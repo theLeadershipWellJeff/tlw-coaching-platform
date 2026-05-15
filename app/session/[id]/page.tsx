@@ -27,17 +27,35 @@ function SessionPage() {
   }, [clientName])
 
   async function run() {
-    // 1. Pull CA notes
+    // 1. Pull CA notes + Zoom summaries in parallel
     setStep('loading-notes')
     let notes: any[] = []
     let actions: any[] = []
-    try {
-      const notesRes = await fetch(`/api/notes?clientName=${encodeURIComponent(clientName)}`)
-      const notesData = await notesRes.json()
-      notes = notesData.notes || []
-      actions = notesData.actions || []
-    } catch (e) {
-      // Continue with empty notes — user can still generate
+    let zoomSummaries: any[] = []
+
+    const notesPromise = fetch(`/api/notes?clientName=${encodeURIComponent(clientName)}`)
+      .then(r => r.json())
+      .catch(() => ({ notes: [], actions: [] }))
+
+    const notesData = await notesPromise
+    notes = notesData.notes || []
+    actions = notesData.actions || []
+
+    // Use CA note dates as known session times for Zoom matching
+    const sessionTimes = notes
+      .map((n: any) => n.date)
+      .filter(Boolean)
+
+    if (sessionTimes.length > 0) {
+      try {
+        const zoomRes = await fetch(
+          `/api/zoom-summaries?sessionTimes=${encodeURIComponent(sessionTimes.join(','))}`
+        )
+        const zoomData = await zoomRes.json()
+        zoomSummaries = zoomData.summaries || []
+      } catch (e) {
+        // Zoom is additive — continue without it
+      }
     }
 
     // 2. Generate content
@@ -46,7 +64,7 @@ function SessionPage() {
       const genRes = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientName, notes, actions }),
+        body: JSON.stringify({ clientName, notes, actions, zoomSummaries }),
       })
       const genData = await genRes.json()
       if (genData.error) throw new Error(genData.error)

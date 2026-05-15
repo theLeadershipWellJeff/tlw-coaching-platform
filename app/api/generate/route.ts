@@ -4,7 +4,7 @@ import Anthropic from '@anthropic-ai/sdk'
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 export async function POST(req: NextRequest) {
-  const { clientName, notes, actions } = await req.json()
+  const { clientName, notes, actions, zoomSummaries } = await req.json()
 
   if (!clientName) {
     return NextResponse.json({ error: 'clientName required' }, { status: 400 })
@@ -18,6 +18,25 @@ export async function POST(req: NextRequest) {
     ? actions.map((a: any) => `• ${a.description}${a.dueDate ? ` (due ${a.dueDate})` : ''}`).join('\n')
     : 'None recorded'
 
+  let zoomSection = ''
+  if (zoomSummaries?.length) {
+    const zoomText = zoomSummaries.map((s: any) => {
+      const date = new Date(s.meeting_start_time).toLocaleDateString()
+      const sections = (s.summary_details || [])
+        .map((d: any) => `  ${d.label}: ${d.summary}`)
+        .join('\n')
+      const nextSteps = (s.next_steps || [])
+        .map((n: string) => `  • ${n}`)
+        .join('\n')
+      return `[${date}] ${s.summary_title || 'Zoom Session'}\nOverview: ${s.summary_overview || 'N/A'}\n${sections ? `Themes:\n${sections}` : ''}${nextSteps ? `\nNext Steps:\n${nextSteps}` : ''}`
+    }).join('\n\n---\n\n')
+
+    zoomSection = `
+
+ZOOM AI MEETING SUMMARIES (recent sessions — focus on ${clientName}'s themes, not Jeff's action items):
+${zoomText}`
+  }
+
   const prompt = `You are helping Jeff Holmes, executive coach at theLeadershipWell, generate a personalized session preparation email for ${clientName}.
 
 Return ONLY a valid JSON object — no markdown fences, no preamble, no explanation.
@@ -26,7 +45,7 @@ SESSION NOTES (most recent first):
 ${notesText}
 
 OPEN ACTION ITEMS FROM COACH ACCOUNTABLE:
-${actionsText}
+${actionsText}${zoomSection}
 
 Generate this exact JSON structure:
 {
