@@ -3,6 +3,18 @@ import { getServerSession } from 'next-auth'
 import { google } from 'googleapis'
 import { authOptions } from '@/lib/authOptions'
 
+const CA_URL = 'https://www.coachaccountable.com/API/'
+const CA_ID = process.env.COACH_ACCOUNTABLE_API_ID!
+const CA_KEY = process.env.COACH_ACCOUNTABLE_API_KEY!
+
+async function caPost(action: string, params: Record<string, string> = {}) {
+  const body = new URLSearchParams({ a: action, APIID: CA_ID, APIKey: CA_KEY, ...params })
+  const res = await fetch(CA_URL, { method: 'POST', body })
+  const json = await res.json()
+  if (json.error !== 0) throw new Error(json.message)
+  return json.return
+}
+
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session?.accessToken) {
@@ -34,13 +46,7 @@ export async function GET(req: NextRequest) {
   // Pull CA client roster for name matching
   let caClients: any[] = []
   try {
-    console.log('CA URL:', process.env.COACH_ACCOUNTABLE_BASE_URL)
-    console.log('CA KEY length:', process.env.COACH_ACCOUNTABLE_API_KEY?.length)
-    console.log('CA KEY start:', process.env.COACH_ACCOUNTABLE_API_KEY?.substring(0,8))
-    const caRes = await fetch(`${process.env.COACH_ACCOUNTABLE_BASE_URL}/clients`, {
-      headers: { 'X-API-Key': process.env.COACH_ACCOUNTABLE_API_KEY! }
-    })
-    caClients = await caRes.json()
+    caClients = (await caPost('Client.getAll')) || []
   } catch (e) {
     console.error('Failed to fetch CA clients', e)
   }

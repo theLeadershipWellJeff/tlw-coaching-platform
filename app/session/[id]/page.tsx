@@ -41,21 +41,22 @@ function SessionPage() {
     notes = notesData.notes || []
     actions = notesData.actions || []
 
-    // Use CA note dates as known session times for Zoom matching
+    // CA note dates seed Zoom matching; the server also pulls calendar history
     const sessionTimes = notes
       .map((n: any) => n.date)
       .filter(Boolean)
 
-    if (sessionTimes.length > 0) {
-      try {
-        const zoomRes = await fetch(
-          `/api/zoom-summaries?sessionTimes=${encodeURIComponent(sessionTimes.join(','))}`
-        )
-        const zoomData = await zoomRes.json()
-        zoomSummaries = zoomData.summaries || []
-      } catch (e) {
-        // Zoom is additive — continue without it
-      }
+    try {
+      const qs = new URLSearchParams({
+        clientName,
+        clientEmail,
+        sessionTimes: sessionTimes.join(','),
+      })
+      const zoomRes = await fetch(`/api/zoom-summaries?${qs.toString()}`)
+      const zoomData = await zoomRes.json()
+      zoomSummaries = zoomData.summaries || []
+    } catch (e) {
+      // Zoom is additive — continue without it
     }
 
     // 2. Generate content
