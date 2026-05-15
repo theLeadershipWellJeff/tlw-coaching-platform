@@ -1,6 +1,6 @@
 // lib/zoom.ts
 // Server-to-Server OAuth client for Zoom API.
-// Fetches AI Companion meeting summaries.
+// Fetches AI Companion meeting summaries (list + detail).
 
 interface ZoomTokenResponse {
   access_token: string;
@@ -9,7 +9,16 @@ interface ZoomTokenResponse {
   scope: string;
 }
 
-export interface ZoomSummary {
+export interface ZoomSummaryListItem {
+  meeting_uuid: string;
+  meeting_id: number;
+  meeting_topic: string;
+  meeting_start_time: string;
+  meeting_end_time: string;
+  meeting_host_email: string;
+}
+
+export interface ZoomSummaryDetail {
   meeting_uuid: string;
   meeting_id: number;
   meeting_topic: string;
@@ -26,7 +35,7 @@ interface ZoomSummaryListResponse {
   next_page_token?: string;
   page_size: number;
   total_records: number;
-  summaries: ZoomSummary[];
+  summaries: ZoomSummaryListItem[];
 }
 
 let cachedToken: { token: string; expiresAt: number } | null = null;
@@ -77,8 +86,9 @@ async function getZoomAccessToken(): Promise<string> {
 
 /**
  * List AI Companion meeting summaries from the past N days.
+ * Returns lightweight metadata only (no summary content).
  */
-export async function listRecentSummaries(daysBack: number = 90): Promise<ZoomSummary[]> {
+export async function listRecentSummaries(daysBack: number = 90): Promise<ZoomSummaryListItem[]> {
   const token = await getZoomAccessToken();
 
   const fromDate = new Date();
@@ -100,4 +110,33 @@ export async function listRecentSummaries(daysBack: number = 90): Promise<ZoomSu
 
   const data: ZoomSummaryListResponse = await response.json();
   return data.summaries || [];
+}
+
+/**
+ * Fetch the full AI Companion summary for a specific meeting.
+ * Includes title, overview, structured sections, and next steps.
+ *
+ * Note: Zoom meeting_uuid values that contain '/' or start with '/'
+ * must be double URL-encoded per Zoom API docs.
+ */
+export async function getMeetingSummaryDetail(meetingUUID: string): Promise<ZoomSummaryDetail> {
+  const token = await getZoomAccessToken();
+
+  let encodedUUID = encodeURIComponent(meetingUUID);
+  if (meetingUUID.startsWith('/') || meetingUUID.includes('//')) {
+    encodedUUID = encodeURIComponent(encodedUUID);
+  }
+
+  const url = `https://api.zoom.us/v2/meetings/${encodedUUID}/meeting_summary`;
+
+  const response = await fetch(url, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Zoom API getSummaryDetail failed: ${response.status} ${errorText}`);
+  }
+
+  return await response.json();
 }
