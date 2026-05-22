@@ -31,6 +31,7 @@ const introspection = `
         name
         kind
         description
+        enumValues { name description }
         inputFields {
           name
           description
@@ -69,7 +70,8 @@ const schema = json.data.__schema;
 const queryRoot = schema.queryType?.name ?? "Query";
 const mutationRoot = schema.mutationType?.name ?? "Mutation";
 
-const NAME_PATTERN = /channel|post|asset|media|input|usererror|created|deleted/i;
+const NAME_PATTERN =
+  /channel|post|asset|media|input|usererror|created|deleted|account|organization|service|sharemode|schedulingtype|sharetype/i;
 const KEEP_EXACT = new Set([queryRoot, mutationRoot]);
 
 const filtered = schema.types.filter((t) => {
@@ -131,6 +133,11 @@ function printType(name) {
       console.log(`  ${f.name}: ${typeName(f.type)}`);
     }
   }
+  if (t.enumValues && t.enumValues.length) {
+    for (const v of t.enumValues) {
+      console.log(`  ${v.name}`);
+    }
+  }
   console.log();
 }
 
@@ -140,20 +147,27 @@ printType(mutationRoot);
 
 // Then anything we care about, in a sensible order.
 const priority = [
+  "Account",
+  "Organization",
+  "OrganizationId",
+  "Service",
+  "ChannelType",
   "Channel",
   "ChannelsInput",
+  "SchedulingType",
+  "ShareMode",
   "Post",
   "PostStatus",
   "PostInput",
   "CreatePostInput",
-  "PostCreated",
-  "PostDeleted",
+  "PostActionPayload",
+  "PostActionSuccess",
+  "InvalidInputError",
   "DeletePostInput",
+  "DeletePostPayload",
+  "DeletePostSuccess",
   "Asset",
   "AssetInput",
-  "Media",
-  "MediaInput",
-  "UserError",
 ];
 const seen = new Set([queryRoot, mutationRoot]);
 for (const n of priority) {
