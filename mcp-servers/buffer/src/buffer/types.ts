@@ -1,18 +1,59 @@
+export type BufferService =
+  | "instagram"
+  | "facebook"
+  | "twitter"
+  | "linkedin"
+  | "pinterest"
+  | "tiktok"
+  | "googlebusiness"
+  | "startPage"
+  | "mastodon"
+  | "youtube"
+  | "threads"
+  | "bluesky";
+
 export interface BufferChannel {
   id: string;
   name: string;
-  service: string;
-  serviceUsername?: string;
-  serviceType?: string;
+  displayName: string | null;
+  descriptor: string;
+  service: BufferService;
+  serviceId: string;
+  type: string;
+  organizationId: string;
+  timezone: string;
+  isDisconnected: boolean;
+  isLocked: boolean;
 }
 
 export type SchedulingMode = "queue" | "scheduled";
 
-export interface MediaAsset {
+export type ImageMedia = {
+  type: "image";
   url: string;
-  mimeType?: string;
-  altText?: string;
-}
+  altText: string;
+  thumbnailUrl?: string;
+};
+export type VideoMedia = {
+  type: "video";
+  url: string;
+  thumbnailUrl?: string;
+  title?: string;
+};
+export type DocumentMedia = {
+  type: "document";
+  url: string;
+  title: string;
+  thumbnailUrl: string;
+};
+export type LinkMedia = {
+  type: "link";
+  url: string;
+  title?: string;
+  description?: string;
+  thumbnailUrl?: string;
+};
+export type MediaAsset = ImageMedia | VideoMedia | DocumentMedia | LinkMedia;
 
 export interface CreatePostInput {
   text: string;
@@ -27,8 +68,14 @@ export interface BufferPost {
   channelId: string;
   text: string;
   status: string;
-  dueAt?: string;
-  createdAt?: string;
+  dueAt: string | null;
+  createdAt: string;
+  shareMode: string;
+}
+
+export interface BufferOrganization {
+  id: string;
+  name: string;
 }
 
 export interface GraphQLError {

@@ -44,7 +44,8 @@ Then restart Claude Code so the server gets picked up.
 
 ```json
 {
-  "buffer_api_key": "sk_buf_...",
+  "buffer_api_key": "1/...",
+  "organization_id": "",
   "channels": {
     "linkedin": "<id>",
     "facebook": "<id>",
@@ -59,6 +60,12 @@ Then restart Claude Code so the server gets picked up.
   "metrics_log_path": "./metrics.csv"
 }
 ```
+
+Buffer's `channels` and `posts` queries require an `organizationId`. If you
+leave `organization_id` empty, the server auto-discovers it from
+`account { organizations }` on first call and uses your first org. Set it
+explicitly if you have multiple Buffer orgs. The `npm run list-channels`
+script prints your org id ready to paste.
 
 The channel keys (`linkedin`, `facebook`, `instagram`) are aliases. Anywhere a
 tool wants a `channel`, you can pass either the alias or the raw Buffer

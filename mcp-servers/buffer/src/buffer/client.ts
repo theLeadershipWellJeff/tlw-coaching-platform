@@ -1,8 +1,10 @@
 import type {
   BufferChannel,
+  BufferOrganization,
   BufferPost,
   CreatePostInput,
   GraphQLError,
+  MediaAsset,
 } from "./types.js";
 
 const BUFFER_GRAPHQL_ENDPOINT = "https://api.buffer.com/graphql";
@@ -18,9 +20,53 @@ export class BufferApiError extends Error {
   }
 }
 
+function toAssetInput(media: MediaAsset) {
+  switch (media.type) {
+    case "image":
+      return {
+        image: {
+          url: media.url,
+          ...(media.thumbnailUrl ? { thumbnailUrl: media.thumbnailUrl } : {}),
+          metadata: { altText: media.altText },
+        },
+      };
+    case "video":
+      return {
+        video: {
+          url: media.url,
+          ...(media.thumbnailUrl ? { thumbnailUrl: media.thumbnailUrl } : {}),
+          ...(media.title ? { metadata: { title: media.title } } : {}),
+        },
+      };
+    case "document":
+      return {
+        document: {
+          url: media.url,
+          title: media.title,
+          thumbnailUrl: media.thumbnailUrl,
+        },
+      };
+    case "link":
+      return {
+        link: {
+          url: media.url,
+          ...(media.title ? { title: media.title } : {}),
+          ...(media.description ? { description: media.description } : {}),
+          ...(media.thumbnailUrl ? { thumbnailUrl: media.thumbnailUrl } : {}),
+        },
+      };
+  }
+}
+
 export class BufferClient {
-  constructor(private readonly apiKey: string) {
+  private cachedOrgId?: string;
+
+  constructor(
+    private readonly apiKey: string,
+    organizationId?: string
+  ) {
     if (!apiKey) throw new Error("BufferClient requires an API key");
+    if (organizationId) this.cachedOrgId = organizationId;
   }
 
   async query<T>(query: string, variables: Record<string, unknown> = {}): Promise<T> {
@@ -74,49 +120,78 @@ export class BufferClient {
       : new BufferApiError("Buffer API failed after retries");
   }
 
-  async listChannels(): Promise<BufferChannel[]> {
+  async getOrganizations(): Promise<BufferOrganization[]> {
     const query = /* GraphQL */ `
-      query ListChannels {
-        channels {
-          id
-          name
-          service
-          serviceUsername
-          serviceType
+      query GetOrganizations {
+        account {
+          organizations {
+            id
+            name
+          }
         }
       }
     `;
-    const data = await this.query<{ channels: BufferChannel[] }>(query);
+    const data = await this.query<{
+      account: { organizations: BufferOrganization[] };
+    }>(query);
+    return data.account.organizations;
+  }
+
+  async getOrganizationId(): Promise<string> {
+    if (this.cachedOrgId) return this.cachedOrgId;
+    const orgs = await this.getOrganizations();
+    if (orgs.length === 0) {
+      throw new BufferApiError(
+        "No Buffer organizations found on this account."
+      );
+    }
+    this.cachedOrgId = orgs[0].id;
+    return this.cachedOrgId;
+  }
+
+  async listChannels(): Promise<BufferChannel[]> {
+    const organizationId = await this.getOrganizationId();
+    const query = /* GraphQL */ `
+      query ListChannels($input: ChannelsInput!) {
+        channels(input: $input) {
+          id
+          name
+          displayName
+          descriptor
+          service
+          serviceId
+          type
+          organizationId
+          timezone
+          isDisconnected
+          isLocked
+        }
+      }
+    `;
+    const data = await this.query<{ channels: BufferChannel[] }>(query, {
+      input: { organizationId },
+    });
     return data.channels;
   }
 
   async createPost(input: CreatePostInput): Promise<BufferPost> {
     const mode = input.mode === "queue" ? "addToQueue" : "customScheduled";
-    const schedulingType = input.mode === "queue" ? "queue" : "scheduled";
 
     const variables: Record<string, unknown> = {
       input: {
         text: input.text,
         channelId: input.channelId,
-        schedulingType,
+        schedulingType: "automatic",
         mode,
+        assets: (input.media ?? []).map(toAssetInput),
         ...(input.dueAt ? { dueAt: input.dueAt } : {}),
-        ...(input.media && input.media.length
-          ? {
-              assets: input.media.map((m) => ({
-                url: m.url,
-                ...(m.mimeType ? { mimeType: m.mimeType } : {}),
-                ...(m.altText ? { altText: m.altText } : {}),
-              })),
-            }
-          : {}),
       },
     };
 
     const mutation = /* GraphQL */ `
       mutation CreatePost($input: CreatePostInput!) {
         createPost(input: $input) {
-          ... on PostCreated {
+          ... on PostActionSuccess {
             post {
               id
               channelId
@@ -124,22 +199,18 @@ export class BufferClient {
               status
               dueAt
               createdAt
+              shareMode
             }
           }
-          ... on UserError {
+          ... on InvalidInputError {
             message
-            field
           }
         }
       }
     `;
 
     const data = await this.query<{
-      createPost: {
-        post?: BufferPost;
-        message?: string;
-        field?: string;
-      };
+      createPost: { post?: BufferPost; message?: string };
     }>(mutation, variables);
 
     if (!data.createPost.post) {
@@ -151,41 +222,56 @@ export class BufferClient {
   }
 
   async listPendingPosts(channelId?: string): Promise<BufferPost[]> {
+    const organizationId = await this.getOrganizationId();
     const query = /* GraphQL */ `
-      query PendingPosts($channelId: String) {
-        posts(status: "pending", channelId: $channelId) {
-          id
-          channelId
-          text
-          status
-          dueAt
-          createdAt
+      query PendingPosts($input: PostsInput!, $first: Int) {
+        posts(input: $input, first: $first) {
+          edges {
+            node {
+              id
+              channelId
+              text
+              status
+              dueAt
+              createdAt
+              shareMode
+            }
+          }
         }
       }
     `;
-    const data = await this.query<{ posts: BufferPost[] }>(query, {
-      channelId: channelId ?? null,
+    const data = await this.query<{
+      posts: { edges: { node: BufferPost }[] };
+    }>(query, {
+      input: {
+        organizationId,
+        filter: {
+          status: ["scheduled", "needs_approval"],
+          ...(channelId ? { channelIds: [channelId] } : {}),
+        },
+        sort: [{ field: "dueAt", direction: "asc" }],
+      },
+      first: 100,
     });
-    return data.posts;
+    return data.posts.edges.map((e) => e.node);
   }
 
   async deletePost(postId: string): Promise<{ id: string; deleted: boolean }> {
     const mutation = /* GraphQL */ `
-      mutation DeletePost($id: String!) {
-        deletePost(input: { id: $id }) {
-          ... on PostDeleted {
+      mutation DeletePost($input: DeletePostInput!) {
+        deletePost(input: $input) {
+          ... on DeletePostSuccess {
             id
           }
-          ... on UserError {
+          ... on InvalidInputError {
             message
-            field
           }
         }
       }
     `;
     const data = await this.query<{
       deletePost: { id?: string; message?: string };
-    }>(mutation, { id: postId });
+    }>(mutation, { input: { id: postId } });
 
     if (!data.deletePost.id) {
       throw new BufferApiError(

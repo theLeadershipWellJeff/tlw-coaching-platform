@@ -5,6 +5,7 @@ import { z } from "zod";
 
 const ConfigSchema = z.object({
   buffer_api_key: z.string().min(1),
+  organization_id: z.string().optional(),
   channels: z.record(z.string(), z.string()),
   default_schedule: z.record(z.string(), z.array(z.string())).default({}),
   timezone: z.string().default("America/Los_Angeles"),
@@ -36,6 +37,8 @@ export function loadConfig(): Config {
   if (typeof raw === "object" && raw !== null) {
     const obj = raw as Record<string, unknown>;
     if (process.env.BUFFER_API_KEY) obj.buffer_api_key = process.env.BUFFER_API_KEY;
+    if (process.env.BUFFER_ORGANIZATION_ID)
+      obj.organization_id = process.env.BUFFER_ORGANIZATION_ID;
     if (process.env.BUFFER_TIMEZONE) obj.timezone = process.env.BUFFER_TIMEZONE;
   }
 

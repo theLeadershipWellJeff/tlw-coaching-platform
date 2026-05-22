@@ -11,22 +11,52 @@ import { logPost } from "./metrics.js";
 import { BRAND_VOICE_GUIDANCE } from "./voice.js";
 
 const config = loadConfig();
-const buffer = new BufferClient(config.buffer_api_key);
+const buffer = new BufferClient(config.buffer_api_key, config.organization_id);
 
-const MediaSchema = z.object({
+const ImageMediaSchema = z.object({
+  type: z.literal("image"),
   url: z.string().url(),
-  mimeType: z.string().optional(),
-  altText: z.string().optional(),
+  altText: z
+    .string()
+    .min(1, "Image alt text is required by Buffer for accessibility."),
+  thumbnailUrl: z.string().url().optional(),
 });
+const VideoMediaSchema = z.object({
+  type: z.literal("video"),
+  url: z.string().url(),
+  thumbnailUrl: z.string().url().optional(),
+  title: z.string().optional(),
+});
+const DocumentMediaSchema = z.object({
+  type: z.literal("document"),
+  url: z.string().url(),
+  title: z.string().min(1),
+  thumbnailUrl: z.string().url(),
+});
+const LinkMediaSchema = z.object({
+  type: z.literal("link"),
+  url: z.string().url(),
+  title: z.string().optional(),
+  description: z.string().optional(),
+  thumbnailUrl: z.string().url().optional(),
+});
+const MediaSchema = z.discriminatedUnion("type", [
+  ImageMediaSchema,
+  VideoMediaSchema,
+  DocumentMediaSchema,
+  LinkMediaSchema,
+]);
 
-const ChannelKeySchema = z.string().describe(
-  'Either a channel alias from config.channels (e.g. "linkedin") or a raw Buffer channel ID.'
-);
+const ChannelKeySchema = z
+  .string()
+  .describe(
+    'Either a channel alias from config.channels (e.g. "linkedin") or a raw Buffer channel ID.'
+  );
 
 const ModeSchema = z
   .enum(["queue", "scheduled"])
   .describe(
-    '"queue" appends to Buffer\'s queue (next available slot). "scheduled" requires a due_at or default schedule.'
+    '"queue" appends to Buffer\'s queue (Buffer picks the slot). "scheduled" requires due_at OR a default_schedule entry for the channel.'
   );
 
 function textResult(payload: unknown) {
@@ -45,11 +75,8 @@ function errorResult(err: unknown) {
   return { content: [{ type: "text" as const, text: message }], isError: true };
 }
 
-function previewText(text: string, channel: string): string | null {
-  if (channel.toLowerCase().includes("instagram")) {
-    return null;
-  }
-  return text;
+function channelAliasFor(channelId: string): string | undefined {
+  return Object.entries(config.channels).find(([, id]) => id === channelId)?.[0];
 }
 
 const server = new McpServer(
@@ -69,7 +96,18 @@ server.tool(
   async () => {
     try {
       const channels = await buffer.listChannels();
-      return textResult({ channels, aliases: config.channels });
+      return textResult({
+        channels: channels.map((c) => ({
+          id: c.id,
+          name: c.name,
+          displayName: c.displayName,
+          descriptor: c.descriptor,
+          service: c.service,
+          type: c.type,
+          isDisconnected: c.isDisconnected,
+        })),
+        configured_aliases: config.channels,
+      });
     } catch (err) {
       return errorResult(err);
     }
@@ -78,7 +116,7 @@ server.tool(
 
 server.tool(
   "create_post",
-  "Create a single post on one Buffer channel. Use mode='queue' for the next available Buffer queue slot, or mode='scheduled' with due_at (or rely on default_schedule).",
+  "Create a single post on one Buffer channel. mode='queue' lets Buffer pick the next slot. mode='scheduled' requires due_at OR a default_schedule entry. Instagram posts require image media.",
   {
     text: z.string().min(1, "text is required"),
     channel: ChannelKeySchema,
@@ -92,19 +130,29 @@ server.tool(
     media: z
       .array(MediaSchema)
       .optional()
-      .describe("Optional media assets. Required for Instagram posts."),
+      .describe(
+        "Optional media. Each item is a discriminated union by 'type'. Required for Instagram posts (must be type='image' with altText)."
+      ),
   },
   async ({ text, channel, mode, due_at, media }) => {
     try {
       const channelId = resolveChannelId(config, channel);
-      const channelKey = Object.entries(config.channels).find(
-        ([, id]) => id === channelId
-      )?.[0];
+      const channelKey = channelAliasFor(channelId);
 
-      if (channelKey === "instagram" && (!media || media.length === 0)) {
-        return errorResult(
-          new Error("Instagram requires an image - none provided.")
-        );
+      const isInstagram =
+        channelKey === "instagram" ||
+        (await buffer
+          .listChannels()
+          .then((cs) => cs.find((c) => c.id === channelId)?.service === "instagram")
+          .catch(() => false));
+
+      if (isInstagram) {
+        const hasImage = media?.some((m) => m.type === "image");
+        if (!hasImage) {
+          return errorResult(
+            new Error("Instagram requires an image - none provided.")
+          );
+        }
       }
 
       const defaultSlots = channelKey
@@ -138,7 +186,8 @@ server.tool(
         post_id: post.id,
         channel: channelKey ?? channelId,
         scheduled_for: post.dueAt ?? dueAtIso ?? "next queue slot",
-        preview: previewText(text, channelKey ?? ""),
+        mode: post.shareMode,
+        status: post.status,
       });
     } catch (err) {
       return errorResult(err);
@@ -163,21 +212,27 @@ server.tool(
     due_at: z.string().optional(),
   },
   async ({ posts, mode, due_at }) => {
+    const channelsCache = await buffer
+      .listChannels()
+      .catch(() => [] as Awaited<ReturnType<typeof buffer.listChannels>>);
     const results: unknown[] = [];
+
     for (const entry of posts) {
       try {
         const channelId = resolveChannelId(config, entry.channel);
-        const channelKey = Object.entries(config.channels).find(
-          ([, id]) => id === channelId
-        )?.[0];
+        const channelKey = channelAliasFor(channelId);
+        const realService = channelsCache.find((c) => c.id === channelId)?.service;
 
-        if (channelKey === "instagram" && (!entry.media || entry.media.length === 0)) {
-          results.push({
-            channel: entry.channel,
-            ok: false,
-            error: "Instagram requires an image - skipping.",
-          });
-          continue;
+        if (realService === "instagram") {
+          const hasImage = entry.media?.some((m) => m.type === "image");
+          if (!hasImage) {
+            results.push({
+              channel: entry.channel,
+              ok: false,
+              error: "Instagram requires an image - skipping.",
+            });
+            continue;
+          }
         }
 
         const defaultSlots = channelKey
@@ -226,7 +281,7 @@ server.tool(
 
 server.tool(
   "list_pending_posts",
-  "List posts currently queued/pending in Buffer. Optionally filter by channel.",
+  "List posts currently scheduled or awaiting approval in Buffer. Optionally filter by channel.",
   {
     channel: ChannelKeySchema.optional(),
   },
@@ -234,7 +289,17 @@ server.tool(
     try {
       const channelId = channel ? resolveChannelId(config, channel) : undefined;
       const posts = await buffer.listPendingPosts(channelId);
-      return textResult({ count: posts.length, posts });
+      return textResult({
+        count: posts.length,
+        posts: posts.map((p) => ({
+          id: p.id,
+          channel: channelAliasFor(p.channelId) ?? p.channelId,
+          status: p.status,
+          dueAt: p.dueAt,
+          shareMode: p.shareMode,
+          preview: p.text.slice(0, 80),
+        })),
+      });
     } catch (err) {
       return errorResult(err);
     }

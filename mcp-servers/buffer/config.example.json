@@ -1,5 +1,6 @@
 {
   "buffer_api_key": "REPLACE_WITH_BUFFER_PERSONAL_API_KEY",
+  "organization_id": "",
   "channels": {
     "linkedin": "REPLACE_WITH_LINKEDIN_CHANNEL_ID",
     "facebook": "REPLACE_WITH_FACEBOOK_CHANNEL_ID",
