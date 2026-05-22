@@ -1,0 +1,15 @@
+{
+  "buffer_api_key": "REPLACE_WITH_BUFFER_PERSONAL_API_KEY",
+  "channels": {
+    "linkedin": "REPLACE_WITH_LINKEDIN_CHANNEL_ID",
+    "facebook": "REPLACE_WITH_FACEBOOK_CHANNEL_ID",
+    "instagram": "REPLACE_WITH_INSTAGRAM_CHANNEL_ID"
+  },
+  "default_schedule": {
+    "linkedin": ["Tue 07:00", "Wed 07:00", "Thu 07:00"],
+    "facebook": ["Tue 07:30", "Wed 07:30", "Thu 07:30"],
+    "instagram": ["Wed 08:00"]
+  },
+  "timezone": "America/Los_Angeles",
+  "metrics_log_path": "./metrics.csv"
+}

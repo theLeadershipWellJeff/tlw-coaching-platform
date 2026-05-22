@@ -1,0 +1,31 @@
+{
+  "name": "@tlw/buffer-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "TheLeadershipWell Buffer MCP server. Draft posts in Claude, queue them in Buffer.",
+  "type": "module",
+  "main": "build/index.js",
+  "bin": {
+    "tlw-buffer-mcp": "build/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node build/index.js",
+    "dev": "tsc --watch",
+    "introspect": "node scripts/introspect.mjs",
+    "list-channels": "node scripts/list-channels.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "luxon": "^3.4.4",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/luxon": "^3.4.2",
+    "@types/node": "^20.14.0",
+    "typescript": "^5.5.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

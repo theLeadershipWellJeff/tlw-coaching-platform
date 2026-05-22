@@ -1,0 +1,14 @@
+node_modules/
+build/
+*.tsbuildinfo
+
+# Secrets and local config
+config.json
+.env
+.env.local
+
+# Metrics output
+metrics.csv
+
+# OS
+.DS_Store
