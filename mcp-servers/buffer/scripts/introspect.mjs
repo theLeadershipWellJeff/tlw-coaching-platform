@@ -1,17 +1,16 @@
 #!/usr/bin/env node
-// One-off Buffer GraphQL schema introspection.
-// Captures Query/Mutation roots and any type whose name involves channels,
-// posts, assets, media, or *Input. Run before going live to verify the
-// real schema matches what src/buffer/client.ts assumes.
-//
-// Usage:
-//   BUFFER_API_KEY=xxx node scripts/introspect.mjs > schema.json
-import { readFileSync, existsSync } from "node:fs";
+// Buffer GraphQL schema introspection.
+// Prints a focused, paste-friendly summary of the types this MCP server cares
+// about, and also writes the full filtered schema to ./schema.json for the
+// record. Run with no arguments:
+//   npm run introspect
+import { readFileSync, existsSync, writeFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const configPath = resolve(here, "..", "config.json");
+const root = resolve(here, "..");
+const configPath = resolve(root, "config.json");
 
 let apiKey = process.env.BUFFER_API_KEY;
 if (!apiKey && existsSync(configPath)) {
@@ -19,7 +18,7 @@ if (!apiKey && existsSync(configPath)) {
   apiKey = cfg.buffer_api_key;
 }
 if (!apiKey || apiKey.startsWith("REPLACE_")) {
-  console.error("Missing Buffer API key.");
+  console.error("Missing Buffer API key. Fill config.json or set BUFFER_API_KEY.");
   process.exit(1);
 }
 
@@ -80,15 +79,97 @@ const filtered = schema.types.filter((t) => {
   return NAME_PATTERN.test(t.name);
 });
 
-console.log(
+// Save full filtered data for later reference (gitignored).
+const outPath = resolve(root, "schema.json");
+writeFileSync(
+  outPath,
   JSON.stringify(
-    {
-      queryRoot,
-      mutationRoot,
-      typeCount: filtered.length,
-      types: filtered,
-    },
+    { queryRoot, mutationRoot, typeCount: filtered.length, types: filtered },
     null,
     2
   )
 );
+
+// --- Human-readable summary to stdout (this is what you paste back) ---
+
+function typeName(t) {
+  if (!t) return "?";
+  if (t.kind === "NON_NULL") return typeName(t.ofType) + "!";
+  if (t.kind === "LIST") return "[" + typeName(t.ofType) + "]";
+  return t.name ?? t.kind ?? "?";
+}
+
+console.log("=".repeat(72));
+console.log("BUFFER GRAPHQL SCHEMA SUMMARY");
+console.log("=".repeat(72));
+console.log(`queryRoot:    ${queryRoot}`);
+console.log(`mutationRoot: ${mutationRoot}`);
+console.log(`(full schema written to ${outPath})`);
+console.log();
+
+const byName = new Map(filtered.map((t) => [t.name, t]));
+
+function printType(name) {
+  const t = byName.get(name);
+  if (!t) {
+    console.log(`  (type ${name} not found)`);
+    return;
+  }
+  console.log(`--- ${t.name} (${t.kind}) ---`);
+  if (t.description) console.log(`  // ${t.description.split("\n")[0]}`);
+  if (t.fields) {
+    for (const f of t.fields) {
+      const args = (f.args ?? [])
+        .map((a) => `${a.name}: ${typeName(a.type)}`)
+        .join(", ");
+      const argStr = args ? `(${args})` : "";
+      console.log(`  ${f.name}${argStr}: ${typeName(f.type)}`);
+    }
+  }
+  if (t.inputFields) {
+    for (const f of t.inputFields) {
+      console.log(`  ${f.name}: ${typeName(f.type)}`);
+    }
+  }
+  console.log();
+}
+
+// Roots first.
+printType(queryRoot);
+printType(mutationRoot);
+
+// Then anything we care about, in a sensible order.
+const priority = [
+  "Channel",
+  "ChannelsInput",
+  "Post",
+  "PostStatus",
+  "PostInput",
+  "CreatePostInput",
+  "PostCreated",
+  "PostDeleted",
+  "DeletePostInput",
+  "Asset",
+  "AssetInput",
+  "Media",
+  "MediaInput",
+  "UserError",
+];
+const seen = new Set([queryRoot, mutationRoot]);
+for (const n of priority) {
+  if (byName.has(n) && !seen.has(n)) {
+    printType(n);
+    seen.add(n);
+  }
+}
+// Anything left that matched the filter.
+for (const t of filtered) {
+  if (!seen.has(t.name)) {
+    printType(t.name);
+    seen.add(t.name);
+  }
+}
+
+console.log("=".repeat(72));
+console.log("END OF SUMMARY. Paste everything above this line back to Claude.");
+console.log("=".repeat(72));
