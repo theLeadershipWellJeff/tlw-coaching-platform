@@ -1,7 +1,7 @@
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
 import { PageHeader } from '@/app/components/layout/PageHeader'
-import { ComingSoon } from '@/app/components/shared/ComingSoon'
+import { DashboardSessions } from './DashboardSessions'
 
 function greeting(): string {
   const h = new Date().getHours()
@@ -13,18 +13,16 @@ function greeting(): string {
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions)
   const firstName = (session?.user?.name || '').split(' ')[0] || 'there'
+  const today = new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  })
 
   return (
     <>
-      <PageHeader
-        eyebrow="theLeadershipWell"
-        title={`${greeting()}, ${firstName}`}
-        subtitle="Your weekly session pipeline and practice pulse land here next."
-      />
-      <ComingSoon
-        title="Your dashboard"
-        description="The 7-day session list, up-next session, and practice pulse metrics are the next milestone."
-      />
+      <PageHeader eyebrow="theLeadershipWell" title={`${greeting()}, ${firstName}`} subtitle={today} />
+      <DashboardSessions />
     </>
   )
 }
