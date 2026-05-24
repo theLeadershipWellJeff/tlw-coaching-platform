@@ -60,12 +60,12 @@ export default function Dashboard() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-8">
         <TLWLogo size={56} light />
-        <p className="text-gray-warm text-xs tracking-[5px] uppercase mt-4 mb-2">theLeadershipWell</p>
-        <h1 className="font-serif text-3xl font-light text-cream mb-2">Session Prep Engine</h1>
-        <p className="text-gray-warm text-sm mb-10">Sign in to access your coaching dashboard</p>
+        <p className="text-tlw-warm-gray text-xs tracking-[5px] uppercase mt-4 mb-2">theLeadershipWell</p>
+        <h1 className="font-serif text-3xl font-light text-tlw-cream mb-2">Session Prep Engine</h1>
+        <p className="text-tlw-warm-gray text-sm mb-10">Sign in to access your coaching dashboard</p>
         <a
           href="/api/auth/signin"
-          className="px-8 py-3 bg-navy-rich border border-gray-warm/30 rounded-lg text-cream text-sm font-medium hover:bg-navy-rich/80 transition-colors"
+          className="px-8 py-3 bg-tlw-navy-rich border border-tlw-warm-gray/30 rounded-lg text-tlw-cream text-sm font-medium hover:bg-tlw-navy-rich/80 transition-colors"
         >
           Sign in with Google
         </a>
@@ -79,35 +79,35 @@ export default function Dashboard() {
       <div className="flex items-center gap-4 mb-10">
         <TLWLogo size={40} light onClick={() => router.push("/")} style={{cursor:"pointer"}} />
         <div>
-          <p className="text-gray-warm text-[9px] tracking-[4px] uppercase">theLeadershipWell</p>
-          <h1 className="font-serif text-2xl font-light text-cream">Session Prep Engine</h1>
+          <p className="text-tlw-warm-gray text-[9px] tracking-[4px] uppercase">theLeadershipWell</p>
+          <h1 className="font-serif text-2xl font-light text-tlw-cream">Session Prep Engine</h1>
         </div>
         <div className="ml-auto">
-          <a href="/api/auth/signout" className="text-gray-warm text-xs hover:text-cream transition-colors">Sign out</a>
+          <a href="/api/auth/signout" className="text-tlw-warm-gray text-xs hover:text-tlw-cream transition-colors">Sign out</a>
         </div>
       </div>
 
       {/* Upcoming sessions */}
       <div className="mb-6">
         <div className="flex items-center justify-between mb-4">
-          <p className="text-[9px] tracking-[4px] uppercase text-gray-warm font-bold">Upcoming Sessions</p>
+          <p className="text-[9px] tracking-[4px] uppercase text-tlw-warm-gray font-bold">Upcoming Sessions</p>
           <button
             onClick={loadSessions}
-            className="text-xs text-gray-warm hover:text-cream transition-colors"
+            className="text-xs text-tlw-warm-gray hover:text-tlw-cream transition-colors"
           >
             ↻ Refresh
           </button>
         </div>
 
         {loading ? (
-          <div className="text-gray-warm text-sm py-12 text-center">Scanning your calendar...</div>
+          <div className="text-tlw-warm-gray text-sm py-12 text-center">Scanning your calendar...</div>
         ) : sessions.length === 0 ? (
-          <div className="text-gray-warm text-sm py-12 text-center border border-gray-warm/20 rounded-lg">
+          <div className="text-tlw-warm-gray text-sm py-12 text-center border border-tlw-warm-gray/20 rounded-lg">
             No upcoming coaching sessions found in the next 14 days.
             <br />
             <button
               onClick={() => router.push('/session/manual')}
-              className="mt-4 text-cream underline text-xs"
+              className="mt-4 text-tlw-cream underline text-xs"
             >
               Enter client details manually
             </button>
@@ -117,22 +117,22 @@ export default function Dashboard() {
             {sessions.map(session => (
               <div
                 key={session.id}
-                className="bg-navy-rich border border-navy-rich rounded-lg p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer group"
+                className="bg-tlw-navy-rich border border-tlw-navy-rich rounded-lg p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer group"
                 onClick={() => router.push(`/session/${session.id}?clientName=${encodeURIComponent(session.clientName)}&clientEmail=${encodeURIComponent(session.clientEmail)}&start=${encodeURIComponent(session.start)}&duration=${session.duration}`)}
               >
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="font-semibold text-cream text-base">{session.clientName}</p>
-                    <p className="text-gray-warm text-xs mt-1">{session.clientEmail}</p>
+                    <p className="font-semibold text-tlw-cream text-base">{session.clientName}</p>
+                    <p className="text-tlw-warm-gray text-xs mt-1">{session.clientEmail}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-cream text-sm font-medium">{formatDate(session.start)}</p>
-                    <p className="text-gray-warm text-xs mt-0.5">{formatTime(session.start)} · {session.duration} min</p>
+                    <p className="text-tlw-cream text-sm font-medium">{formatDate(session.start)}</p>
+                    <p className="text-tlw-warm-gray text-xs mt-0.5">{formatTime(session.start)} · {session.duration} min</p>
                   </div>
                 </div>
                 <div className="mt-4 flex items-center justify-between">
-                  <p className="text-gray-warm text-xs truncate">{session.title}</p>
-                  <span className="text-[9px] tracking-[3px] uppercase text-gray-warm group-hover:text-cream transition-colors ml-4 whitespace-nowrap">
+                  <p className="text-tlw-warm-gray text-xs truncate">{session.title}</p>
+                  <span className="text-[9px] tracking-[3px] uppercase text-tlw-warm-gray group-hover:text-tlw-cream transition-colors ml-4 whitespace-nowrap">
                     Generate Prep →
                   </span>
                 </div>
@@ -146,7 +146,7 @@ export default function Dashboard() {
       <div className="mt-6 text-center">
         <button
           onClick={() => router.push('/session/manual')}
-          className="text-xs text-gray-warm hover:text-cream transition-colors underline"
+          className="text-xs text-tlw-warm-gray hover:text-tlw-cream transition-colors underline"
         >
           + Enter client manually
         </button>

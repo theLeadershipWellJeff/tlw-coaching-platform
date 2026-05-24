@@ -8,20 +8,34 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        navy: {
-          deep: '#111226',
-          rich: '#0C1940',
-        },
-        cream: '#F2F2F0',
-        gray: {
-          warm: '#8B8680',
-        },
-        espresso: '#403832',
-        'near-black': '#0D0D0D',
+        'tlw-navy-deep': '#111226',
+        'tlw-navy-rich': '#0C1940',
+        'tlw-cream': '#F2F2F0',
+        'tlw-warm-gray': '#8B8680',
+        'tlw-espresso': '#403832',
+        'tlw-near-black': '#0D0D0D',
+        'tlw-signal-orange': '#E8650A',
+        'tlw-surface': '#FFFFFF',
+        'tlw-canvas': '#F2F2F0',
       },
       fontFamily: {
-        sans: ['DM Sans', 'system-ui', 'sans-serif'],
+        sans: ['DM Sans', '-apple-system', 'system-ui', 'sans-serif'],
         serif: ['Cormorant Garamond', 'Georgia', 'serif'],
+      },
+      borderRadius: {
+        'tlw-sm': '4px',
+        'tlw-md': '6px',
+        'tlw-lg': '8px',
+        'tlw-xl': '10px',
+        'tlw-2xl': '12px',
+      },
+      transitionTimingFunction: {
+        tlw: 'cubic-bezier(0.4, 0, 0.2, 1)',
+      },
+      transitionDuration: {
+        'tlw-fast': '150ms',
+        'tlw-base': '200ms',
+        'tlw-slow': '300ms',
       },
     },
   },

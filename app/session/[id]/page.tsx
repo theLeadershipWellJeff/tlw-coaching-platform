@@ -179,15 +179,15 @@ function SessionPage() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-8">
         <TLWLogo size={48} light />
-        <p className="text-gray-warm text-xs tracking-[4px] uppercase mt-4 mb-8">theLeadershipWell</p>
+        <p className="text-tlw-warm-gray text-xs tracking-[4px] uppercase mt-4 mb-8">theLeadershipWell</p>
         <div className="text-center space-y-2">
           <div className="flex items-center gap-3 justify-center">
-            <div className="w-2 h-2 rounded-full bg-gray-warm animate-pulse" />
-            <p className="text-cream text-sm">
+            <div className="w-2 h-2 rounded-full bg-tlw-warm-gray animate-pulse" />
+            <p className="text-tlw-cream text-sm">
               {step === 'loading-notes' ? `Pulling session notes for ${clientName}…` : `Generating personalized prep content…`}
             </p>
           </div>
-          <p className="text-gray-warm text-xs">This takes about 15 seconds</p>
+          <p className="text-tlw-warm-gray text-xs">This takes about 15 seconds</p>
         </div>
       </div>
     )
@@ -197,8 +197,8 @@ function SessionPage() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-8 text-center">
         <p className="text-red-400 mb-4">Something went wrong: {error}</p>
-        <button onClick={run} className="text-cream underline text-sm">Try again</button>
-        <button onClick={() => router.push('/')} className="text-gray-warm text-sm mt-2">← Back to dashboard</button>
+        <button onClick={run} className="text-tlw-cream underline text-sm">Try again</button>
+        <button onClick={() => router.push('/')} className="text-tlw-warm-gray text-sm mt-2">← Back to dashboard</button>
       </div>
     )
   }
@@ -207,10 +207,10 @@ function SessionPage() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-8 text-center">
         <TLWLogo size={48} light />
-        <h2 className="font-serif text-3xl font-light text-cream mt-6 mb-3">Sent ✓</h2>
-        <p className="text-gray-warm text-sm mb-2">Session prep delivered to {clientName}</p>
-        <p className="text-gray-warm text-xs mb-8">CC'd to jeff@theleadershipwell.com</p>
-        <button onClick={() => router.push('/')} className="text-cream underline text-sm">← Back to dashboard</button>
+        <h2 className="font-serif text-3xl font-light text-tlw-cream mt-6 mb-3">Sent ✓</h2>
+        <p className="text-tlw-warm-gray text-sm mb-2">Session prep delivered to {clientName}</p>
+        <p className="text-tlw-warm-gray text-xs mb-8">CC'd to jeff@theleadershipwell.com</p>
+        <button onClick={() => router.push('/')} className="text-tlw-cream underline text-sm">← Back to dashboard</button>
       </div>
     )
   }
@@ -219,7 +219,7 @@ function SessionPage() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-8 text-center">
         <TLWLogo size={48} light />
-        <p className="text-cream mt-6">Sending to {clientEmail}…</p>
+        <p className="text-tlw-cream mt-6">Sending to {clientEmail}…</p>
       </div>
     )
   }
@@ -230,31 +230,31 @@ function SessionPage() {
   return (
     <div className="min-h-screen flex flex-col">
       {/* Top bar */}
-      <div className="sticky top-0 z-50 bg-navy-deep/95 backdrop-blur border-b border-gray-warm/20 px-6 py-3 flex items-center justify-between">
+      <div className="sticky top-0 z-50 bg-tlw-navy-deep/95 backdrop-blur border-b border-tlw-warm-gray/20 px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <TLWLogo size={28} light onClick={() => router.push("/")} style={{cursor:"pointer"}} />
           <div>
-            <p className="text-cream text-sm font-semibold">{clientName}</p>
-            <p className="text-gray-warm text-xs">{clientEmail}</p>
+            <p className="text-tlw-cream text-sm font-semibold">{clientName}</p>
+            <p className="text-tlw-warm-gray text-xs">{clientEmail}</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-gray-warm text-xs hidden sm:block">Click any field to edit</span>
+          <span className="text-tlw-warm-gray text-xs hidden sm:block">Click any field to edit</span>
           <button
             onClick={() => router.push('/')}
-            className="px-4 py-2 text-xs text-gray-warm border border-gray-warm/30 rounded-lg hover:text-cream transition-colors"
+            className="px-4 py-2 text-xs text-tlw-warm-gray border border-tlw-warm-gray/30 rounded-lg hover:text-tlw-cream transition-colors"
           >
             ← Dashboard
           </button>
           <button
             onClick={run}
-            className="px-4 py-2 text-xs text-gray-warm border border-gray-warm/30 rounded-lg hover:text-cream transition-colors"
+            className="px-4 py-2 text-xs text-tlw-warm-gray border border-tlw-warm-gray/30 rounded-lg hover:text-tlw-cream transition-colors"
           >
             ↻ Regenerate
           </button>
           <button
             onClick={send}
-            className="px-5 py-2 text-xs font-semibold bg-navy-rich border border-gray-warm/40 text-cream rounded-lg hover:bg-navy-rich/70 transition-colors"
+            className="px-5 py-2 text-xs font-semibold bg-tlw-navy-rich border border-tlw-warm-gray/40 text-tlw-cream rounded-lg hover:bg-tlw-navy-rich/70 transition-colors"
           >
             Send to {clientName.split(' ')[0]} →
           </button>
@@ -264,7 +264,7 @@ function SessionPage() {
       {/* Email preview — live editable */}
       <div className="flex-1 p-6 overflow-y-auto">
         <div className="max-w-[660px] mx-auto">
-          <p className="text-gray-warm text-xs text-center mb-4 tracking-[3px] uppercase">Live Preview — click any section to edit</p>
+          <p className="text-tlw-warm-gray text-xs text-center mb-4 tracking-[3px] uppercase">Live Preview — click any section to edit</p>
 
           <div className="bg-white rounded-lg overflow-hidden shadow-2xl" style={{ fontFamily: "'DM Sans', sans-serif" }}>
 
@@ -391,12 +391,12 @@ function SessionPage() {
           <div className="mt-6 flex justify-center">
             <button
               onClick={send}
-              className="px-8 py-3 bg-navy-rich border border-gray-warm/40 text-cream rounded-lg font-semibold hover:bg-navy-rich/70 transition-colors"
+              className="px-8 py-3 bg-tlw-navy-rich border border-tlw-warm-gray/40 text-tlw-cream rounded-lg font-semibold hover:bg-tlw-navy-rich/70 transition-colors"
             >
               Send to {clientName} →
             </button>
           </div>
-          <p className="text-gray-warm text-xs text-center mt-2">Also CC'd to jeff@theleadershipwell.com</p>
+          <p className="text-tlw-warm-gray text-xs text-center mt-2">Also CC'd to jeff@theleadershipwell.com</p>
         </div>
       </div>
     </div>
