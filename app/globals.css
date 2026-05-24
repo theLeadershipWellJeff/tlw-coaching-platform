@@ -2,6 +2,50 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  /* Brand colors */
+  --tlw-navy-deep: #111226;
+  --tlw-navy-rich: #0C1940;
+  --tlw-cream: #F2F2F0;
+  --tlw-warm-gray: #8B8680;
+  --tlw-espresso: #403832;
+  --tlw-near-black: #0D0D0D;
+  --tlw-signal-orange: #E8650A;
+
+  /* Surface system */
+  --tlw-surface: #FFFFFF;
+  --tlw-canvas: #F2F2F0;
+
+  /* Border tints */
+  --tlw-border-strong: rgba(139, 134, 128, 0.4);
+  --tlw-border-default: rgba(139, 134, 128, 0.25);
+  --tlw-border-subtle: rgba(139, 134, 128, 0.15);
+
+  /* Signal Orange tints */
+  --tlw-orange-tint: rgba(232, 101, 10, 0.08);
+  --tlw-orange-tint-strong: rgba(232, 101, 10, 0.06);
+
+  /* Navy tint */
+  --tlw-navy-tint: rgba(12, 25, 64, 0.06);
+
+  /* Typography */
+  --tlw-font-sans: 'DM Sans', -apple-system, system-ui, sans-serif;
+  --tlw-font-serif: 'Cormorant Garamond', Georgia, serif;
+
+  /* Radii */
+  --tlw-radius-sm: 4px;
+  --tlw-radius-md: 6px;
+  --tlw-radius-lg: 8px;
+  --tlw-radius-xl: 10px;
+  --tlw-radius-2xl: 12px;
+
+  /* Transition timing */
+  --tlw-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --tlw-duration-fast: 150ms;
+  --tlw-duration-base: 200ms;
+  --tlw-duration-slow: 300ms;
+}
+
 [contenteditable]:focus {
   outline: 2px solid #8B8680;
   outline-offset: 2px;
