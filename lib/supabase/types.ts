@@ -48,8 +48,9 @@ export interface Action {
 }
 
 // Insert/Update shapes: server provides id/timestamps via defaults.
-type Insertable<T> = Omit<T, 'id' | 'created_at' | 'updated_at'> &
-  Partial<Pick<T, 'id' | 'created_at' | 'updated_at'>>
+type GeneratedKey = 'id' | 'created_at' | 'updated_at'
+type Insertable<T> = Omit<T, GeneratedKey> &
+  Partial<Pick<T, Extract<keyof T, GeneratedKey>>>
 type Updatable<T> = Partial<Insertable<T>>
 
 export interface Database {
