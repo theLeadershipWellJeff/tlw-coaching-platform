@@ -11,6 +11,8 @@ export function ClientsRoster() {
   const [error, setError] = useState('')
   const [filter, setFilter] = useState('')
   const [showAdd, setShowAdd] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [importMsg, setImportMsg] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -29,6 +31,26 @@ export function ClientsRoster() {
   useEffect(() => {
     load()
   }, [load])
+
+  async function importFromCA() {
+    if (importing) return
+    setImporting(true)
+    setImportMsg('')
+    try {
+      const res = await fetch('/api/clients/import', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Import failed')
+      setImportMsg(
+        data.imported > 0
+          ? `Imported ${data.imported} new ${data.imported === 1 ? 'client' : 'clients'} (${data.skipped} already here).`
+          : `Up to date — all ${data.total} Coach Accountable clients are already imported.`
+      )
+      if (data.imported > 0) await load()
+    } catch (e: any) {
+      setImportMsg(e.message)
+    }
+    setImporting(false)
+  }
 
   const visible = clients.filter((c) => {
     if (!filter) return true
@@ -49,13 +71,26 @@ export function ClientsRoster() {
           placeholder="Search clients…"
           className="w-full max-w-xs rounded-tlw-lg border border-tlw-warm-gray/25 bg-tlw-surface px-3 py-2 text-[13px] text-tlw-espresso outline-none transition-colors focus:border-tlw-signal-orange"
         />
-        <button
-          onClick={() => setShowAdd(true)}
-          className="rounded-tlw-lg bg-tlw-navy-rich px-4 py-2 text-[13px] font-medium text-tlw-cream transition-colors hover:bg-tlw-navy-rich/85"
-        >
-          + Add client
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={importFromCA}
+            disabled={importing}
+            className="rounded-tlw-lg border border-tlw-warm-gray/30 px-4 py-2 text-[13px] font-medium text-tlw-espresso transition-colors hover:border-tlw-warm-gray/50 disabled:opacity-60"
+          >
+            {importing ? 'Importing…' : 'Import from Coach Accountable'}
+          </button>
+          <button
+            onClick={() => setShowAdd(true)}
+            className="rounded-tlw-lg bg-tlw-navy-rich px-4 py-2 text-[13px] font-medium text-tlw-cream transition-colors hover:bg-tlw-navy-rich/85"
+          >
+            + Add client
+          </button>
+        </div>
       </div>
+
+      {importMsg && (
+        <p className="text-[13px] text-tlw-warm-gray">{importMsg}</p>
+      )}
 
       {loading ? (
         <div className="space-y-2">
