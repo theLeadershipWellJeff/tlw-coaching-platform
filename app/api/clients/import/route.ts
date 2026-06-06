@@ -45,14 +45,21 @@ export async function POST(_req: NextRequest) {
     return NextResponse.json({ error: `Coach Accountable: ${e.message}` }, { status: 502 })
   }
 
-  const supabase = getSupabaseAdmin()
+  let supabase: ReturnType<typeof getSupabaseAdmin>
+  try {
+    supabase = getSupabaseAdmin()
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: 500 })
+  }
 
   // Which CA clients are already in Supabase?
   const { data: existing, error: readErr } = await supabase
     .from('clients')
     .select('ca_client_id')
     .not('ca_client_id', 'is', null)
-  if (readErr) return NextResponse.json({ error: readErr.message }, { status: 500 })
+  if (readErr) {
+    return NextResponse.json({ error: `Supabase: ${readErr.message}` }, { status: 500 })
+  }
 
   const seen = new Set((existing || []).map((c) => String(c.ca_client_id)))
 
@@ -76,7 +83,7 @@ export async function POST(_req: NextRequest) {
     const { error: insErr, count } = await supabase
       .from('clients')
       .insert(toInsert, { count: 'exact' })
-    if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 })
+    if (insErr) return NextResponse.json({ error: `Supabase: ${insErr.message}` }, { status: 500 })
     imported = count ?? toInsert.length
   }
 
