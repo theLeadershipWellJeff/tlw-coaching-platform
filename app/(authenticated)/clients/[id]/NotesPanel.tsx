@@ -1,8 +1,23 @@
 'use client'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Note } from '@/lib/supabase/types'
+import { RichNoteEditor } from './RichNoteEditor'
+import { extractCaptures } from '@/lib/notes/extract'
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
+
+// Turn stored note HTML into plain text for ACTION:/INSIGHT: capture on first
+// render (before the editor has emitted any text). Block elements become
+// separate lines, matching how TipTap's getText() splits content so the
+// captured items are identical before and after the first edit.
+function htmlToText(html: string): string {
+  if (!html) return ''
+  if (typeof document === 'undefined') return html
+  const el = document.createElement('div')
+  // Put a newline boundary between block-level elements.
+  el.innerHTML = html.replace(/<\/(p|div|li|h[1-6]|ul|ol)>/gi, '</$1>\n')
+  return (el.textContent || '').replace(/\n{2,}/g, '\n')
+}
 
 function today(): string {
   return new Date().toISOString().slice(0, 10)
@@ -154,9 +169,13 @@ function NoteEditor({
   const [title, setTitle] = useState(note.title || '')
   const [date, setDate] = useState(note.session_date)
   const [content, setContent] = useState(note.content)
+  const [text, setText] = useState(() => htmlToText(note.content))
   const [state, setState] = useState<SaveState>('idle')
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const dirty = useRef(false)
+
+  // Live ACTION:/INSIGHT: capture, derived straight from the note text.
+  const captures = useMemo(() => extractCaptures(text), [text])
 
   const save = useCallback(async () => {
     setState('saving')
@@ -224,13 +243,18 @@ function NoteEditor({
         />
       </div>
 
-      <textarea
-        value={content}
-        onChange={(e) => touch(() => setContent(e.target.value))}
-        placeholder="Write your session notes…"
-        rows={14}
-        className="w-full resize-y rounded-tlw-lg border border-tlw-warm-gray/20 bg-tlw-canvas/40 p-4 text-[14px] leading-relaxed text-tlw-espresso outline-none transition-colors focus:border-tlw-signal-orange"
-      />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_240px]">
+        <RichNoteEditor
+          html={content}
+          onChange={(html, plain) =>
+            touch(() => {
+              setContent(html)
+              setText(plain)
+            })
+          }
+        />
+        <CapturePanel captures={captures} />
+      </div>
 
       <div className="flex items-center justify-between">
         <span
@@ -255,6 +279,75 @@ function NoteEditor({
           </button>
         </div>
       </div>
+
+      <p className="text-[11px] text-tlw-warm-gray">
+        Tip: start a line with <span className="font-semibold">ACTION:</span> or{' '}
+        <span className="font-semibold">INSIGHT:</span> to capture it on the right.
+      </p>
+    </div>
+  )
+}
+
+function CapturePanel({
+  captures,
+}: {
+  captures: ReturnType<typeof extractCaptures>
+}) {
+  const { actions, insights } = captures
+
+  return (
+    <div className="space-y-4 lg:sticky lg:top-4 lg:self-start">
+      <CaptureGroup
+        label="Actions"
+        emptyHint="Lines starting with ACTION:"
+        items={actions.map((a) => a.text)}
+        accent="text-tlw-navy-rich"
+      />
+      <CaptureGroup
+        label="Insights"
+        emptyHint="Lines starting with INSIGHT:"
+        items={insights.map((i) => i.text)}
+        accent="text-tlw-signal-orange"
+      />
+    </div>
+  )
+}
+
+function CaptureGroup({
+  label,
+  emptyHint,
+  items,
+  accent,
+}: {
+  label: string
+  emptyHint: string
+  items: string[]
+  accent: string
+}) {
+  return (
+    <div className="rounded-tlw-lg border border-tlw-warm-gray/15 bg-tlw-surface p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <p className={`text-[11px] font-semibold uppercase tracking-[1.5px] ${accent}`}>
+          {label}
+        </p>
+        {items.length > 0 && (
+          <span className="rounded-full bg-tlw-canvas px-1.5 text-[11px] text-tlw-warm-gray">
+            {items.length}
+          </span>
+        )}
+      </div>
+      {items.length === 0 ? (
+        <p className="text-[12px] text-tlw-warm-gray/70">{emptyHint}</p>
+      ) : (
+        <ul className="space-y-1.5">
+          {items.map((t, i) => (
+            <li key={i} className="flex gap-2 text-[13px] leading-snug text-tlw-espresso">
+              <span className={`mt-[2px] shrink-0 ${accent}`}>•</span>
+              <span>{t}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }
