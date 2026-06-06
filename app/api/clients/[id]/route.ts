@@ -1,0 +1,59 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/authOptions'
+import { getSupabaseAdmin } from '@/lib/supabase/server'
+import type { Database } from '@/lib/supabase/types'
+
+// Fetch one client.
+export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+  const session = await getServerSession(authOptions)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const supabase = getSupabaseAdmin()
+  const { data, error } = await supabase
+    .from('clients')
+    .select('*')
+    .eq('id', params.id)
+    .single()
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 404 })
+  return NextResponse.json({ client: data })
+}
+
+// Update editable fields on a client.
+export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+  const session = await getServerSession(authOptions)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const body = await req.json().catch(() => ({}))
+  const allowed = ['name', 'email', 'title', 'company', 'status', 'phone', 'ca_client_id', 'tags', 'bio'] as const
+  const patch: Database['public']['Tables']['clients']['Update'] = {}
+  for (const key of allowed) {
+    if (key in body) patch[key] = body[key]
+  }
+  if (Object.keys(patch).length === 0) {
+    return NextResponse.json({ error: 'No fields to update' }, { status: 400 })
+  }
+
+  const supabase = getSupabaseAdmin()
+  const { data, error } = await supabase
+    .from('clients')
+    .update(patch)
+    .eq('id', params.id)
+    .select()
+    .single()
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ client: data })
+}
+
+// Delete a client (cascades to its notes + actions).
+export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+  const session = await getServerSession(authOptions)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const supabase = getSupabaseAdmin()
+  const { error } = await supabase.from('clients').delete().eq('id', params.id)
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ ok: true })
+}
