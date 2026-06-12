@@ -11,6 +11,8 @@
  * would silently collapse every table to `never`.
  */
 
+import type { SessionReportJson } from '@/lib/scoring/types'
+
 type Timestamp = string // ISO 8601
 type DateString = string // YYYY-MM-DD
 
@@ -52,6 +54,53 @@ export type Action = {
   updated_at: Timestamp
 }
 
+export type Coach = {
+  id: string
+  email: string
+  name: string
+  role: string // coach | supervisor
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
+export type Transcript = {
+  id: string
+  coach_id: string | null
+  client_id: string | null
+  client_initials: string | null
+  source: string
+  drive_file_id: string | null
+  filename: string | null
+  raw_md: string
+  content_hash: string
+  session_date: DateString | null
+  match_status: string // matched | needs_review | unmatched
+  match_confidence: number | null
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
+export type SessionReport = {
+  id: string
+  transcript_id: string
+  coach_id: string | null
+  client_id: string | null
+  client_initials: string | null
+  session_date: DateString | null
+  session_type: string | null
+  session_number: number | null
+  engagement_total: number | null
+  overall_score: number | null
+  band: string | null
+  report: SessionReportJson
+  coach_self_scores: Record<string, number> | null
+  coach_overall: number | null
+  coach_notes: string | null
+  status: string // scored | reviewed
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
 /**
  * Insert shape: columns with DB defaults (id, timestamps) are optional, and
  * any nullable column is optional too (Postgres fills NULL). Everything else
@@ -84,6 +133,24 @@ export type Database = {
         Row: Action
         Insert: Insertable<Action>
         Update: Updatable<Action>
+        Relationships: []
+      }
+      coaches: {
+        Row: Coach
+        Insert: Insertable<Coach>
+        Update: Updatable<Coach>
+        Relationships: []
+      }
+      transcripts: {
+        Row: Transcript
+        Insert: Insertable<Transcript>
+        Update: Updatable<Transcript>
+        Relationships: []
+      }
+      session_reports: {
+        Row: SessionReport
+        Insert: Insertable<SessionReport>
+        Update: Updatable<SessionReport>
         Relationships: []
       }
     }

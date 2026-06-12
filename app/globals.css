@@ -44,6 +44,16 @@
   --tlw-duration-fast: 150ms;
   --tlw-duration-base: 200ms;
   --tlw-duration-slow: 300ms;
+
+  /* Scorecard semantic tokens (Session Report Spec §4 — color carries meaning
+     only: status and scoring band). Calm, document-like, not decorative. */
+  --color-danger: #B4451F;   /* threshold breach, falling score, red flags */
+  --color-warning: #B07A1E;  /* at threshold, amber execution, developing band */
+  --color-success: #3F7250;  /* threshold met/exceeded, green, strong/masterful */
+  --color-info: #3A567E;     /* proficient band, neutral informational accent */
+  --color-muted: #8B8680;    /* baseline states, "no data yet" */
+  --color-surface: #F6F5F3;  /* metric card fill (muted, no border) */
+  --color-divider: rgba(139, 134, 128, 0.25); /* 0.5px section borders */
 }
 
 [contenteditable]:focus {

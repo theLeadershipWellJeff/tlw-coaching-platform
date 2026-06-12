@@ -68,6 +68,11 @@ const icons = {
       <path d="M3 20h18" />
     </svg>
   ),
+  scorecard: (
+    <svg viewBox="0 0 24 24" width="18" height="18" {...stroke}>
+      <path d="M12 3l2.6 5.3 5.9.9-4.2 4.1 1 5.8L12 16.9 6.7 19.2l1-5.8L3.5 9.2l5.9-.9z" />
+    </svg>
+  ),
   business: (
     <svg viewBox="0 0 24 24" width="18" height="18" {...stroke}>
       <rect x="3" y="7" width="18" height="13" rx="2" />
@@ -78,6 +83,7 @@ const icons = {
 
 const destinations: NavDestination[] = [
   { href: '/dashboard', label: 'Dashboard', icon: icons.dashboard },
+  { href: '/scorecard', label: 'Scorecard', icon: icons.scorecard },
   { href: '/clients', label: 'Clients', icon: icons.clients },
   { href: '/groups', label: 'Groups', icon: icons.groups },
   { href: '/templates', label: 'Templates', icon: icons.templates },
