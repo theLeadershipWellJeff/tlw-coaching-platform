@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import type { ScorecardSummary, CompetencyAverage } from '@/lib/scoring/aggregate'
 import { bandColor, BandChip } from './ui'
+import { AddTranscript } from './AddTranscript'
 
 interface ReportRow {
   id: string
@@ -121,6 +122,9 @@ export function ScorecardSpace() {
 
   return (
     <div className="space-y-12">
+      {/* Add a transcript (manual / backfill) */}
+      <AddTranscript onAdded={load} />
+
       {/* Headline */}
       <section>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
