@@ -34,11 +34,12 @@ function formatDate(d: string): string {
   })
 }
 
-export function NotesPanel({ clientId }: { clientId: string }) {
+export function NotesPanel({ clientId, autoNew = false }: { clientId: string; autoNew?: boolean }) {
   const [notes, setNotes] = useState<Note[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [activeId, setActiveId] = useState<string | null>(null)
+  const autoNewDone = useRef(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -58,6 +59,15 @@ export function NotesPanel({ clientId }: { clientId: string }) {
   useEffect(() => {
     load()
   }, [load])
+
+  // When arrived here via "+ New note", start a fresh note once after load.
+  useEffect(() => {
+    if (autoNew && !loading && !autoNewDone.current) {
+      autoNewDone.current = true
+      newNote()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoNew, loading])
 
   async function newNote() {
     try {
