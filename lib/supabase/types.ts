@@ -46,6 +46,7 @@ export type Note = {
   title: string | null
   content: string
   calendar_event_id: string | null
+  ca_session_id: string | null
   created_at: Timestamp
   updated_at: Timestamp
 }

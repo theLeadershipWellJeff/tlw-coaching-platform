@@ -13,6 +13,8 @@ export function ClientsRoster() {
   const [showAdd, setShowAdd] = useState(false)
   const [importing, setImporting] = useState(false)
   const [importMsg, setImportMsg] = useState('')
+  const [importingNotes, setImportingNotes] = useState(false)
+  const [notesMsg, setNotesMsg] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -52,6 +54,39 @@ export function ClientsRoster() {
     setImporting(false)
   }
 
+  // Port Coach Accountable session notes for every active client. Runs one
+  // request per client so each stays within limits, with live progress; it's
+  // idempotent, so re-running only pulls in anything new.
+  async function importNotesFromCA() {
+    if (importingNotes) return
+    const active = clients.filter((c) => c.status === 'active')
+    if (active.length === 0) {
+      setNotesMsg('No active clients to import notes for.')
+      return
+    }
+    setImportingNotes(true)
+    setNotesMsg('')
+    let imported = 0
+    let done = 0
+    for (const c of active) {
+      setNotesMsg(`Importing notes… ${done + 1} of ${active.length} (${c.name})`)
+      try {
+        const res = await fetch(`/api/clients/${c.id}/import-notes`, { method: 'POST' })
+        const data = await res.json()
+        if (res.ok) imported += data.imported || 0
+      } catch {
+        /* keep going — re-running fills any gaps */
+      }
+      done++
+    }
+    setNotesMsg(
+      `Done — imported ${imported} note${imported === 1 ? '' : 's'} across ${active.length} active client${
+        active.length === 1 ? '' : 's'
+      }.`
+    )
+    setImportingNotes(false)
+  }
+
   const visible = clients.filter((c) => {
     if (!filter) return true
     const q = filter.toLowerCase()
@@ -77,7 +112,14 @@ export function ClientsRoster() {
             disabled={importing}
             className="rounded-tlw-lg border border-tlw-warm-gray/30 px-4 py-2 text-[13px] font-medium text-tlw-espresso transition-colors hover:border-tlw-warm-gray/50 disabled:opacity-60"
           >
-            {importing ? 'Importing…' : 'Import from Coach Accountable'}
+            {importing ? 'Importing…' : 'Import clients from CA'}
+          </button>
+          <button
+            onClick={importNotesFromCA}
+            disabled={importingNotes}
+            className="rounded-tlw-lg border border-tlw-warm-gray/30 px-4 py-2 text-[13px] font-medium text-tlw-espresso transition-colors hover:border-tlw-warm-gray/50 disabled:opacity-60"
+          >
+            {importingNotes ? 'Importing notes…' : 'Import notes from CA'}
           </button>
           <button
             onClick={() => setShowAdd(true)}
@@ -88,9 +130,8 @@ export function ClientsRoster() {
         </div>
       </div>
 
-      {importMsg && (
-        <p className="text-[13px] text-tlw-warm-gray">{importMsg}</p>
-      )}
+      {importMsg && <p className="text-[13px] text-tlw-warm-gray">{importMsg}</p>}
+      {notesMsg && <p className="text-[13px] text-tlw-warm-gray">{notesMsg}</p>}
 
       {loading ? (
         <div className="space-y-2">
