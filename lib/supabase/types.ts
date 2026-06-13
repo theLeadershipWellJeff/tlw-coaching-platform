@@ -59,6 +59,8 @@ export type Coach = {
   email: string
   name: string
   role: string // coach | supervisor
+  google_refresh_token: string | null
+  timezone: string
   created_at: Timestamp
   updated_at: Timestamp
 }

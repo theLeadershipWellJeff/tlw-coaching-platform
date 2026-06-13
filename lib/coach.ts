@@ -9,6 +9,8 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { authOptions } from './authOptions'
 import type { Database, Coach } from './supabase/types'
 
+export const DEFAULT_TIMEZONE = process.env.DEFAULT_TIMEZONE || 'America/Los_Angeles'
+
 export async function getOrCreateCoach(
   supabase: SupabaseClient<Database>,
   email: string,
@@ -26,7 +28,7 @@ export async function getOrCreateCoach(
 
   const { data: created, error: insErr } = await supabase
     .from('coaches')
-    .insert({ email: normalizedEmail, name: name || normalizedEmail, role: 'coach' })
+    .insert({ email: normalizedEmail, name: name || normalizedEmail, role: 'coach', timezone: DEFAULT_TIMEZONE })
     .select('*')
     .single()
   if (insErr) {
@@ -40,6 +42,24 @@ export async function getOrCreateCoach(
     throw new Error(`Supabase (coaches insert): ${insErr.message}`)
   }
   return created
+}
+
+/**
+ * Persist the coach's Google refresh token (and ensure the coach row exists) on
+ * sign-in, so the background webhook can read their calendar server-side. Google
+ * only returns a refresh token when offline access is (re)granted; sign-in uses
+ * prompt=consent so we get one each time. Never clobber a stored token with null.
+ */
+export async function storeCoachRefreshToken(
+  supabase: SupabaseClient<Database>,
+  email: string,
+  name: string,
+  refreshToken: string | null | undefined
+): Promise<void> {
+  const coach = await getOrCreateCoach(supabase, email, name)
+  if (!refreshToken) return
+  if (coach.google_refresh_token === refreshToken) return
+  await supabase.from('coaches').update({ google_refresh_token: refreshToken }).eq('id', coach.id)
 }
 
 /** The coach for the signed-in session, or null if not authenticated. */
