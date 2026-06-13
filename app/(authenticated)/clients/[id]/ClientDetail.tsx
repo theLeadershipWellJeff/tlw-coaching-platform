@@ -6,12 +6,15 @@ import { NameCard } from './NameCard'
 import { TranscriptsCard, NotesCard } from './SummaryCards'
 import { GoalsCard } from './GoalsCard'
 import { EmailModal } from './EmailModal'
+import { ImportTranscriptsModal } from './ImportTranscriptsModal'
 
 export function ClientDetail({ clientId }: { clientId: string }) {
   const [client, setClient] = useState<Client | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [emailing, setEmailing] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [txReload, setTxReload] = useState(0)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -55,7 +58,7 @@ export function ClientDetail({ clientId }: { clientId: string }) {
       <NameCard client={client} onUpdated={setClient} />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <TranscriptsCard clientId={clientId} />
+        <TranscriptsCard clientId={clientId} reloadKey={txReload} />
         <NotesCard clientId={clientId} />
       </div>
 
@@ -72,12 +75,27 @@ export function ClientDetail({ clientId }: { clientId: string }) {
         >
           Send an email
         </button>
+        <button
+          onClick={() => setImporting(true)}
+          className="rounded-tlw-lg border border-tlw-warm-gray/30 px-4 py-2 text-[13px] font-medium text-tlw-espresso transition-colors hover:border-tlw-warm-gray/50"
+        >
+          Import transcripts from Plaud
+        </button>
       </div>
 
       <GoalsCard client={client} onUpdated={setClient} />
 
       {emailing && (
         <EmailModal to={client.email || ''} clientName={client.name} onClose={() => setEmailing(false)} />
+      )}
+
+      {importing && (
+        <ImportTranscriptsModal
+          clientId={clientId}
+          clientName={client.name}
+          onClose={() => setImporting(false)}
+          onImported={() => setTxReload((n) => n + 1)}
+        />
       )}
     </div>
   )

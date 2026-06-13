@@ -25,6 +25,9 @@ export interface IngestInput {
   source?: string
   sessionDate?: string | null // override (YYYY-MM-DD), used by manual add
   autoScore?: boolean
+  // Assign this exact client and skip matching — used by per-client import,
+  // where the coach has already told us whose session this is.
+  forceClient?: { id: string; name: string }
 }
 
 export interface IngestResult {
@@ -67,33 +70,40 @@ export async function ingestMarkdown(
 
   const parsed = parseTranscript(filename, markdown)
 
-  const { data: roster } = await supabase.from('clients').select('id, name, email')
-  const clients = (roster || []) as RosterClientWithEmail[]
+  let match: { clientId: string | null; confidence: number; status: string }
+  let matchedName: string | null = null
 
-  // 1) Match on a name in the title/front matter (when the file is named).
-  let match = matchClient(
-    parsed.clientNameRaw,
-    clients.map((c) => ({ id: c.id, name: c.name }) as RosterClient)
-  )
+  if (input.forceClient) {
+    // Coach picked the client (per-client import) — trust it, skip matching.
+    match = { clientId: input.forceClient.id, confidence: 1, status: 'matched' }
+    matchedName = input.forceClient.name
+  } else {
+    const { data: roster } = await supabase.from('clients').select('id, name, email')
+    const clients = (roster || []) as RosterClientWithEmail[]
 
-  // 2) Otherwise, resolve by timestamp: align the recording time (local wall
-  //    clock, the coach's timezone) with the calendar and read the guest.
-  if (match.status !== 'matched' && parsed.sessionDate && parsed.sessionTime) {
-    const instant = zonedWallClockToUtc(parsed.sessionDate, parsed.sessionTime, coach.timezone)
-    if (instant) {
-      const cal = await findClientFromCalendar(coach, instant, clients)
-      if (cal.status === 'matched' && cal.clientId) {
-        match = { clientId: cal.clientId, confidence: cal.confidence, status: 'matched' }
+    // 1) Match on a name in the title/front matter (when the file is named).
+    match = matchClient(
+      parsed.clientNameRaw,
+      clients.map((c) => ({ id: c.id, name: c.name }) as RosterClient)
+    )
+
+    // 2) Otherwise, resolve by timestamp: align the recording time (local wall
+    //    clock, the coach's timezone) with the calendar and read the guest.
+    if (match.status !== 'matched' && parsed.sessionDate && parsed.sessionTime) {
+      const instant = zonedWallClockToUtc(parsed.sessionDate, parsed.sessionTime, coach.timezone)
+      if (instant) {
+        const cal = await findClientFromCalendar(coach, instant, clients)
+        if (cal.status === 'matched' && cal.clientId) {
+          match = { clientId: cal.clientId, confidence: cal.confidence, status: 'matched' }
+        }
       }
     }
+    matchedName = match.clientId ? clients.find((c) => c.id === match.clientId)?.name || null : null
   }
 
   // Initials come from the matched roster client when we have one (privacy §3),
   // else from whatever name the file carried.
-  const matchedClient = match.clientId ? clients.find((c) => c.id === match.clientId) : null
-  const clientInitials = matchedClient
-    ? deriveInitials(matchedClient.name)
-    : parsed.clientInitials
+  const clientInitials = matchedName ? deriveInitials(matchedName) : parsed.clientInitials
 
   const insert: Database['public']['Tables']['transcripts']['Insert'] = {
     coach_id: coach.id,

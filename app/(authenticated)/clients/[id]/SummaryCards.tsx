@@ -8,7 +8,7 @@ function fmtDate(d: string | null): string {
   return new Date(y, m - 1, day).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-export function TranscriptsCard({ clientId }: { clientId: string }) {
+export function TranscriptsCard({ clientId, reloadKey = 0 }: { clientId: string; reloadKey?: number }) {
   const [items, setItems] = useState<MiniItem[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -32,7 +32,7 @@ export function TranscriptsCard({ clientId }: { clientId: string }) {
     return () => {
       cancelled = true
     }
-  }, [clientId])
+  }, [clientId, reloadKey])
 
   return (
     <MiniListCard
