@@ -56,24 +56,42 @@ export async function GET(req: NextRequest) {
     (process.env.JEFF_CC_EMAIL || '').toLowerCase(),
   ]
 
-  function matchClientFromTitle(title: string): { name: string; email: string } | null {
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+  // Non-Jeff guests on an event.
+  const guestsOf = (e: any): any[] =>
+    (e.attendees || []).filter((a: any) => a.email && !jeffEmails.includes(a.email.toLowerCase()))
+
+  // Reliable signal: an exact match between a guest's email and a client email.
+  function clientByEmail(email: string) {
+    const e = email.toLowerCase()
+    return caClients.find((c) => (c.email || '').toLowerCase() === e) || null
+  }
+
+  // Match a client ONLY when both first and last name (each >= 2 chars) appear
+  // as whole words in the title. Never match on a lone short fragment — a
+  // one-letter last name like "W" would otherwise hit any title containing a "w".
+  function clientByFullName(title: string) {
     const t = title.toLowerCase()
     for (const c of caClients) {
-      const first = (c.firstName || '').toLowerCase()
-      const last = (c.lastName || '').toLowerCase()
-      const full = `${first} ${last}`
-      if (
-        t.includes(full) ||
-        t.includes(first) ||
-        t.includes(last)
-      ) {
-        return {
-          name: `${c.firstName} ${c.lastName}`.trim(),
-          email: c.email || '',
-        }
-      }
+      const first = (c.firstName || '').trim().toLowerCase()
+      const last = (c.lastName || '').trim().toLowerCase()
+      if (first.length < 2 || last.length < 2) continue
+      if (new RegExp(`\\b${esc(first)}\\b`).test(t) && new RegExp(`\\b${esc(last)}\\b`).test(t)) return c
     }
     return null
+  }
+
+  const clientFullName = (c: any) => `${c.firstName || ''} ${c.lastName || ''}`.trim()
+
+  // Identify the client for an event: guest email first, then a full-name match.
+  function matchClient(e: any): { name: string; email: string } | null {
+    for (const g of guestsOf(e)) {
+      const c = clientByEmail(g.email)
+      if (c) return { name: clientFullName(c), email: c.email || g.email }
+    }
+    const byName = clientByFullName(e.summary || '')
+    return byName ? { name: clientFullName(byName), email: byName.email || '' } : null
   }
 
   function extractNameFromTitle(title: string): string {
@@ -81,6 +99,7 @@ export async function GET(req: NextRequest) {
       /^(.+?)\s+and\s+(?:dr\.?\s*jeff|jeff)/i,
       /^(.+?):\s*\d+\s*min/i,
       /^(.+?)\s*[-:]\s*(?:coaching|session|1:1|tlw)/i,
+      /^(.+?)\s+(?:coaching|session)\b/i,
       /(?:coaching|session|1:1|tlw)\s*[-:]\s*(.+)/i,
     ]
     for (const pattern of patterns) {
@@ -90,46 +109,23 @@ export async function GET(req: NextRequest) {
     return title
   }
 
+  // Only surface confirmed client sessions, or events clearly labeled coaching.
+  // A bare non-Jeff attendee is no longer enough — that pulled in CRM/admin
+  // meetings and prospects and mislabeled them as clients.
+  const COACHING_RE = /\b(coaching|session|1:1|tlw)\b|dr\.?\s*jeff/i
+
   const sessions = events
-    .filter(e => {
-      if (!e.summary) return false
-      const title = e.summary.toLowerCase()
-      const hasAttendees = (e.attendees?.length || 0) > 1
-
-      // Match against CA client names
-      const caMatch = matchClientFromTitle(e.summary)
-      if (caMatch) return true
-
-      // Match attendees not Jeff
-      const nonJeffAttendee = e.attendees?.find(
-        a => !jeffEmails.includes((a.email || '').toLowerCase())
-      )
-      if (nonJeffAttendee) return true
-
-      // Match common coaching keywords
-      const isCoaching =
-        title.includes('coaching') ||
-        title.includes('session') ||
-        title.includes('1:1') ||
-        title.includes('tlw') ||
-        title.includes('dr. jeff') ||
-        title.includes('dr jeff')
-
-      return isCoaching
-    })
-    .map(e => {
-      const caMatch = matchClientFromTitle(e.summary || '')
-      const nonJeffAttendee = e.attendees?.find(
-        a => !jeffEmails.includes((a.email || '').toLowerCase())
-      )
-
+    .filter((e) => !!e.summary && (!!matchClient(e) || COACHING_RE.test(e.summary)))
+    .map((e) => {
+      const client = matchClient(e)
+      const guest = guestsOf(e)[0]
       return {
         id: e.id,
         title: e.summary,
         start: e.start?.dateTime || e.start?.date,
         end: e.end?.dateTime || e.end?.date,
-        clientName: caMatch?.name || nonJeffAttendee?.displayName || extractNameFromTitle(e.summary || ''),
-        clientEmail: caMatch?.email || nonJeffAttendee?.email || '',
+        clientName: client?.name || extractNameFromTitle(e.summary || ''),
+        clientEmail: client?.email || guest?.email || '',
         duration: getDuration(e.start?.dateTime ?? undefined, e.end?.dateTime ?? undefined),
         meetLink: e.hangoutLink || e.location || '',
       }
