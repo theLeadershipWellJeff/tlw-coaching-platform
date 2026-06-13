@@ -1,4 +1,6 @@
 import GoogleProvider from 'next-auth/providers/google'
+import { getSupabaseAdmin } from './supabase/server'
+import { storeCoachRefreshToken } from './coach'
 
 export const authOptions = {
   session: {
@@ -67,4 +69,22 @@ export const authOptions = {
     },
   },
 
+  events: {
+    // Persist the coach's Google refresh token so the unattended transcript
+    // webhook can read their calendar. Best-effort — never block sign-in on it.
+    async signIn({ user, account }: any) {
+      if (!user?.email) return
+      try {
+        const supabase = getSupabaseAdmin()
+        await storeCoachRefreshToken(
+          supabase,
+          user.email,
+          user.name || user.email,
+          account?.refresh_token
+        )
+      } catch (e) {
+        console.error('Failed to persist coach refresh token:', e)
+      }
+    },
+  },
 }

@@ -8,9 +8,14 @@
 import { createHash } from 'crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Coach, Database } from '@/lib/supabase/types'
-import { parseTranscript } from './parse'
+import { parseTranscript, deriveInitials } from './parse'
 import { matchClient, type RosterClient } from './match'
 import { runAndStoreReport } from '@/lib/scoring/store'
+import {
+  findClientFromCalendar,
+  zonedWallClockToUtc,
+  type RosterClientWithEmail,
+} from '@/lib/calendar'
 
 export interface IngestInput {
   coach: Coach
@@ -62,13 +67,38 @@ export async function ingestMarkdown(
 
   const parsed = parseTranscript(filename, markdown)
 
-  const { data: roster } = await supabase.from('clients').select('id, name')
-  const match = matchClient(parsed.clientNameRaw, (roster || []) as RosterClient[])
+  const { data: roster } = await supabase.from('clients').select('id, name, email')
+  const clients = (roster || []) as RosterClientWithEmail[]
+
+  // 1) Match on a name in the title/front matter (when the file is named).
+  let match = matchClient(
+    parsed.clientNameRaw,
+    clients.map((c) => ({ id: c.id, name: c.name }) as RosterClient)
+  )
+
+  // 2) Otherwise, resolve by timestamp: align the recording time (local wall
+  //    clock, the coach's timezone) with the calendar and read the guest.
+  if (match.status !== 'matched' && parsed.sessionDate && parsed.sessionTime) {
+    const instant = zonedWallClockToUtc(parsed.sessionDate, parsed.sessionTime, coach.timezone)
+    if (instant) {
+      const cal = await findClientFromCalendar(coach, instant, clients)
+      if (cal.status === 'matched' && cal.clientId) {
+        match = { clientId: cal.clientId, confidence: cal.confidence, status: 'matched' }
+      }
+    }
+  }
+
+  // Initials come from the matched roster client when we have one (privacy §3),
+  // else from whatever name the file carried.
+  const matchedClient = match.clientId ? clients.find((c) => c.id === match.clientId) : null
+  const clientInitials = matchedClient
+    ? deriveInitials(matchedClient.name)
+    : parsed.clientInitials
 
   const insert: Database['public']['Tables']['transcripts']['Insert'] = {
     coach_id: coach.id,
     client_id: match.clientId,
-    client_initials: parsed.clientInitials,
+    client_initials: clientInitials,
     source: input.source || 'plaud',
     drive_file_id: input.driveFileId ?? null,
     filename,

@@ -13,6 +13,7 @@ export interface ParsedTranscript {
   clientNameRaw: string | null
   clientInitials: string | null
   sessionDate: string | null // YYYY-MM-DD
+  sessionTime: string | null // HH:MM(:SS), local wall-clock if present
   sessionType: string | null
   sessionNumber: number | null
   engagementTotal: number | null
@@ -85,6 +86,16 @@ export function deriveInitials(name: string | null): string | null {
   return tokens.map((t) => `${t[0].toUpperCase()}.`).join('')
 }
 
+/** Pull a wall-clock time "HH:MM(:SS)" from a string, or null. */
+function extractTime(raw: string | null): string | null {
+  if (!raw) return null
+  // Require two digits after the colon so "1:1" (as in "1:1 coaching") is ignored.
+  const m = raw.match(/\b(\d{1,2}):(\d{2})(?::(\d{2}))?\b/)
+  if (!m) return null
+  const hh = m[1].padStart(2, '0')
+  return `${hh}:${m[2]}${m[3] ? `:${m[3]}` : ''}`
+}
+
 function parseIntOrNull(v: string | null): number | null {
   if (!v) return null
   const n = parseInt(v, 10)
@@ -105,20 +116,40 @@ function parseSessionNumber(fields: Record<string, string>): { number: number | 
   }
 }
 
-/** Pull a name + date out of a filename like "acme-jane-d-2026-06-10.md". */
-function parseFilename(filename: string | null): { name: string | null; date: string | null } {
-  if (!filename) return { name: null, date: null }
+/**
+ * Pull name + date + time out of a filename/title. Handles both a bare Plaud
+ * timestamp ("2026-06-12 16:05:41" — date+time, no name) and a named file
+ * ("acme-jane-2026-06-10.md").
+ */
+function parseFilename(
+  filename: string | null
+): { name: string | null; date: string | null; time: string | null } {
+  if (!filename) return { name: null, date: null, time: null }
   const base = filename.replace(/\.[a-z0-9]+$/i, '')
+
+  // Full timestamp first: date + time together (Plaud's default title).
+  const tsMatch = base.match(/(\d{4})-(\d{1,2})-(\d{1,2})[ T_]+(\d{1,2}):(\d{2})(?::(\d{2}))?/)
+  if (tsMatch) {
+    const date = normalizeDate(tsMatch[0])
+    const time = extractTime(tsMatch[0])
+    const namePart = base.replace(tsMatch[0], ' ')
+    const name = cleanName(namePart)
+    return { name: name || null, date, time }
+  }
+
   const dateMatch = base.match(/\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}/)
   const date = dateMatch ? normalizeDate(dateMatch[0]) : null
   let namePart = base
   if (dateMatch) namePart = base.replace(dateMatch[0], ' ')
-  const name = namePart
+  return { name: cleanName(namePart) || null, date, time: null }
+}
+
+function cleanName(s: string): string {
+  return s
     .replace(/[_\-]+/g, ' ')
     .replace(/\b(transcript|session|coaching|plaud|notes?)\b/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim()
-  return { name: name || null, date }
 }
 
 /**
@@ -153,9 +184,9 @@ export function parseTranscript(filename: string | null, md: string): ParsedTran
     ? deriveInitials(explicitInitials)
     : deriveInitials(clientNameRaw)
 
-  const sessionDate =
-    normalizeDate(pick(fields, ['date', 'sessiondate', 'sessiondatetime', 'recordeddate'])) ||
-    fromFile.date
+  const dateField = pick(fields, ['date', 'sessiondate', 'sessiondatetime', 'recordeddate'])
+  const sessionDate = normalizeDate(dateField) || fromFile.date
+  const sessionTime = extractTime(dateField) || fromFile.time
 
   const { number, total } = parseSessionNumber(fields)
 
@@ -163,6 +194,7 @@ export function parseTranscript(filename: string | null, md: string): ParsedTran
     clientNameRaw,
     clientInitials,
     sessionDate,
+    sessionTime,
     sessionType: pick(fields, ['type', 'sessiontype', 'engagementtype']),
     sessionNumber: number,
     engagementTotal: total,
