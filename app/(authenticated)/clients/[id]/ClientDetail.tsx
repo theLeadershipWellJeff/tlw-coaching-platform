@@ -1,13 +1,17 @@
 'use client'
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import type { Client, Note } from '@/lib/supabase/types'
-import { NotesPanel } from './NotesPanel'
+import type { Client } from '@/lib/supabase/types'
+import { NameCard } from './NameCard'
+import { TranscriptsCard, NotesCard } from './SummaryCards'
+import { GoalsCard } from './GoalsCard'
+import { EmailModal } from './EmailModal'
 
 export function ClientDetail({ clientId }: { clientId: string }) {
   const [client, setClient] = useState<Client | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [emailing, setEmailing] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -48,37 +52,33 @@ export function ClientDetail({ clientId }: { clientId: string }) {
         ← Back to roster
       </Link>
 
-      {/* Client header card */}
-      <div className="rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <h2 className="text-xl font-medium text-tlw-navy-deep">{client.name}</h2>
-            <p className="mt-1 text-[13px] text-tlw-warm-gray">
-              {[client.title, client.company].filter(Boolean).join(' · ') || '—'}
-            </p>
-            {client.email && (
-              <p className="mt-0.5 text-[13px] text-tlw-espresso">{client.email}</p>
-            )}
-          </div>
-          <span
-            className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-medium capitalize ${
-              client.status === 'active'
-                ? 'bg-tlw-navy-rich/10 text-tlw-navy-rich'
-                : 'bg-tlw-warm-gray/15 text-tlw-warm-gray'
-            }`}
-          >
-            {client.status}
-          </span>
-        </div>
-        {client.bio && (
-          <p className="mt-4 border-t border-tlw-warm-gray/15 pt-4 text-[13px] leading-relaxed text-tlw-espresso">
-            {client.bio}
-          </p>
-        )}
+      <NameCard client={client} onUpdated={setClient} />
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <TranscriptsCard clientId={clientId} />
+        <NotesCard clientId={clientId} />
       </div>
 
-      {/* Notes */}
-      <NotesPanel clientId={clientId} />
+      <div className="flex flex-wrap gap-3">
+        <Link
+          href={`/clients/${clientId}/notes?new=1`}
+          className="rounded-tlw-lg bg-tlw-navy-rich px-4 py-2 text-[13px] font-medium text-tlw-cream transition-opacity hover:opacity-90"
+        >
+          + New note
+        </Link>
+        <button
+          onClick={() => setEmailing(true)}
+          className="rounded-tlw-lg border border-tlw-warm-gray/30 px-4 py-2 text-[13px] font-medium text-tlw-espresso transition-colors hover:border-tlw-warm-gray/50"
+        >
+          Send an email
+        </button>
+      </div>
+
+      <GoalsCard client={client} onUpdated={setClient} />
+
+      {emailing && (
+        <EmailModal to={client.email || ''} clientName={client.name} onClose={() => setEmailing(false)} />
+      )}
     </div>
   )
 }

@@ -16,6 +16,11 @@ import type { SessionReportJson } from '@/lib/scoring/types'
 type Timestamp = string // ISO 8601
 type DateString = string // YYYY-MM-DD
 
+export type CoachingGoal = {
+  title: string
+  description: string
+}
+
 export type Client = {
   id: string
   name: string
@@ -28,6 +33,8 @@ export type Client = {
   ca_client_id: string | null
   tags: string[]
   bio: string | null
+  address: string | null
+  coaching_goals: CoachingGoal[] | null
   created_at: Timestamp
   updated_at: Timestamp
 }
