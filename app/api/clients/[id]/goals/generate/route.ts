@@ -8,7 +8,7 @@ import type { CoachingGoal, Database } from '@/lib/supabase/types'
 export const runtime = 'nodejs'
 export const maxDuration = 60
 
-const MODEL = process.env.GOALS_MODEL || 'claude-sonnet-4-20250514'
+const MODEL = process.env.GOALS_MODEL || 'claude-sonnet-4-6'
 
 // Strip HTML tags from rich-text note content for the prompt.
 function toText(html: string): string {
