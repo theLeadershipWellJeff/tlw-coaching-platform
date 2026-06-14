@@ -72,6 +72,31 @@ export function ScorecardSpace() {
   const [loading, setLoading] = useState(true)
   const [assigning, setAssigning] = useState<string | null>(null)
   const [picked, setPicked] = useState<Record<string, string>>({})
+  const [openPreview, setOpenPreview] = useState<string | null>(null)
+  const [previewCache, setPreviewCache] = useState<
+    Record<string, { loading?: boolean; text?: string; truncated?: boolean; speakerSeparated?: boolean; error?: string }>
+  >({})
+
+  async function togglePreview(id: string) {
+    if (openPreview === id) {
+      setOpenPreview(null)
+      return
+    }
+    setOpenPreview(id)
+    if (previewCache[id] && !previewCache[id].error) return
+    setPreviewCache((c) => ({ ...c, [id]: { loading: true } }))
+    try {
+      const res = await fetch(`/api/transcripts/${id}`)
+      if (!res.ok) throw new Error()
+      const d = await res.json()
+      setPreviewCache((c) => ({
+        ...c,
+        [id]: { text: d.preview ?? '', truncated: !!d.truncated, speakerSeparated: !!d.speakerSeparated },
+      }))
+    } catch {
+      setPreviewCache((c) => ({ ...c, [id]: { error: 'Could not load this transcript.' } }))
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -177,45 +202,80 @@ export function ScorecardSpace() {
             client to score them; matches are never auto-assigned without confidence.
           </p>
           <div className="space-y-2">
-            {needsReview.map((t) => (
-              <div
-                key={t.id}
-                className="flex flex-wrap items-center gap-3 rounded-tlw-lg p-3"
-                style={{ backgroundColor: 'var(--color-surface)' }}
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[13px] text-tlw-espresso">
-                    {t.filename || 'transcript'}{' '}
-                    {t.client_initials && <span className="text-tlw-warm-gray">· {t.client_initials}</span>}
-                  </p>
-                  <p className="text-[11px] text-tlw-warm-gray">
-                    {fmtDate(t.session_date)}
-                    {t.match_confidence != null && t.match_confidence > 0 && (
-                      <> · best guess {(t.match_confidence * 100).toFixed(0)}%</>
-                    )}
-                  </p>
+            {needsReview.map((t) => {
+              const pv = previewCache[t.id]
+              const open = openPreview === t.id
+              return (
+                <div
+                  key={t.id}
+                  className="rounded-tlw-lg p-3"
+                  style={{ backgroundColor: 'var(--color-surface)' }}
+                >
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[13px] text-tlw-espresso">
+                        {t.filename || 'Untitled recording'}{' '}
+                        {t.client_initials && <span className="text-tlw-warm-gray">· {t.client_initials}</span>}
+                      </p>
+                      <p className="text-[11px] text-tlw-warm-gray">
+                        {fmtDate(t.session_date)}
+                        {t.match_confidence != null && t.match_confidence > 0 && (
+                          <> · best guess {(t.match_confidence * 100).toFixed(0)}%</>
+                        )}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => togglePreview(t.id)}
+                      className="rounded-tlw-md border border-tlw-warm-gray/25 px-2.5 py-1.5 text-[12px] text-tlw-espresso transition-opacity duration-tlw-base hover:opacity-80"
+                    >
+                      {open ? 'hide' : 'view'}
+                    </button>
+                    <select
+                      value={picked[t.id] || ''}
+                      onChange={(e) => setPicked((p) => ({ ...p, [t.id]: e.target.value }))}
+                      className="rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-surface px-2 py-1.5 text-[12px] text-tlw-espresso"
+                    >
+                      <option value="">choose client…</option>
+                      {clients.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() => confirmClient(t.id)}
+                      disabled={!picked[t.id] || assigning === t.id}
+                      className="rounded-tlw-md bg-tlw-navy-rich px-3 py-1.5 text-[12px] font-medium text-tlw-cream transition-opacity duration-tlw-base hover:opacity-90 disabled:opacity-40"
+                    >
+                      {assigning === t.id ? 'scoring…' : 'confirm & score'}
+                    </button>
+                  </div>
+                  {open && (
+                    <div
+                      className="mt-3 rounded-tlw-md p-3"
+                      style={{ border: '0.5px solid var(--color-divider)' }}
+                    >
+                      {pv?.loading && <p className="text-[12px] text-tlw-warm-gray">loading…</p>}
+                      {pv?.error && <p className="text-[12px] text-tlw-warm-gray">{pv.error}</p>}
+                      {!pv?.loading && !pv?.error && (
+                        pv?.text ? (
+                          <>
+                            <pre className="max-h-64 overflow-auto whitespace-pre-wrap font-sans text-[12px] leading-relaxed text-tlw-espresso">
+                              {pv.text}
+                            </pre>
+                            {pv.truncated && (
+                              <p className="mt-2 text-[11px] text-tlw-warm-gray">…preview truncated · open the transcript to read the rest</p>
+                            )}
+                          </>
+                        ) : (
+                          <p className="text-[12px] text-tlw-warm-gray">This transcript appears to be empty.</p>
+                        )
+                      )}
+                    </div>
+                  )}
                 </div>
-                <select
-                  value={picked[t.id] || ''}
-                  onChange={(e) => setPicked((p) => ({ ...p, [t.id]: e.target.value }))}
-                  className="rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-surface px-2 py-1.5 text-[12px] text-tlw-espresso"
-                >
-                  <option value="">choose client…</option>
-                  {clients.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  onClick={() => confirmClient(t.id)}
-                  disabled={!picked[t.id] || assigning === t.id}
-                  className="rounded-tlw-md bg-tlw-navy-rich px-3 py-1.5 text-[12px] font-medium text-tlw-cream transition-opacity duration-tlw-base hover:opacity-90 disabled:opacity-40"
-                >
-                  {assigning === t.id ? 'scoring…' : 'confirm & score'}
-                </button>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </section>
       )}
