@@ -3,7 +3,10 @@ import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { getSessionCoach } from '@/lib/coach'
 
 // Transcripts for the signed-in coach. Defaults to those needing manual client
-// confirmation (fail-loud queue, spec §19); pass ?status=all for everything.
+// confirmation (the fail-loud queue, spec §19): both needs_review (an uncertain
+// guess) and unmatched (no name to guess from — e.g. Plaud's timestamp-named
+// files when the calendar lookup also misses). Pass a comma-separated status
+// list to filter, or ?status=all for everything.
 export async function GET(req: NextRequest) {
   let supabase: ReturnType<typeof getSupabaseAdmin>
   try {
@@ -15,14 +18,17 @@ export async function GET(req: NextRequest) {
   const coach = await getSessionCoach(supabase)
   if (!coach) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const status = req.nextUrl.searchParams.get('status') || 'needs_review'
+  const status = req.nextUrl.searchParams.get('status') || 'needs_review,unmatched'
 
   let query = supabase
     .from('transcripts')
     .select('id, client_id, client_initials, filename, session_date, match_status, match_confidence, created_at')
     .eq('coach_id', coach.id)
     .order('created_at', { ascending: false })
-  if (status !== 'all') query = query.eq('match_status', status)
+  if (status !== 'all') {
+    const statuses = status.split(',').map((s) => s.trim()).filter(Boolean)
+    query = statuses.length > 1 ? query.in('match_status', statuses) : query.eq('match_status', statuses[0])
+  }
 
   const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

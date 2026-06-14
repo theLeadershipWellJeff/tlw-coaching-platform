@@ -78,7 +78,7 @@ export function ScorecardSpace() {
     const [s, r, t, c] = await Promise.all([
       fetch('/api/reports/summary').then((x) => (x.ok ? x.json() : null)),
       fetch('/api/reports').then((x) => (x.ok ? x.json() : null)),
-      fetch('/api/transcripts?status=needs_review').then((x) => (x.ok ? x.json() : null)),
+      fetch('/api/transcripts?status=needs_review,unmatched').then((x) => (x.ok ? x.json() : null)),
       fetch('/api/clients').then((x) => (x.ok ? x.json() : null)),
     ])
     setSummary(s?.summary || null)
@@ -172,8 +172,9 @@ export function ScorecardSpace() {
         <section className="pt-8" style={{ borderTop: '0.5px solid var(--color-divider)' }}>
           <h2 className="mb-1 text-[15px] font-medium text-tlw-navy-deep">Needs a client confirmed</h2>
           <p className="mb-4 text-[12px] text-tlw-warm-gray">
-            These transcripts couldn&apos;t be matched with confidence. Confirm the client to score them
-            — uncertain matches are never auto-assigned.
+            These transcripts couldn&apos;t be matched to a client — either the guess was uncertain or
+            the file carried no name to match on (common for timestamp-named recordings). Confirm the
+            client to score them; matches are never auto-assigned without confidence.
           </p>
           <div className="space-y-2">
             {needsReview.map((t) => (
@@ -189,7 +190,9 @@ export function ScorecardSpace() {
                   </p>
                   <p className="text-[11px] text-tlw-warm-gray">
                     {fmtDate(t.session_date)}
-                    {t.match_confidence != null && <> · best guess {(t.match_confidence * 100).toFixed(0)}%</>}
+                    {t.match_confidence != null && t.match_confidence > 0 && (
+                      <> · best guess {(t.match_confidence * 100).toFixed(0)}%</>
+                    )}
                   </p>
                 </div>
                 <select

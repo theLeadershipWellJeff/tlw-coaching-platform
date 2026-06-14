@@ -26,7 +26,7 @@ export async function GET() {
     .from('transcripts')
     .select('id', { count: 'exact', head: true })
     .eq('coach_id', coach.id)
-    .eq('match_status', 'needs_review')
+    .in('match_status', ['needs_review', 'unmatched'])
 
   return NextResponse.json({
     summary: summarize(reports || []),
