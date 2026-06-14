@@ -24,10 +24,12 @@ import type {
   SessionReportJson,
 } from './types'
 
-// Proven default model from the repo; override with SCORING_MODEL (e.g. an Opus
-// id) once the account has access. Scoring is a judgment task — a stronger model
-// helps, but the deterministic gates below hold the line regardless.
-const MODEL = process.env.SCORING_MODEL || 'claude-sonnet-4-20250514'
+// Default scoring model. The previous default (claude-sonnet-4-20250514) is
+// deprecated and retires 2026-06-15, which silently breaks scoring; claude-sonnet-4-6
+// is its current drop-in replacement. Override with SCORING_MODEL (e.g. an Opus
+// id like claude-opus-4-8) for stronger judgment — the deterministic gates below
+// hold the line regardless.
+const MODEL = process.env.SCORING_MODEL || 'claude-sonnet-4-6'
 
 export interface ScoringContext {
   coachName: string
