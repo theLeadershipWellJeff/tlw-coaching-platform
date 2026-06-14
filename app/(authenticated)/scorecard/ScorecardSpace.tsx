@@ -72,6 +72,8 @@ export function ScorecardSpace() {
   const [loading, setLoading] = useState(true)
   const [assigning, setAssigning] = useState<string | null>(null)
   const [picked, setPicked] = useState<Record<string, string>>({})
+  const [deletePending, setDeletePending] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<string | null>(null)
   const [openPreview, setOpenPreview] = useState<string | null>(null)
   const [previewCache, setPreviewCache] = useState<
     Record<string, { loading?: boolean; text?: string; truncated?: boolean; speakerSeparated?: boolean; error?: string }>
@@ -116,6 +118,19 @@ export function ScorecardSpace() {
   useEffect(() => {
     load()
   }, [load])
+
+  async function deleteTranscript(transcriptId: string) {
+    setDeleting(transcriptId)
+    try {
+      const res = await fetch(`/api/transcripts/${transcriptId}`, { method: 'DELETE' })
+      if (res.ok) {
+        setDeletePending(null)
+        await load()
+      }
+    } finally {
+      setDeleting(null)
+    }
+  }
 
   async function confirmClient(transcriptId: string) {
     const clientId = picked[transcriptId]
@@ -230,6 +245,31 @@ export function ScorecardSpace() {
                     >
                       {open ? 'hide' : 'view'}
                     </button>
+                    {deletePending === t.id ? (
+                      <>
+                        <button
+                          onClick={() => deleteTranscript(t.id)}
+                          disabled={deleting === t.id}
+                          className="rounded-tlw-md border border-red-300 px-2.5 py-1.5 text-[12px] font-medium text-red-600 transition-opacity duration-tlw-base hover:opacity-80 disabled:opacity-40"
+                        >
+                          {deleting === t.id ? 'deleting…' : 'confirm delete'}
+                        </button>
+                        <button
+                          onClick={() => setDeletePending(null)}
+                          disabled={deleting === t.id}
+                          className="rounded-tlw-md px-2 py-1.5 text-[12px] text-tlw-warm-gray transition-opacity duration-tlw-base hover:opacity-80"
+                        >
+                          cancel
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => setDeletePending(t.id)}
+                        className="rounded-tlw-md border border-tlw-warm-gray/25 px-2.5 py-1.5 text-[12px] text-red-600 transition-opacity duration-tlw-base hover:opacity-80"
+                      >
+                        delete
+                      </button>
+                    )}
                     <select
                       value={picked[t.id] || ''}
                       onChange={(e) => setPicked((p) => ({ ...p, [t.id]: e.target.value }))}
