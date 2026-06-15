@@ -120,6 +120,27 @@ goals** (the same `clients.coaching_goals` as the workspace card, edited via the
 "Client goals" modal). All three save with PATCH `/api/clients/[id]`
 (`KeyInfoCard`, `CoachingMapCard`, `EngagementGoalsCard`).
 
+**Key info is PRIVATE to the coach.** `clients.key_info` must never feed any
+client-facing generation (session prep, nudges, the "send to client" draft) —
+those use the note content only. Keep it out of those prompts.
+
+New note titles default to `"<client name> · <date>"` (`NotesPanel#newNote`).
+The editor toolbar has a **Templates** dropdown (`RichNoteEditor`, gated by
+`enableTemplates`) that inserts a saved Library template at the cursor.
+
+### Note templates (Library)
+`note_templates` (coach-scoped, migration 008) holds reusable rich-text note
+templates authored on the **Library** page (`library/TemplatesLibrary.tsx`), CRUD
+via `/api/templates` + `/api/templates/[id]`. They surface in the note editor's
+Templates dropdown.
+
+### Send to client (`SendToClientModal`)
+The button at the bottom of a note drafts a clean, client-facing email from the
+note via Claude (`/api/notes/client-email` → `{subject, body}`; **note content
+only, never key_info**), shows it for review/edit, then sends with
+`/api/email/send` to `client.email` (Cc the coach). Disabled when the client has
+no email on file.
+
 ### Coaching goals = the source of truth (and of the prep plan)
 `clients.coaching_goals` is the sacred goal list. Each goal is `{title,
 description, metrics?}` (`metrics` = up to three measures of fulfillment).
@@ -172,8 +193,8 @@ workspace (address + coaching_goals) · 005 CA notes (ca_session_id) · 006
 supervisor email (coaches.supervisor_email). Run new migrations by hand in the
 Supabase SQL editor.
 
-**Pending — apply in Supabase:** 007 client key info + map
-(`clients.key_info`, `clients.coaching_map`).
+**Pending — apply in Supabase:** 008 note templates (`note_templates` table).
+(007 client key info + map — applied.)
 
 ## Roadmap
 
