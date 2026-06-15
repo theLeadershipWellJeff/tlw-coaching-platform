@@ -6,19 +6,20 @@
  * row is the source of truth for session metadata; the engine fills in the rest.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Database, SessionReport, Transcript } from '@/lib/supabase/types'
+import type { Coach, Database, SessionReport, Transcript } from '@/lib/supabase/types'
 import { scoreTranscript, type ScoringContext } from './engine'
 import { parseTranscript } from '@/lib/transcripts/parse'
+import { sendScorecardEmail } from '@/lib/scorecard-email'
 
 export async function runAndStoreReport(
   supabase: SupabaseClient<Database>,
   transcript: Transcript,
-  coachName: string
+  coach: Coach
 ): Promise<SessionReport> {
   const parsed = parseTranscript(transcript.filename, transcript.raw_md)
 
   const ctx: ScoringContext = {
-    coachName,
+    coachName: coach.name,
     clientInitials: transcript.client_initials || parsed.clientInitials || '—',
     sessionType: parsed.sessionType,
     sessionNumber: parsed.sessionNumber,
@@ -51,5 +52,16 @@ export async function runAndStoreReport(
     .select('*')
     .single()
   if (error) throw new Error(`Supabase (session_reports upsert): ${error.message}`)
+
+  // Email the coach their scorecard (roadmap: emailed scorecard). Best-effort —
+  // a send failure must never fail scoring. Disable with EMAIL_SCORECARD=false.
+  if (process.env.EMAIL_SCORECARD !== 'false') {
+    try {
+      await sendScorecardEmail(coach, report)
+    } catch (e: any) {
+      console.error('Scorecard email failed:', e?.message || e)
+    }
+  }
+
   return data
 }

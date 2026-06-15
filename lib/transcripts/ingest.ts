@@ -135,7 +135,7 @@ export async function ingestMarkdown(
       scoringError = 'Transcript is not speaker-separated; conversation metrics will be unavailable.'
     }
     try {
-      const report = await runAndStoreReport(supabase, transcript, coach.name)
+      const report = await runAndStoreReport(supabase, transcript, coach)
       reportId = report.id
     } catch (e: any) {
       scoringError = e.message
