@@ -113,6 +113,7 @@ function ConversationMetrics({ m }: { m: Metrics }) {
 
 export function SessionReportView({ id }: { id: string }) {
   const [row, setRow] = useState<SessionReport | null>(null)
+  const [clientName, setClientName] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
 
@@ -194,6 +195,7 @@ export function SessionReportView({ id }: { id: string }) {
     }
     const data = await res.json()
     setRow(data.report)
+    setClientName(data.clientName ?? null)
     setSelfScores(data.report?.coach_self_scores || {})
     setNotes(data.report?.coach_notes || '')
     // Seed any previously-generated suggested moves so they show instantly.
@@ -256,7 +258,7 @@ export function SessionReportView({ id }: { id: string }) {
       {/* 1 · Header */}
       <div className="mt-4 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-medium text-tlw-navy-deep">Session report · {s.client_initials}</h1>
+          <h1 className="text-2xl font-medium text-tlw-navy-deep">Session report · {clientName || s.client_initials}</h1>
           <p className="mt-1 text-[13px] text-tlw-warm-gray">
             {s.coach}
             {s.type ? ` · ${s.type}` : ''} · {fmtDate(s.date)}

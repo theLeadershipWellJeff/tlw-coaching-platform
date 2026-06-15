@@ -24,7 +24,19 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  return NextResponse.json({ report: data })
+  // The report header shows the client's full name in-app (initials stay the
+  // stored privacy label). Resolve it from the matched client when present.
+  let clientName: string | null = null
+  if (data.client_id) {
+    const { data: client } = await supabase
+      .from('clients')
+      .select('name')
+      .eq('id', data.client_id)
+      .maybeSingle()
+    clientName = client?.name ?? null
+  }
+
+  return NextResponse.json({ report: data, clientName })
 }
 
 /**

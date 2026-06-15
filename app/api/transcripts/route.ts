@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { getSessionCoach } from '@/lib/coach'
+import { withClientNames } from '@/lib/clientNames'
 
 // Transcripts for the signed-in coach. Defaults to those needing manual client
 // confirmation (the fail-loud queue, spec §19): both needs_review (an uncertain
@@ -33,5 +34,6 @@ export async function GET(req: NextRequest) {
   const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  return NextResponse.json({ transcripts: data || [] })
+  const transcripts = await withClientNames(supabase, data || [])
+  return NextResponse.json({ transcripts })
 }

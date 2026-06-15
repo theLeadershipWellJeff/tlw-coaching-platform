@@ -8,6 +8,7 @@ import { AddTranscript } from './AddTranscript'
 interface ReportRow {
   id: string
   client_initials: string | null
+  client_name: string | null
   session_date: string | null
   session_type: string | null
   session_number: number | null
@@ -21,6 +22,7 @@ interface ReportRow {
 interface TranscriptRow {
   id: string
   client_initials: string | null
+  client_name: string | null
   filename: string | null
   session_date: string | null
   match_confidence: number | null
@@ -239,7 +241,9 @@ export function ScorecardSpace() {
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[13px] text-tlw-espresso">
                         {t.filename || 'Untitled recording'}{' '}
-                        {t.client_initials && <span className="text-tlw-warm-gray">· {t.client_initials}</span>}
+                        {(t.client_name || t.client_initials) && (
+                          <span className="text-tlw-warm-gray">· {t.client_name || t.client_initials}</span>
+                        )}
                       </p>
                       <p className="text-[11px] text-tlw-warm-gray">
                         {fmtDate(t.session_date)}
@@ -368,7 +372,7 @@ export function ScorecardSpace() {
               >
                 <div className="min-w-0">
                   <p className="text-[14px] font-medium text-tlw-navy-deep">
-                    {r.client_initials || '—'}
+                    {r.client_name || r.client_initials || '—'}
                     {r.session_number != null && (
                       <span className="ml-2 text-[12px] font-normal text-tlw-warm-gray">
                         session {r.session_number}
