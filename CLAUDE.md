@@ -128,11 +128,27 @@ New note titles default to `"<client name> · <date>"` (`NotesPanel#newNote`).
 The editor toolbar has a **Templates** dropdown (`RichNoteEditor`, gated by
 `enableTemplates`) that inserts a saved Library template at the cursor.
 
-### Note templates (Library)
+### Note templates (Library) + merge fields
 `note_templates` (coach-scoped, migration 008) holds reusable rich-text note
 templates authored on the **Library** page (`library/TemplatesLibrary.tsx`), CRUD
 via `/api/templates` + `/api/templates/[id]`. They surface in the note editor's
 Templates dropdown.
+
+Templates can embed **merge fields** (`lib/note-template-fields.ts`: `{{client_name}}`,
+`{{today}}`, `{{unfinished_actions}}`, `{{recent_insights}}`, `{{coaching_goals}}`),
+dropped in via the editor's **Insert field** dropdown (`RichNoteEditor`,
+`enableFields`, shown in the Library editor). When a template is inserted into a
+client's note, the Templates dropdown POSTs it to `/api/clients/[id]/template-render`,
+which resolves the tokens against live data (open `actions`, INSIGHT: lines from
+recent notes, goals) before inserting.
+
+### Note editor (`RichNoteEditor`)
+TipTap. Toolbar: bold/italic, Title (H2)/Sub-title (H3), bullet list, numbered
+list, and **Harvard outline** (I. A. 1. a. i.) — the last two share the
+orderedList node, told apart by an `outline` attribute (CSS `.tlw-prose
+ol.tlw-outline` styles the levels by depth). **Tab** nests a list item or
+indents a paragraph (custom `Indent` extension → `data-indent`/margin); Shift-Tab
+reverses. `enableTemplates`/`enableFields`/`clientId` gate the dropdowns.
 
 ### Send to client (`SendToClientModal`) + action completion loop
 The button at the bottom of a note drafts a clean, client-facing **narrative**
