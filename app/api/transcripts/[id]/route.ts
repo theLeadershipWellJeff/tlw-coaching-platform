@@ -114,3 +114,39 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ error: `Scoring failed: ${e.message}` }, { status: 500 })
   }
 }
+
+/**
+ * Delete a transcript (e.g. a pulled-in recording that isn't a coaching
+ * session). Coach-scoped. Any scored report for it is removed first so the
+ * delete succeeds regardless of the FK's on-delete behavior.
+ */
+export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+  let supabase: ReturnType<typeof getSupabaseAdmin>
+  try {
+    supabase = getSupabaseAdmin()
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: 500 })
+  }
+
+  const coach = await getSessionCoach(supabase)
+  if (!coach) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { data: transcript } = await supabase
+    .from('transcripts')
+    .select('id')
+    .eq('id', params.id)
+    .eq('coach_id', coach.id)
+    .maybeSingle()
+  if (!transcript) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  await supabase.from('session_reports').delete().eq('transcript_id', params.id)
+
+  const { error } = await supabase
+    .from('transcripts')
+    .delete()
+    .eq('id', params.id)
+    .eq('coach_id', coach.id)
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  return NextResponse.json({ deleted: true })
+}
