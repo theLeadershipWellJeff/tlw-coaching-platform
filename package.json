@@ -11,6 +11,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.24.3",
     "@supabase/supabase-js": "^2.106.2",
+    "@tiptap/extension-ordered-list": "^2.27.2",
     "@tiptap/pm": "^2.27.2",
     "@tiptap/react": "^2.27.2",
     "@tiptap/starter-kit": "^2.27.2",

@@ -80,9 +80,14 @@ export function TemplatesLibrary() {
         </div>
         <RichNoteEditor
           html={editing.content}
+          enableFields
           onChange={(html) => setEditing((ed) => (ed ? { ...ed, content: html } : ed))}
           placeholder="Write the template — headings, lists, prompts you reuse each session…"
         />
+        <p className="text-[12px] text-tlw-warm-gray">
+          Use <span className="font-medium">Insert field</span> to drop in dynamic data (e.g. unfinished actions or
+          recent insights) — it fills in from the client when you add the template to a note.
+        </p>
         {error && <p className="text-[12px] text-tlw-signal-orange">{error}</p>}
         <div className="flex items-center justify-end gap-3">
           <button onClick={() => setEditing(null)} className="text-[13px] text-tlw-warm-gray hover:text-tlw-espresso">

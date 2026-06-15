@@ -288,6 +288,7 @@ function NoteEditor({
         <RichNoteEditor
           html={content}
           enableTemplates
+          clientId={clientId}
           onChange={(html, plain) =>
             touch(() => {
               setContent(html)

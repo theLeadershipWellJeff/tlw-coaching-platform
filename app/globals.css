@@ -127,3 +127,20 @@
 .tlw-prose li > ol {
   margin: 0.1rem 0;
 }
+/* Harvard-style outline: I. → A. → 1. → a. → i. by nesting depth. Only the top
+   list carries .tlw-outline; nested levels are styled as its descendants. */
+.tlw-prose ol.tlw-outline {
+  list-style: upper-roman;
+}
+.tlw-prose ol.tlw-outline ol {
+  list-style: upper-alpha;
+}
+.tlw-prose ol.tlw-outline ol ol {
+  list-style: decimal;
+}
+.tlw-prose ol.tlw-outline ol ol ol {
+  list-style: lower-alpha;
+}
+.tlw-prose ol.tlw-outline ol ol ol ol {
+  list-style: lower-roman;
+}
