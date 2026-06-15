@@ -60,6 +60,23 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   try {
     const suggestion = await suggestCompetencyMove({ competency, report, transcriptBody })
+
+    // Persist on the report JSON so re-opening the report is instant (no
+    // regeneration). Best-effort — a write failure still returns the suggestion.
+    try {
+      const merged: SessionReportJson = {
+        ...report,
+        suggested_moves: { ...(report.suggested_moves || {}), [String(competencyId)]: suggestion },
+      }
+      await supabase
+        .from('session_reports')
+        .update({ report: merged })
+        .eq('id', params.id)
+        .eq('coach_id', coach.id)
+    } catch (e: any) {
+      console.error('Failed to persist suggested move:', e?.message || e)
+    }
+
     return NextResponse.json({ suggestion })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Could not generate a suggestion.' }, { status: 502 })

@@ -82,4 +82,8 @@ export interface SessionReportJson {
   metrics: Metrics
   win: Win
   evidence_moments: EvidenceMoment[]
+  // Suggested coaching moves to raise a competency, generated on demand and
+  // cached here so they're instant on re-open. Keyed by competency id. Not
+  // produced by the engine — added post-hoc by /api/reports/[id]/suggest.
+  suggested_moves?: Record<string, string>
 }
