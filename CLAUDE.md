@@ -159,6 +159,13 @@ Icons are consistent everywhere: **actions = a square checkbox**, **insights =
 `lib/url.ts#getBaseUrl` builds absolute email links (NEXTAUTH_URL → VERCEL_URL →
 localhost).
 
+`lib/actions.ts#persistActionLinks` is the shared core (insert/reuse a row with a
+token, return a link per action). The **session-prep email** uses the same system:
+`/api/send` looks up the client (email → name), persists `content.actions` (note_id
+null), and passes the per-action links into `buildClientEmailHTML(..., actionLinks)`
+so the prep "Your Action Items" boxes are click-to-log too. No client match → plain
+boxes, email still sends.
+
 ### Coaching goals = the source of truth (and of the prep plan)
 `clients.coaching_goals` is the sacred goal list. Each goal is `{title,
 description, metrics?}` (`metrics` = up to three measures of fulfillment).
