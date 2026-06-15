@@ -108,7 +108,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 
   try {
-    const report = await runAndStoreReport(supabase, transcript, coach.name)
+    const report = await runAndStoreReport(supabase, transcript, coach)
     return NextResponse.json({ reportId: report.id, matchStatus: transcript.match_status })
   } catch (e: any) {
     return NextResponse.json({ error: `Scoring failed: ${e.message}` }, { status: 500 })
