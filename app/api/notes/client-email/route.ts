@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
 
 Guidelines:
 - Clean up shorthand and fragments into clear, professional prose. Keep Jeff's warm, direct voice.
-- Strip internal markers like "ACTION:" / "INSIGHT:" — fold them into natural language (e.g. action items as a short list of next steps).
+- Write only the reflective narrative recap. Do NOT enumerate the "ACTION:" or "INSIGHT:" items — those are shown to the client as their own Insights list and an interactive Action items checklist appended after your text, so listing them again would duplicate.
 - Do NOT invent anything that isn't in the note. If the note is thin, keep the email short.
 - Greet "${firstName}," and sign off as "Jeff". No subject line inside the body. No AI mention.
 

@@ -134,12 +134,30 @@ templates authored on the **Library** page (`library/TemplatesLibrary.tsx`), CRU
 via `/api/templates` + `/api/templates/[id]`. They surface in the note editor's
 Templates dropdown.
 
-### Send to client (`SendToClientModal`)
-The button at the bottom of a note drafts a clean, client-facing email from the
-note via Claude (`/api/notes/client-email` → `{subject, body}`; **note content
-only, never key_info**), shows it for review/edit, then sends with
-`/api/email/send` to `client.email` (Cc the coach). Disabled when the client has
-no email on file.
+### Send to client (`SendToClientModal`) + action completion loop
+The button at the bottom of a note drafts a clean, client-facing **narrative**
+via Claude (`/api/notes/client-email` → `{subject, body}`; **note content only,
+never key_info** — and it deliberately omits the ACTION:/INSIGHT: items, which
+render as their own sections). The captured `INSIGHT:` lines become an Insights
+list (✦) and the `ACTION:` lines an interactive checklist. Sending goes through
+`POST /api/clients/[id]/send-note`, which:
+1. persists each action as an `actions` row with an unguessable `complete_token`
+   (re-uses the row for the same note+description across re-sends);
+2. builds the HTML email (`lib/client-note-email.ts`) where each action's box is
+   a click-to-log link `${getBaseUrl()}/api/actions/complete?token=…`;
+3. sends HTML via Gmail (Cc the coach).
+
+`GET /api/actions/complete?token=…` is **public** (the token is the credential)
+— it flips the action to `done` (idempotent) and returns a branded confirmation
+page. The client workspace `ActionsCard` (`/api/clients/[id]/actions`) shows the
+sent items and their live status, closing the loop. Email can't run live
+checkboxes, so the "checkbox" is a styled link — the one-click GET is the
+tradeoff (watch for link-prefetch false positives).
+
+Icons are consistent everywhere: **actions = a square checkbox**, **insights =
+✦** (capture panel `CaptureGroup`, the email, and `ActionsCard`).
+`lib/url.ts#getBaseUrl` builds absolute email links (NEXTAUTH_URL → VERCEL_URL →
+localhost).
 
 ### Coaching goals = the source of truth (and of the prep plan)
 `clients.coaching_goals` is the sacred goal list. Each goal is `{title,
@@ -193,8 +211,8 @@ workspace (address + coaching_goals) · 005 CA notes (ca_session_id) · 006
 supervisor email (coaches.supervisor_email). Run new migrations by hand in the
 Supabase SQL editor.
 
-**Pending — apply in Supabase:** 008 note templates (`note_templates` table).
-(007 client key info + map — applied.)
+**Pending — apply in Supabase:** 009 action completion (`actions.complete_token`,
+`completed_at`, `completed_via`). (007 key info + map, 008 note templates — applied.)
 
 ## Roadmap
 

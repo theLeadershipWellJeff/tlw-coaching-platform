@@ -5,18 +5,26 @@ import { Modal } from '@/app/components/shared/Modal'
 
 /**
  * Drafts a clean, client-facing email from the current note (via Claude), shows
- * it for review/edit, then sends it to the client. Only the note is used — never
+ * it for review/edit, then sends it. The captured INSIGHT: items render as an
+ * Insights list and the ACTION: items as an interactive checklist the client can
+ * tap to mark done (logged back to their account). Only the note is used — never
  * the coach's private Key info.
  */
 export function SendToClientModal({
   client,
   noteTitle,
   noteHtml,
+  noteId,
+  actions,
+  insights,
   onClose,
 }: {
   client: Client
   noteTitle: string
   noteHtml: string
+  noteId: string
+  actions: string[]
+  insights: string[]
   onClose: () => void
 }) {
   const [drafting, setDrafting] = useState(true)
@@ -54,10 +62,10 @@ export function SendToClientModal({
     setSending(true)
     setError('')
     try {
-      const res = await fetch('/api/email/send', {
+      const res = await fetch(`/api/clients/${client.id}/send-note`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to: client.email, subject, body: bodyText }),
+        body: JSON.stringify({ subject, body: bodyText, actions, insights, noteId }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to send.')
@@ -98,12 +106,42 @@ export function SendToClientModal({
               <textarea
                 value={bodyText}
                 onChange={(e) => setBodyText(e.target.value)}
-                rows={14}
+                rows={10}
                 placeholder="The cleaned-up message…"
                 className="w-full rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-surface p-3 text-[13px] leading-relaxed text-tlw-espresso outline-none focus:border-tlw-signal-orange"
               />
+
+              {insights.length > 0 && (
+                <div className="rounded-tlw-md border border-tlw-warm-gray/15 p-3">
+                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-[1.5px] text-tlw-signal-orange">Insights</p>
+                  <ul className="space-y-1">
+                    {insights.map((t, i) => (
+                      <li key={i} className="flex gap-2 text-[13px] text-tlw-espresso">
+                        <span className="text-tlw-signal-orange">✦</span>
+                        <span>{t}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {actions.length > 0 && (
+                <div className="rounded-tlw-md border border-tlw-warm-gray/15 p-3">
+                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-[1.5px] text-tlw-navy-rich">Action items</p>
+                  <p className="mb-2 text-[11px] text-tlw-warm-gray">Each becomes a checkbox the client can tap to mark done.</p>
+                  <ul className="space-y-1.5">
+                    {actions.map((t, i) => (
+                      <li key={i} className="flex items-start gap-2 text-[13px] text-tlw-espresso">
+                        <span className="mt-[2px] inline-block h-3.5 w-3.5 shrink-0 rounded-[3px] border-2 border-tlw-navy-rich" />
+                        <span>{t}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               <p className="text-[11px] text-tlw-warm-gray">
-                Review and edit before sending — this is a draft cleaned up from your note.
+                Review and edit the message before sending. Insights and action items are pulled from your note.
               </p>
             </>
           )}

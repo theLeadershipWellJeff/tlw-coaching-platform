@@ -5,6 +5,7 @@ import type { Client } from '@/lib/supabase/types'
 import { NameCard } from './NameCard'
 import { TranscriptsCard, NotesCard } from './SummaryCards'
 import { GoalsCard } from './GoalsCard'
+import { ActionsCard } from './ActionsCard'
 import { EmailModal } from './EmailModal'
 import { ImportTranscriptsModal } from './ImportTranscriptsModal'
 
@@ -84,6 +85,8 @@ export function ClientDetail({ clientId }: { clientId: string }) {
       </div>
 
       <GoalsCard client={client} onUpdated={setClient} />
+
+      <ActionsCard clientId={clientId} />
 
       {emailing && (
         <EmailModal to={client.email || ''} clientName={client.name} onClose={() => setEmailing(false)} />
