@@ -71,6 +71,7 @@ export function ScorecardSpace() {
   const [clients, setClients] = useState<ClientRow[]>([])
   const [loading, setLoading] = useState(true)
   const [assigning, setAssigning] = useState<string | null>(null)
+  const [assignError, setAssignError] = useState<Record<string, string>>({})
   const [picked, setPicked] = useState<Record<string, string>>({})
   const [deletePending, setDeletePending] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
@@ -136,13 +137,21 @@ export function ScorecardSpace() {
     const clientId = picked[transcriptId]
     if (!clientId) return
     setAssigning(transcriptId)
+    setAssignError((e) => ({ ...e, [transcriptId]: '' }))
     try {
       const res = await fetch(`/api/transcripts/${transcriptId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clientId }),
       })
-      if (res.ok) await load()
+      if (res.ok) {
+        await load()
+      } else {
+        const data = await res.json().catch(() => ({}))
+        setAssignError((e) => ({ ...e, [transcriptId]: data.error || 'Scoring failed. Please try again.' }))
+      }
+    } catch {
+      setAssignError((e) => ({ ...e, [transcriptId]: 'Network error while scoring. Please try again.' }))
     } finally {
       setAssigning(null)
     }
@@ -290,6 +299,11 @@ export function ScorecardSpace() {
                       {assigning === t.id ? 'scoring…' : 'confirm & score'}
                     </button>
                   </div>
+                  {assignError[t.id] && (
+                    <p className="mt-2 text-[12px]" style={{ color: 'var(--color-danger)' }}>
+                      {assignError[t.id]}
+                    </p>
+                  )}
                   {open && (
                     <div
                       className="mt-3 rounded-tlw-md p-3"
