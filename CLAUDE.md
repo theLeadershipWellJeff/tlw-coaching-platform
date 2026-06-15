@@ -135,11 +135,12 @@ Supabase (`NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_API_SECRET_KEY`),
   (branch content is the superset; this avoids phantom add/add conflicts).
   Verify `git diff --stat origin/main..HEAD` shows only the intended files.
 
-## Migrations applied (001–005)
+## Migrations applied (001–005; 006 pending)
 
 001 init (clients/notes/actions) · 002 scorecard (coaches/transcripts/
 session_reports) · 003 coach calendar (refresh token + timezone) · 004 client
-workspace (address + coaching_goals) · 005 CA notes (ca_session_id). Run new
+workspace (address + coaching_goals) · 005 CA notes (ca_session_id) · 006
+supervisor email (coaches.supervisor_email — run this one in Supabase). Run new
 migrations by hand in the Supabase SQL editor.
 
 ## Roadmap
