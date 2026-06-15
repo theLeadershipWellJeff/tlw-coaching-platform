@@ -145,14 +145,24 @@ migrations by hand in the Supabase SQL editor.
 
 ## Roadmap
 
-- **In progress:** Plaud transcript import (enable Drive API, then per-client
-  import). Bulk/refined import is a possible follow-up.
-- **Next:** **emailed scorecard** — email the coach their session report after
-  each scored session (reuse the Gmail send path; build an HTML report template
-  akin to `lib/email-template.ts`).
-- **Phase 3:** **supervisor cross-coach view** — schema already carries
-  `coach_id` + `role`; build the firm-facing roll-up + Claude-vs-coach
-  comparison.
-- **Open from spec §18:** full band definitions for Competencies 1,3–8 (only the
-  general bands + Competency 2 are written); fold into the engine prompt as they
-  lock.
+### Shipped
+- Plaud transcript import (Drive list + per-client import; unmatched transcripts
+  surface in the Practice review queue with preview + delete).
+- Emailed scorecard — auto-emails the coach after each scored session, plus an
+  on-demand "Email this report" from a report (to me / supervisor / other).
+- Scorecard now lives under **Practice** (Scorecard sidebar item removed).
+- Per-competency **suggested moves** on a report (Claude-generated, persisted).
+- Coach self-scoring (top of report) and supervisor email (`coaches.supervisor_email`,
+  set on Account).
+
+### Open — keep these tracked (also GitHub issues)
+- **Band definitions (spec §18) — PRIORITY, authoring task.** Full band
+  definitions for Competencies 1 and 3–8 (only the general bands + Competency 2
+  are written). These are the scoring foundation; fold each into the engine
+  prompt (`lib/scoring/engine.ts` SYSTEM/rubric) as it locks. Jeff is drafting
+  the language.
+- **Supervisor cross-coach roll-up view (Phase 3).** Firm-facing dashboard
+  rolling up reports across coaches + a Claude-vs-coach comparison. Schema is
+  ready (`coach_id` + `role`), and coach self-scores are now captured, so the
+  comparison data exists. Needs: a supervisor-scoped aggregate API and a
+  `/supervision`-style page (gate on `role = 'supervisor'`).
