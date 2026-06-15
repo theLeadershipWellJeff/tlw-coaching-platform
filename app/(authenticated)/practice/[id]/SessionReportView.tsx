@@ -126,6 +126,34 @@ export function SessionReportView({ id }: { id: string }) {
   const [openComp, setOpenComp] = useState<number | null>(null)
   const [moves, setMoves] = useState<Record<number, { loading?: boolean; text?: string; error?: string }>>({})
 
+  // email-this-report state
+  const [emailRecipient, setEmailRecipient] = useState<'self' | 'other'>('self')
+  const [emailOther, setEmailOther] = useState('')
+  const [emailing, setEmailing] = useState(false)
+  const [emailMsg, setEmailMsg] = useState<{ ok: boolean; text: string } | null>(null)
+
+  async function emailReport() {
+    setEmailing(true)
+    setEmailMsg(null)
+    try {
+      const res = await fetch(`/api/reports/${id}/email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          recipient: emailRecipient,
+          email: emailRecipient === 'other' ? emailOther : undefined,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok) setEmailMsg({ ok: true, text: `Sent to ${data.to}.` })
+      else setEmailMsg({ ok: false, text: data.error || 'Could not send the email.' })
+    } catch {
+      setEmailMsg({ ok: false, text: 'Network error while sending.' })
+    } finally {
+      setEmailing(false)
+    }
+  }
+
   async function toggleMove(competencyId: number) {
     if (openComp === competencyId) {
       setOpenComp(null)
@@ -230,6 +258,76 @@ export function SessionReportView({ id }: { id: string }) {
           </p>
         </div>
         <BandPill band={report.band} />
+      </div>
+
+      {/* Self-score — directly under the title (spec §13) */}
+      <div className="mt-5">
+        {!open ? (
+          <button
+            onClick={() => setOpen(true)}
+            className="rounded-tlw-md border border-tlw-warm-gray/30 px-3 py-1.5 text-[12px] font-medium text-tlw-espresso transition-opacity duration-tlw-base hover:opacity-80"
+          >
+            {Object.keys(selfScores).length > 0
+              ? `edit my scores${row?.coach_overall != null ? ` · yours ${row.coach_overall.toFixed(1)}` : ''}`
+              : 'score it yourself'}
+          </button>
+        ) : (
+          <div className="rounded-tlw-lg p-4" style={{ backgroundColor: 'var(--color-surface)' }}>
+            <p className="mb-3 text-[12px] text-tlw-warm-gray">
+              Score the session yourself. Your scores sit alongside the engine&apos;s — they never change it —
+              so the two can be reconciled.
+            </p>
+            <div className="space-y-3">
+              {COMPETENCIES.map((c) => {
+                const machine = report.competencies.find((x) => x.id === c.id)?.score
+                const mine = selfScores[String(c.id)]
+                return (
+                  <div key={c.id} className="flex flex-wrap items-center gap-3">
+                    <div className="w-44 shrink-0 text-[13px] text-tlw-espresso">
+                      <span className="text-tlw-warm-gray">{c.id}.</span> {c.name}
+                    </div>
+                    <span className="text-[11px] text-tlw-warm-gray">engine {machine ?? '—'}</span>
+                    <div className="flex gap-1">
+                      {[1, 2, 3, 4, 5].map((n) => (
+                        <button
+                          key={n}
+                          onClick={() => setSelfScores((p) => ({ ...p, [c.id]: n }))}
+                          className="h-7 w-7 rounded-tlw-sm text-[12px] font-medium transition-colors duration-tlw-base"
+                          style={
+                            mine === n
+                              ? { backgroundColor: 'var(--tlw-navy-rich)', color: 'var(--tlw-cream)' }
+                              : { backgroundColor: 'var(--color-bg, #fff)', color: 'var(--tlw-espresso)' }
+                          }
+                        >
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="your reflections on the scores (optional)"
+                className="mt-2 w-full rounded-tlw-md border border-tlw-warm-gray/25 bg-white p-3 text-[13px] text-tlw-espresso"
+                rows={3}
+              />
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={save}
+                  disabled={saving}
+                  className="rounded-tlw-md bg-tlw-navy-rich px-3 py-1.5 text-[12px] font-medium text-tlw-cream transition-opacity duration-tlw-base hover:opacity-90 disabled:opacity-40"
+                >
+                  {saving ? 'saving…' : 'save my scores'}
+                </button>
+                <button onClick={() => setOpen(false)} className="text-[12px] text-tlw-warm-gray hover:text-tlw-espresso">
+                  done
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 2 · Score summary */}
@@ -350,75 +448,50 @@ export function SessionReportView({ id }: { id: string }) {
                 The overall and per-client trend lines build as more sessions are scored.
               </>
             ) : (
-              'The overall and per-client trend lines build as more sessions are scored. Add your own scores below to start the calibration record.'
+              'The overall and per-client trend lines build as more sessions are scored. Add your own scores (under the title) to start the calibration record.'
             )}
           </p>
         </Section>
 
-        {/* 7 · Actions — coach's parallel self-assessment (spec §13) */}
-        <Section title="Your own scores">
-          <p className="mb-3 text-[12px] text-tlw-warm-gray">
-            Score the session yourself. Your scores sit alongside the engine&apos;s — they never change it —
-            so the two can be reconciled.
-          </p>
-          {!open ? (
-            <button
-              onClick={() => setOpen(true)}
-              className="rounded-tlw-md bg-tlw-navy-rich px-3 py-1.5 text-[12px] font-medium text-tlw-cream transition-opacity duration-tlw-base hover:opacity-90"
+        {/* 7 · Email this report */}
+        <Section title="Email this report">
+          <div className="flex flex-wrap items-center gap-3">
+            <select
+              value={emailRecipient}
+              onChange={(e) => setEmailRecipient(e.target.value as 'self' | 'other')}
+              className="rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-surface px-2 py-1.5 text-[12px] text-tlw-espresso"
             >
-              {Object.keys(selfScores).length > 0 ? 'edit my scores' : 'add my own scores'}
-            </button>
-          ) : (
-            <div className="space-y-3">
-              {COMPETENCIES.map((c) => {
-                const machine = report.competencies.find((x) => x.id === c.id)?.score
-                const mine = selfScores[String(c.id)]
-                return (
-                  <div key={c.id} className="flex flex-wrap items-center gap-3">
-                    <div className="w-44 shrink-0 text-[13px] text-tlw-espresso">
-                      <span className="text-tlw-warm-gray">{c.id}.</span> {c.name}
-                    </div>
-                    <span className="text-[11px] text-tlw-warm-gray">engine {machine ?? '—'}</span>
-                    <div className="flex gap-1">
-                      {[1, 2, 3, 4, 5].map((n) => (
-                        <button
-                          key={n}
-                          onClick={() => setSelfScores((p) => ({ ...p, [c.id]: n }))}
-                          className="h-7 w-7 rounded-tlw-sm text-[12px] font-medium transition-colors duration-tlw-base"
-                          style={
-                            mine === n
-                              ? { backgroundColor: 'var(--tlw-navy-rich)', color: 'var(--tlw-cream)' }
-                              : { backgroundColor: 'var(--color-surface)', color: 'var(--tlw-espresso)' }
-                          }
-                        >
-                          {n}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )
-              })}
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="your reflections on the scores (optional)"
-                className="mt-2 w-full rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-surface p-3 text-[13px] text-tlw-espresso"
-                rows={3}
+              <option value="self">to me</option>
+              <option value="other">someone else…</option>
+            </select>
+            {emailRecipient === 'other' && (
+              <input
+                type="email"
+                value={emailOther}
+                onChange={(e) => setEmailOther(e.target.value)}
+                placeholder="email address"
+                className="min-w-[200px] flex-1 rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-surface px-2.5 py-1.5 text-[12px] text-tlw-espresso"
               />
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={save}
-                  disabled={saving}
-                  className="rounded-tlw-md bg-tlw-navy-rich px-3 py-1.5 text-[12px] font-medium text-tlw-cream transition-opacity duration-tlw-base hover:opacity-90 disabled:opacity-40"
-                >
-                  {saving ? 'saving…' : 'save my scores'}
-                </button>
-                <button onClick={() => setOpen(false)} className="text-[12px] text-tlw-warm-gray hover:text-tlw-espresso">
-                  done
-                </button>
-              </div>
-            </div>
+            )}
+            <button
+              onClick={emailReport}
+              disabled={emailing || (emailRecipient === 'other' && !emailOther.trim())}
+              className="rounded-tlw-md bg-tlw-navy-rich px-3 py-1.5 text-[12px] font-medium text-tlw-cream transition-opacity duration-tlw-base hover:opacity-90 disabled:opacity-40"
+            >
+              {emailing ? 'sending…' : 'send report'}
+            </button>
+          </div>
+          {emailMsg && (
+            <p
+              className="mt-2 text-[12px]"
+              style={{ color: emailMsg.ok ? 'var(--color-success)' : 'var(--color-danger)' }}
+            >
+              {emailMsg.text}
+            </p>
           )}
+          <p className="mt-2 text-[11px]" style={{ color: 'var(--color-muted)' }}>
+            Sends the scorecard for this session as an email. Sending to a supervisor on file is coming.
+          </p>
         </Section>
       </div>
     </div>
