@@ -8,7 +8,15 @@ export interface PrepContent {
   quote: { text: string; author: string }
 }
 
-export function buildClientEmailHTML(clientName: string, c: PrepContent): string {
+// `actionLinks` is aligned by index with `c.actions`: when an entry is a URL,
+// that action's checkbox becomes a click-to-log link (same system as the note
+// "send to client" flow); a null entry renders a plain box.
+export function buildClientEmailHTML(
+  clientName: string,
+  c: PrepContent,
+  actionLinks: (string | null)[] = []
+): string {
+  const anyActionLinks = actionLinks.some(Boolean)
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -101,15 +109,21 @@ export function buildClientEmailHTML(clientName: string, c: PrepContent): string
   <!-- ACTIONS -->
   <div style="padding:20px 44px;">
     <div style="font-size:9px;letter-spacing:4px;text-transform:uppercase;color:#8B8680;font-weight:700;margin-bottom:6px;">Your Action Items</div>
-    <div style="font-size:12px;color:#8B8680;margin-bottom:14px;">From our last sessions &mdash; how did these land?</div>
+    <div style="font-size:12px;color:#8B8680;margin-bottom:14px;">${anyActionLinks ? 'Tap a box to mark one done &mdash; it logs back with your coach.' : 'From our last sessions &mdash; how did these land?'}</div>
     <table width="100%" cellpadding="0" cellspacing="0">
-      ${c.actions.map(act => `
+      ${c.actions.map((act, i) => {
+        const url = actionLinks[i]
+        const box = url
+          ? `<a href="${url}" style="display:inline-block;width:16px;height:16px;border:2px solid #0C1940;border-radius:3px;text-decoration:none;font-size:1px;line-height:16px;">&nbsp;</a>`
+          : `<div style="width:16px;height:16px;border:2px solid #0C1940;border-radius:3px;"></div>`
+        return `
       <tr><td style="padding:11px 0;border-bottom:1px solid #e5e0d8;">
         <table><tr>
-          <td style="padding-right:14px;vertical-align:top;padding-top:3px;"><div style="width:16px;height:16px;border:2px solid #0C1940;border-radius:3px;"></div></td>
+          <td style="padding-right:14px;vertical-align:top;padding-top:3px;">${box}</td>
           <td style="font-size:14px;color:#1f2937;line-height:1.65;">${act}</td>
         </tr></table>
-      </td></tr>`).join('')}
+      </td></tr>`
+      }).join('')}
     </table>
   </div>
   <div style="height:1px;margin:0 44px;background:#e5e0d8;"></div>

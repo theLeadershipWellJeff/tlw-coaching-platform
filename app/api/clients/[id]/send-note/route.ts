@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { randomUUID } from 'crypto'
 import { getServerSession } from 'next-auth'
 import { google } from 'googleapis'
 import { authOptions } from '@/lib/authOptions'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
-import { getBaseUrl } from '@/lib/url'
-import { buildNoteEmailHTML, type NoteEmailAction } from '@/lib/client-note-email'
+import { persistActionLinks } from '@/lib/actions'
+import { buildNoteEmailHTML } from '@/lib/client-note-email'
 
 export const runtime = 'nodejs'
 
@@ -59,36 +58,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (!client) return NextResponse.json({ error: 'Client not found' }, { status: 404 })
   if (!client.email) return NextResponse.json({ error: 'This client has no email on file.' }, { status: 400 })
 
-  // Persist the actions so completions can be logged. Re-use an existing row for
-  // the same note + description (keeps the token stable across re-sends).
-  const emailActions: NoteEmailAction[] = []
-  if (actionTexts.length > 0) {
-    let existingQuery = supabase
-      .from('actions')
-      .select('id, description, complete_token')
-      .eq('client_id', client.id)
-    existingQuery = noteId ? existingQuery.eq('note_id', noteId) : existingQuery.is('note_id', null)
-    const { data: existing } = await existingQuery
-    const byDesc = new Map((existing || []).map((a) => [a.description, a]))
-
-    for (const description of actionTexts) {
-      const found = byDesc.get(description)
-      let token = found?.complete_token || null
-      if (!found) {
-        token = randomUUID()
-        await supabase.from('actions').insert({
-          client_id: client.id,
-          note_id: noteId,
-          description,
-          status: 'open',
-          complete_token: token,
-        })
-      }
-      if (token) {
-        emailActions.push({ description, url: `${getBaseUrl()}/api/actions/complete?token=${token}` })
-      }
-    }
-  }
+  // Persist the actions so completions can be logged, and get a checkbox link
+  // per action.
+  const emailActions = await persistActionLinks(supabase, client.id, noteId, actionTexts)
 
   const html = buildNoteEmailHTML({ clientName: client.name, bodyText, insights, actions: emailActions })
 
