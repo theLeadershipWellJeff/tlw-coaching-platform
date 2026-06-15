@@ -345,7 +345,15 @@ function NoteEditor({
       </div>
 
       {sendOpen && client && (
-        <SendToClientModal client={client} noteTitle={title} noteHtml={content} onClose={() => setSendOpen(false)} />
+        <SendToClientModal
+          client={client}
+          noteTitle={title}
+          noteHtml={content}
+          noteId={note.id}
+          actions={captures.actions.map((a) => a.text)}
+          insights={captures.insights.map((i) => i.text)}
+          onClose={() => setSendOpen(false)}
+        />
       )}
     </div>
   )
@@ -371,12 +379,14 @@ function CapturePanel({
         emptyHint="Lines starting with ACTION:"
         items={actions.map((a) => a.text)}
         accent="text-tlw-navy-rich"
+        icon={<span className="mt-[2px] inline-block h-3 w-3 shrink-0 rounded-[2px] border-2 border-tlw-navy-rich" />}
       />
       <CaptureGroup
         label="Insights"
         emptyHint="Lines starting with INSIGHT:"
         items={insights.map((i) => i.text)}
         accent="text-tlw-signal-orange"
+        icon={<span className="shrink-0 text-tlw-signal-orange">✦</span>}
       />
       {/* …and the assigned map + engagement goals below it. */}
       {client && <CoachingMapCard client={client} onUpdated={onClientUpdated} />}
@@ -390,11 +400,13 @@ function CaptureGroup({
   emptyHint,
   items,
   accent,
+  icon,
 }: {
   label: string
   emptyHint: string
   items: string[]
   accent: string
+  icon: React.ReactNode
 }) {
   return (
     <div className="rounded-tlw-lg border border-tlw-warm-gray/15 bg-tlw-surface p-3">
@@ -414,7 +426,7 @@ function CaptureGroup({
         <ul className="space-y-1.5">
           {items.map((t, i) => (
             <li key={i} className="flex gap-2 text-[13px] leading-snug text-tlw-espresso">
-              <span className={`mt-[2px] shrink-0 ${accent}`}>•</span>
+              {icon}
               <span>{t}</span>
             </li>
           ))}

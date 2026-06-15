@@ -63,6 +63,9 @@ export type Action = {
   description: string
   due_date: DateString | null
   status: string
+  complete_token: string | null
+  completed_at: Timestamp | null
+  completed_via: string | null
   created_at: Timestamp
   updated_at: Timestamp
 }
