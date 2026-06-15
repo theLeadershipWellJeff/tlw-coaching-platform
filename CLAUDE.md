@@ -113,10 +113,23 @@ that client), then the UI scores each.
 The right-hand rail carries the live ACTION/INSIGHT capture **plus** persistent,
 per-client context loaded from the client record: **Key info** (`clients.key_info`,
 freeform reference — boss/spouse/kids), **Coaching map** (`clients.coaching_map`,
-the assigned map e.g. "6 Components"), and **Engagement goals** (the same
-`clients.coaching_goals` as the workspace card, edited via the "Client goals"
-modal). All three save with PATCH `/api/clients/[id]` (`KeyInfoCard`,
-`CoachingMapCard`, `EngagementGoalsCard`).
+a pulldown of the practice's maps — defined in `CoachingMapCard.tsx#MAPS`: The 6
+Components / The Airplane Model / First 90 Days / Who I Am Becoming; `blurb` field
+is the future home of click-to-view framework descriptions), and **Engagement
+goals** (the same `clients.coaching_goals` as the workspace card, edited via the
+"Client goals" modal). All three save with PATCH `/api/clients/[id]`
+(`KeyInfoCard`, `CoachingMapCard`, `EngagementGoalsCard`).
+
+### Coaching goals = the source of truth (and of the prep plan)
+`clients.coaching_goals` is the sacred goal list. Each goal is `{title,
+description, metrics?}` (`metrics` = up to three measures of fulfillment).
+Edited in two places that share `GoalRows.tsx` (the rows editor + `toDrafts`/
+`cleanGoals`/`emptyGoal` helpers — both preserve metrics on save): the workspace
+`GoalsCard` (inline) and the notes-panel `EngagementGoalsCard` (modal). Session
+prep is wired to them: `/api/generate` loads the client's goals (by `clientId`
+or name) and renders them as the email's fixed **coachingPlan** instead of
+inventing one — the rest of the email is still drawn from notes/Zoom. With no
+goals stored it falls back to generating the plan from notes.
 
 ### Names vs initials
 `client_initials` stays the stored, privacy-preserving label (transcripts,

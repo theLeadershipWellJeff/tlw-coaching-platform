@@ -1,11 +1,13 @@
 'use client'
 import { useState } from 'react'
-import type { Client, CoachingGoal } from '@/lib/supabase/types'
+import type { Client } from '@/lib/supabase/types'
+import { GoalRows, type GoalDraft, toDrafts, cleanGoals, emptyGoal } from './GoalRows'
 
 /**
  * Compact engagement-goals card for the session-notes panel. It shows the same
  * persistent goals as the workspace GoalsCard (single source of truth on
- * client.coaching_goals) and opens a "Client goals" panel to edit them.
+ * client.coaching_goals — these are also what session prep pulls from) and opens
+ * a "Client goals" panel to edit them.
  */
 export function EngagementGoalsCard({
   client,
@@ -33,6 +35,9 @@ export function EngagementGoalsCard({
           {goals.map((g, i) => (
             <li key={i} className="text-[12px] leading-snug text-tlw-espresso">
               <span className="font-medium text-tlw-navy-deep">{g.title}</span>
+              {g.metrics && g.metrics.length > 0 && (
+                <span className="ml-1 text-tlw-warm-gray">· {g.metrics.length} metric{g.metrics.length === 1 ? '' : 's'}</span>
+              )}
             </li>
           ))}
         </ul>
@@ -54,7 +59,7 @@ function ClientGoalsModal({
   onClose: () => void
 }) {
   const goals = client.coaching_goals || []
-  const [draft, setDraft] = useState<CoachingGoal[]>(goals.length ? goals : [{ title: '', description: '' }])
+  const [draft, setDraft] = useState<GoalDraft[]>(goals.length ? toDrafts(goals) : [emptyGoal()])
   const [busy, setBusy] = useState<'generate' | 'save' | null>(null)
   const [error, setError] = useState('')
 
@@ -66,7 +71,7 @@ function ClientGoalsModal({
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Could not generate goals')
       onUpdated({ ...client, coaching_goals: data.goals })
-      setDraft(data.goals)
+      setDraft(toDrafts(data.goals))
     } catch (e: any) {
       setError(e.message)
     } finally {
@@ -78,9 +83,7 @@ function ClientGoalsModal({
     setBusy('save')
     setError('')
     try {
-      const cleaned = draft
-        .map((g) => ({ title: g.title.trim(), description: g.description.trim() }))
-        .filter((g) => g.title)
+      const cleaned = cleanGoals(draft)
       const res = await fetch(`/api/clients/${client.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -103,7 +106,7 @@ function ClientGoalsModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface p-6 shadow-xl"
+        className="w-full max-w-2xl rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface p-6 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
@@ -122,39 +125,7 @@ function ClientGoalsModal({
 
         {error && <p className="mb-3 text-[12px] text-tlw-signal-orange">{error}</p>}
 
-        <div className="space-y-3">
-          {draft.map((g, i) => (
-            <div key={i} className="space-y-1.5 rounded-tlw-lg border border-tlw-warm-gray/15 p-3">
-              <div className="flex items-center gap-2">
-                <input
-                  value={g.title}
-                  placeholder="Goal title"
-                  onChange={(e) => setDraft((d) => d.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)))}
-                  className="flex-1 border-none bg-transparent text-[13px] font-medium text-tlw-navy-deep outline-none placeholder:text-tlw-warm-gray/60"
-                />
-                <button
-                  onClick={() => setDraft((d) => d.filter((_, j) => j !== i))}
-                  className="text-[12px] text-tlw-warm-gray hover:text-tlw-signal-orange"
-                >
-                  remove
-                </button>
-              </div>
-              <textarea
-                value={g.description}
-                placeholder="What we're working on, grounded in the real coaching…"
-                rows={2}
-                onChange={(e) => setDraft((d) => d.map((x, j) => (j === i ? { ...x, description: e.target.value } : x)))}
-                className="w-full rounded-tlw-md border border-tlw-warm-gray/20 bg-tlw-surface px-2 py-1.5 text-[12px] text-tlw-espresso outline-none focus:border-tlw-signal-orange"
-              />
-            </div>
-          ))}
-          <button
-            onClick={() => setDraft((d) => [...d, { title: '', description: '' }])}
-            className="text-[12px] font-medium text-tlw-warm-gray hover:text-tlw-espresso"
-          >
-            + add goal
-          </button>
-        </div>
+        <GoalRows draft={draft} setDraft={setDraft} />
 
         <div className="mt-5 flex items-center justify-end gap-3">
           <button onClick={onClose} className="text-[13px] text-tlw-warm-gray hover:text-tlw-espresso">

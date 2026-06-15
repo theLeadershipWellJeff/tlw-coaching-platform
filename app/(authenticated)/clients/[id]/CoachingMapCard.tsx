@@ -2,14 +2,20 @@
 import { useState } from 'react'
 import type { Client } from '@/lib/supabase/types'
 
-// Maps core to theLeadershipWell's practice. "6 Components" is the one we know;
-// the rest live in the vault and can be added here (or just typed in free-form)
-// as Jeff sends them over.
-const KNOWN_MAPS = ['6 Components']
+// The maps core to theLeadershipWell's practice. `blurb` is a short reminder of
+// the framework; FUTURE: build out fuller descriptions here so the coach can
+// click a map to see the framework while coaching.
+type CoachingMap = { name: string; blurb?: string }
+const MAPS: CoachingMap[] = [
+  { name: 'The 6 Components' },
+  { name: 'The Airplane Model', blurb: 'Wings / Engines / Fuel / Fuselage — the structural picture' },
+  { name: 'First 90 Days' },
+  { name: 'Who I Am Becoming' },
+]
 
 /**
- * The coaching map assigned to this client (persistent, per-client). Stored as
- * free text so any map can be named; the known maps are offered as suggestions.
+ * The coaching map assigned to this client (persistent, per-client). Chosen from
+ * the practice's maps; stored as the map name so older free-text values survive.
  */
 export function CoachingMapCard({
   client,
@@ -23,6 +29,10 @@ export function CoachingMapCard({
   const [draft, setDraft] = useState(value)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+
+  // Keep an unknown stored value (e.g. an older free-text entry) selectable.
+  const options = MAPS.some((m) => m.name === value) || !value ? MAPS : [...MAPS, { name: value }]
+  const selectedBlurb = MAPS.find((m) => m.name === value)?.blurb
 
   async function save() {
     setBusy(true)
@@ -65,19 +75,19 @@ export function CoachingMapCard({
 
       {editing ? (
         <div className="space-y-2">
-          <input
-            list="coaching-map-options"
+          <select
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             autoFocus
-            placeholder="e.g. 6 Components"
             className="w-full rounded-tlw-md border border-tlw-warm-gray/20 bg-tlw-surface px-2 py-1.5 text-[12px] text-tlw-espresso outline-none focus:border-tlw-signal-orange"
-          />
-          <datalist id="coaching-map-options">
-            {KNOWN_MAPS.map((m) => (
-              <option key={m} value={m} />
+          >
+            <option value="">— select a map —</option>
+            {options.map((m) => (
+              <option key={m.name} value={m.name}>
+                {m.name}
+              </option>
             ))}
-          </datalist>
+          </select>
           <div className="flex items-center justify-end gap-3">
             <button
               onClick={() => setEditing(false)}
@@ -95,7 +105,10 @@ export function CoachingMapCard({
           </div>
         </div>
       ) : value ? (
-        <p className="text-[13px] font-medium text-tlw-espresso">{value}</p>
+        <>
+          <p className="text-[13px] font-medium text-tlw-espresso">{value}</p>
+          {selectedBlurb && <p className="mt-0.5 text-[11px] leading-snug text-tlw-warm-gray">{selectedBlurb}</p>}
+        </>
       ) : (
         <p className="text-[12px] text-tlw-warm-gray/70">No map assigned yet.</p>
       )}
