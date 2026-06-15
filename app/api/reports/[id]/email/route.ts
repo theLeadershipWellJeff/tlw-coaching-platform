@@ -26,13 +26,22 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (!coach) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json().catch(() => ({}))
-  const recipient = body.recipient === 'other' ? 'other' : 'self'
+  const recipient =
+    body.recipient === 'other' || body.recipient === 'supervisor' ? body.recipient : 'self'
 
   let to: string
   if (recipient === 'other') {
     to = String(body.email || '').trim()
     if (!EMAIL_RE.test(to)) {
       return NextResponse.json({ error: 'Enter a valid email address.' }, { status: 400 })
+    }
+  } else if (recipient === 'supervisor') {
+    to = (coach.supervisor_email || '').trim()
+    if (!to) {
+      return NextResponse.json(
+        { error: 'No supervisor email on file — add one on the Account page.' },
+        { status: 400 }
+      )
     }
   } else {
     to = (coach.email || '').trim()

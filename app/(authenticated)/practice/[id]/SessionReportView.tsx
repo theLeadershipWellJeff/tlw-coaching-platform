@@ -127,10 +127,18 @@ export function SessionReportView({ id }: { id: string }) {
   const [moves, setMoves] = useState<Record<number, { loading?: boolean; text?: string; error?: string }>>({})
 
   // email-this-report state
-  const [emailRecipient, setEmailRecipient] = useState<'self' | 'other'>('self')
+  const [emailRecipient, setEmailRecipient] = useState<'self' | 'supervisor' | 'other'>('self')
   const [emailOther, setEmailOther] = useState('')
   const [emailing, setEmailing] = useState(false)
   const [emailMsg, setEmailMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [supervisorEmail, setSupervisorEmail] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetch('/api/coach')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setSupervisorEmail(d?.coach?.supervisor_email ?? null))
+      .catch(() => {})
+  }, [])
 
   async function emailReport() {
     setEmailing(true)
@@ -458,10 +466,11 @@ export function SessionReportView({ id }: { id: string }) {
           <div className="flex flex-wrap items-center gap-3">
             <select
               value={emailRecipient}
-              onChange={(e) => setEmailRecipient(e.target.value as 'self' | 'other')}
+              onChange={(e) => setEmailRecipient(e.target.value as 'self' | 'supervisor' | 'other')}
               className="rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-surface px-2 py-1.5 text-[12px] text-tlw-espresso"
             >
               <option value="self">to me</option>
+              {supervisorEmail && <option value="supervisor">to my supervisor</option>}
               <option value="other">someone else…</option>
             </select>
             {emailRecipient === 'other' && (
@@ -490,7 +499,10 @@ export function SessionReportView({ id }: { id: string }) {
             </p>
           )}
           <p className="mt-2 text-[11px]" style={{ color: 'var(--color-muted)' }}>
-            Sends the scorecard for this session as an email. Sending to a supervisor on file is coming.
+            Sends the scorecard for this session as an email.
+            {supervisorEmail
+              ? ` Your supervisor is ${supervisorEmail}.`
+              : ' Set a supervisor on the Account page to email it to them.'}
           </p>
         </Section>
       </div>
