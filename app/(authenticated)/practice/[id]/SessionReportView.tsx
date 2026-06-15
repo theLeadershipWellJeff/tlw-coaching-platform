@@ -160,6 +160,13 @@ export function SessionReportView({ id }: { id: string }) {
     setRow(data.report)
     setSelfScores(data.report?.coach_self_scores || {})
     setNotes(data.report?.coach_notes || '')
+    // Seed any previously-generated suggested moves so they show instantly.
+    const saved = data.report?.report?.suggested_moves as Record<string, string> | undefined
+    if (saved) {
+      setMoves(
+        Object.fromEntries(Object.entries(saved).map(([k, text]) => [Number(k), { text }]))
+      )
+    }
     setLoading(false)
   }, [id])
 
