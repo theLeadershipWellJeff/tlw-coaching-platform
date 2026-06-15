@@ -348,7 +348,7 @@ export function ScorecardSpace() {
             {reports.map((r) => (
               <Link
                 key={r.id}
-                href={`/scorecard/${r.id}`}
+                href={`/practice/${r.id}`}
                 className="flex items-center justify-between gap-4 rounded-tlw-lg p-4 transition-colors duration-tlw-base hover:opacity-90"
                 style={{ backgroundColor: 'var(--color-surface)' }}
               >

@@ -1,14 +1,14 @@
 import { PageHeader } from '@/app/components/layout/PageHeader'
-import { ComingSoon } from '@/app/components/shared/ComingSoon'
+import { ScorecardSpace } from './ScorecardSpace'
 
 export default function PracticePage() {
   return (
     <>
-      <PageHeader title="Practice" subtitle="Revenue, capacity, and the health of your coaching practice." />
-      <ComingSoon
-        title="Practice analytics"
-        description="Detailed practice metrics live here; headline numbers will also surface on the dashboard."
+      <PageHeader
+        title="Practice"
+        subtitle="Your coaching craft, scored session by session against the ICF competencies and theLeadershipWell standards."
       />
+      <ScorecardSpace />
     </>
   )
 }

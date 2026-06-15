@@ -131,7 +131,7 @@ export function AddTranscript({ onAdded }: { onAdded: () => void }) {
           ) : result.matchStatus === 'matched' && result.reportId ? (
             <p style={{ color: 'var(--color-success)' }}>
               Scored ({result.clientInitials}).{' '}
-              <Link href={`/scorecard/${result.reportId}`} className="underline">
+              <Link href={`/practice/${result.reportId}`} className="underline">
                 open the report →
               </Link>
             </p>
