@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
-import type { Client, CoachingGoal } from '@/lib/supabase/types'
+import type { Client } from '@/lib/supabase/types'
+import { GoalRows, type GoalDraft, toDrafts, cleanGoals, emptyGoal } from './GoalRows'
 
 export function GoalsCard({
   client,
@@ -11,7 +12,7 @@ export function GoalsCard({
 }) {
   const goals = client.coaching_goals || []
   const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState<CoachingGoal[]>(goals)
+  const [draft, setDraft] = useState<GoalDraft[]>(toDrafts(goals))
   const [busy, setBusy] = useState<'generate' | 'save' | null>(null)
   const [error, setError] = useState('')
 
@@ -23,7 +24,7 @@ export function GoalsCard({
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Could not generate goals')
       onUpdated({ ...client, coaching_goals: data.goals })
-      setDraft(data.goals)
+      setDraft(toDrafts(data.goals))
       setEditing(false)
     } catch (e: any) {
       setError(e.message)
@@ -36,9 +37,7 @@ export function GoalsCard({
     setBusy('save')
     setError('')
     try {
-      const cleaned = draft
-        .map((g) => ({ title: g.title.trim(), description: g.description.trim() }))
-        .filter((g) => g.title)
+      const cleaned = cleanGoals(draft)
       const res = await fetch(`/api/clients/${client.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -56,7 +55,7 @@ export function GoalsCard({
   }
 
   function edit() {
-    setDraft(goals.length ? goals : [{ title: '', description: '' }])
+    setDraft(goals.length ? toDrafts(goals) : [emptyGoal()])
     setEditing(true)
   }
 
@@ -84,37 +83,7 @@ export function GoalsCard({
 
       {editing ? (
         <div className="space-y-3">
-          {draft.map((g, i) => (
-            <div key={i} className="space-y-1.5 rounded-tlw-lg border border-tlw-warm-gray/15 p-3">
-              <div className="flex items-center gap-2">
-                <input
-                  value={g.title}
-                  placeholder="Goal title"
-                  onChange={(e) => setDraft((d) => d.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)))}
-                  className="flex-1 border-none bg-transparent text-[13px] font-medium text-tlw-navy-deep outline-none placeholder:text-tlw-warm-gray/60"
-                />
-                <button
-                  onClick={() => setDraft((d) => d.filter((_, j) => j !== i))}
-                  className="text-[12px] text-tlw-warm-gray hover:text-tlw-signal-orange"
-                >
-                  remove
-                </button>
-              </div>
-              <textarea
-                value={g.description}
-                placeholder="What we're working on, grounded in the real coaching…"
-                rows={2}
-                onChange={(e) => setDraft((d) => d.map((x, j) => (j === i ? { ...x, description: e.target.value } : x)))}
-                className="w-full rounded-tlw-md border border-tlw-warm-gray/20 bg-tlw-surface px-2 py-1.5 text-[12px] text-tlw-espresso outline-none focus:border-tlw-signal-orange"
-              />
-            </div>
-          ))}
-          <button
-            onClick={() => setDraft((d) => [...d, { title: '', description: '' }])}
-            className="text-[12px] font-medium text-tlw-warm-gray hover:text-tlw-espresso"
-          >
-            + add goal
-          </button>
+          <GoalRows draft={draft} setDraft={setDraft} />
           <div className="flex items-center justify-end gap-3 pt-1">
             <button onClick={() => setEditing(false)} className="text-[13px] text-tlw-warm-gray hover:text-tlw-espresso">
               Cancel
@@ -138,6 +107,16 @@ export function GoalsCard({
             <li key={i}>
               <p className="text-[14px] font-medium text-tlw-navy-deep">{g.title}</p>
               {g.description && <p className="mt-0.5 text-[13px] leading-relaxed text-tlw-warm-gray">{g.description}</p>}
+              {g.metrics && g.metrics.length > 0 && (
+                <ul className="mt-1.5 space-y-0.5">
+                  {g.metrics.map((m, j) => (
+                    <li key={j} className="flex gap-2 text-[12px] text-tlw-espresso">
+                      <span className="mt-[2px] shrink-0 text-tlw-signal-orange">›</span>
+                      <span>{m}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </li>
           ))}
         </ul>

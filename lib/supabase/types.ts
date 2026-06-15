@@ -19,6 +19,9 @@ type DateString = string // YYYY-MM-DD
 export type CoachingGoal = {
   title: string
   description: string
+  // Up to three measures of fulfillment for the goal (filled in with the
+  // client). Optional so existing two-field goals keep working unchanged.
+  metrics?: string[]
 }
 
 export type Client = {
