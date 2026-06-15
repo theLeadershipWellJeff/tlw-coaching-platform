@@ -1,7 +1,10 @@
 'use client'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { Note } from '@/lib/supabase/types'
+import type { Client, Note } from '@/lib/supabase/types'
 import { RichNoteEditor } from './RichNoteEditor'
+import { KeyInfoCard } from './KeyInfoCard'
+import { CoachingMapCard } from './CoachingMapCard'
+import { EngagementGoalsCard } from './EngagementGoalsCard'
 import { extractCaptures } from '@/lib/notes/extract'
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
@@ -36,10 +39,25 @@ function formatDate(d: string): string {
 
 export function NotesPanel({ clientId, autoNew = false }: { clientId: string; autoNew?: boolean }) {
   const [notes, setNotes] = useState<Note[]>([])
+  const [client, setClient] = useState<Client | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [activeId, setActiveId] = useState<string | null>(null)
   const autoNewDone = useRef(false)
+
+  // The session-notes panel surfaces persistent, per-client context (key info,
+  // coaching map, engagement goals) alongside the live capture, so load the
+  // client record in parallel with its notes.
+  useEffect(() => {
+    let cancelled = false
+    fetch(`/api/clients/${clientId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => !cancelled && d?.client && setClient(d.client))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [clientId])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -152,6 +170,8 @@ export function NotesPanel({ clientId, autoNew = false }: { clientId: string; au
                 key={active.id}
                 clientId={clientId}
                 note={active}
+                client={client}
+                onClientUpdated={setClient}
                 onSaved={onSaved}
                 onDeleted={onDeleted}
               />
@@ -168,11 +188,15 @@ export function NotesPanel({ clientId, autoNew = false }: { clientId: string; au
 function NoteEditor({
   clientId,
   note,
+  client,
+  onClientUpdated,
   onSaved,
   onDeleted,
 }: {
   clientId: string
   note: Note
+  client: Client | null
+  onClientUpdated: (c: Client) => void
   onSaved: (n: Note) => void
   onDeleted: (id: string) => void
 }) {
@@ -253,7 +277,7 @@ function NoteEditor({
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_240px]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_260px]">
         <RichNoteEditor
           html={content}
           onChange={(html, plain) =>
@@ -263,7 +287,7 @@ function NoteEditor({
             })
           }
         />
-        <CapturePanel captures={captures} />
+        <CapturePanel captures={captures} client={client} onClientUpdated={onClientUpdated} />
       </div>
 
       <div className="flex items-center justify-between">
@@ -300,13 +324,19 @@ function NoteEditor({
 
 function CapturePanel({
   captures,
+  client,
+  onClientUpdated,
 }: {
   captures: ReturnType<typeof extractCaptures>
+  client: Client | null
+  onClientUpdated: (c: Client) => void
 }) {
   const { actions, insights } = captures
 
   return (
     <div className="space-y-4 lg:sticky lg:top-4 lg:self-start">
+      {/* Persistent client context sits above the live capture… */}
+      {client && <KeyInfoCard client={client} onUpdated={onClientUpdated} />}
       <CaptureGroup
         label="Actions"
         emptyHint="Lines starting with ACTION:"
@@ -319,6 +349,9 @@ function CapturePanel({
         items={insights.map((i) => i.text)}
         accent="text-tlw-signal-orange"
       />
+      {/* …and the assigned map + engagement goals below it. */}
+      {client && <CoachingMapCard client={client} onUpdated={onClientUpdated} />}
+      {client && <EngagementGoalsCard client={client} onUpdated={onClientUpdated} />}
     </div>
   )
 }

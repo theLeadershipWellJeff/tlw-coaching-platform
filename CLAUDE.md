@@ -109,6 +109,22 @@ Gmail (`/api/email/send`). Plaud import: `/api/drive/transcripts` lists the
 Drive folder; `/api/clients/[id]/import-transcripts` imports picks (forced to
 that client), then the UI scores each.
 
+### Session-notes panel (`clients/[id]/NotesPanel.tsx`)
+The right-hand rail carries the live ACTION/INSIGHT capture **plus** persistent,
+per-client context loaded from the client record: **Key info** (`clients.key_info`,
+freeform reference — boss/spouse/kids), **Coaching map** (`clients.coaching_map`,
+the assigned map e.g. "6 Components"), and **Engagement goals** (the same
+`clients.coaching_goals` as the workspace card, edited via the "Client goals"
+modal). All three save with PATCH `/api/clients/[id]` (`KeyInfoCard`,
+`CoachingMapCard`, `EngagementGoalsCard`).
+
+### Names vs initials
+`client_initials` stays the stored, privacy-preserving label (transcripts,
+reports, emails). In-app *lists* show the full client name, resolved in code via
+`lib/clientNames.ts#withClientNames` (relationship types aren't generated, so no
+embedded select) — wired through `/api/reports`, `/api/transcripts`, and
+`/api/reports/[id]` (`clientName`).
+
 ## Environment variables
 
 Google OAuth (`GOOGLE_CLIENT_ID/SECRET`), `NEXTAUTH_URL/SECRET`,
@@ -142,6 +158,9 @@ session_reports) · 003 coach calendar (refresh token + timezone) · 004 client
 workspace (address + coaching_goals) · 005 CA notes (ca_session_id) · 006
 supervisor email (coaches.supervisor_email). Run new migrations by hand in the
 Supabase SQL editor.
+
+**Pending — apply in Supabase:** 007 client key info + map
+(`clients.key_info`, `clients.coaching_map`).
 
 ## Roadmap
 

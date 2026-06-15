@@ -35,6 +35,8 @@ export type Client = {
   bio: string | null
   address: string | null
   coaching_goals: CoachingGoal[] | null
+  key_info: string | null
+  coaching_map: string | null
   created_at: Timestamp
   updated_at: Timestamp
 }
