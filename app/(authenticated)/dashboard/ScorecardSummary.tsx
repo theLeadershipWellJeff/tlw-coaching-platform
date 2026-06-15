@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import type { ScorecardSummary } from '@/lib/scoring/aggregate'
-import { bandColor } from '../scorecard/ui'
+import { bandColor } from '../practice/ui'
 
 interface Payload {
   summary: ScorecardSummary
@@ -12,7 +12,7 @@ interface Payload {
 /**
  * The coaching workspace's headline scorecard read (spec §5.2 applied at the
  * practice level): average score across all sessions, strongest competency,
- * lowest competency. Quiet and flat; the full instrument lives at /scorecard.
+ * lowest competency. Quiet and flat; the full instrument lives at /practice.
  */
 export function ScorecardSummary() {
   const [data, setData] = useState<Payload | null>(null)
@@ -45,7 +45,7 @@ export function ScorecardSummary() {
   if (!summary || summary.sessionCount === 0) {
     return (
       <Link
-        href="/scorecard"
+        href="/practice"
         className="block rounded-tlw-xl p-5 transition-colors duration-tlw-base hover:opacity-90"
         style={{ backgroundColor: 'var(--color-surface)' }}
       >
@@ -93,7 +93,7 @@ export function ScorecardSummary() {
         <p className="text-[11px] font-medium uppercase tracking-[2px] text-tlw-warm-gray">
           Coaching scorecard
         </p>
-        <Link href="/scorecard" className="text-[12px] font-medium text-tlw-signal-orange hover:underline">
+        <Link href="/practice" className="text-[12px] font-medium text-tlw-signal-orange hover:underline">
           Open scorecard →
         </Link>
       </div>
@@ -124,7 +124,7 @@ export function ScorecardSummary() {
         {needsReview > 0 && (
           <>
             {' '}·{' '}
-            <Link href="/scorecard" style={{ color: 'var(--color-warning)' }} className="hover:underline">
+            <Link href="/practice" style={{ color: 'var(--color-warning)' }} className="hover:underline">
               {needsReview} need a client confirmed
             </Link>
           </>

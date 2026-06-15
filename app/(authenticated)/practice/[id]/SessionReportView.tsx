@@ -122,6 +122,32 @@ export function SessionReportView({ id }: { id: string }) {
   const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
 
+  // suggested-move panel state (per competency)
+  const [openComp, setOpenComp] = useState<number | null>(null)
+  const [moves, setMoves] = useState<Record<number, { loading?: boolean; text?: string; error?: string }>>({})
+
+  async function toggleMove(competencyId: number) {
+    if (openComp === competencyId) {
+      setOpenComp(null)
+      return
+    }
+    setOpenComp(competencyId)
+    if (moves[competencyId] && !moves[competencyId].error) return
+    setMoves((m) => ({ ...m, [competencyId]: { loading: true } }))
+    try {
+      const res = await fetch(`/api/reports/${id}/suggest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ competencyId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not generate a suggestion.')
+      setMoves((m) => ({ ...m, [competencyId]: { text: data.suggestion } }))
+    } catch (e: any) {
+      setMoves((m) => ({ ...m, [competencyId]: { error: e?.message || 'Could not generate a suggestion.' } }))
+    }
+  }
+
   const load = useCallback(async () => {
     setLoading(true)
     const res = await fetch(`/api/reports/${id}`)
@@ -169,8 +195,8 @@ export function SessionReportView({ id }: { id: string }) {
     return (
       <div className="rounded-tlw-lg p-8 text-center" style={{ backgroundColor: 'var(--color-surface)' }}>
         <p className="text-[13px] text-tlw-espresso">This report couldn&apos;t be found.</p>
-        <Link href="/scorecard" className="mt-3 inline-block text-[13px] font-medium text-tlw-signal-orange hover:underline">
-          Back to scorecard
+        <Link href="/practice" className="mt-3 inline-block text-[13px] font-medium text-tlw-signal-orange hover:underline">
+          Back to practice
         </Link>
       </div>
     )
@@ -180,8 +206,8 @@ export function SessionReportView({ id }: { id: string }) {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <Link href="/scorecard" className="text-[12px] text-tlw-warm-gray hover:text-tlw-espresso">
-        ← scorecard
+      <Link href="/practice" className="text-[12px] text-tlw-warm-gray hover:text-tlw-espresso">
+        ← practice
       </Link>
 
       {/* 1 · Header */}
@@ -217,6 +243,9 @@ export function SessionReportView({ id }: { id: string }) {
 
         {/* 4 · ICF competency read */}
         <Section title="ICF competency read">
+          <p className="mb-4 text-[12px] text-tlw-warm-gray">
+            Tap a competency for a suggested move to raise that score next session.
+          </p>
           <div className="space-y-6">
             {DOMAINS.map((domain) => {
               const inDomain = report.competencies.filter((c) => c.domain === domain.label)
@@ -227,22 +256,57 @@ export function SessionReportView({ id }: { id: string }) {
                     {domain.key} · {domain.label.toLowerCase()}
                   </p>
                   <div className="space-y-2">
-                    {inDomain.map((c) => (
-                      <div key={c.id} className="rounded-tlw-lg p-3" style={{ backgroundColor: 'var(--color-surface)' }}>
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="text-[13px] font-medium text-tlw-espresso">
-                            <span className="text-tlw-warm-gray">{c.id}.</span> {c.name}
-                          </p>
-                          <BandChip band={c.band} score={c.score} />
+                    {inDomain.map((c) => {
+                      const mv = moves[c.id]
+                      const expanded = openComp === c.id
+                      return (
+                        <div key={c.id} className="rounded-tlw-lg p-3" style={{ backgroundColor: 'var(--color-surface)' }}>
+                          <button
+                            onClick={() => toggleMove(c.id)}
+                            className="flex w-full items-center justify-between gap-3 text-left"
+                            aria-expanded={expanded}
+                          >
+                            <p className="text-[13px] font-medium text-tlw-espresso">
+                              <span className="text-tlw-warm-gray">{c.id}.</span> {c.name}
+                            </p>
+                            <span className="flex shrink-0 items-center gap-2">
+                              <BandChip band={c.band} score={c.score} />
+                              <svg
+                                viewBox="0 0 24 24"
+                                width="14"
+                                height="14"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth={1.8}
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                className={`text-tlw-warm-gray transition-transform duration-tlw-base ${expanded ? 'rotate-180' : ''}`}
+                              >
+                                <path d="M6 9l6 6 6-6" />
+                              </svg>
+                            </span>
+                          </button>
+                          {c.evidence && <p className="mt-1.5 text-[12px] text-tlw-warm-gray">{c.evidence}</p>}
+                          {c.subcompetency_refs.length > 0 && (
+                            <p className="mt-1 text-[11px]" style={{ color: 'var(--color-muted)' }}>
+                              {c.subcompetency_refs.join(' · ')}
+                            </p>
+                          )}
+                          {expanded && (
+                            <div className="mt-3 rounded-tlw-md p-3" style={{ border: '0.5px solid var(--color-divider)' }}>
+                              <p className="mb-1.5 text-[11px] font-medium uppercase tracking-[2px] text-tlw-warm-gray">
+                                suggested move
+                              </p>
+                              {mv?.loading && <p className="text-[12px] text-tlw-warm-gray">thinking of a move to raise this…</p>}
+                              {mv?.error && <p className="text-[12px]" style={{ color: 'var(--color-danger)' }}>{mv.error}</p>}
+                              {mv?.text && (
+                                <p className="text-[13px] leading-relaxed text-tlw-espresso">{mv.text}</p>
+                              )}
+                            </div>
+                          )}
                         </div>
-                        {c.evidence && <p className="mt-1.5 text-[12px] text-tlw-warm-gray">{c.evidence}</p>}
-                        {c.subcompetency_refs.length > 0 && (
-                          <p className="mt-1 text-[11px]" style={{ color: 'var(--color-muted)' }}>
-                            {c.subcompetency_refs.join(' · ')}
-                          </p>
-                        )}
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </div>
               )

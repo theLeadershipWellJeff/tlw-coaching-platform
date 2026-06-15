@@ -83,12 +83,11 @@ const icons = {
 
 const destinations: NavDestination[] = [
   { href: '/dashboard', label: 'Dashboard', icon: icons.dashboard },
-  { href: '/scorecard', label: 'Scorecard', icon: icons.scorecard },
+  { href: '/practice', label: 'Practice', icon: icons.practice },
   { href: '/clients', label: 'Clients', icon: icons.clients },
   { href: '/groups', label: 'Groups', icon: icons.groups },
   { href: '/templates', label: 'Templates', icon: icons.templates },
   { href: '/library', label: 'Library', icon: icons.library },
-  { href: '/practice', label: 'Practice', icon: icons.practice },
   { href: '#', label: 'Business Center', icon: icons.business, disabled: true, badge: 'Soon' },
 ]
 

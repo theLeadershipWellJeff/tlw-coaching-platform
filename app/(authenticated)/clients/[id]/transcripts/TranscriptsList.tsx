@@ -73,7 +73,7 @@ export function TranscriptsList({ clientId }: { clientId: string }) {
           </div>
         )
         return t.reportId ? (
-          <Link key={t.id} href={`/scorecard/${t.reportId}`} className="block">
+          <Link key={t.id} href={`/practice/${t.reportId}`} className="block">
             {inner}
           </Link>
         ) : (
