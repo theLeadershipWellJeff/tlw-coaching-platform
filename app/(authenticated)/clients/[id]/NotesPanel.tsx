@@ -5,6 +5,7 @@ import { RichNoteEditor } from './RichNoteEditor'
 import { KeyInfoCard } from './KeyInfoCard'
 import { CoachingMapCard } from './CoachingMapCard'
 import { EngagementGoalsCard } from './EngagementGoalsCard'
+import { SendToClientModal } from './SendToClientModal'
 import { extractCaptures } from '@/lib/notes/extract'
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
@@ -40,6 +41,7 @@ function formatDate(d: string): string {
 export function NotesPanel({ clientId, autoNew = false }: { clientId: string; autoNew?: boolean }) {
   const [notes, setNotes] = useState<Note[]>([])
   const [client, setClient] = useState<Client | null>(null)
+  const [clientLoaded, setClientLoaded] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -54,6 +56,7 @@ export function NotesPanel({ clientId, autoNew = false }: { clientId: string; au
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => !cancelled && d?.client && setClient(d.client))
       .catch(() => {})
+      .finally(() => !cancelled && setClientLoaded(true))
     return () => {
       cancelled = true
     }
@@ -79,20 +82,23 @@ export function NotesPanel({ clientId, autoNew = false }: { clientId: string; au
   }, [load])
 
   // When arrived here via "+ New note", start a fresh note once after load.
+  // Wait for the client too so the default title can include their name.
   useEffect(() => {
-    if (autoNew && !loading && !autoNewDone.current) {
+    if (autoNew && !loading && clientLoaded && !autoNewDone.current) {
       autoNewDone.current = true
       newNote()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoNew, loading])
+  }, [autoNew, loading, clientLoaded])
 
   async function newNote() {
     try {
+      // Default the title to the client name + date so it's pre-filled on open.
+      const title = client?.name ? `${client.name} · ${formatDate(today())}` : formatDate(today())
       const res = await fetch(`/api/clients/${clientId}/notes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_date: today(), title: '', content: '' }),
+        body: JSON.stringify({ session_date: today(), title, content: '' }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to create note')
@@ -205,6 +211,7 @@ function NoteEditor({
   const [content, setContent] = useState(note.content)
   const [text, setText] = useState(() => htmlToText(note.content))
   const [state, setState] = useState<SaveState>('idle')
+  const [sendOpen, setSendOpen] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const dirty = useRef(false)
 
@@ -280,6 +287,7 @@ function NoteEditor({
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_260px]">
         <RichNoteEditor
           html={content}
+          enableTemplates
           onChange={(html, plain) =>
             touch(() => {
               setContent(html)
@@ -318,6 +326,27 @@ function NoteEditor({
         Tip: start a line with <span className="font-semibold">ACTION:</span> or{' '}
         <span className="font-semibold">INSIGHT:</span> to capture it on the right.
       </p>
+
+      {/* Send to client — Claude cleans the note into a client-facing email,
+          shown for review before it sends. */}
+      <div className="flex items-center justify-between border-t border-tlw-warm-gray/15 pt-4">
+        <p className="text-[11px] text-tlw-warm-gray">
+          {client?.email
+            ? `Sends a cleaned-up version of this note to ${client.name}.`
+            : 'Add an email on the client to enable sending.'}
+        </p>
+        <button
+          onClick={() => setSendOpen(true)}
+          disabled={!client?.email}
+          className="rounded-tlw-lg bg-tlw-navy-rich px-4 py-2 text-[13px] font-medium text-tlw-cream transition-opacity hover:opacity-90 disabled:opacity-40"
+        >
+          Send to client →
+        </button>
+      </div>
+
+      {sendOpen && client && (
+        <SendToClientModal client={client} noteTitle={title} noteHtml={content} onClose={() => setSendOpen(false)} />
+      )}
     </div>
   )
 }

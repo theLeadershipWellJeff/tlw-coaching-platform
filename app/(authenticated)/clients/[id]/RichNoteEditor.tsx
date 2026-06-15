@@ -1,7 +1,8 @@
 'use client'
 import { useEditor, EditorContent, type Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import type { NoteTemplate } from '@/lib/supabase/types'
 
 /**
  * Rich text note editor built on TipTap.
@@ -14,10 +15,14 @@ export function RichNoteEditor({
   html,
   onChange,
   placeholder = 'Write your session notes…',
+  enableTemplates = false,
 }: {
   html: string
   onChange: (html: string, text: string) => void
   placeholder?: string
+  // Show a "Templates" dropdown in the toolbar that inserts a saved Library
+  // template at the cursor. Off by default (e.g. when editing a template itself).
+  enableTemplates?: boolean
 }) {
   // Ref lets the (once-created) handleKeyDown reach the live editor instance.
   const editorRef = useRef<Editor | null>(null)
@@ -69,7 +74,7 @@ export function RichNoteEditor({
 
   return (
     <div className="space-y-2">
-      <Toolbar editor={editor} />
+      <Toolbar editor={editor} enableTemplates={enableTemplates} />
       <div className="relative">
         {editor.isEmpty && (
           <p className="pointer-events-none absolute left-4 top-4 text-[14px] text-tlw-warm-gray/60">
@@ -82,7 +87,7 @@ export function RichNoteEditor({
   )
 }
 
-function Toolbar({ editor }: { editor: Editor }) {
+function Toolbar({ editor, enableTemplates }: { editor: Editor; enableTemplates: boolean }) {
   const btn = (active: boolean) =>
     `rounded-tlw-md px-2 py-1 text-[12px] font-medium transition-colors ${
       active
@@ -167,6 +172,82 @@ function Toolbar({ editor }: { editor: Editor }) {
       >
         |←
       </button>
+
+      {enableTemplates && (
+        <>
+          <Divider />
+          <TemplatesMenu editor={editor} />
+        </>
+      )}
+    </div>
+  )
+}
+
+/** Toolbar dropdown that inserts a saved Library template at the cursor. */
+function TemplatesMenu({ editor }: { editor: Editor }) {
+  const [open, setOpen] = useState(false)
+  const [templates, setTemplates] = useState<NoteTemplate[] | null>(null)
+  const [loading, setLoading] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  // Load lazily the first time the menu opens.
+  useEffect(() => {
+    if (!open || templates !== null) return
+    setLoading(true)
+    fetch('/api/templates')
+      .then((r) => (r.ok ? r.json() : { templates: [] }))
+      .then((d) => setTemplates(d.templates || []))
+      .catch(() => setTemplates([]))
+      .finally(() => setLoading(false))
+  }, [open, templates])
+
+  // Close on outside click.
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [open])
+
+  function insert(t: NoteTemplate) {
+    editor.chain().focus().insertContent(t.content || '').run()
+    setOpen(false)
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="rounded-tlw-md px-2 py-1 text-[12px] font-medium text-tlw-espresso transition-colors hover:bg-tlw-canvas"
+        title="Insert a template"
+      >
+        Templates ▾
+      </button>
+      {open && (
+        <div className="absolute right-0 z-20 mt-1 max-h-64 w-56 overflow-auto rounded-tlw-lg border border-tlw-warm-gray/20 bg-tlw-surface py-1 shadow-lg">
+          {loading ? (
+            <p className="px-3 py-2 text-[12px] text-tlw-warm-gray">loading…</p>
+          ) : !templates || templates.length === 0 ? (
+            <p className="px-3 py-2 text-[12px] text-tlw-warm-gray">
+              No templates yet — add them in the Library.
+            </p>
+          ) : (
+            templates.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => insert(t)}
+                className="block w-full truncate px-3 py-1.5 text-left text-[13px] text-tlw-espresso hover:bg-tlw-canvas"
+              >
+                {t.name}
+              </button>
+            ))
+          )}
+        </div>
+      )}
     </div>
   )
 }

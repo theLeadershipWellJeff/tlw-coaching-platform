@@ -67,6 +67,15 @@ export type Action = {
   updated_at: Timestamp
 }
 
+export type NoteTemplate = {
+  id: string
+  coach_id: string | null
+  name: string
+  content: string // rich-text HTML
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
 export type Coach = {
   id: string
   email: string
@@ -155,6 +164,12 @@ export type Database = {
         Row: Coach
         Insert: Insertable<Coach>
         Update: Updatable<Coach>
+        Relationships: []
+      }
+      note_templates: {
+        Row: NoteTemplate
+        Insert: Insertable<NoteTemplate>
+        Update: Updatable<NoteTemplate>
         Relationships: []
       }
       transcripts: {

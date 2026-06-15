@@ -6,6 +6,10 @@ import type { Client } from '@/lib/supabase/types'
  * Persistent, per-client "key info" the coach wants in front of them every
  * session (boss's name, spouse, kids, context to remember). Edits save straight
  * to the client record via PATCH /api/clients/[id].
+ *
+ * PRIVATE TO THE COACH. `clients.key_info` must never be fed to any client-facing
+ * generation — session prep, nudges, or the "send to client" draft. Anything
+ * client-facing comes from the note content only. Keep it out of those prompts.
  */
 export function KeyInfoCard({
   client,
@@ -43,7 +47,9 @@ export function KeyInfoCard({
   return (
     <div className="rounded-tlw-lg border border-tlw-warm-gray/15 bg-tlw-surface p-3">
       <div className="mb-2 flex items-center justify-between">
-        <p className="text-[11px] font-semibold uppercase tracking-[1.5px] text-tlw-navy-deep">Key info</p>
+        <p className="text-[11px] font-semibold uppercase tracking-[1.5px] text-tlw-navy-deep">
+          Key info <span className="font-normal normal-case tracking-normal text-tlw-warm-gray/70">· private</span>
+        </p>
         {!editing && (
           <button
             onClick={() => {
