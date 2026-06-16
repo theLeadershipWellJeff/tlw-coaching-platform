@@ -8,8 +8,8 @@ import { AddTranscript } from './AddTranscript'
 
 interface Revenue {
   calendarConnected: boolean
-  past: { weekStart: string; sessions: number; total: number }
-  projected: { weekStart: string; sessions: number; total: number }
+  past: { weekStart: string; sessions: number; hours: number; total: number }
+  projected: { weekStart: string; sessions: number; hours: number; total: number }
 }
 
 function money(n: number): string {
@@ -319,7 +319,7 @@ export function ScorecardSpace() {
             </p>
             <p className="mt-1.5 text-[11px] text-tlw-warm-gray">
               {revenue
-                ? `${revenue.past.sessions} logged session${revenue.past.sessions === 1 ? '' : 's'}`
+                ? `${revenue.past.sessions} logged session${revenue.past.sessions === 1 ? '' : 's'} · ${revenue.past.hours} billed h`
                 : 'from logged session notes'}
             </p>
           </div>
@@ -332,13 +332,14 @@ export function ScorecardSpace() {
               {revenue && !revenue.calendarConnected
                 ? 'connect Google Calendar to project'
                 : revenue
-                ? `${revenue.projected.sessions} scheduled session${revenue.projected.sessions === 1 ? '' : 's'}`
+                ? `${revenue.projected.sessions} scheduled session${revenue.projected.sessions === 1 ? '' : 's'} · ${revenue.projected.hours} billed h`
                 : 'from this week’s calendar'}
             </p>
           </div>
         </div>
         <p className="mt-2 text-[11px] text-tlw-warm-gray">
-          Past week from logged notes; this week projected from calendar events. Set each client’s fee on their profile.
+          Hourly fee × billed hours (half-hour units, 1-hour minimum, rounding up past 15 min). Past week from each
+          note’s logged length; this week projected from scheduled calendar events. Set each client’s fee on their profile.
         </p>
       </section>
 

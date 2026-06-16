@@ -279,13 +279,17 @@ workspace (address + coaching_goals) · 005 CA notes (ca_session_id) · 006
 supervisor email (coaches.supervisor_email) · 007 key info + map · 008 note
 templates · 009 action completion · 010 library folders · 011 agreements · 012
 agenda requests · 013 revenue + competency focus + prep sheets
-(`clients.session_fee`, `coaches.competency_focus` jsonb, `prep_sheets` table).
-Run new migrations by hand in the Supabase SQL editor.
+(`clients.session_fee`, `coaches.competency_focus` jsonb, `prep_sheets` table) ·
+014 note duration (`notes.duration_minutes`, default 60). Run new migrations by
+hand in the Supabase SQL editor.
 
-**Pending — apply in Supabase:** `013_revenue_competency_prep.sql` (per-client
-session fee for the Practice revenue cards, the coach's per-competency
-improvement notes, and the persisted prep-sheet snapshots). The `library-pdfs`
-Storage bucket is created automatically on first upload.
+**Revenue billing:** `session_fee` is an hourly rate; sessions bill in half-hour
+units with a 1-hour minimum, rounding up once past 15 min into a half hour
+(`lib/billing.ts`). Past-week revenue uses each note's logged `duration_minutes`;
+the projection uses the scheduled calendar-event length.
+
+**Pending — apply in Supabase:** `014_note_duration.sql` (013 already applied).
+The `library-pdfs` Storage bucket is created automatically on first upload.
 
 ## Roadmap
 

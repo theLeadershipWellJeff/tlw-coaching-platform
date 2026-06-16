@@ -167,6 +167,7 @@ export interface MatchedEvent {
   eventId: string
   clientId: string | null
   start: string | null
+  durationMinutes: number
 }
 
 /**
@@ -211,6 +212,13 @@ export async function listClientMatchedEvents(
   return items.map((event) => {
     const eventId: string = event.id || ''
     const start: string | null = event.start?.dateTime || event.start?.date || null
+    // Scheduled length in minutes; defaults to an hour for events without times.
+    const startMs = event.start?.dateTime ? new Date(event.start.dateTime).getTime() : NaN
+    const endMs = event.end?.dateTime ? new Date(event.end.dateTime).getTime() : NaN
+    const durationMinutes =
+      Number.isFinite(startMs) && Number.isFinite(endMs) && endMs > startMs
+        ? Math.round((endMs - startMs) / 60000)
+        : 60
     const guest = (event.attendees || []).find(
       (a: any) => a.email && !mine.includes(a.email.toLowerCase())
     )
@@ -230,6 +238,6 @@ export async function listClientMatchedEvents(
         }
       }
     }
-    return { eventId, clientId, start }
+    return { eventId, clientId, start, durationMinutes }
   })
 }

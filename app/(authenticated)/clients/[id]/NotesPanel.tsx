@@ -8,6 +8,7 @@ import { EngagementGoalsCard } from './EngagementGoalsCard'
 import { SendToClientModal } from './SendToClientModal'
 import { PrepSheetCard } from './PrepSheetCard'
 import { extractCaptures } from '@/lib/notes/extract'
+import { billedHours } from '@/lib/billing'
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 
@@ -239,6 +240,7 @@ function NoteEditor({
 }) {
   const [title, setTitle] = useState(note.title || '')
   const [date, setDate] = useState(note.session_date)
+  const [duration, setDuration] = useState<number>(note.duration_minutes ?? 60)
   const [content, setContent] = useState(note.content)
   const [text, setText] = useState(() => htmlToText(note.content))
   const [state, setState] = useState<SaveState>('idle')
@@ -255,7 +257,7 @@ function NoteEditor({
       const res = await fetch(`/api/clients/${clientId}/notes/${note.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, content, session_date: date }),
+        body: JSON.stringify({ title, content, session_date: date, duration_minutes: duration }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Save failed')
@@ -265,7 +267,7 @@ function NoteEditor({
     } catch {
       setState('error')
     }
-  }, [clientId, note.id, title, content, date, onSaved])
+  }, [clientId, note.id, title, content, date, duration, onSaved])
 
   // Debounced autosave whenever an edited field changes.
   useEffect(() => {
@@ -275,7 +277,7 @@ function NoteEditor({
     return () => {
       if (timer.current) clearTimeout(timer.current)
     }
-  }, [title, content, date, save])
+  }, [title, content, date, duration, save])
 
   function touch(fn: () => void) {
     dirty.current = true
@@ -313,6 +315,17 @@ function NoteEditor({
           onChange={(e) => touch(() => setDate(e.target.value))}
           className="rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-surface px-2 py-1 text-[12px] text-tlw-espresso outline-none focus:border-tlw-signal-orange"
         />
+        <label className="flex items-center gap-1.5 text-[12px] text-tlw-warm-gray" title="Logged session length — bills in half hours, 1-hour minimum">
+          <input
+            type="number"
+            min={0}
+            step={5}
+            value={duration}
+            onChange={(e) => touch(() => setDuration(Math.max(0, Math.round(Number(e.target.value) || 0))))}
+            className="w-16 rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-surface px-2 py-1 text-[12px] text-tlw-espresso outline-none focus:border-tlw-signal-orange"
+          />
+          <span>min · bills {billedHours(duration)} h</span>
+        </label>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[260px_1fr]">

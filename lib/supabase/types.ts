@@ -53,6 +53,8 @@ export type Note = {
   session_date: DateString
   title: string | null
   content: string
+  // Logged session length in minutes (drives past-week revenue). Default 60.
+  duration_minutes: number
   calendar_event_id: string | null
   ca_session_id: string | null
   created_at: Timestamp

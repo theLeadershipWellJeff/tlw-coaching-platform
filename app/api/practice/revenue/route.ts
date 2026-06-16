@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/authOptions'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { getSessionCoach } from '@/lib/coach'
 import { listClientMatchedEvents, zonedWallClockToUtc, type RosterClientWithEmail } from '@/lib/calendar'
+import { billedHours, sessionRevenue } from '@/lib/billing'
 
 export const runtime = 'nodejs'
 
@@ -64,21 +65,25 @@ export async function GET() {
     roster.push({ id: c.id, name: c.name, email: c.email })
   }
 
-  // --- Past week (realized) from logged notes ---
+  // --- Past week (realized) from logged notes, by actual logged length ---
   const { data: notes } = await supabase
     .from('notes')
-    .select('id, client_id, session_date')
+    .select('id, client_id, session_date, duration_minutes')
     .gte('session_date', ymdStr(lastMonday))
     .lt('session_date', ymdStr(thisMonday))
 
   let pastTotal = 0
+  let pastHours = 0
   for (const n of notes || []) {
-    pastTotal += feeById.get(n.client_id) || 0
+    const minutes = typeof n.duration_minutes === 'number' ? n.duration_minutes : 60
+    pastHours += billedHours(minutes)
+    pastTotal += sessionRevenue(feeById.get(n.client_id), minutes)
   }
   const pastSessions = (notes || []).length
 
-  // --- This week (projected) from the calendar ---
+  // --- This week (projected) from the calendar, by scheduled length ---
   let projectedTotal = 0
+  let projectedHours = 0
   let projectedSessions = 0
   if (coach?.google_refresh_token) {
     const start = zonedWallClockToUtc(ymdStr(thisMonday), '00:00', tz)
@@ -88,7 +93,8 @@ export async function GET() {
       for (const e of events) {
         if (!e.clientId) continue
         projectedSessions++
-        projectedTotal += feeById.get(e.clientId) || 0
+        projectedHours += billedHours(e.durationMinutes)
+        projectedTotal += sessionRevenue(feeById.get(e.clientId), e.durationMinutes)
       }
     }
   }
@@ -96,7 +102,7 @@ export async function GET() {
   return NextResponse.json({
     timezone: tz,
     calendarConnected: !!coach?.google_refresh_token,
-    past: { weekStart: ymdStr(lastMonday), sessions: pastSessions, total: pastTotal },
-    projected: { weekStart: ymdStr(thisMonday), sessions: projectedSessions, total: projectedTotal },
+    past: { weekStart: ymdStr(lastMonday), sessions: pastSessions, hours: pastHours, total: pastTotal },
+    projected: { weekStart: ymdStr(thisMonday), sessions: projectedSessions, hours: projectedHours, total: projectedTotal },
   })
 }
