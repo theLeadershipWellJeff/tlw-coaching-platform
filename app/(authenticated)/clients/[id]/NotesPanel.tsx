@@ -6,6 +6,7 @@ import { KeyInfoCard } from './KeyInfoCard'
 import { CoachingMapCard } from './CoachingMapCard'
 import { EngagementGoalsCard } from './EngagementGoalsCard'
 import { SendToClientModal } from './SendToClientModal'
+import { PrepSheetCard } from './PrepSheetCard'
 import { extractCaptures } from '@/lib/notes/extract'
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
@@ -150,43 +151,73 @@ export function NotesPanel({ clientId, autoNew = false }: { clientId: string; au
           <p className="text-[13px] text-tlw-warm-gray">No notes yet. Start your first session note.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-[220px_1fr]">
-          {/* Note list */}
-          <div className="border-b border-tlw-warm-gray/15 md:border-b-0 md:border-r">
-            {notes.map((n) => (
-              <button
-                key={n.id}
-                onClick={() => setActiveId(n.id)}
-                className={`block w-full border-b border-tlw-warm-gray/10 px-4 py-3 text-left transition-colors last:border-b-0 ${
-                  n.id === activeId ? 'bg-tlw-canvas' : 'hover:bg-tlw-canvas/50'
-                }`}
-              >
-                <p className="truncate text-[13px] font-medium text-tlw-navy-deep">
-                  {n.title?.trim() || 'Untitled note'}
-                </p>
-                <p className="mt-0.5 text-[11px] text-tlw-warm-gray">{formatDate(n.session_date)}</p>
-              </button>
-            ))}
-          </div>
+        <div className="space-y-5 p-5">
+          {active ? (
+            <NoteEditor
+              key={active.id}
+              clientId={clientId}
+              note={active}
+              client={client}
+              onClientUpdated={setClient}
+              onSaved={onSaved}
+              onDeleted={onDeleted}
+            />
+          ) : (
+            <p className="text-[13px] text-tlw-warm-gray">Select a note below to edit.</p>
+          )}
 
-          {/* Editor */}
-          <div className="p-5">
-            {active ? (
-              <NoteEditor
-                key={active.id}
-                clientId={clientId}
-                note={active}
-                client={client}
-                onClientUpdated={setClient}
-                onSaved={onSaved}
-                onDeleted={onDeleted}
-              />
-            ) : (
-              <p className="text-[13px] text-tlw-warm-gray">Select a note to edit.</p>
-            )}
-          </div>
+          {/* Last three session notes, with the rest a click away. */}
+          <RecentNotes notes={notes} activeId={activeId} onSelect={setActiveId} />
+
+          {/* The prep sheet we send out, alongside the notes. */}
+          <PrepSheetCard clientId={clientId} />
         </div>
       )}
+    </div>
+  )
+}
+
+function RecentNotes({
+  notes,
+  activeId,
+  onSelect,
+}: {
+  notes: Note[]
+  activeId: string | null
+  onSelect: (id: string) => void
+}) {
+  const [showAll, setShowAll] = useState(false)
+  const visible = showAll ? notes : notes.slice(0, 3)
+
+  return (
+    <div className="rounded-tlw-lg border border-tlw-warm-gray/15 bg-tlw-surface p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-[11px] font-semibold uppercase tracking-[1.5px] text-tlw-warm-gray">
+          Last session notes
+        </p>
+        {notes.length > 3 && (
+          <button
+            onClick={() => setShowAll((s) => !s)}
+            className="text-[11px] font-medium text-tlw-signal-orange hover:underline"
+          >
+            {showAll ? 'Show fewer' : `Show all ${notes.length}`}
+          </button>
+        )}
+      </div>
+      <div className="divide-y divide-tlw-warm-gray/10">
+        {visible.map((n) => (
+          <button
+            key={n.id}
+            onClick={() => onSelect(n.id)}
+            className={`flex w-full items-center justify-between gap-3 px-1 py-2 text-left transition-colors hover:bg-tlw-canvas/50 ${
+              n.id === activeId ? 'bg-tlw-canvas/60' : ''
+            }`}
+          >
+            <span className="truncate text-[13px] text-tlw-navy-deep">{n.title?.trim() || 'Untitled note'}</span>
+            <span className="shrink-0 text-[11px] text-tlw-warm-gray">{formatDate(n.session_date)}</span>
+          </button>
+        ))}
+      </div>
     </div>
   )
 }
@@ -284,7 +315,8 @@ function NoteEditor({
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_260px]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[260px_1fr]">
+        <CapturePanel captures={captures} client={client} onClientUpdated={onClientUpdated} />
         <RichNoteEditor
           html={content}
           enableTemplates
@@ -296,7 +328,6 @@ function NoteEditor({
             })
           }
         />
-        <CapturePanel captures={captures} client={client} onClientUpdated={onClientUpdated} />
       </div>
 
       <div className="flex items-center justify-between">
@@ -325,7 +356,7 @@ function NoteEditor({
 
       <p className="text-[11px] text-tlw-warm-gray">
         Tip: start a line with <span className="font-semibold">ACTION:</span> or{' '}
-        <span className="font-semibold">INSIGHT:</span> to capture it on the right.
+        <span className="font-semibold">INSIGHT:</span> to capture it on the left.
       </p>
 
       {/* Send to client — Claude cleans the note into a client-facing email,

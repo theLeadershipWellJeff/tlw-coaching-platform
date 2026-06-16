@@ -2,14 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { google } from 'googleapis'
 import { authOptions } from '@/lib/authOptions'
+import { headerSafe, encodeHeaderValue } from '@/lib/email-mime'
 
 export const runtime = 'nodejs'
-
-// Escape a header value and keep it to a single line (defense against header
-// injection via the subject).
-function headerSafe(s: string): string {
-  return s.replace(/[\r\n]+/g, ' ').trim()
-}
 
 function makeRawEmail(opts: {
   from: string
@@ -24,7 +19,7 @@ function makeRawEmail(opts: {
   ]
   if (opts.cc) lines.push(`Cc: ${headerSafe(opts.cc)}`)
   lines.push(
-    `Subject: ${headerSafe(opts.subject)}`,
+    `Subject: ${encodeHeaderValue(opts.subject)}`,
     'MIME-Version: 1.0',
     'Content-Type: text/plain; charset=UTF-8',
     '',

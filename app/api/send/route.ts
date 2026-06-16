@@ -8,6 +8,7 @@ import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { getSessionCoach } from '@/lib/coach'
 import { persistActionLinks } from '@/lib/actions'
 import { getBaseUrl } from '@/lib/url'
+import { headerSafe, encodeHeaderValue } from '@/lib/email-mime'
 
 function makeRawEmail(to: string, cc: string, subject: string, body: string, isHTML: boolean) {
   const contentType = isHTML ? 'text/html' : 'text/plain'
@@ -15,9 +16,9 @@ function makeRawEmail(to: string, cc: string, subject: string, body: string, isH
 
   const message = [
     `From: Jeff Holmes <${from}>`,
-    `To: ${to}`,
-    `Cc: ${cc}`,
-    `Subject: ${subject}`,
+    `To: ${headerSafe(to)}`,
+    `Cc: ${headerSafe(cc)}`,
+    `Subject: ${encodeHeaderValue(subject)}`,
     `MIME-Version: 1.0`,
     `Content-Type: ${contentType}; charset=UTF-8`,
     ``,
@@ -66,6 +67,9 @@ export async function POST(req: NextRequest) {
   // "Help shape our agenda" link. No match → plain boxes/no agenda, still sends.
   let actionLinks: (string | null)[] = []
   let agendaUrl: string | undefined
+  // Captured during matching so we can snapshot the sent prep sheet afterward.
+  let matchedClientId: string | null = null
+  let matchedCoachId: string | null = null
   try {
     const supabase = getSupabaseAdmin()
     let row: { id: string } | null = null
@@ -78,6 +82,7 @@ export async function POST(req: NextRequest) {
       row = data
     }
     if (row?.id) {
+      matchedClientId = row.id
       const actions: string[] = Array.isArray(content?.actions) ? content.actions : []
       if (actions.length > 0) {
         const links = await persistActionLinks(supabase, row.id, null, actions)
@@ -85,6 +90,7 @@ export async function POST(req: NextRequest) {
         actionLinks = actions.map((a) => urlByDesc.get(String(a || '').trim()) || null)
       }
       const coach = await getSessionCoach(supabase)
+      matchedCoachId = coach?.id ?? null
       const { data: agenda } = await supabase
         .from('agenda_requests')
         .insert({ coach_id: coach?.id ?? null, client_id: row.id, token: randomUUID(), status: 'pending' })
@@ -97,6 +103,24 @@ export async function POST(req: NextRequest) {
   }
 
   const html = buildClientEmailHTML(clientName, content, actionLinks, agendaUrl)
+
+  // Snapshot the prep sheet against the client so it can be re-read in the
+  // workspace alongside the session notes. Best-effort — never block the send.
+  if (matchedClientId) {
+    try {
+      const supabase = getSupabaseAdmin()
+      await supabase.from('prep_sheets').insert({
+        coach_id: matchedCoachId,
+        client_id: matchedClientId,
+        content,
+        html,
+        sent_at: new Date().toISOString(),
+      })
+    } catch {
+      // Persisting the prep sheet is additive.
+    }
+  }
+
   const prepRaw = makeRawEmail(
     clientEmail,
     cc,
