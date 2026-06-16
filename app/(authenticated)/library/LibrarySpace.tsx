@@ -4,11 +4,17 @@ import { FolderTemplates } from './FolderTemplates'
 import { FolderPdfs } from './FolderPdfs'
 
 type Section = 'templates' | 'pdf'
-type Folder = { id: string; name: string; count: number }
-type OpenFolder = { id: string; name: string }
+type Folder = { id: string; name: string; kind: string; count: number }
+type OpenFolder = { id: string; name: string; kind: string }
 
 const SECTION_LABEL: Record<Section, string> = { templates: 'Templates', pdf: 'PDF Resources' }
-const TEMPLATE_SUGGESTIONS = ['Note', 'Worksheets', 'Agreements']
+// Quick-add folders: label → kind.
+const TEMPLATE_SUGGESTIONS: { label: string; kind: string }[] = [
+  { label: 'Note', kind: 'note' },
+  { label: 'Worksheets', kind: 'worksheet' },
+  { label: 'Agreements', kind: 'agreement' },
+]
+const KIND_LABEL: Record<string, string> = { agreement: 'Agreements', worksheet: 'Worksheets' }
 
 export function LibrarySpace() {
   const [section, setSection] = useState<Section | null>(null)
@@ -55,7 +61,11 @@ export function LibrarySpace() {
     return (
       <div>
         {crumb}
-        {section === 'templates' ? <FolderTemplates folderId={folder.id} /> : <FolderPdfs folderId={folder.id} />}
+        {section === 'templates' ? (
+          <FolderTemplates folderId={folder.id} kind={folder.kind} />
+        ) : (
+          <FolderPdfs folderId={folder.id} />
+        )}
       </div>
     )
   }
@@ -91,6 +101,7 @@ function FolderList({ section, onOpen }: { section: Section; onOpen: (f: OpenFol
   const [error, setError] = useState('')
   const [adding, setAdding] = useState(false)
   const [name, setName] = useState('')
+  const [newKind, setNewKind] = useState('note')
   const [busy, setBusy] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
 
@@ -116,7 +127,7 @@ function FolderList({ section, onOpen }: { section: Section; onOpen: (f: OpenFol
     load()
   }, [load])
 
-  async function create(folderName: string) {
+  async function create(folderName: string, kind = 'note') {
     const trimmed = folderName.trim()
     if (!trimmed) return
     setBusy(true)
@@ -125,7 +136,7 @@ function FolderList({ section, onOpen }: { section: Section; onOpen: (f: OpenFol
       const res = await fetch('/api/library/folders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ section, name: trimmed }),
+        body: JSON.stringify({ section, name: trimmed, kind }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Could not create folder')
@@ -171,16 +182,27 @@ function FolderList({ section, onOpen }: { section: Section; onOpen: (f: OpenFol
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && create(name)}
+            onKeyDown={(e) => e.key === 'Enter' && create(name, newKind)}
             placeholder="Folder name"
             autoFocus
             className="flex-1 border-none bg-transparent text-[14px] text-tlw-navy-deep outline-none placeholder:text-tlw-warm-gray/60"
           />
+          {section === 'templates' && (
+            <select
+              value={newKind}
+              onChange={(e) => setNewKind(e.target.value)}
+              className="rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-surface px-2 py-1.5 text-[12px] text-tlw-espresso outline-none focus:border-tlw-signal-orange"
+            >
+              <option value="note">Note templates</option>
+              <option value="agreement">Agreements</option>
+              <option value="worksheet">Worksheets</option>
+            </select>
+          )}
           <button onClick={() => { setAdding(false); setName('') }} className="text-[12px] text-tlw-warm-gray hover:text-tlw-espresso">
             Cancel
           </button>
           <button
-            onClick={() => create(name)}
+            onClick={() => create(name, newKind)}
             disabled={busy || !name.trim()}
             className="rounded-tlw-md bg-tlw-navy-rich px-3 py-1.5 text-[12px] font-medium text-tlw-cream transition-opacity hover:opacity-90 disabled:opacity-40"
           >
@@ -201,12 +223,12 @@ function FolderList({ section, onOpen }: { section: Section; onOpen: (f: OpenFol
               <span className="text-[12px] text-tlw-warm-gray">Quick add:</span>
               {TEMPLATE_SUGGESTIONS.map((s) => (
                 <button
-                  key={s}
-                  onClick={() => create(s)}
+                  key={s.label}
+                  onClick={() => create(s.label, s.kind)}
                   disabled={busy}
                   className="rounded-tlw-md border border-tlw-warm-gray/30 px-2.5 py-1 text-[12px] text-tlw-espresso hover:border-tlw-warm-gray/50 disabled:opacity-40"
                 >
-                  + {s}
+                  + {s.label}
                 </button>
               ))}
             </div>
@@ -216,9 +238,14 @@ function FolderList({ section, onOpen }: { section: Section; onOpen: (f: OpenFol
         <div className="space-y-2">
           {folders.map((f) => (
             <div key={f.id} className="flex items-center justify-between gap-4 rounded-tlw-xl border border-tlw-warm-gray/15 bg-tlw-surface p-4">
-              <button onClick={() => onOpen({ id: f.id, name: f.name })} className="flex min-w-0 items-center gap-3 text-left">
+              <button onClick={() => onOpen({ id: f.id, name: f.name, kind: f.kind })} className="flex min-w-0 items-center gap-3 text-left">
                 <FolderIcon />
                 <span className="truncate text-[14px] font-medium text-tlw-navy-deep">{f.name}</span>
+                {KIND_LABEL[f.kind] && (
+                  <span className="shrink-0 rounded-full bg-tlw-canvas px-2 py-0.5 text-[10px] uppercase tracking-[1px] text-tlw-warm-gray">
+                    {KIND_LABEL[f.kind]}
+                  </span>
+                )}
                 <span className="shrink-0 text-[12px] text-tlw-warm-gray">{f.count} item{f.count === 1 ? '' : 's'}</span>
               </button>
               <div className="flex shrink-0 items-center gap-3 text-[12px] font-medium">
@@ -242,7 +269,7 @@ function FolderList({ section, onOpen }: { section: Section; onOpen: (f: OpenFol
 
           {section === 'templates' && unfiled > 0 && (
             <button
-              onClick={() => onOpen({ id: 'none', name: 'Unfiled' })}
+              onClick={() => onOpen({ id: 'none', name: 'Unfiled', kind: 'note' })}
               className="flex w-full items-center gap-3 rounded-tlw-xl border border-dashed border-tlw-warm-gray/25 bg-tlw-surface/60 p-4 text-left"
             >
               <FolderIcon />

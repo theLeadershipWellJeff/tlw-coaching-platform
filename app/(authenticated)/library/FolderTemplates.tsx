@@ -2,21 +2,26 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { NoteTemplate } from '@/lib/supabase/types'
 import { RichNoteEditor } from '../clients/[id]/RichNoteEditor'
+import { AssignAgreementModal } from './AssignAgreementModal'
 
 type Editing = { id: string | null; name: string; content: string } | null
 
 /**
- * Manage the note templates inside one Library folder. `folderId` is a folder
- * uuid, or 'none' for unfiled templates (existing templates created before
- * folders). Building works the same as before — it's just scoped to the folder.
+ * Manage the templates inside one Library folder. `folderId` is a folder uuid,
+ * or 'none' for unfiled templates. When the folder's `kind` is 'agreement',
+ * each item can be assigned to a client to sign (otherwise it's a note template
+ * that surfaces in the editor's Templates dropdown).
  */
-export function FolderTemplates({ folderId }: { folderId: string }) {
+export function FolderTemplates({ folderId, kind = 'note' }: { folderId: string; kind?: string }) {
+  const isAgreement = kind === 'agreement'
+  const noun = isAgreement ? 'agreement' : 'template'
   const [templates, setTemplates] = useState<NoteTemplate[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [editing, setEditing] = useState<Editing>(null)
   const [busy, setBusy] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [assigning, setAssigning] = useState<{ id: string; name: string } | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -88,14 +93,20 @@ export function FolderTemplates({ folderId }: { folderId: string }) {
         />
         <RichNoteEditor
           html={editing.content}
-          enableFields
+          enableFields={!isAgreement}
           onChange={(html) => setEditing((ed) => (ed ? { ...ed, content: html } : ed))}
-          placeholder="Write the template — headings, lists, prompts you reuse each session…"
+          placeholder={
+            isAgreement
+              ? 'Write the agreement — the client reads this and taps to agree…'
+              : 'Write the template — headings, lists, prompts you reuse each session…'
+          }
         />
-        <p className="text-[12px] text-tlw-warm-gray">
-          Use <span className="font-medium">Insert field</span> to drop in dynamic data (e.g. unfinished actions or
-          recent insights) — it fills in from the client when you add the template to a note.
-        </p>
+        {!isAgreement && (
+          <p className="text-[12px] text-tlw-warm-gray">
+            Use <span className="font-medium">Insert field</span> to drop in dynamic data (e.g. unfinished actions or
+            recent insights) — it fills in from the client when you add the template to a note.
+          </p>
+        )}
         {error && <p className="text-[12px] text-tlw-signal-orange">{error}</p>}
         <div className="flex items-center justify-end gap-3">
           <button onClick={() => setEditing(null)} className="text-[13px] text-tlw-warm-gray hover:text-tlw-espresso">
@@ -106,7 +117,7 @@ export function FolderTemplates({ folderId }: { folderId: string }) {
             disabled={busy || !editing.name.trim()}
             className="rounded-tlw-lg bg-tlw-navy-rich px-4 py-2 text-[13px] font-medium text-tlw-cream transition-opacity hover:opacity-90 disabled:opacity-40"
           >
-            {busy ? 'Saving…' : 'Save template'}
+            {busy ? 'Saving…' : `Save ${noun}`}
           </button>
         </div>
       </div>
@@ -120,7 +131,7 @@ export function FolderTemplates({ folderId }: { folderId: string }) {
           onClick={() => setEditing({ id: null, name: '', content: '' })}
           className="rounded-tlw-lg bg-tlw-navy-rich px-3 py-1.5 text-[12px] font-medium text-tlw-cream transition-opacity hover:opacity-90"
         >
-          + New template
+          + New {noun}
         </button>
       </div>
 
@@ -131,7 +142,9 @@ export function FolderTemplates({ folderId }: { folderId: string }) {
       ) : templates.length === 0 ? (
         <div className="rounded-tlw-xl border border-dashed border-tlw-warm-gray/25 bg-tlw-surface/60 p-8 text-center">
           <p className="text-[13px] text-tlw-warm-gray">
-            No templates in this folder yet. Create one and it&apos;ll appear in the note editor&apos;s Templates dropdown.
+            {isAgreement
+              ? 'No agreements in this folder yet. Create one, then assign it to a client to sign.'
+              : "No templates in this folder yet. Create one and it'll appear in the note editor's Templates dropdown."}
           </p>
         </div>
       ) : (
@@ -143,6 +156,14 @@ export function FolderTemplates({ folderId }: { folderId: string }) {
             >
               <p className="truncate text-[14px] font-medium text-tlw-navy-deep">{t.name}</p>
               <div className="flex shrink-0 items-center gap-3 text-[12px] font-medium">
+                {isAgreement && (
+                  <button
+                    onClick={() => setAssigning({ id: t.id, name: t.name })}
+                    className="text-tlw-signal-orange hover:underline"
+                  >
+                    assign to client
+                  </button>
+                )}
                 <button
                   onClick={() => setEditing({ id: t.id, name: t.name, content: t.content })}
                   className="text-tlw-warm-gray hover:text-tlw-espresso"
@@ -167,6 +188,14 @@ export function FolderTemplates({ folderId }: { folderId: string }) {
             </div>
           ))}
         </div>
+      )}
+
+      {assigning && (
+        <AssignAgreementModal
+          templateId={assigning.id}
+          templateName={assigning.name}
+          onClose={() => setAssigning(null)}
+        />
       )}
     </div>
   )

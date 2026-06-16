@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { getSessionCoach } from '@/lib/coach'
 
 const SECTIONS = ['templates', 'pdf']
+const KINDS = ['note', 'agreement', 'worksheet', 'generic']
 
 // List the coach's folders in a section (?section=templates|pdf), with the
 // number of items in each.
@@ -54,12 +55,14 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
   const section = body.section
   const name = (body.name || '').trim()
+  // Kind only applies to template folders; PDF folders are always 'generic'.
+  const kind = section === 'pdf' ? 'generic' : KINDS.includes(body.kind) ? body.kind : 'note'
   if (!SECTIONS.includes(section)) return NextResponse.json({ error: 'Unknown section' }, { status: 400 })
   if (!name) return NextResponse.json({ error: 'A folder name is required.' }, { status: 400 })
 
   const { data, error } = await supabase
     .from('library_folders')
-    .insert({ coach_id: coach.id, section, name })
+    .insert({ coach_id: coach.id, section, kind, name })
     .select()
     .single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
