@@ -305,17 +305,17 @@ created automatically on first upload.
 - **Prep-sheet agenda fill-ins** → public page → `AgendaCard`.
 
 ### Open — keep these tracked (also GitHub issues)
-- **Worksheets (client fill-in) — to be built.** Worksheet-kind Library folders
+- **Worksheets (client fill-in) — to be built (#38).** Worksheet-kind Library folders
   exist (with a "still being built" banner) but currently behave like note
   templates. Planned: a builder with blanks + checkboxes, assign-to-client, a
   public fill-in page (same token pattern as agreements/agenda), and answers
   stored on the client workspace.
-- **Band definitions (spec §18) — PRIORITY, authoring task.** Full band
+- **Band definitions (spec §18) — PRIORITY, authoring task (#39).** Full band
   definitions for Competencies 1 and 3–8 (only the general bands + Competency 2
   are written). These are the scoring foundation; fold each into the engine
   prompt (`lib/scoring/engine.ts` SYSTEM/rubric) as it locks. Jeff is drafting
   the language.
-- **Supervisor cross-coach roll-up view (Phase 3).** Firm-facing dashboard
+- **Supervisor cross-coach roll-up view (Phase 3) (#40).** Firm-facing dashboard
   rolling up reports across coaches + a Claude-vs-coach comparison. Schema is
   ready (`coach_id` + `role`), and coach self-scores are now captured, so the
   comparison data exists. Needs: a supervisor-scoped aggregate API and a
