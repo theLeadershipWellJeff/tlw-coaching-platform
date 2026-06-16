@@ -7,6 +7,7 @@ import { TranscriptsCard, NotesCard } from './SummaryCards'
 import { GoalsCard } from './GoalsCard'
 import { ActionsCard } from './ActionsCard'
 import { AgreementsCard } from './AgreementsCard'
+import { AgendaCard } from './AgendaCard'
 import { EmailModal } from './EmailModal'
 import { ImportTranscriptsModal } from './ImportTranscriptsModal'
 
@@ -88,6 +89,8 @@ export function ClientDetail({ clientId }: { clientId: string }) {
       <GoalsCard client={client} onUpdated={setClient} />
 
       <ActionsCard clientId={clientId} />
+
+      <AgendaCard clientId={clientId} />
 
       <AgreementsCard clientId={clientId} />
 

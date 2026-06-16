@@ -217,6 +217,16 @@ null), and passes the per-action links into `buildClientEmailHTML(..., actionLin
 so the prep "Your Action Items" boxes are click-to-log too. No client match → plain
 boxes, email still sends.
 
+### Session-prep agenda fill-ins (`agenda_requests`)
+When `/api/send` matches a client it also creates an `agenda_requests` row
+(token) and passes `${getBaseUrl()}/agenda/<token>` into `buildClientEmailHTML`,
+which renders a "Help shape our agenda" CTA at the bottom of the prep email. The
+**public** page `app/agenda/[token]/page.tsx` (token = credential) shows the
+prompts (`lib/agenda.ts#AGENDA_PROMPTS`); `GET/POST /api/agenda/[token]` load and
+submit (stores `items` = `[{q,a}]`, status → submitted). The workspace
+`AgendaCard` (`/api/clients/[id]/agenda`, latest request) shows the client's
+answers (or "awaiting their response").
+
 ### Coaching goals = the source of truth (and of the prep plan)
 `clients.coaching_goals` is the sacred goal list. Each goal is `{title,
 description, metrics?}` (`metrics` = up to three measures of fulfillment).
@@ -269,10 +279,10 @@ workspace (address + coaching_goals) · 005 CA notes (ca_session_id) · 006
 supervisor email (coaches.supervisor_email). Run new migrations by hand in the
 Supabase SQL editor.
 
-**Pending — apply in Supabase:** 011 agreements (`library_folders.kind`,
-`agreements` table). The `library-pdfs` Storage bucket is created automatically
-on first upload. (007 key info + map, 008 note templates, 009 action completion,
-010 library folders — applied.)
+**Pending — apply in Supabase:** 012 agenda requests (`agenda_requests` table).
+The `library-pdfs` Storage bucket is created automatically on first upload. (007
+key info + map, 008 note templates, 009 action completion, 010 library folders,
+011 agreements — applied.)
 
 ## Roadmap
 
@@ -287,6 +297,11 @@ on first upload. (007 key info + map, 008 note templates, 009 action completion,
   set on Account).
 
 ### Open — keep these tracked (also GitHub issues)
+- **Worksheets (client fill-in) — to be built.** Worksheet-kind Library folders
+  exist (with a "still being built" banner) but currently behave like note
+  templates. Planned: a builder with blanks + checkboxes, assign-to-client, a
+  public fill-in page (same token pattern as agreements/agenda), and answers
+  stored on the client workspace.
 - **Band definitions (spec §18) — PRIORITY, authoring task.** Full band
   definitions for Competencies 1 and 3–8 (only the general bands + Competency 2
   are written). These are the scoring foundation; fold each into the engine

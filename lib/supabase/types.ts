@@ -105,6 +105,17 @@ export type Agreement = {
   updated_at: Timestamp
 }
 
+export type AgendaRequest = {
+  id: string
+  coach_id: string | null
+  client_id: string
+  token: string
+  items: { q: string; a: string }[] | null
+  status: string // pending | submitted
+  created_at: Timestamp
+  submitted_at: Timestamp | null
+}
+
 export type PdfResource = {
   id: string
   coach_id: string | null
@@ -227,6 +238,12 @@ export type Database = {
         Row: Agreement
         Insert: Insertable<Agreement>
         Update: Updatable<Agreement>
+        Relationships: []
+      }
+      agenda_requests: {
+        Row: AgendaRequest
+        Insert: Insertable<AgendaRequest>
+        Update: Updatable<AgendaRequest>
         Relationships: []
       }
       transcripts: {
