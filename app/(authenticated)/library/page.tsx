@@ -4,7 +4,7 @@ import { TemplatesLibrary } from './TemplatesLibrary'
 export default function LibraryPage() {
   return (
     <>
-      <PageHeader title="Library" subtitle="Reusable note templates for your sessions." />
+      <PageHeader title="Library" subtitle="Your templates — note templates now; coaching agreements and worksheets to come." />
       <TemplatesLibrary />
     </>
   )

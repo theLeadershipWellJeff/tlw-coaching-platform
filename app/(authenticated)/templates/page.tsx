@@ -1,17 +1,7 @@
-import { PageHeader } from '@/app/components/layout/PageHeader'
-import { ComingSoon } from '@/app/components/shared/ComingSoon'
+import { redirect } from 'next/navigation'
 
+// Templates now live in the Library (note templates today; coaching agreements
+// and worksheets to come). Keep this path working for old links/bookmarks.
 export default function TemplatesPage() {
-  return (
-    <>
-      <PageHeader
-        title="Templates"
-        subtitle="Agreements, worksheets, note templates, email templates, and reminders."
-      />
-      <ComingSoon
-        title="Templates"
-        description="Agreement templates come first, with the other categories shelled out alongside."
-      />
-    </>
-  )
+  redirect('/library')
 }
