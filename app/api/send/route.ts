@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { randomUUID } from 'crypto'
 import { getServerSession } from 'next-auth'
 import { google } from 'googleapis'
 import { authOptions } from '@/lib/authOptions'
 import { buildClientEmailHTML } from '@/lib/email-template'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
+import { getSessionCoach } from '@/lib/coach'
 import { persistActionLinks } from '@/lib/actions'
+import { getBaseUrl } from '@/lib/url'
 
 function makeRawEmail(to: string, cc: string, subject: string, body: string, isHTML: boolean) {
   const contentType = isHTML ? 'text/html' : 'text/plain'
@@ -58,35 +61,42 @@ export async function POST(req: NextRequest) {
     results.push({ type: 'intro', id: introResult.data.id })
   }
 
-  // 2. Send prep sheet. Make each action item a click-to-log checkbox (same
-  // system as the note "send to client" flow) when we can tie it to a client —
-  // match on email first, then name. No match → plain boxes, email still sends.
+  // 2. Send prep sheet. When we can tie the email to a client (match on email
+  // first, then name), make the action items click-to-log checkboxes and add an
+  // "Help shape our agenda" link. No match → plain boxes/no agenda, still sends.
   let actionLinks: (string | null)[] = []
+  let agendaUrl: string | undefined
   try {
-    const actions: string[] = Array.isArray(content?.actions) ? content.actions : []
-    if (actions.length > 0) {
-      const supabase = getSupabaseAdmin()
-      let row: { id: string } | null = null
-      if (clientEmail) {
-        const { data } = await supabase.from('clients').select('id').ilike('email', clientEmail).limit(1).maybeSingle()
-        row = data
-      }
-      if (!row && clientName) {
-        const { data } = await supabase.from('clients').select('id').ilike('name', clientName).limit(1).maybeSingle()
-        row = data
-      }
-      if (row?.id) {
+    const supabase = getSupabaseAdmin()
+    let row: { id: string } | null = null
+    if (clientEmail) {
+      const { data } = await supabase.from('clients').select('id').ilike('email', clientEmail).limit(1).maybeSingle()
+      row = data
+    }
+    if (!row && clientName) {
+      const { data } = await supabase.from('clients').select('id').ilike('name', clientName).limit(1).maybeSingle()
+      row = data
+    }
+    if (row?.id) {
+      const actions: string[] = Array.isArray(content?.actions) ? content.actions : []
+      if (actions.length > 0) {
         const links = await persistActionLinks(supabase, row.id, null, actions)
         const urlByDesc = new Map(links.map((l) => [l.description, l.url]))
         actionLinks = actions.map((a) => urlByDesc.get(String(a || '').trim()) || null)
       }
+      const coach = await getSessionCoach(supabase)
+      const { data: agenda } = await supabase
+        .from('agenda_requests')
+        .insert({ coach_id: coach?.id ?? null, client_id: row.id, token: randomUUID(), status: 'pending' })
+        .select('token')
+        .single()
+      if (agenda?.token) agendaUrl = `${getBaseUrl()}/agenda/${agenda.token}`
     }
   } catch {
     // Tracking is additive — never block the prep email on it.
-    actionLinks = []
   }
 
-  const html = buildClientEmailHTML(clientName, content, actionLinks)
+  const html = buildClientEmailHTML(clientName, content, actionLinks, agendaUrl)
   const prepRaw = makeRawEmail(
     clientEmail,
     cc,

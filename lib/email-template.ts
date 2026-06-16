@@ -14,7 +14,8 @@ export interface PrepContent {
 export function buildClientEmailHTML(
   clientName: string,
   c: PrepContent,
-  actionLinks: (string | null)[] = []
+  actionLinks: (string | null)[] = [],
+  agendaUrl?: string
 ): string {
   const anyActionLinks = actionLinks.some(Boolean)
   return `<!DOCTYPE html>
@@ -138,6 +139,14 @@ export function buildClientEmailHTML(
       <div style="font-size:15px;color:#F2F2F0;font-family:'Cormorant Garamond',Georgia,serif;font-style:italic;line-height:1.8;">${q.question}</div>
     </div>`).join('')}
   </div>
+
+  ${agendaUrl ? `
+  <div style="height:1px;margin:0 44px;background:#e5e0d8;"></div>
+  <div style="padding:22px 44px;text-align:center;">
+    <div style="font-size:9px;letter-spacing:4px;text-transform:uppercase;color:#8B8680;font-weight:700;margin-bottom:6px;">Help Shape Our Agenda</div>
+    <div style="font-size:13px;color:#6b7280;line-height:1.6;margin-bottom:14px;">Tell me what you&rsquo;d like to focus on &mdash; a minute now means we make the most of our time together.</div>
+    <a href="${agendaUrl}" style="display:inline-block;background:#0C1940;color:#F2F2F0;text-decoration:none;font-size:13px;font-weight:600;padding:11px 24px;border-radius:8px;">Set the agenda &rarr;</a>
+  </div>` : ''}
 
   <!-- SIGNATURE -->
   <div style="padding:20px 44px 34px;">

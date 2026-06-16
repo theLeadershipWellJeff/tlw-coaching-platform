@@ -14,6 +14,7 @@ type Editing = { id: string | null; name: string; content: string } | null
  */
 export function FolderTemplates({ folderId, kind = 'note' }: { folderId: string; kind?: string }) {
   const isAgreement = kind === 'agreement'
+  const isWorksheet = kind === 'worksheet'
   const noun = isAgreement ? 'agreement' : 'template'
   const [templates, setTemplates] = useState<NoteTemplate[]>([])
   const [loading, setLoading] = useState(true)
@@ -126,6 +127,13 @@ export function FolderTemplates({ folderId, kind = 'note' }: { folderId: string;
 
   return (
     <div className="space-y-4">
+      {isWorksheet && (
+        <div className="rounded-tlw-lg border border-tlw-warm-gray/20 bg-tlw-canvas/60 px-4 py-3 text-[12px] text-tlw-warm-gray">
+          <span className="font-medium text-tlw-espresso">Worksheets are still being built.</span> Client fill-in
+          worksheets (blanks + checkboxes the client completes on a page) are on the roadmap. For now this folder
+          works like note templates.
+        </div>
+      )}
       <div className="flex items-center justify-end">
         <button
           onClick={() => setEditing({ id: null, name: '', content: '' })}
