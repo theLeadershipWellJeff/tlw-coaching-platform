@@ -5,7 +5,12 @@ import { RichNoteEditor } from '../clients/[id]/RichNoteEditor'
 
 type Editing = { id: string | null; name: string; content: string } | null
 
-export function TemplatesLibrary() {
+/**
+ * Manage the note templates inside one Library folder. `folderId` is a folder
+ * uuid, or 'none' for unfiled templates (existing templates created before
+ * folders). Building works the same as before — it's just scoped to the folder.
+ */
+export function FolderTemplates({ folderId }: { folderId: string }) {
   const [templates, setTemplates] = useState<NoteTemplate[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -17,7 +22,7 @@ export function TemplatesLibrary() {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch('/api/templates')
+      const res = await fetch(`/api/templates?folderId=${encodeURIComponent(folderId)}`)
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to load templates')
       setTemplates(data.templates || [])
@@ -25,7 +30,7 @@ export function TemplatesLibrary() {
       setError(e.message)
     }
     setLoading(false)
-  }, [])
+  }, [folderId])
 
   useEffect(() => {
     load()
@@ -40,7 +45,12 @@ export function TemplatesLibrary() {
       const res = await fetch(isNew ? '/api/templates' : `/api/templates/${editing.id}`, {
         method: isNew ? 'POST' : 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: editing.name, content: editing.content }),
+        body: JSON.stringify({
+          name: editing.name,
+          content: editing.content,
+          // New templates land in this folder (unfiled folder → null).
+          ...(isNew ? { folder_id: folderId === 'none' ? null : folderId } : {}),
+        }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Save failed')
@@ -69,15 +79,13 @@ export function TemplatesLibrary() {
   if (editing) {
     return (
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <input
-            value={editing.name}
-            onChange={(e) => setEditing({ ...editing, name: e.target.value })}
-            placeholder="Template name"
-            className="flex-1 border-none bg-transparent text-lg font-medium text-tlw-navy-deep outline-none placeholder:text-tlw-warm-gray/60"
-            autoFocus
-          />
-        </div>
+        <input
+          value={editing.name}
+          onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+          placeholder="Template name"
+          className="w-full border-none bg-transparent text-lg font-medium text-tlw-navy-deep outline-none placeholder:text-tlw-warm-gray/60"
+          autoFocus
+        />
         <RichNoteEditor
           html={editing.content}
           enableFields
@@ -107,8 +115,7 @@ export function TemplatesLibrary() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-[11px] font-medium uppercase tracking-[2px] text-tlw-warm-gray">Note templates</p>
+      <div className="flex items-center justify-end">
         <button
           onClick={() => setEditing({ id: null, name: '', content: '' })}
           className="rounded-tlw-lg bg-tlw-navy-rich px-3 py-1.5 text-[12px] font-medium text-tlw-cream transition-opacity hover:opacity-90"
@@ -124,7 +131,7 @@ export function TemplatesLibrary() {
       ) : templates.length === 0 ? (
         <div className="rounded-tlw-xl border border-dashed border-tlw-warm-gray/25 bg-tlw-surface/60 p-8 text-center">
           <p className="text-[13px] text-tlw-warm-gray">
-            No templates yet. Create one and it&apos;ll appear in the note editor&apos;s Templates dropdown.
+            No templates in this folder yet. Create one and it&apos;ll appear in the note editor&apos;s Templates dropdown.
           </p>
         </div>
       ) : (

@@ -19,6 +19,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const patch: Database['public']['Tables']['note_templates']['Update'] = {}
   if (typeof body.name === 'string') patch.name = body.name.trim()
   if (typeof body.content === 'string') patch.content = body.content
+  if ('folder_id' in body) patch.folder_id = body.folder_id || null
   if (patch.name === '') return NextResponse.json({ error: 'A template name is required.' }, { status: 400 })
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: 'No fields to update' }, { status: 400 })

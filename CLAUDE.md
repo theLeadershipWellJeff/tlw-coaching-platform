@@ -128,11 +128,29 @@ New note titles default to `"<client name> · <date>"` (`NotesPanel#newNote`).
 The editor toolbar has a **Templates** dropdown (`RichNoteEditor`, gated by
 `enableTemplates`) that inserts a saved Library template at the cursor.
 
-### Note templates (Library) + merge fields
+### Library = folder system (`library/LibrarySpace.tsx`)
+The Library is a two-section folder browser (migration 010): **Templates** and
+**PDF Resources**. `library_folders` (coach-scoped, `section` = templates|pdf)
+are the folders; CRUD via `/api/library/folders` + `/api/library/folders/[id]`
+(delete cascades the folder's contents — for PDF folders the Storage objects are
+removed first). Navigation state lives in `LibrarySpace` (home → section →
+folder).
+
+- **Templates folders** hold `note_templates` (now carry `folder_id`; null =
+  Unfiled, surfaced as a virtual folder for pre-folder templates). Managed by
+  `FolderTemplates` — same builder as before, scoped to the folder. `/api/templates`
+  takes `?folderId=<uuid|none>` (omit it → all, for the note editor dropdown);
+  POST/PATCH accept `folder_id` (PATCH = move).
+- **PDF folders** hold uploaded files. `pdf_resources` rows index files in the
+  private Storage bucket `library-pdfs` (created on first upload via
+  `lib/library-storage.ts#ensurePdfBucket`). `FolderPdfs` uploads (multipart →
+  `POST /api/library/pdfs`, **4 MB cap** — serverless body limit), views (signed
+  URL via `GET /api/library/pdfs/[id]`), deletes.
+
+### Note templates + merge fields
 `note_templates` (coach-scoped, migration 008) holds reusable rich-text note
-templates authored on the **Library** page (`library/TemplatesLibrary.tsx`), CRUD
-via `/api/templates` + `/api/templates/[id]`. They surface in the note editor's
-Templates dropdown.
+templates, organized into Library folders (above), CRUD via `/api/templates` +
+`/api/templates/[id]`. They surface in the note editor's Templates dropdown.
 
 Templates can embed **merge fields** (`lib/note-template-fields.ts`: `{{client_name}}`,
 `{{today}}`, `{{unfinished_actions}}`, `{{recent_insights}}`, `{{coaching_goals}}`),
@@ -234,8 +252,10 @@ workspace (address + coaching_goals) · 005 CA notes (ca_session_id) · 006
 supervisor email (coaches.supervisor_email). Run new migrations by hand in the
 Supabase SQL editor.
 
-**Pending — apply in Supabase:** 009 action completion (`actions.complete_token`,
-`completed_at`, `completed_via`). (007 key info + map, 008 note templates — applied.)
+**Pending — apply in Supabase:** 010 library folders (`library_folders`,
+`note_templates.folder_id`, `pdf_resources`). The `library-pdfs` Storage bucket
+is created automatically on first upload. (007 key info + map, 008 note
+templates, 009 action completion — applied.)
 
 ## Roadmap
 
