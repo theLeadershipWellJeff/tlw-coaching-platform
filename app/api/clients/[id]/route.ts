@@ -26,7 +26,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json().catch(() => ({}))
-  const allowed = ['name', 'email', 'title', 'company', 'status', 'phone', 'timezone', 'address', 'ca_client_id', 'tags', 'bio', 'coaching_goals', 'key_info', 'coaching_map'] as const
+  const allowed = ['name', 'email', 'title', 'company', 'status', 'phone', 'timezone', 'address', 'ca_client_id', 'tags', 'bio', 'coaching_goals', 'key_info', 'coaching_map', 'session_fee'] as const
   const patch: Database['public']['Tables']['clients']['Update'] = {}
   for (const key of allowed) {
     if (key in body) patch[key] = body[key]

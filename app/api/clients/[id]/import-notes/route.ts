@@ -79,6 +79,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
       session_date: safeDate(n.dateOf),
       title: n.title?.trim() || null,
       content: typeof n.content === 'string' ? n.content : '',
+      duration_minutes: 60,
       ca_session_id: caId,
     })
   }

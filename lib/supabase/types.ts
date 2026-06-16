@@ -12,6 +12,7 @@
  */
 
 import type { SessionReportJson } from '@/lib/scoring/types'
+import type { PrepContent } from '@/lib/email-template'
 
 type Timestamp = string // ISO 8601
 type DateString = string // YYYY-MM-DD
@@ -40,6 +41,8 @@ export type Client = {
   coaching_goals: CoachingGoal[] | null
   key_info: string | null
   coaching_map: string | null
+  // Flat per-session fee, in dollars. Drives the Practice revenue cards.
+  session_fee: number | null
   created_at: Timestamp
   updated_at: Timestamp
 }
@@ -50,6 +53,8 @@ export type Note = {
   session_date: DateString
   title: string | null
   content: string
+  // Logged session length in minutes (drives past-week revenue). Default 60.
+  duration_minutes: number
   calendar_event_id: string | null
   ca_session_id: string | null
   created_at: Timestamp
@@ -134,8 +139,20 @@ export type Coach = {
   google_refresh_token: string | null
   timezone: string
   supervisor_email: string | null
+  // Per-competency improvement focus, keyed by competency id ("1".."8").
+  competency_focus: Record<string, string> | null
   created_at: Timestamp
   updated_at: Timestamp
+}
+
+export type PrepSheet = {
+  id: string
+  coach_id: string | null
+  client_id: string
+  content: PrepContent
+  html: string | null
+  sent_at: Timestamp
+  created_at: Timestamp
 }
 
 export type Transcript = {
@@ -256,6 +273,12 @@ export type Database = {
         Row: SessionReport
         Insert: Insertable<SessionReport>
         Update: Updatable<SessionReport>
+        Relationships: []
+      }
+      prep_sheets: {
+        Row: PrepSheet
+        Insert: Insertable<PrepSheet>
+        Update: Updatable<PrepSheet>
         Relationships: []
       }
     }

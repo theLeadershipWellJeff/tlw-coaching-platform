@@ -2,8 +2,19 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import type { ScorecardSummary, CompetencyAverage } from '@/lib/scoring/aggregate'
+import { BAND_DESCRIPTIONS, nextBand } from '@/lib/scoring/rubric'
 import { bandColor, BandChip } from './ui'
 import { AddTranscript } from './AddTranscript'
+
+interface Revenue {
+  calendarConnected: boolean
+  past: { weekStart: string; sessions: number; hours: number; total: number }
+  projected: { weekStart: string; sessions: number; hours: number; total: number }
+}
+
+function money(n: number): string {
+  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
+}
 
 interface ReportRow {
   id: string
@@ -42,26 +53,127 @@ function fmtDate(d: string | null): string {
   })
 }
 
-/** Overall score per competency, averaged across sessions (spec §5, §11). */
-function CompetencyBars({ competencies }: { competencies: CompetencyAverage[] }) {
+/** Overall score per competency, averaged across sessions (spec §5, §11).
+ *  Each row expands to the current band, the next level to aim for, and an
+ *  editable note for what the coach will try to improve it. */
+function CompetencyBars({
+  competencies,
+  focus,
+  onSaveFocus,
+}: {
+  competencies: CompetencyAverage[]
+  focus: Record<string, string>
+  onSaveFocus: (id: number, text: string) => Promise<void>
+}) {
+  const [open, setOpen] = useState<number | null>(null)
   return (
-    <div className="space-y-3">
-      {competencies.map((c) => (
-        <div key={c.id} className="flex items-center gap-4">
-          <div className="w-44 shrink-0 text-[13px] text-tlw-espresso">
-            <span className="text-tlw-warm-gray">{c.id}.</span> {c.name}
+    <div className="space-y-2">
+      {competencies.map((c) => {
+        const expanded = open === c.id
+        return (
+          <div key={c.id} className="rounded-tlw-lg" style={{ backgroundColor: expanded ? 'var(--color-surface)' : undefined }}>
+            <button
+              onClick={() => setOpen(expanded ? null : c.id)}
+              className="flex w-full items-center gap-4 rounded-tlw-lg px-2 py-1.5 text-left transition-colors hover:bg-tlw-canvas/60"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                width="14"
+                height="14"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                className={`shrink-0 text-tlw-warm-gray transition-transform ${expanded ? 'rotate-90' : ''}`}
+              >
+                <path d="M9 6l6 6-6 6" />
+              </svg>
+              <div className="w-44 shrink-0 text-[13px] text-tlw-espresso">
+                <span className="text-tlw-warm-gray">{c.id}.</span> {c.name}
+              </div>
+              <div className="h-1.5 flex-1 rounded-full" style={{ backgroundColor: 'var(--color-divider)' }}>
+                <div
+                  className="h-1.5 rounded-full"
+                  style={{ width: `${(c.average / 5) * 100}%`, backgroundColor: bandColor(c.band) }}
+                />
+              </div>
+              <div className="w-12 shrink-0 text-right text-[14px] font-medium" style={{ color: bandColor(c.band) }}>
+                {c.average.toFixed(1)}
+              </div>
+            </button>
+            {expanded && <CompetencyDetail comp={c} focus={focus[String(c.id)] || ''} onSaveFocus={onSaveFocus} />}
           </div>
-          <div className="h-1.5 flex-1 rounded-full" style={{ backgroundColor: 'var(--color-divider)' }}>
-            <div
-              className="h-1.5 rounded-full"
-              style={{ width: `${(c.average / 5) * 100}%`, backgroundColor: bandColor(c.band) }}
-            />
-          </div>
-          <div className="w-12 shrink-0 text-right text-[14px] font-medium" style={{ color: bandColor(c.band) }}>
-            {c.average.toFixed(1)}
-          </div>
-        </div>
-      ))}
+        )
+      })}
+    </div>
+  )
+}
+
+function CompetencyDetail({
+  comp,
+  focus,
+  onSaveFocus,
+}: {
+  comp: CompetencyAverage
+  focus: string
+  onSaveFocus: (id: number, text: string) => Promise<void>
+}) {
+  const [text, setText] = useState(focus)
+  const [state, setState] = useState<'idle' | 'saving' | 'saved'>('idle')
+  const next = nextBand(comp.band)
+
+  async function save() {
+    if (text.trim() === focus.trim()) return
+    setState('saving')
+    await onSaveFocus(comp.id, text.trim())
+    setState('saved')
+  }
+
+  return (
+    <div className="grid grid-cols-1 gap-3 px-2 pb-3 pt-1 md:grid-cols-3">
+      {/* Current state */}
+      <div className="rounded-tlw-md p-3" style={{ border: '0.5px solid var(--color-divider)' }}>
+        <p className="text-[10px] font-semibold uppercase tracking-[1.5px] text-tlw-warm-gray">Current state</p>
+        <p className="mt-1.5 text-[13px] font-medium" style={{ color: bandColor(comp.band) }}>
+          {comp.band.toLowerCase()} · {comp.average.toFixed(1)}
+        </p>
+        <p className="mt-1.5 text-[12px] leading-relaxed text-tlw-espresso">{BAND_DESCRIPTIONS[comp.band]}</p>
+      </div>
+
+      {/* Next level */}
+      <div className="rounded-tlw-md p-3" style={{ border: '0.5px solid var(--color-divider)' }}>
+        <p className="text-[10px] font-semibold uppercase tracking-[1.5px] text-tlw-warm-gray">Next level</p>
+        {next ? (
+          <>
+            <p className="mt-1.5 text-[13px] font-medium" style={{ color: bandColor(next) }}>
+              {next.toLowerCase()}
+            </p>
+            <p className="mt-1.5 text-[12px] leading-relaxed text-tlw-espresso">{BAND_DESCRIPTIONS[next]}</p>
+          </>
+        ) : (
+          <p className="mt-1.5 text-[12px] leading-relaxed text-tlw-espresso">
+            Already at the top band — the work here is sustaining mastery.
+          </p>
+        )}
+      </div>
+
+      {/* Improvement focus */}
+      <div className="rounded-tlw-md p-3" style={{ border: '0.5px solid var(--color-divider)' }}>
+        <p className="text-[10px] font-semibold uppercase tracking-[1.5px] text-tlw-warm-gray">What I&rsquo;ll try</p>
+        <textarea
+          value={text}
+          onChange={(e) => {
+            setText(e.target.value)
+            setState('idle')
+          }}
+          onBlur={save}
+          rows={3}
+          placeholder="One concrete thing to practice next session…"
+          className="mt-1.5 w-full resize-none rounded-tlw-sm border border-tlw-warm-gray/25 bg-tlw-surface px-2 py-1.5 text-[12px] leading-relaxed text-tlw-espresso outline-none focus:border-tlw-signal-orange"
+        />
+        <p className="mt-1 h-3 text-[10px] text-tlw-warm-gray">
+          {state === 'saving' ? 'Saving…' : state === 'saved' ? 'Saved' : ''}
+        </p>
+      </div>
     </div>
   )
 }
@@ -71,6 +183,8 @@ export function ScorecardSpace() {
   const [reports, setReports] = useState<ReportRow[]>([])
   const [needsReview, setNeedsReview] = useState<TranscriptRow[]>([])
   const [clients, setClients] = useState<ClientRow[]>([])
+  const [revenue, setRevenue] = useState<Revenue | null>(null)
+  const [focus, setFocus] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [assigning, setAssigning] = useState<string | null>(null)
   const [assignError, setAssignError] = useState<Record<string, string>>({})
@@ -105,17 +219,36 @@ export function ScorecardSpace() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [s, r, t, c] = await Promise.all([
+    const [s, r, t, c, rev, f] = await Promise.all([
       fetch('/api/reports/summary').then((x) => (x.ok ? x.json() : null)),
       fetch('/api/reports').then((x) => (x.ok ? x.json() : null)),
       fetch('/api/transcripts?status=needs_review,unmatched').then((x) => (x.ok ? x.json() : null)),
       fetch('/api/clients').then((x) => (x.ok ? x.json() : null)),
+      fetch('/api/practice/revenue').then((x) => (x.ok ? x.json() : null)),
+      fetch('/api/practice/competency-focus').then((x) => (x.ok ? x.json() : null)),
     ])
     setSummary(s?.summary || null)
     setReports(r?.reports || [])
     setNeedsReview(t?.transcripts || [])
     setClients(c?.clients || [])
+    setRevenue(rev || null)
+    setFocus(f?.focus || {})
     setLoading(false)
+  }, [])
+
+  const saveFocus = useCallback(async (id: number, text: string) => {
+    setFocus((prev) => ({ ...prev, [String(id)]: text }))
+    try {
+      const res = await fetch('/api/practice/competency-focus', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ competencyId: id, text }),
+      })
+      const data = await res.json().catch(() => null)
+      if (res.ok && data?.focus) setFocus(data.focus)
+    } catch {
+      // Non-fatal — the optimistic value stays on screen.
+    }
   }, [])
 
   useEffect(() => {
@@ -175,6 +308,40 @@ export function ScorecardSpace() {
     <div className="space-y-12">
       {/* Add a transcript (manual / backfill) */}
       <AddTranscript onAdded={load} />
+
+      {/* Revenue */}
+      <section>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="rounded-tlw-lg p-4" style={{ backgroundColor: 'var(--color-surface)' }}>
+            <p className="text-[11px] text-tlw-warm-gray">past week revenue</p>
+            <p className="mt-2 text-[30px] font-medium leading-none text-tlw-navy-deep">
+              {revenue ? money(revenue.past.total) : '—'}
+            </p>
+            <p className="mt-1.5 text-[11px] text-tlw-warm-gray">
+              {revenue
+                ? `${revenue.past.sessions} logged session${revenue.past.sessions === 1 ? '' : 's'} · ${revenue.past.hours} billed h`
+                : 'from logged session notes'}
+            </p>
+          </div>
+          <div className="rounded-tlw-lg p-4" style={{ backgroundColor: 'var(--color-surface)' }}>
+            <p className="text-[11px] text-tlw-warm-gray">this week projected</p>
+            <p className="mt-2 text-[30px] font-medium leading-none text-tlw-navy-deep">
+              {revenue ? money(revenue.projected.total) : '—'}
+            </p>
+            <p className="mt-1.5 text-[11px] text-tlw-warm-gray">
+              {revenue && !revenue.calendarConnected
+                ? 'connect Google Calendar to project'
+                : revenue
+                ? `${revenue.projected.sessions} scheduled session${revenue.projected.sessions === 1 ? '' : 's'} · ${revenue.projected.hours} billed h`
+                : 'from this week’s calendar'}
+            </p>
+          </div>
+        </div>
+        <p className="mt-2 text-[11px] text-tlw-warm-gray">
+          Hourly fee × billed hours (half-hour units, 1-hour minimum, rounding up past 15 min). Past week from each
+          note’s logged length; this week projected from scheduled calendar events. Set each client’s fee on their profile.
+        </p>
+      </section>
 
       {/* Headline */}
       <section>
@@ -342,7 +509,7 @@ export function ScorecardSpace() {
       <section className="pt-8" style={{ borderTop: '0.5px solid var(--color-divider)' }}>
         <h2 className="mb-4 text-[15px] font-medium text-tlw-navy-deep">Competency scores</h2>
         {hasScores ? (
-          <CompetencyBars competencies={summary!.competencies} />
+          <CompetencyBars competencies={summary!.competencies} focus={focus} onSaveFocus={saveFocus} />
         ) : (
           <p className="text-[13px] text-tlw-warm-gray">
             No sessions scored yet. Once a transcript is matched and scored, the eight ICF competencies

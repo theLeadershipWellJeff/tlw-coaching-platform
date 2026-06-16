@@ -35,6 +35,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       title: body.title?.trim() || null,
       content: typeof body.content === 'string' ? body.content : '',
       session_date: body.session_date || undefined,
+      duration_minutes: Number.isFinite(body.duration_minutes) ? Math.round(body.duration_minutes) : 60,
       calendar_event_id: body.calendar_event_id?.trim() || null,
     })
     .select()

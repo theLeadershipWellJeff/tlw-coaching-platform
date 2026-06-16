@@ -36,6 +36,34 @@ export const COMPETENCIES: CompetencyDef[] = [
 /** Competencies where band 4 requires attunement, not just focus (spec §6.5). */
 export const ATTUNEMENT_COMPETENCIES = [5, 6, 8]
 
+/** Bands in ascending order, for "what's the next level" lookups. */
+export const BAND_ORDER: Band[] = ['Emerging', 'Developing', 'Proficient', 'Strong', 'Masterful']
+
+/**
+ * General band descriptions (the 5-point scale, spec §6.1). Per-competency band
+ * definitions are still being authored (spec §18); until each is locked, the
+ * competency expander uses these general descriptions for the current/next
+ * level cards.
+ */
+export const BAND_DESCRIPTIONS: Record<Band, string> = {
+  Emerging:
+    'Below competent practice. The behavior is largely absent or applied inconsistently; the coach is still building the habit.',
+  Developing:
+    'Approaching competent practice. The behavior shows up, but unevenly — present in moments and missed in others.',
+  Proficient:
+    'Competent practice (around the PCC range, the ICF credential threshold). The behavior is reliably present and well executed.',
+  Strong:
+    'Consistently skilled. The behavior is sustained across the session and attunement to the client is visible, not just focus.',
+  Masterful:
+    'Mastery (around the MCC range). The behavior is fluid, client-led, and adapts seamlessly to what the moment calls for.',
+}
+
+/** The band one level above `band`, or null if already at the top. */
+export function nextBand(band: Band): Band | null {
+  const i = BAND_ORDER.indexOf(band)
+  return i >= 0 && i < BAND_ORDER.length - 1 ? BAND_ORDER[i + 1] : null
+}
+
 /**
  * Map a numeric score to its band. Integer competency scores land exactly
  * (3 -> Proficient); the overall decimal average is banded by rounding to the

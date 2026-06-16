@@ -162,3 +162,82 @@ export async function findClientFromCalendar(
   // Found the event but couldn't tie it to a roster client — fail loud.
   return { clientId: null, confidence: 0, status: 'needs_review', via: 'none', eventTitle, eventStart }
 }
+
+export interface MatchedEvent {
+  eventId: string
+  clientId: string | null
+  start: string | null
+  durationMinutes: number
+}
+
+/**
+ * List the coach's calendar events in [timeMin, timeMax) and tie each to a
+ * roster client — email first (exact match on the non-coach guest), then a name
+ * match on the guest/title. Used by the Practice revenue projection: each event
+ * that maps to a client counts as one upcoming session. Events without a
+ * non-coach guest (focus blocks, personal events) and unmatched ones are
+ * returned with clientId = null so callers can ignore them.
+ */
+export async function listClientMatchedEvents(
+  coach: Coach,
+  timeMin: Date,
+  timeMax: Date,
+  clients: RosterClientWithEmail[]
+): Promise<MatchedEvent[]> {
+  if (!coach.google_refresh_token) return []
+
+  const auth = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET)
+  auth.setCredentials({ refresh_token: coach.google_refresh_token })
+  const calendar = google.calendar({ version: 'v3', auth })
+
+  let items: any[] = []
+  try {
+    const res = await calendar.events.list({
+      calendarId: 'primary',
+      timeMin: timeMin.toISOString(),
+      timeMax: timeMax.toISOString(),
+      singleEvents: true,
+      orderBy: 'startTime',
+      maxResults: 250,
+    })
+    items = res.data.items || []
+  } catch (e) {
+    console.error('Calendar revenue lookup failed:', e)
+    return []
+  }
+
+  const mine = coachEmails(coach)
+  const roster: RosterClient[] = clients.map((c) => ({ id: c.id, name: c.name }))
+
+  return items.map((event) => {
+    const eventId: string = event.id || ''
+    const start: string | null = event.start?.dateTime || event.start?.date || null
+    // Scheduled length in minutes; defaults to an hour for events without times.
+    const startMs = event.start?.dateTime ? new Date(event.start.dateTime).getTime() : NaN
+    const endMs = event.end?.dateTime ? new Date(event.end.dateTime).getTime() : NaN
+    const durationMinutes =
+      Number.isFinite(startMs) && Number.isFinite(endMs) && endMs > startMs
+        ? Math.round((endMs - startMs) / 60000)
+        : 60
+    const guest = (event.attendees || []).find(
+      (a: any) => a.email && !mine.includes(a.email.toLowerCase())
+    )
+
+    let clientId: string | null = null
+    if (guest?.email) {
+      const email = guest.email.toLowerCase()
+      clientId = clients.find((c) => c.email && c.email.toLowerCase() === email)?.id || null
+    }
+    if (!clientId) {
+      for (const name of [guest?.displayName as string | undefined, event.summary as string | undefined]) {
+        if (!name) continue
+        const m = matchClient(name, roster)
+        if (m.status === 'matched' && m.clientId) {
+          clientId = m.clientId
+          break
+        }
+      }
+    }
+    return { eventId, clientId, start, durationMinutes }
+  })
+}

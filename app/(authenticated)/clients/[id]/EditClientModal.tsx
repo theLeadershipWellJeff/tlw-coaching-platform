@@ -25,7 +25,11 @@ export function EditClientModal({
   onSaved: (c: Client) => void
 }) {
   const [form, setForm] = useState<Record<string, string>>(() => {
-    const f: Record<string, string> = { status: client.status || 'active', bio: client.bio || '' }
+    const f: Record<string, string> = {
+      status: client.status || 'active',
+      bio: client.bio || '',
+      session_fee: client.session_fee != null ? String(client.session_fee) : '',
+    }
     for (const { key } of FIELDS) f[key] = (client[key] as string) || ''
     return f
   })
@@ -40,7 +44,16 @@ export function EditClientModal({
     setSaving(true)
     setError('')
     try {
-      const payload: Record<string, unknown> = { status: form.status, bio: form.bio.trim() || null }
+      const feeRaw = form.session_fee.trim()
+      const fee = feeRaw ? Number(feeRaw) : null
+      if (feeRaw && (Number.isNaN(fee) || (fee as number) < 0)) {
+        throw new Error('Session fee must be a non-negative number.')
+      }
+      const payload: Record<string, unknown> = {
+        status: form.status,
+        bio: form.bio.trim() || null,
+        session_fee: fee,
+      }
       for (const { key } of FIELDS) payload[key] = form[key].trim() || (key === 'name' ? form[key] : null)
       const res = await fetch(`/api/clients/${client.id}`, {
         method: 'PATCH',
@@ -86,6 +99,23 @@ export function EditClientModal({
               </option>
             ))}
           </select>
+        </label>
+
+        <label className="block">
+          <span className="text-[11px] font-medium uppercase tracking-[1.5px] text-tlw-warm-gray">Session fee (per hour)</span>
+          <div className="mt-1 flex items-center rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-surface px-3 focus-within:border-tlw-signal-orange">
+            <span className="text-[13px] text-tlw-warm-gray">$</span>
+            <input
+              type="number"
+              min="0"
+              step="any"
+              inputMode="decimal"
+              value={form.session_fee}
+              placeholder="e.g. 350"
+              onChange={(e) => set('session_fee', e.target.value)}
+              className="w-full bg-transparent py-2 pl-1 text-[13px] text-tlw-espresso outline-none"
+            />
+          </div>
         </label>
 
         <label className="block">

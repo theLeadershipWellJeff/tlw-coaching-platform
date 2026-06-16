@@ -5,18 +5,15 @@ import { authOptions } from '@/lib/authOptions'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { persistActionLinks } from '@/lib/actions'
 import { buildNoteEmailHTML } from '@/lib/client-note-email'
+import { headerSafe, encodeHeaderValue } from '@/lib/email-mime'
 
 export const runtime = 'nodejs'
-
-function headerSafe(s: string): string {
-  return s.replace(/[\r\n]+/g, ' ').trim()
-}
 
 function makeRawHtmlEmail(opts: { from: string; to: string; cc?: string; subject: string; html: string }): string {
   const lines = [`From: Jeff Holmes <${opts.from}>`, `To: ${headerSafe(opts.to)}`]
   if (opts.cc) lines.push(`Cc: ${headerSafe(opts.cc)}`)
   lines.push(
-    `Subject: ${headerSafe(opts.subject)}`,
+    `Subject: ${encodeHeaderValue(opts.subject)}`,
     'MIME-Version: 1.0',
     'Content-Type: text/html; charset=UTF-8',
     '',

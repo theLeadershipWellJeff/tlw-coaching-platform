@@ -10,17 +10,13 @@ import { google } from 'googleapis'
 import type { Coach } from './supabase/types'
 import type { SessionReportJson } from './scoring/types'
 import { buildScorecardEmailHTML } from './scorecard-email-template'
-
-/** Single-line, injection-safe header value. */
-function headerSafe(s: string): string {
-  return s.replace(/[\r\n]+/g, ' ').trim()
-}
+import { headerSafe, encodeHeaderValue } from './email-mime'
 
 function makeRawEmail(from: string, to: string, subject: string, html: string): string {
   const lines = [
     `From: theLeadershipWell <${from}>`,
     `To: ${headerSafe(to)}`,
-    `Subject: ${headerSafe(subject)}`,
+    `Subject: ${encodeHeaderValue(subject)}`,
     'MIME-Version: 1.0',
     'Content-Type: text/html; charset=UTF-8',
     '',
