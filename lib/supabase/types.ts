@@ -84,7 +84,23 @@ export type LibraryFolder = {
   id: string
   coach_id: string | null
   section: string // 'templates' | 'pdf'
+  kind: string // note | agreement | worksheet | generic
   name: string
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
+export type Agreement = {
+  id: string
+  coach_id: string | null
+  client_id: string
+  template_id: string | null
+  title: string
+  body_html: string
+  status: string // sent | signed
+  sign_token: string
+  sent_at: Timestamp
+  signed_at: Timestamp | null
   created_at: Timestamp
   updated_at: Timestamp
 }
@@ -205,6 +221,12 @@ export type Database = {
         Row: PdfResource
         Insert: Insertable<PdfResource>
         Update: Updatable<PdfResource>
+        Relationships: []
+      }
+      agreements: {
+        Row: Agreement
+        Insert: Insertable<Agreement>
+        Update: Updatable<Agreement>
         Relationships: []
       }
       transcripts: {

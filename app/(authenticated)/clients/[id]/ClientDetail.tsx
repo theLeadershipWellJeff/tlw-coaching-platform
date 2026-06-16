@@ -6,6 +6,7 @@ import { NameCard } from './NameCard'
 import { TranscriptsCard, NotesCard } from './SummaryCards'
 import { GoalsCard } from './GoalsCard'
 import { ActionsCard } from './ActionsCard'
+import { AgreementsCard } from './AgreementsCard'
 import { EmailModal } from './EmailModal'
 import { ImportTranscriptsModal } from './ImportTranscriptsModal'
 
@@ -87,6 +88,8 @@ export function ClientDetail({ clientId }: { clientId: string }) {
       <GoalsCard client={client} onUpdated={setClient} />
 
       <ActionsCard clientId={clientId} />
+
+      <AgreementsCard clientId={clientId} />
 
       {emailing && (
         <EmailModal to={client.email || ''} clientName={client.name} onClose={() => setEmailing(false)} />

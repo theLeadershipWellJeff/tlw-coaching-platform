@@ -147,6 +147,23 @@ folder).
   `POST /api/library/pdfs`, **4 MB cap** — serverless body limit), views (signed
   URL via `GET /api/library/pdfs/[id]`), deletes.
 
+Folders carry a `kind` (note|agreement|worksheet|generic; migration 011). A
+folder's kind drives the builder inside it — `FolderTemplates` shows an "assign
+to client" action for `agreement` folders (worksheet kind is a later phase).
+
+### Coaching agreements e-sign (`agreements`)
+Templates in an **agreement-kind** folder can be assigned to a client to sign
+(`AssignAgreementModal` → `POST /api/agreements` {templateId, clientId}). That
+**snapshots** the template body into an `agreements` row (so a later edit never
+changes what was agreed) and emails the client the agreement
+(`lib/agreement-email.ts`) with an "I have read and agree" checkbox link —
+`${getBaseUrl()}/api/agreements/sign?token=…`, the same click-to-log mechanism as
+actions. `GET /api/agreements/sign` is **public** (token = credential): flips
+status to `signed` (idempotent) + sets `signed_at`, returns a confirmation page.
+The client workspace `AgreementsCard` (`/api/clients/[id]/agreements`) shows
+sent vs signed. Agreement editing disables merge fields (bodies are snapshotted
+raw, so unresolved `{{…}}` would leak).
+
 ### Note templates + merge fields
 `note_templates` (coach-scoped, migration 008) holds reusable rich-text note
 templates, organized into Library folders (above), CRUD via `/api/templates` +
@@ -252,10 +269,10 @@ workspace (address + coaching_goals) · 005 CA notes (ca_session_id) · 006
 supervisor email (coaches.supervisor_email). Run new migrations by hand in the
 Supabase SQL editor.
 
-**Pending — apply in Supabase:** 010 library folders (`library_folders`,
-`note_templates.folder_id`, `pdf_resources`). The `library-pdfs` Storage bucket
-is created automatically on first upload. (007 key info + map, 008 note
-templates, 009 action completion — applied.)
+**Pending — apply in Supabase:** 011 agreements (`library_folders.kind`,
+`agreements` table). The `library-pdfs` Storage bucket is created automatically
+on first upload. (007 key info + map, 008 note templates, 009 action completion,
+010 library folders — applied.)
 
 ## Roadmap
 
