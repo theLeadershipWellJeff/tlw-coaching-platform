@@ -73,10 +73,30 @@ export type Action = {
 export type NoteTemplate = {
   id: string
   coach_id: string | null
+  folder_id: string | null
   name: string
   content: string // rich-text HTML
   created_at: Timestamp
   updated_at: Timestamp
+}
+
+export type LibraryFolder = {
+  id: string
+  coach_id: string | null
+  section: string // 'templates' | 'pdf'
+  name: string
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
+export type PdfResource = {
+  id: string
+  coach_id: string | null
+  folder_id: string | null
+  name: string
+  storage_path: string
+  size_bytes: number | null
+  created_at: Timestamp
 }
 
 export type Coach = {
@@ -173,6 +193,18 @@ export type Database = {
         Row: NoteTemplate
         Insert: Insertable<NoteTemplate>
         Update: Updatable<NoteTemplate>
+        Relationships: []
+      }
+      library_folders: {
+        Row: LibraryFolder
+        Insert: Insertable<LibraryFolder>
+        Update: Updatable<LibraryFolder>
+        Relationships: []
+      }
+      pdf_resources: {
+        Row: PdfResource
+        Insert: Insertable<PdfResource>
+        Update: Updatable<PdfResource>
         Relationships: []
       }
       transcripts: {

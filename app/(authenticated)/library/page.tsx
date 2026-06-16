@@ -1,11 +1,11 @@
 import { PageHeader } from '@/app/components/layout/PageHeader'
-import { TemplatesLibrary } from './TemplatesLibrary'
+import { LibrarySpace } from './LibrarySpace'
 
 export default function LibraryPage() {
   return (
     <>
-      <PageHeader title="Library" subtitle="Your templates — note templates now; coaching agreements and worksheets to come." />
-      <TemplatesLibrary />
+      <PageHeader title="Library" subtitle="Templates and PDF resources, organized in folders." />
+      <LibrarySpace />
     </>
   )
 }
