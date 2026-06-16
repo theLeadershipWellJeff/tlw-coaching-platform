@@ -271,18 +271,17 @@ Supabase (`NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_API_SECRET_KEY`),
   (branch content is the superset; this avoids phantom add/add conflicts).
   Verify `git diff --stat origin/main..HEAD` shows only the intended files.
 
-## Migrations applied (001–006)
+## Migrations applied (001–012)
 
 001 init (clients/notes/actions) · 002 scorecard (coaches/transcripts/
 session_reports) · 003 coach calendar (refresh token + timezone) · 004 client
 workspace (address + coaching_goals) · 005 CA notes (ca_session_id) · 006
-supervisor email (coaches.supervisor_email). Run new migrations by hand in the
-Supabase SQL editor.
+supervisor email (coaches.supervisor_email) · 007 key info + map · 008 note
+templates · 009 action completion · 010 library folders · 011 agreements · 012
+agenda requests. Run new migrations by hand in the Supabase SQL editor.
 
-**Pending — apply in Supabase:** 012 agenda requests (`agenda_requests` table).
-The `library-pdfs` Storage bucket is created automatically on first upload. (007
-key info + map, 008 note templates, 009 action completion, 010 library folders,
-011 agreements — applied.)
+**Pending — apply in Supabase:** none. The `library-pdfs` Storage bucket is
+created automatically on first upload.
 
 ## Roadmap
 
@@ -295,6 +294,15 @@ key info + map, 008 note templates, 009 action completion, 010 library folders,
 - Per-competency **suggested moves** on a report (Claude-generated, persisted).
 - Coach self-scoring (top of report) and supervisor email (`coaches.supervisor_email`,
   set on Account).
+- **Session-notes panel** — Key info (private), Coaching map pulldown, Engagement
+  goals; default note titles; in-app full client names; browser app icon.
+- **Coaching goals** carry metrics and feed the session-prep coaching plan.
+- **Library = folder system** — Templates + PDF Resources folders (uploads).
+- **Note templates** with merge fields + the editor's Harvard outline / Tab indent.
+- **Send to client** + **action checkboxes** (note + prep email) that log back to
+  the workspace `ActionsCard`.
+- **Coaching agreements** — build → assign → e-sign → `AgreementsCard`.
+- **Prep-sheet agenda fill-ins** → public page → `AgendaCard`.
 
 ### Open — keep these tracked (also GitHub issues)
 - **Worksheets (client fill-in) — to be built.** Worksheet-kind Library folders
