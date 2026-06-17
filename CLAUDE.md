@@ -100,6 +100,13 @@ may inflate talk-time or statement counts. Output shape = spec §16
 (`lib/scoring/types.ts`). `lib/scoring/aggregate.ts` rolls reports into the
 dashboard/scorecard headline numbers.
 
+**Rescore.** `runAndStoreReport` upserts on `transcript_id`, so re-running it
+replaces the machine report in place (coach self-scores/notes live in separate
+columns and survive; a `reviewed` report stays reviewed). The report page has a
+**rescore** button (`POST /api/reports/[id]/rescore`) to refresh a session's
+score against the current rubric after the engine is updated — no email is sent
+on a rescore (`runAndStoreReport(..., { sendEmail: false })`).
+
 ### Client matching gotcha (important)
 Match on **email first**, then **full first+last name as whole words** — never a
 single short fragment. A client stored with a one-letter last name (e.g. "Michel

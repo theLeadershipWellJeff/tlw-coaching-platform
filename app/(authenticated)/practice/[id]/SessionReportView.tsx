@@ -134,6 +134,10 @@ export function SessionReportView({ id }: { id: string }) {
   const [emailMsg, setEmailMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [supervisorEmail, setSupervisorEmail] = useState<string | null>(null)
 
+  // rescore state
+  const [rescoring, setRescoring] = useState(false)
+  const [rescoreMsg, setRescoreMsg] = useState<{ ok: boolean; text: string } | null>(null)
+
   useEffect(() => {
     fetch('/api/coach')
       .then((r) => (r.ok ? r.json() : null))
@@ -160,6 +164,34 @@ export function SessionReportView({ id }: { id: string }) {
       setEmailMsg({ ok: false, text: 'Network error while sending.' })
     } finally {
       setEmailing(false)
+    }
+  }
+
+  async function rescore() {
+    if (
+      !window.confirm(
+        'Re-score this session against the current rubric? This replaces the engine’s scores, metrics, and suggested moves. Your own self-scores are kept.'
+      )
+    )
+      return
+    setRescoring(true)
+    setRescoreMsg(null)
+    try {
+      const res = await fetch(`/api/reports/${id}/rescore`, { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok) {
+        // Clear cached suggested-move panels — they were generated off old scores.
+        setMoves({})
+        setOpenComp(null)
+        await load()
+        setRescoreMsg({ ok: true, text: 'Re-scored against the current rubric.' })
+      } else {
+        setRescoreMsg({ ok: false, text: data.error || 'Could not re-score.' })
+      }
+    } catch {
+      setRescoreMsg({ ok: false, text: 'Network error while re-scoring.' })
+    } finally {
+      setRescoring(false)
     }
   }
 
@@ -267,7 +299,25 @@ export function SessionReportView({ id }: { id: string }) {
             )}
           </p>
         </div>
-        <BandPill band={report.band} />
+        <div className="flex flex-col items-end gap-2">
+          <BandPill band={report.band} />
+          <button
+            onClick={rescore}
+            disabled={rescoring}
+            title="Re-run the engine against the current rubric"
+            className="rounded-tlw-md border border-tlw-warm-gray/30 px-3 py-1.5 text-[12px] font-medium text-tlw-espresso transition-opacity duration-tlw-base hover:opacity-80 disabled:opacity-40"
+          >
+            {rescoring ? 'rescoring…' : 'rescore'}
+          </button>
+          {rescoreMsg && (
+            <p
+              className="max-w-[200px] text-right text-[11px]"
+              style={{ color: rescoreMsg.ok ? 'var(--color-success)' : 'var(--color-danger)' }}
+            >
+              {rescoreMsg.text}
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Self-score — directly under the title (spec §13) */}

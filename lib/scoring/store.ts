@@ -14,8 +14,10 @@ import { sendScorecardEmail } from '@/lib/scorecard-email'
 export async function runAndStoreReport(
   supabase: SupabaseClient<Database>,
   transcript: Transcript,
-  coach: Coach
+  coach: Coach,
+  opts: { sendEmail?: boolean } = {}
 ): Promise<SessionReport> {
+  const sendEmail = opts.sendEmail ?? true
   const parsed = parseTranscript(transcript.filename, transcript.raw_md)
 
   const ctx: ScoringContext = {
@@ -54,8 +56,9 @@ export async function runAndStoreReport(
   if (error) throw new Error(`Supabase (session_reports upsert): ${error.message}`)
 
   // Email the coach their scorecard (roadmap: emailed scorecard). Best-effort —
-  // a send failure must never fail scoring. Disable with EMAIL_SCORECARD=false.
-  if (process.env.EMAIL_SCORECARD !== 'false') {
+  // a send failure must never fail scoring. Disable with EMAIL_SCORECARD=false,
+  // or per-call via opts.sendEmail (a manual rescore shouldn't re-notify).
+  if (sendEmail && process.env.EMAIL_SCORECARD !== 'false') {
     try {
       await sendScorecardEmail(coach, report)
     } catch (e: any) {
