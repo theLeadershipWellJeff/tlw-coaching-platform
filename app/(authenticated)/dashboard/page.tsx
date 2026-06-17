@@ -1,8 +1,7 @@
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
 import { PageHeader } from '@/app/components/layout/PageHeader'
-import { DashboardSessions } from './DashboardSessions'
-import { ScorecardSummary } from './ScorecardSummary'
+import { DashboardBoard } from './DashboardBoard'
 
 function greeting(): string {
   const h = new Date().getHours()
@@ -23,10 +22,7 @@ export default async function DashboardPage() {
   return (
     <>
       <PageHeader eyebrow="theLeadershipWell" title={`${greeting()}, ${firstName}`} subtitle={today} />
-      <div className="space-y-10">
-        <ScorecardSummary />
-        <DashboardSessions />
-      </div>
+      <DashboardBoard />
     </>
   )
 }
