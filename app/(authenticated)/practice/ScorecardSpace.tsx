@@ -5,6 +5,9 @@ import type { ScorecardSummary, CompetencyAverage } from '@/lib/scoring/aggregat
 import { bandDefinition, nextBand } from '@/lib/scoring/rubric'
 import { bandColor, BandChip } from './ui'
 import { AddTranscript } from './AddTranscript'
+import { PanelBoard, type Panel } from '@/app/components/layout/PanelBoard'
+
+const STORAGE_KEY = 'tlw-practice-layout'
 
 interface Revenue {
   calendarConnected: boolean
@@ -304,13 +307,13 @@ export function ScorecardSpace() {
 
   const hasScores = summary && summary.sessionCount > 0 && summary.competencies.length > 0
 
-  return (
-    <div className="space-y-12">
-      {/* Add a transcript (manual / backfill) */}
-      <AddTranscript onAdded={load} />
-
-      {/* Revenue */}
-      <section>
+  const panels: Panel[] = [
+    { id: 'add-transcript', label: 'Add a transcript', node: <AddTranscript onAdded={load} /> },
+    {
+      id: 'revenue',
+      label: 'Revenue',
+      node: (
+        <section>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="rounded-tlw-lg p-4" style={{ backgroundColor: 'var(--color-surface)' }}>
             <p className="text-[11px] text-tlw-warm-gray">past week revenue</p>
@@ -341,10 +344,14 @@ export function ScorecardSpace() {
           Hourly fee × billed hours (half-hour units, 1-hour minimum, rounding up past 15 min). Past week from each
           note’s logged length; this week projected from scheduled calendar events. Set each client’s fee on their profile.
         </p>
-      </section>
-
-      {/* Headline */}
-      <section>
+        </section>
+      ),
+    },
+    {
+      id: 'headline',
+      label: 'Headline scores',
+      node: (
+        <section>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="rounded-tlw-lg p-4" style={{ backgroundColor: 'var(--color-surface)' }}>
             <p className="text-[11px] text-tlw-warm-gray">average score</p>
@@ -383,11 +390,16 @@ export function ScorecardSpace() {
           </div>
         </div>
         <p className="mt-2 text-[11px] text-tlw-warm-gray">1 = emerging, 3 = proficient (PCC), 5 = masterful (MCC)</p>
-      </section>
-
-      {/* Needs review */}
-      {needsReview.length > 0 && (
-        <section className="pt-8" style={{ borderTop: '0.5px solid var(--color-divider)' }}>
+        </section>
+      ),
+    },
+    ...(needsReview.length > 0
+      ? [
+          {
+            id: 'needs-review',
+            label: 'Needs review',
+            node: (
+              <section className="pt-8" style={{ borderTop: '0.5px solid var(--color-divider)' }}>
           <h2 className="mb-1 text-[15px] font-medium text-tlw-navy-deep">Needs a client confirmed</h2>
           <p className="mb-4 text-[12px] text-tlw-warm-gray">
             These transcripts couldn&apos;t be matched to a client — either the guess was uncertain or
@@ -502,11 +514,16 @@ export function ScorecardSpace() {
               )
             })}
           </div>
-        </section>
-      )}
-
-      {/* Overall competency scores */}
-      <section className="pt-8" style={{ borderTop: '0.5px solid var(--color-divider)' }}>
+              </section>
+            ),
+          },
+        ]
+      : []),
+    {
+      id: 'competencies',
+      label: 'Competency scores',
+      node: (
+        <section className="pt-8" style={{ borderTop: '0.5px solid var(--color-divider)' }}>
         <h2 className="mb-4 text-[15px] font-medium text-tlw-navy-deep">Competency scores</h2>
         {hasScores ? (
           <CompetencyBars competencies={summary!.competencies} focus={focus} onSaveFocus={saveFocus} />
@@ -516,10 +533,14 @@ export function ScorecardSpace() {
             appear here, averaged across your sessions.
           </p>
         )}
-      </section>
-
-      {/* Sessions */}
-      <section className="pt-8" style={{ borderTop: '0.5px solid var(--color-divider)' }}>
+        </section>
+      ),
+    },
+    {
+      id: 'sessions',
+      label: 'Sessions',
+      node: (
+        <section className="pt-8" style={{ borderTop: '0.5px solid var(--color-divider)' }}>
         <h2 className="mb-1 text-[15px] font-medium text-tlw-navy-deep">Sessions</h2>
         {reports.length === 1 && (
           <p className="mb-4 text-[12px] text-tlw-warm-gray">
@@ -562,7 +583,17 @@ export function ScorecardSpace() {
             ))}
           </div>
         )}
-      </section>
-    </div>
+        </section>
+      ),
+    },
+  ]
+
+  return (
+    <PanelBoard
+      storageKey={STORAGE_KEY}
+      panels={panels}
+      columns={1}
+      defaultLayout={[['add-transcript', 'revenue', 'headline', 'needs-review', 'competencies', 'sessions']]}
+    />
   )
 }
