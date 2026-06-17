@@ -11,8 +11,9 @@ A coaching platform for Dr. Jeff Holmes (theLeadershipWell). Two pillars:
    transcript context) and uses Claude to generate a personalized prep email,
    sent via Gmail.
 2. **Coaching scorecard** — scores recorded sessions against the ICF 2025 Core
-   Competencies refined by theLeadershipWell's standards. Spec lives in
-   `spec/theLeadershipWell_Session_Report_Spec_v0.3.md` — read it before
+   Competencies refined by theLeadershipWell's standards. Spec baseline lives in
+   `spec/theLeadershipWell_Session_Report_Spec_v0.3.md`; the v0.4 delta
+   (`..._v0.4.md`) locks the per-competency band definitions — read both before
    touching scoring.
 
 Plus a **client workspace** (per-client hub) and **roster**.
@@ -84,11 +85,20 @@ manual paste and per-client Drive import):
 Uncertain/ambiguous matches → `needs_review` (never guessed).
 
 ### Scoring engine (`lib/scoring/engine.ts`)
-Prompts Claude with the rubric, then **enforces the §17 gates in code**
-(feeling-explorations cap on Competency 6, consultant-move math + >3 mode-drift
-flag, threshold flags, equal-weighted overall, band derivation). Output shape =
-spec §16 (`lib/scoring/types.ts`). `lib/scoring/aggregate.ts` rolls reports into
-the dashboard/scorecard headline numbers.
+Prompts Claude with the rubric — including the locked **per-competency band
+definitions** (spec v0.4, rendered from `rubric.ts#COMPETENCY_BANDS`) and the
+cross-competency principles (`CROSS_COMPETENCY_PRINCIPLES`) — then **enforces the
+§17 arithmetic gates in code** (feeling-explorations cap on Competency 6,
+consultant-move math + >3 mode-drift flag, threshold flags, equal-weighted
+overall, band derivation). The **judgment gates** are instructed in the prompt
+(they need reading, not arithmetic): attunement for 5/6/8, the Competency-2
+band-4 gate, and the v0.4 **Competency-1 AI/technology-disclosure** and
+**Competency-3 session-close** band-2 ceilings. v0.4 also adds two move
+classifications the prompt pins down — *attunement observation* (counts as a C6
+feeling exploration) and *presence-as-instrument* (a C5 move) — neither of which
+may inflate talk-time or statement counts. Output shape = spec §16
+(`lib/scoring/types.ts`). `lib/scoring/aggregate.ts` rolls reports into the
+dashboard/scorecard headline numbers.
 
 ### Client matching gotcha (important)
 Match on **email first**, then **full first+last name as whole words** — never a
@@ -311,6 +321,12 @@ The `library-pdfs` Storage bucket is created automatically on first upload.
   the workspace `ActionsCard`.
 - **Coaching agreements** — build → assign → e-sign → `AgreementsCard`.
 - **Prep-sheet agenda fill-ins** → public page → `AgendaCard`.
+- **Band definitions locked (spec v0.4) (#39)** — explicit 1–5 band definitions
+  for Competencies 1 and 3–8 (C2 already done), held in `rubric.ts#COMPETENCY_BANDS`,
+  rendered into both the engine prompt and the competency expander. Adds the
+  cross-competency principles and the attunement-observation / presence-as-instrument
+  move classifications, plus the C1 (AI/tech disclosure) and C3 (session close)
+  judgment gates. B.W. is the calibration anchor.
 
 ### Open — keep these tracked (also GitHub issues)
 - **Worksheets (client fill-in) — to be built (#38).** Worksheet-kind Library folders
@@ -318,11 +334,6 @@ The `library-pdfs` Storage bucket is created automatically on first upload.
   templates. Planned: a builder with blanks + checkboxes, assign-to-client, a
   public fill-in page (same token pattern as agreements/agenda), and answers
   stored on the client workspace.
-- **Band definitions (spec §18) — PRIORITY, authoring task (#39).** Full band
-  definitions for Competencies 1 and 3–8 (only the general bands + Competency 2
-  are written). These are the scoring foundation; fold each into the engine
-  prompt (`lib/scoring/engine.ts` SYSTEM/rubric) as it locks. Jeff is drafting
-  the language.
 - **Supervisor cross-coach roll-up view (Phase 3) (#40).** Firm-facing dashboard
   rolling up reports across coaches + a Claude-vs-coach comparison. Schema is
   ready (`coach_id` + `role`), and coach self-scores are now captured, so the

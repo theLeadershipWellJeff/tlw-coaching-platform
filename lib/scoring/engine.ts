@@ -2,17 +2,22 @@
  * The coaching evaluation engine.
  *
  * Sends a speaker-separated transcript to Claude with the Session Report Spec
- * v0.3 encoded as instructions, gets back the §16 JSON, then enforces the
- * mechanical scoring-engine rules (§17) deterministically in code so they can't
- * drift: the feeling-explorations gate, the consultant-move math and mode-drift
- * flag, the threshold flags, and the equal-weighted overall average. The
- * judgment gates (attunement for 5/6/8, the Competency-2 band-4 gate) are
- * instructed in the prompt — they need reading of the session, not arithmetic.
+ * (baseline v0.3, band definitions locked in v0.4) encoded as instructions,
+ * gets back the §16 JSON, then enforces the mechanical scoring-engine rules
+ * (§17) deterministically in code so they can't drift: the feeling-explorations
+ * gate, the consultant-move math and mode-drift flag, the threshold flags, and
+ * the equal-weighted overall average. The judgment gates (attunement for 5/6/8,
+ * the Competency-2 band-4 gate, and the v0.4 Competency-1 AI/technology
+ * disclosure and Competency-3 session-close gates) are instructed in the
+ * prompt — they need reading of the session, not arithmetic.
  */
 import Anthropic from '@anthropic-ai/sdk'
 import {
   ATTUNEMENT_COMPETENCIES,
+  BAND_ORDER,
   COMPETENCIES,
+  COMPETENCY_BANDS,
+  CROSS_COMPETENCY_PRINCIPLES,
   bandForScore,
   worstFlag,
 } from './rubric'
@@ -42,9 +47,41 @@ export interface ScoringContext {
 
 const SYSTEM = `You are theLeadershipWell's coaching evaluation engine. You score a single executive-coaching session against the ICF 2025 Core Competencies, refined by theLeadershipWell's proprietary standards. You are rigorous and honest, not generous: a solid PCC-level coach lands around 3 on the 5-point scale. Every competency score must be tied to specific evidence from the transcript. Return ONLY a valid JSON object — no markdown fences, no preamble.`
 
+const BAND_NUMBER: Record<string, number> = {
+  Emerging: 1,
+  Developing: 2,
+  Proficient: 3,
+  Strong: 4,
+  Masterful: 5,
+}
+
+/**
+ * Render the locked per-competency band definitions (spec v0.4) into prompt
+ * text, straight from COMPETENCY_BANDS so the rubric Claude scores against is
+ * the same source the coach-facing UI reads. Competencies/bands without an
+ * authored definition are simply omitted (the general scale still applies).
+ */
+function buildRubricBlock(): string {
+  return COMPETENCIES.map((c) => {
+    const bands = COMPETENCY_BANDS[c.id]
+    if (!bands) return ''
+    const lines = BAND_ORDER.filter((b) => bands[b]).map(
+      (b) => `    ${BAND_NUMBER[b]} ${b} — ${bands[b]}`
+    )
+    if (lines.length === 0) return ''
+    return `  Competency ${c.id} — ${c.name}:\n${lines.join('\n')}`
+  })
+    .filter(Boolean)
+    .join('\n\n')
+}
+
 function buildPrompt(transcript: string, ctx: ScoringContext): string {
   const competencyList = COMPETENCIES.map(
     (c) => `  ${c.id}. ${c.name} (domain: ${c.domain})`
+  ).join('\n')
+
+  const principles = CROSS_COMPETENCY_PRINCIPLES.map(
+    (p) => `  - ${p.name}: ${p.text}`
   ).join('\n')
 
   return `Score this coaching session.
@@ -66,6 +103,12 @@ THE 5-POINT BAND SCALE
 THE EIGHT COMPETENCIES (score each 1-5, with a one-line evidence note and sub-competency refs like "6.04"):
 ${competencyList}
 
+PER-COMPETENCY BAND DEFINITIONS (theLeadershipWell v0.4 — these OVERRIDE the general scale; score the band whose definition the evidence matches):
+${buildRubricBlock()}
+
+CROSS-COMPETENCY PRINCIPLES (theLeadershipWell IP — apply across all eight):
+${principles}
+
 theLEADERSHIPWELL STANDARDS (apply these refinements on top of ICF):
   - Coach talk-time should be <= 40% of words. Above 40% is a red flag.
   - Flagged emotion = coach moves that tune into client emotion (naming a feeling, asking a feeling question, reflecting an energy shift, or mirroring the coach's own felt response ONLY when handed back to the client). Need >= 2 per session.
@@ -74,6 +117,16 @@ theLEADERSHIPWELL STANDARDS (apply these refinements on top of ICF):
   - Consultant/teaching/framework moves are welcome ONLY when signaled, permissioned, brief, and floor-returned. For each such move, mark each of the four criteria true/false. More than 3 moves in a session signals drift from coaching mode.
   - Attunement standard (Competencies 5, 6, 8): focus earns a 3; reaching a 4 REQUIRES visible real-time responsiveness to what is emerging in the client, not just steady attention.
   - Competency 2 (coaching mindset): a 4 requires that consultant moves were consistently signaled, permissioned, brief, and floor-returned, AND the coach nurtures the client's own curiosity rather than filling space with frameworks.
+
+MOVE CLASSIFICATION (v0.4 — classify these precisely; misclassifying them as statements/talk-time was the primary scoring error in calibration):
+  - Attunement observation: the coach names resistance, an energy shift, or an emotional undercurrent observed in the client (e.g. "It sounds like there's some resistance there"). Counts as a FEELING EXPLORATION under Competency 6 — NOT a statement. One clear instance qualifies Competency 6 for band 4.
+  - Presence-as-instrument: the coach uses their OWN felt response as a signal and bridges it back to the client as an invitation to reflect (e.g. "If I were in your shoes I'd feel X — does that land?"). Scored within Competency 5 ONLY (not Competency 6). One clear instance qualifies Competency 5 for band 4. This is distinct from self-disclosure — the coach's feeling is the instrument, not the subject.
+  - ENGINE RULE: neither attunement observations nor presence-as-instrument moves may inflate coach_talk_time_pct or the statement count, or worsen the question:statement ratio. They are attunement moves, not statements.
+
+JUDGMENT GATE RULES (apply BEFORE finalizing each band; these are hard ceilings):
+  - Competency 1: if the coach does NOT disclose AI/technology use in the session (e.g. recording, transcription, AI-assisted evaluation) and obtain client consent, cap Competency 1 at band 2 (Developing) regardless of every other ethical behavior.
+  - Competency 3: if the session does NOT close with at least one explicitly named insight or learning, cap Competency 3 at band 2 (Developing) regardless of opening and thread quality.
+  - Competency 6: a session with ZERO feeling explorations caps Competency 6 at band 3 (the engine also enforces this in code).
 
 TRANSCRIPT REQUIREMENT
   You need a speaker-separated verbatim transcript to compute the conversation metrics. If the transcript below is NOT speaker-separated (you cannot tell who said what), set every metric field to null and set metrics.source to "unavailable" — do NOT estimate metrics from a summary. Otherwise set metrics.source to "parsed".

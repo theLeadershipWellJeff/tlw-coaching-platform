@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import type { ScorecardSummary, CompetencyAverage } from '@/lib/scoring/aggregate'
-import { BAND_DESCRIPTIONS, nextBand } from '@/lib/scoring/rubric'
+import { bandDefinition, nextBand } from '@/lib/scoring/rubric'
 import { bandColor, BandChip } from './ui'
 import { AddTranscript } from './AddTranscript'
 
@@ -136,7 +136,7 @@ function CompetencyDetail({
         <p className="mt-1.5 text-[13px] font-medium" style={{ color: bandColor(comp.band) }}>
           {comp.band.toLowerCase()} · {comp.average.toFixed(1)}
         </p>
-        <p className="mt-1.5 text-[12px] leading-relaxed text-tlw-espresso">{BAND_DESCRIPTIONS[comp.band]}</p>
+        <p className="mt-1.5 text-[12px] leading-relaxed text-tlw-espresso">{bandDefinition(comp.id, comp.band)}</p>
       </div>
 
       {/* Next level */}
@@ -147,7 +147,7 @@ function CompetencyDetail({
             <p className="mt-1.5 text-[13px] font-medium" style={{ color: bandColor(next) }}>
               {next.toLowerCase()}
             </p>
-            <p className="mt-1.5 text-[12px] leading-relaxed text-tlw-espresso">{BAND_DESCRIPTIONS[next]}</p>
+            <p className="mt-1.5 text-[12px] leading-relaxed text-tlw-espresso">{bandDefinition(comp.id, next)}</p>
           </>
         ) : (
           <p className="mt-1.5 text-[12px] leading-relaxed text-tlw-espresso">
