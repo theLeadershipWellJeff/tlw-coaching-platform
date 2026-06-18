@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
     const introRaw = makeRawEmail(
       clientEmail,
       cc,
-      'Quick favor — feedback on something I\'m building',
+      'Quick favor - feedback on something I\'m building',
       introText,
       false
     )
@@ -124,7 +124,7 @@ export async function POST(req: NextRequest) {
   const prepRaw = makeRawEmail(
     clientEmail,
     cc,
-    'Your Session Preparation — theLeadershipWell',
+    'Your Session Preparation - theLeadershipWell',
     html,
     true
   )
