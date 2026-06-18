@@ -127,8 +127,10 @@ Drive folder; `/api/clients/[id]/import-transcripts` imports picks (forced to
 that client), then the UI scores each.
 
 ### Session-notes panel (`clients/[id]/NotesPanel.tsx`)
-The right-hand rail carries the live ACTION/INSIGHT capture **plus** persistent,
-per-client context loaded from the client record: **Key info** (`clients.key_info`,
+The right-hand rail carries the live ACTION/INSIGHT capture (`CaptureGroup` —
+newest-first, 5 visible with a "Show all" expander; the notes list does the same)
+**plus** persistent, per-client context loaded from the client record: **Key info**
+(`clients.key_info`,
 freeform reference — boss/spouse/kids), **Coaching map** (`clients.coaching_map`,
 a pulldown of the practice's maps — defined in `CoachingMapCard.tsx#MAPS`: The 6
 Components / The Airplane Model / First 90 Days / Who I Am Becoming; `blurb` field
@@ -140,6 +142,20 @@ goals** (the same `clients.coaching_goals` as the workspace card, edited via the
 **Key info is PRIVATE to the coach.** `clients.key_info` must never feed any
 client-facing generation (session prep, nudges, the "send to client" draft) —
 those use the note content only. Keep it out of those prompts.
+
+**Captured actions persist + are checkable.** A note's `ACTION:` lines are
+reconciled into the `actions` table (note_id set) on every open and save —
+`lib/notes/sync-actions.ts#syncNoteActions`, called from the note PATCH and
+`POST /api/clients/[id]/notes/[noteId]/actions` (the editor POSTs it on mount so
+older notes persist on view). So a note's actions flow to the workspace
+`ActionsCard` and the `{{unfinished_actions}}` field without a "send to client".
+The capture-panel checkbox toggles status coach-side via
+`PATCH /api/clients/[id]/actions/[actionId]` (`completed_via = 'coach'`; the
+client email link still uses public `/api/actions/complete`). Sync keeps `done`
+rows but drops still-`open` rows whose line the coach edited away; `send-note`'s
+`persistActionLinks` dedupes on the same `(note_id, description)`, so tokens stay
+stable. A just-typed line shows a plain (not-yet-checkable) box until autosave
+persists it.
 
 New note titles default to `"<client name> · <date>"` (`NotesPanel#newNote`).
 The editor toolbar has a **Templates** dropdown (`RichNoteEditor`, gated by
