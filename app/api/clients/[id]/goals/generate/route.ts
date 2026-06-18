@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/authOptions'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
+import { toErrorResponse } from '@/lib/api-handler'
+import { requireClientCoach } from '@/lib/client-access'
 import type { CoachingGoal, Database } from '@/lib/supabase/types'
 
 export const runtime = 'nodejs'
@@ -26,15 +26,15 @@ function toText(html: string): string {
  * coach can then edit/save on the goals card. Returns { goals }.
  */
 export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return NextResponse.json({ error: 'ANTHROPIC_API_KEY is not configured.' }, { status: 500 })
-  }
+  try {
+    const supabase = getSupabaseAdmin()
+    await requireClientCoach(supabase, params.id)
 
-  const supabase = getSupabaseAdmin()
+    if (!process.env.ANTHROPIC_API_KEY) {
+      return NextResponse.json({ error: 'ANTHROPIC_API_KEY is not configured.' }, { status: 500 })
+    }
 
-  const { data: client, error: cErr } = await supabase
+    const { data: client, error: cErr } = await supabase
     .from('clients')
     .select('id, name')
     .eq('id', params.id)
@@ -96,5 +96,8 @@ ${notesText}`
   const { error: upErr } = await supabase.from('clients').update(update).eq('id', params.id)
   if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 })
 
-  return NextResponse.json({ goals })
+    return NextResponse.json({ goals })
+  } catch (e) {
+    return toErrorResponse(e)
+  }
 }

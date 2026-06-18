@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/authOptions'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
+import { toErrorResponse } from '@/lib/api-handler'
+import { requireClientCoach } from '@/lib/client-access'
 import type { Database } from '@/lib/supabase/types'
 
 export const runtime = 'nodejs'
@@ -33,18 +33,18 @@ type NoteInsert = Database['public']['Tables']['notes']['Insert']
  * "import notes" action so each request stays well within limits.
  */
 export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!CA_ID || !CA_KEY) {
-    return NextResponse.json(
-      { error: 'Coach Accountable is not configured (COACH_ACCOUNTABLE_API_ID / _API_KEY).' },
-      { status: 400 }
-    )
-  }
+  try {
+    const supabase = getSupabaseAdmin()
+    await requireClientCoach(supabase, params.id)
 
-  const supabase = getSupabaseAdmin()
+    if (!CA_ID || !CA_KEY) {
+      return NextResponse.json(
+        { error: 'Coach Accountable is not configured (COACH_ACCOUNTABLE_API_ID / _API_KEY).' },
+        { status: 400 }
+      )
+    }
 
-  const { data: client, error: cErr } = await supabase
+    const { data: client, error: cErr } = await supabase
     .from('clients')
     .select('id, ca_client_id')
     .eq('id', params.id)
@@ -91,5 +91,8 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
     imported = count ?? toInsert.length
   }
 
-  return NextResponse.json({ imported, skipped: sessions.length - toInsert.length })
+    return NextResponse.json({ imported, skipped: sessions.length - toInsert.length })
+  } catch (e) {
+    return toErrorResponse(e)
+  }
 }
