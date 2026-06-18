@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import type { Client } from '@/lib/supabase/types'
-import { GoalRows, type GoalDraft, toDrafts, cleanGoals, emptyGoal } from './GoalRows'
+import { GoalRows, type GoalDraft, toDrafts, cleanGoals, emptyGoal, untitledGoals } from './GoalRows'
 
 /**
  * Compact engagement-goals card for the session-notes panel. It shows the same
@@ -80,6 +80,12 @@ function ClientGoalsModal({
   }
 
   async function save() {
+    // Never silently drop a goal the coach typed: a row with a description or
+    // metrics but no title would be discarded by cleanGoals, so stop and ask.
+    if (untitledGoals(draft)) {
+      setError('Give every goal a title before saving — a goal without one can’t be saved.')
+      return
+    }
     setBusy('save')
     setError('')
     try {
