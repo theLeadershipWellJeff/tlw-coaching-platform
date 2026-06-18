@@ -360,6 +360,16 @@ created automatically on first upload.
 - Per-competency **suggested moves** on a report (Claude-generated, persisted).
 - Coach self-scoring (top of report) and supervisor email (`coaches.supervisor_email`,
   set on Account).
+- **Coach timezone setting (Account → Timezone).** `coaches.timezone` is now
+  editable via PATCH `/api/coach` (`TimezoneSettings`). The dashboard "Up next"
+  cards render every day/time label in that zone (passed down to `UpNextPanel`),
+  and "today" fallbacks for an undated transcript/CA note now resolve in the
+  coach's zone via `lib/datetime.ts#todayInTimeZone` — never the server's UTC
+  date, which was landing evening-Pacific sessions on the next day. The
+  `DEFAULT_TIMEZONE` env var stays the fallback for new coaches.
+- **Skip on session-prep cards.** Each "Up next" card has a Skip button that
+  hides that calendar session from the dashboard (persisted in `localStorage`,
+  `tlw-dashboard-skipped`, pruned to live event ids).
 - **Session-notes panel** — Key info (private), Coaching map pulldown, Engagement
   goals; default note titles; in-app full client names; browser app icon.
 - **Coaching goals** carry metrics and feed the session-prep coaching plan.

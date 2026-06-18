@@ -7,6 +7,7 @@ import { RosterPanel } from './RosterPanel'
 import { UpNextPanel, type UpcomingSession } from './UpNextPanel'
 
 const STORAGE_KEY = 'tlw-dashboard-layout'
+const SKIPPED_KEY = 'tlw-dashboard-skipped'
 
 // Roster on the left; scorecard summary stacked above Up next on the right.
 // Coaches can rearrange (and move between columns) via the Arrange button.
@@ -20,6 +21,21 @@ export function DashboardBoard() {
   const [sessions, setSessions] = useState<UpcomingSession[]>([])
   const [sessionsLoading, setSessionsLoading] = useState(true)
   const [sessionsError, setSessionsError] = useState(false)
+
+  // Sessions the coach chose to skip — hidden from Up next, persisted locally
+  // (these are calendar-derived, so there's no server-side prep row to mark).
+  const [skipped, setSkipped] = useState<string[]>([])
+
+  // The coach's configured timezone drives every date/time label here, so the
+  // dashboard reads the same on any device. Seed with the browser zone until the
+  // profile loads.
+  const [timeZone, setTimeZone] = useState(() => {
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Los_Angeles'
+    } catch {
+      return 'America/Los_Angeles'
+    }
+  })
 
   const loadClients = useCallback(async () => {
     setClientsLoading(true)
@@ -58,7 +74,51 @@ export function DashboardBoard() {
   useEffect(() => {
     loadClients()
     loadSessions()
+    // Coach timezone for all date/time labels.
+    fetch('/api/coach')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d?.coach?.timezone && setTimeZone(d.coach.timezone))
+      .catch(() => {})
+    // Restore skipped sessions.
+    try {
+      const raw = localStorage.getItem(SKIPPED_KEY)
+      if (raw) setSkipped(JSON.parse(raw))
+    } catch {
+      /* ignore */
+    }
   }, [loadClients, loadSessions])
+
+  const skipSession = useCallback((id: string) => {
+    setSkipped((prev) => {
+      if (prev.includes(id)) return prev
+      const next = [...prev, id]
+      try {
+        localStorage.setItem(SKIPPED_KEY, JSON.stringify(next))
+      } catch {
+        /* ignore */
+      }
+      return next
+    })
+  }, [])
+
+  // Hide skipped sessions, and keep the stored set pruned to live event ids so it
+  // can't grow without bound as past sessions roll off the calendar.
+  const skippedSet = new Set(skipped)
+  const visibleSessions = sessions.filter((s) => !skippedSet.has(s.id))
+  useEffect(() => {
+    if (sessions.length === 0) return
+    const live = new Set(sessions.map((s) => s.id))
+    const pruned = skipped.filter((id) => live.has(id))
+    if (pruned.length !== skipped.length) {
+      setSkipped(pruned)
+      try {
+        localStorage.setItem(SKIPPED_KEY, JSON.stringify(pruned))
+      } catch {
+        /* ignore */
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessions])
 
   const panels: Panel[] = [
     { id: 'summary', label: 'Scorecard summary', node: <ScorecardSummary /> },
@@ -72,11 +132,13 @@ export function DashboardBoard() {
       label: 'Up next',
       node: (
         <UpNextPanel
-          sessions={sessions}
+          sessions={visibleSessions}
           clients={clients}
           loading={sessionsLoading}
           error={sessionsError}
           onRefresh={loadSessions}
+          onSkip={skipSession}
+          timeZone={timeZone}
         />
       ),
     },

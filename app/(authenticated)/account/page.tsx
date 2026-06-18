@@ -2,6 +2,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
 import { PageHeader } from '@/app/components/layout/PageHeader'
 import { SupervisorSettings } from './SupervisorSettings'
+import { TimezoneSettings } from './TimezoneSettings'
 
 export default async function AccountPage() {
   const session = await getServerSession(authOptions)
@@ -28,6 +29,8 @@ export default async function AccountPage() {
             </div>
           </dl>
         </div>
+
+        <TimezoneSettings />
 
         <SupervisorSettings />
 
