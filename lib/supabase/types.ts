@@ -145,6 +145,13 @@ export type Coach = {
   updated_at: Timestamp
 }
 
+export type CoachClient = {
+  coach_id: string
+  client_id: string
+  role: string // 'primary' | 'shared'
+  created_at: Timestamp
+}
+
 export type PrepSheet = {
   id: string
   coach_id: string | null
@@ -279,6 +286,12 @@ export type Database = {
         Row: PrepSheet
         Insert: Insertable<PrepSheet>
         Update: Updatable<PrepSheet>
+        Relationships: []
+      }
+      coach_clients: {
+        Row: CoachClient
+        Insert: Insertable<CoachClient>
+        Update: Updatable<CoachClient>
         Relationships: []
       }
     }

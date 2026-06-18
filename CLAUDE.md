@@ -325,16 +325,29 @@ supervisor email (coaches.supervisor_email) · 007 key info + map · 008 note
 templates · 009 action completion · 010 library folders · 011 agreements · 012
 agenda requests · 013 revenue + competency focus + prep sheets
 (`clients.session_fee`, `coaches.competency_focus` jsonb, `prep_sheets` table) ·
-014 note duration (`notes.duration_minutes`, default 60). Run new migrations by
-hand in the Supabase SQL editor.
+014 note duration (`notes.duration_minutes`, default 60) · 015 coach_clients
+(tenant scoping — links each client to its coach(es); the isolation boundary the
+client routes filter on). Run new migrations by hand in the Supabase SQL editor.
+
+**Tenant scoping (015).** `coach_clients` (coach_id, client_id, role) is the
+ownership link. Client access is enforced **server-side** by the session coach,
+not Supabase RLS (we're on NextAuth): `lib/client-access.ts#requireClientCoach`
+gates every `/api/clients/[id]/**` route (404, not 403, on no access), the roster
+list filters via `accessibleClientIds`, and client create/import call
+`linkCoachToClient`. A client can be linked to more than one coach (occasional
+shared clients, role `shared`); the normal case is one `primary` link.
 
 **Revenue billing:** `session_fee` is an hourly rate; sessions bill in half-hour
 units with a 1-hour minimum, rounding up once past 15 min into a half hour
 (`lib/billing.ts`). Past-week revenue uses each note's logged `duration_minutes`;
 the projection uses the scheduled calendar-event length.
 
-**Pending — apply in Supabase:** `014_note_duration.sql` (013 already applied).
-The `library-pdfs` Storage bucket is created automatically on first upload.
+**Pending — apply in Supabase:** `014_note_duration.sql` and
+`015_coach_clients.sql`. ⚠️ **015 must be run BEFORE the tenant-scoping code is
+deployed to `main`** — until the table exists and is backfilled, the roster would
+filter to zero clients. Read the backfill comment in 015 first (it assumes all
+current coach logins are the same person). The `library-pdfs` Storage bucket is
+created automatically on first upload.
 
 ## Roadmap
 
