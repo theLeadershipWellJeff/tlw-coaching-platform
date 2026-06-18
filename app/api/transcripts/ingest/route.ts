@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { getOrCreateCoach } from '@/lib/coach'
 import { ingestMarkdown } from '@/lib/transcripts/ingest'
+import { sendNeedsReviewEmail } from '@/lib/transcript-review-email'
 
 // Scoring calls Claude on a full transcript — give the function room to run.
 export const runtime = 'nodejs'
@@ -67,8 +68,37 @@ export async function POST(req: NextRequest) {
       driveFileId: body.driveFileId ?? body.drive_file_id ?? null,
       source: body.source || 'plaud',
     })
+
+    // Hold-for-review-but-tell-me: a freshly ingested session that couldn't be
+    // matched (and so wasn't scored) would otherwise sit silently in the queue.
+    // Email the coach so nothing slips. Best-effort — never fail ingest on it.
+    if (!result.duplicate && !result.reportId && result.matchStatus !== 'matched') {
+      try {
+        await sendNeedsReviewEmail(coach, {
+          filename: body.filename ?? null,
+          preview: previewOf(markdown),
+        })
+      } catch (e: any) {
+        console.error('Needs-review email failed:', e?.message || e)
+      }
+    }
+
     return NextResponse.json(result)
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
+}
+
+// First opening lines of the transcript (front matter stripped) for the email.
+function previewOf(md: string): string {
+  const body = md.replace(/^﻿?\s*---\s*\n[\s\S]*?\n---\s*\n?/, '')
+  const text = body
+    .replace(/\r/g, '')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return text.length > 180 ? `${text.slice(0, 180)}…` : text
 }

@@ -73,16 +73,32 @@ Plaud.ai finishes a transcript → Zapier POSTs it to `POST /api/transcripts/ing
 (shared-secret `x-ingest-secret`) and also archives the md to a Drive folder.
 `lib/transcripts/ingest.ts#ingestMarkdown` is the shared core (also used by the
 manual paste and per-client Drive import):
-1. dedupe by content hash;
+1. dedupe by content hash — hashed over a **canonicalized** form of the markdown
+   (`canonicalizeForHash`: strip BOM, CRLF→LF, trailing whitespace, collapse blank
+   lines, trim) so the same session ingested via Zapier (CRLF JSON) and via the
+   Drive import (`alt:'media'` LF) lands on **one** row instead of two;
 2. parse (`lib/transcripts/parse.ts`) — title/front matter, **timestamp** title
    handling (Plaud names files `YYYY-MM-DD HH:MM:SS`);
 3. **match client** — name match (`lib/transcripts/match.ts`, token-based,
    fail-loud) → else **calendar match** (`lib/calendar.ts`): convert the local
    wall-clock time (coach's timezone, DST-correct) to an instant, find the
    overlapping Google Calendar event, read the client off the **non-coach
-   guest's email** (exact roster match) → name fallback;
+   guest's email** (exact roster match) → guest-name → **event-title** name match.
+   **Calendar match needs the client invited as an email guest (or their name in
+   the event title)** — events with no guest/generic title won't match. Sessions
+   booked via the in-app **Schedule next session** flow satisfy this by design;
 4. on a confident match, **score** (`lib/scoring/store.ts#runAndStoreReport`).
-Uncertain/ambiguous matches → `needs_review` (never guessed).
+Uncertain/ambiguous matches → `needs_review` (never guessed) and, on the Zapier
+path, the coach is **emailed** (`lib/transcript-review-email.ts#sendNeedsReviewEmail`)
+so a held transcript never sits silently — they assign the client in Practice and
+it scores. **Dupe reconcile:** a per-client "Import from Plaud" of a session
+already ingested (e.g. parked by Zapier) **adopts the existing row** (assigns the
+forced client) instead of creating a copy; the import UI then scores it. The
+Practice queue shows a transcript **preview** (`/api/transcripts` returns first
+lines of `raw_md`) so timestamp-named, unmatched rows are identifiable at a glance.
+The scoring **model is hardened**: a retired `SCORING_MODEL` id (e.g. the
+2026-06-15-retired `claude-sonnet-4-20250514`) is ignored in favor of the safe
+default so a stale env var can't silently break scoring (`engine.ts#resolveModel`).
 
 ### Scoring engine (`lib/scoring/engine.ts`)
 Prompts Claude with the rubric — including the locked **per-competency band

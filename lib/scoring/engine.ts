@@ -30,11 +30,33 @@ import type {
 } from './types'
 
 // Default scoring model. The previous default (claude-sonnet-4-20250514) is
-// deprecated and retires 2026-06-15, which silently breaks scoring; claude-sonnet-4-6
+// deprecated and retired 2026-06-15, which silently breaks scoring; claude-sonnet-4-6
 // is its current drop-in replacement. Override with SCORING_MODEL (e.g. an Opus
 // id like claude-opus-4-8) for stronger judgment — the deterministic gates below
 // hold the line regardless.
-const MODEL = process.env.SCORING_MODEL || 'claude-sonnet-4-6'
+const SAFE_DEFAULT_MODEL = 'claude-sonnet-4-6'
+// Model ids that have retired — calling them throws and breaks scoring. If a
+// stale SCORING_MODEL still points at one (e.g. left in Vercel from before the
+// default was bumped), ignore it and fall back to the safe default so scoring
+// can't silently die again.
+const RETIRED_MODELS = new Set([
+  'claude-sonnet-4-20250514',
+  'claude-3-5-sonnet-20240620',
+  'claude-3-5-sonnet-20241022',
+  'claude-3-opus-20240229',
+])
+function resolveModel(): string {
+  const configured = process.env.SCORING_MODEL?.trim()
+  if (configured && RETIRED_MODELS.has(configured)) {
+    console.warn(
+      `SCORING_MODEL "${configured}" is retired; falling back to ${SAFE_DEFAULT_MODEL}. ` +
+        `Update the env var to a current model id (e.g. claude-opus-4-8).`
+    )
+    return SAFE_DEFAULT_MODEL
+  }
+  return configured || SAFE_DEFAULT_MODEL
+}
+const MODEL = resolveModel()
 
 export interface ScoringContext {
   coachName: string

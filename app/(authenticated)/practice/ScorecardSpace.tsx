@@ -40,6 +40,7 @@ interface TranscriptRow {
   filename: string | null
   session_date: string | null
   match_confidence: number | null
+  preview: string | null
 }
 
 interface ClientRow {
@@ -430,6 +431,11 @@ export function ScorecardSpace() {
                           <> · best guess {(t.match_confidence * 100).toFixed(0)}%</>
                         )}
                       </p>
+                      {t.preview && (
+                        <p className="mt-1 line-clamp-2 text-[11px] italic text-tlw-warm-gray/80">
+                          “{t.preview}”
+                        </p>
+                      )}
                     </div>
                     <button
                       onClick={() => togglePreview(t.id)}
