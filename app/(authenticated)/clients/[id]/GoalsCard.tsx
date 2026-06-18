@@ -17,6 +17,17 @@ export function GoalsCard({
   const [error, setError] = useState('')
 
   async function generate() {
+    // Hand-written/edited goals are protected server-side; warn so the coach
+    // knows the suggestions are added below them, not a replacement.
+    const hasProtected = goals.some((g) => g.source !== 'generated')
+    if (
+      hasProtected &&
+      !window.confirm(
+        'Draft goals from this client’s notes? Your hand-written goals are kept — the AI suggestions are added below them.'
+      )
+    ) {
+      return
+    }
     setBusy('generate')
     setError('')
     try {

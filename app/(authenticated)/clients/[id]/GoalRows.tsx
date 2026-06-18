@@ -20,13 +20,19 @@ export function toDrafts(goals: CoachingGoal[]): GoalDraft[] {
   }))
 }
 
-/** Editable drafts → stored goals (trim, drop empty metrics, require a title). */
+/**
+ * Editable drafts → stored goals (trim, drop empty metrics, require a title).
+ * Anything saved through the editor is the coach's own work, so it is tagged
+ * `source: 'manual'` — that flag is what protects it from being overwritten by
+ * "generate from notes".
+ */
 export function cleanGoals(draft: GoalDraft[]): CoachingGoal[] {
   return draft
     .map((g) => ({
       title: g.title.trim(),
       description: g.description.trim(),
       metrics: g.metrics.map((m) => m.trim()).filter(Boolean),
+      source: 'manual' as const,
     }))
     .filter((g) => g.title)
 }

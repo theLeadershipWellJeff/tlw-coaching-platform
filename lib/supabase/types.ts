@@ -23,6 +23,12 @@ export type CoachingGoal = {
   // Up to three measures of fulfillment for the goal (filled in with the
   // client). Optional so existing two-field goals keep working unchanged.
   metrics?: string[]
+  // Provenance. 'manual' = written or edited and saved by the coach — these are
+  // protected: "generate from notes" must never overwrite them. 'generated' = an
+  // AI draft the coach hasn't endorsed yet, which a later generate may replace.
+  // Absent on goals that predate this field — treated as protected, since we
+  // can't prove they weren't hand-written.
+  source?: 'manual' | 'generated'
 }
 
 export type Client = {
