@@ -36,7 +36,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
 
     const { data: client, error: cErr } = await supabase
     .from('clients')
-    .select('id, name')
+    .select('id, name, coaching_goals')
     .eq('id', params.id)
     .single()
   if (cErr || !client) return NextResponse.json({ error: 'Client not found' }, { status: 404 })
@@ -86,17 +86,28 @@ ${notesText}`
     const match = clean.match(/\[[\s\S]*\]/)
     const parsed = JSON.parse(match ? match[0] : clean)
     goals = (Array.isArray(parsed) ? parsed : [])
-      .map((g: any) => ({ title: String(g?.title || '').trim(), description: String(g?.description || '').trim() }))
+      .map((g: any) => ({
+        title: String(g?.title || '').trim(),
+        description: String(g?.description || '').trim(),
+        source: 'generated' as const,
+      }))
       .filter((g: CoachingGoal) => g.title)
   } catch {
     return NextResponse.json({ error: 'Could not generate goals from the notes.' }, { status: 502 })
   }
 
-  const update: Database['public']['Tables']['clients']['Update'] = { coaching_goals: goals }
+  // Never overwrite the coach's own work. Keep every goal that isn't an
+  // untouched AI draft (manual, or pre-dating the source field) and only replace
+  // previously-generated suggestions with the fresh ones.
+  const existing = (client.coaching_goals ?? []) as CoachingGoal[]
+  const protectedGoals = existing.filter((g) => g.source !== 'generated')
+  const merged = [...protectedGoals, ...goals]
+
+  const update: Database['public']['Tables']['clients']['Update'] = { coaching_goals: merged }
   const { error: upErr } = await supabase.from('clients').update(update).eq('id', params.id)
   if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 })
 
-    return NextResponse.json({ goals })
+    return NextResponse.json({ goals: merged, protectedCount: protectedGoals.length })
   } catch (e) {
     return toErrorResponse(e)
   }

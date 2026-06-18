@@ -20,15 +20,35 @@ export function toDrafts(goals: CoachingGoal[]): GoalDraft[] {
   }))
 }
 
-/** Editable drafts → stored goals (trim, drop empty metrics, require a title). */
+/**
+ * Editable drafts → stored goals (trim, drop empty metrics, require a title).
+ * Anything saved through the editor is the coach's own work, so it is tagged
+ * `source: 'manual'` — that flag is what protects it from being overwritten by
+ * "generate from notes".
+ */
 export function cleanGoals(draft: GoalDraft[]): CoachingGoal[] {
   return draft
     .map((g) => ({
       title: g.title.trim(),
       description: g.description.trim(),
       metrics: g.metrics.map((m) => m.trim()).filter(Boolean),
+      source: 'manual' as const,
     }))
     .filter((g) => g.title)
+}
+
+/** Does this row carry any work the coach would not want silently dropped? */
+export function goalHasContent(g: GoalDraft): boolean {
+  return !!(g.title.trim() || g.description.trim() || g.metrics.some((m) => m.trim()))
+}
+
+/**
+ * Rows that have a description/metrics but no title. cleanGoals discards these
+ * (a stored goal needs a title to render), so saving them silently would lose
+ * the coach's work — callers must block the save and prompt for a title instead.
+ */
+export function untitledGoals(draft: GoalDraft[]): boolean {
+  return draft.some((g) => !g.title.trim() && (g.description.trim() || g.metrics.some((m) => m.trim())))
 }
 
 /** The shared goal-rows form: goal + description (left), three metrics (right). */
@@ -49,9 +69,9 @@ export function GoalRows({
               <div className="flex items-center gap-2">
                 <input
                   value={g.title}
-                  placeholder="Goal"
+                  placeholder="Goal title (required)"
                   onChange={(e) => setDraft((d) => d.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)))}
-                  className="flex-1 border-none bg-transparent text-[13px] font-medium text-tlw-navy-deep outline-none placeholder:text-tlw-warm-gray/60"
+                  className="flex-1 rounded-tlw-md border border-tlw-warm-gray/20 bg-tlw-surface px-2 py-1.5 text-[13px] font-medium text-tlw-navy-deep outline-none focus:border-tlw-signal-orange placeholder:text-tlw-warm-gray/60"
                 />
                 <button
                   onClick={() => setDraft((d) => d.filter((_, j) => j !== i))}

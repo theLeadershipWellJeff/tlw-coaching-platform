@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import type { Client } from '@/lib/supabase/types'
-import { GoalRows, type GoalDraft, toDrafts, cleanGoals, emptyGoal } from './GoalRows'
+import { GoalRows, type GoalDraft, toDrafts, cleanGoals, emptyGoal, untitledGoals } from './GoalRows'
 
 export function GoalsCard({
   client,
@@ -17,6 +17,17 @@ export function GoalsCard({
   const [error, setError] = useState('')
 
   async function generate() {
+    // Hand-written/edited goals are protected server-side; warn so the coach
+    // knows the suggestions are added below them, not a replacement.
+    const hasProtected = goals.some((g) => g.source !== 'generated')
+    if (
+      hasProtected &&
+      !window.confirm(
+        'Draft goals from this client’s notes? Your hand-written goals are kept — the AI suggestions are added below them.'
+      )
+    ) {
+      return
+    }
     setBusy('generate')
     setError('')
     try {
@@ -34,6 +45,12 @@ export function GoalsCard({
   }
 
   async function save() {
+    // Never silently drop a goal the coach typed: a row with a description or
+    // metrics but no title would be discarded by cleanGoals, so stop and ask.
+    if (untitledGoals(draft)) {
+      setError('Give every goal a title before saving — a goal without one can’t be saved.')
+      return
+    }
     setBusy('save')
     setError('')
     try {
