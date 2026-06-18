@@ -1,6 +1,7 @@
 'use client'
 import Link from 'next/link'
 import type { Client } from '@/lib/supabase/types'
+import { ymdInTimeZone } from '@/lib/datetime'
 
 export interface UpcomingSession {
   id: string
@@ -23,25 +24,30 @@ function prepHref(s: UpcomingSession): string {
   return `/session/${s.id}?${qs.toString()}`
 }
 
-function dayLabel(iso: string): string {
+// All labels render in the coach's timezone (passed down from the profile) so a
+// session reads the same regardless of which device's clock is showing it.
+function dayLabel(iso: string, timeZone: string): string {
   const d = new Date(iso)
-  const today = new Date()
-  const tomorrow = new Date()
-  tomorrow.setDate(today.getDate() + 1)
-  if (d.toDateString() === today.toDateString()) return 'Today'
-  if (d.toDateString() === tomorrow.toDateString()) return 'Tomorrow'
-  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+  const now = new Date()
+  const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000)
+  const ymd = ymdInTimeZone(d, timeZone)
+  if (ymd === ymdInTimeZone(now, timeZone)) return 'Today'
+  if (ymd === ymdInTimeZone(tomorrow, timeZone)) return 'Tomorrow'
+  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone })
 }
 
-function timeLabel(iso: string): string {
+function timeLabel(iso: string, timeZone: string): string {
   if (!iso) return ''
-  return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone })
 }
 
-function groupByDay(sessions: UpcomingSession[]): { label: string; items: UpcomingSession[] }[] {
+function groupByDay(
+  sessions: UpcomingSession[],
+  timeZone: string
+): { label: string; items: UpcomingSession[] }[] {
   const groups: { label: string; items: UpcomingSession[] }[] = []
   for (const s of sessions) {
-    const label = dayLabel(s.start)
+    const label = dayLabel(s.start, timeZone)
     const last = groups[groups.length - 1]
     if (last && last.label === label) last.items.push(s)
     else groups.push({ label, items: [s] })
@@ -73,12 +79,16 @@ export function UpNextPanel({
   loading,
   error,
   onRefresh,
+  onSkip,
+  timeZone,
 }: {
   sessions: UpcomingSession[]
   clients: Client[]
   loading: boolean
   error: boolean
   onRefresh: () => void
+  onSkip: (id: string) => void
+  timeZone: string
 }) {
   const byEmail = new Map<string, string>()
   const byName = new Map<string, string>()
@@ -123,7 +133,7 @@ export function UpNextPanel({
   }
 
   const [upNext, ...rest] = sessions
-  const groups = groupByDay(rest)
+  const groups = groupByDay(rest, timeZone)
   const upNextClientId = resolveClientId(upNext, byEmail, byName)
 
   return (
@@ -148,9 +158,9 @@ export function UpNextPanel({
               )}
             </div>
             <div className="shrink-0 text-right">
-              <p className="text-[13px] font-medium text-tlw-cream">{dayLabel(upNext.start)}</p>
+              <p className="text-[13px] font-medium text-tlw-cream">{dayLabel(upNext.start, timeZone)}</p>
               <p className="mt-0.5 text-[12px] text-tlw-warm-gray">
-                {timeLabel(upNext.start)} · {upNext.duration} min
+                {timeLabel(upNext.start, timeZone)} · {upNext.duration} min
               </p>
             </div>
           </div>
@@ -170,6 +180,12 @@ export function UpNextPanel({
                 Open workspace →
               </Link>
             )}
+            <button
+              onClick={() => onSkip(upNext.id)}
+              className="ml-auto rounded-tlw-lg px-3 py-2 text-[12px] font-medium text-tlw-warm-gray transition-colors hover:text-tlw-cream"
+            >
+              Skip
+            </button>
           </div>
         </div>
       </section>
@@ -194,7 +210,7 @@ export function UpNextPanel({
                           <p className="mt-0.5 truncate text-[12px] text-tlw-warm-gray">{s.title}</p>
                         </div>
                         <div className="shrink-0 text-right">
-                          <p className="text-[13px] text-tlw-espresso">{timeLabel(s.start)}</p>
+                          <p className="text-[13px] text-tlw-espresso">{timeLabel(s.start, timeZone)}</p>
                           <p className="text-[12px] text-tlw-warm-gray">{s.duration} min</p>
                         </div>
                       </div>
@@ -213,6 +229,12 @@ export function UpNextPanel({
                             Workspace →
                           </Link>
                         )}
+                        <button
+                          onClick={() => onSkip(s.id)}
+                          className="ml-auto text-[12px] font-medium text-tlw-warm-gray transition-colors hover:text-tlw-espresso"
+                        >
+                          Skip
+                        </button>
                       </div>
                     </div>
                   )

@@ -10,6 +10,8 @@ import type { Coach, Database, SessionReport, Transcript } from '@/lib/supabase/
 import { scoreTranscript, type ScoringContext } from './engine'
 import { parseTranscript } from '@/lib/transcripts/parse'
 import { sendScorecardEmail } from '@/lib/scorecard-email'
+import { todayInTimeZone } from '@/lib/datetime'
+import { DEFAULT_TIMEZONE } from '@/lib/coach'
 
 export async function runAndStoreReport(
   supabase: SupabaseClient<Database>,
@@ -26,7 +28,12 @@ export async function runAndStoreReport(
     sessionType: parsed.sessionType,
     sessionNumber: parsed.sessionNumber,
     engagementTotal: parsed.engagementTotal,
-    sessionDate: transcript.session_date || parsed.sessionDate || new Date().toISOString().slice(0, 10),
+    // Fall back to today *in the coach's timezone* — never the server's UTC date,
+    // which lands an evening Pacific session on the next day.
+    sessionDate:
+      transcript.session_date ||
+      parsed.sessionDate ||
+      todayInTimeZone(coach.timezone || DEFAULT_TIMEZONE),
   }
 
   // Feed the transcript body (front matter stripped) to the engine.

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { toErrorResponse } from '@/lib/api-handler'
 import { requireClientCoach } from '@/lib/client-access'
+import { todayInTimeZone } from '@/lib/datetime'
+import { DEFAULT_TIMEZONE } from '@/lib/coach'
 import type { Database } from '@/lib/supabase/types'
 
 export const runtime = 'nodejs'
@@ -19,9 +21,9 @@ async function caPost(action: string, paramObj: Record<string, string> = {}) {
   return json.return
 }
 
-function safeDate(v: unknown): string {
+function safeDate(v: unknown, timeZone: string): string {
   const s = String(v || '').slice(0, 10)
-  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : new Date().toISOString().slice(0, 10)
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : todayInTimeZone(timeZone)
 }
 
 type NoteInsert = Database['public']['Tables']['notes']['Insert']
@@ -35,7 +37,8 @@ type NoteInsert = Database['public']['Tables']['notes']['Insert']
 export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const supabase = getSupabaseAdmin()
-    await requireClientCoach(supabase, params.id)
+    const coach = await requireClientCoach(supabase, params.id)
+    const tz = coach.timezone || DEFAULT_TIMEZONE
 
     if (!CA_ID || !CA_KEY) {
       return NextResponse.json(
@@ -76,7 +79,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
     if (seen.has(caId)) continue
     toInsert.push({
       client_id: client.id,
-      session_date: safeDate(n.dateOf),
+      session_date: safeDate(n.dateOf, tz),
       title: n.title?.trim() || null,
       content: typeof n.content === 'string' ? n.content : '',
       duration_minutes: 60,

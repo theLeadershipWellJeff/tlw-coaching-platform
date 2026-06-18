@@ -65,10 +65,14 @@ export function normalizeDate(raw: string | null): string | null {
     if (y.length === 2) y = `20${y}`
     return `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`
   }
-  // Month name: May 26, 2026 / 26 May 2026
+  // Month name: May 26, 2026 / 26 May 2026. Read the local calendar parts rather
+  // than toISOString(), which would shift the date into UTC.
   const parsed = new Date(s)
   if (!Number.isNaN(parsed.getTime())) {
-    return parsed.toISOString().slice(0, 10)
+    const y = parsed.getFullYear()
+    const mo = String(parsed.getMonth() + 1).padStart(2, '0')
+    const d = String(parsed.getDate()).padStart(2, '0')
+    return `${y}-${mo}-${d}`
   }
   return null
 }
