@@ -126,6 +126,21 @@ Gmail (`/api/email/send`). Plaud import: `/api/drive/transcripts` lists the
 Drive folder; `/api/clients/[id]/import-transcripts` imports picks (forced to
 that client), then the UI scores each.
 
+### Schedule next session (`ScheduleSessionModal.tsx`)
+The notes-panel header has a **Schedule next session** button (disabled until the
+client has an email). It opens a right-edge slide-over (date / time / duration —
+**default 55 min**) with the client name+email pre-filled from context. Confirm
+POSTs to `POST /api/clients/[id]/schedule`, which interprets the wall-clock pick
+in the coach's timezone (`zonedWallClockToUtc`) and calls
+`lib/calendar.ts#createCoachingEvent` to insert the event on the coach's
+**primary** calendar with `sendUpdates: 'all'` (emails the client the invite).
+Title `"<client name> · Coaching Session"`, description `"Coaching session with
+Jeff Holmes · theLeadershipWell"`. Auth is the **live session access token**
+(same pattern as `/api/send`), so it needs the writable `calendar.events` scope;
+a 403/insufficient-scope is mapped to a "sign out and back in" message. The
+created event id is linked onto the active note (`notes.calendar_event_id`). No
+availability/conflict checks, no self-scheduling (deliberately out of scope).
+
 ### Session-notes panel (`clients/[id]/NotesPanel.tsx`)
 The right-hand rail carries the live ACTION/INSIGHT capture (`CaptureGroup` —
 newest-first, 5 visible with a "Show all" expander; the notes list does the same)
@@ -296,7 +311,10 @@ Supabase (`NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_API_SECRET_KEY`),
   the Cloud console if you hit "Drive API has not been used").
 - **Adding an OAuth scope requires the coach to sign out and back in** (the
   refresh token / access token only gains the scope on re-consent). This also
-  populates `coaches.google_refresh_token`.
+  populates `coaches.google_refresh_token`. **The calendar scope is now the
+  writable `calendar.events`** (was `calendar.readonly`) so the app can create
+  sessions — existing coaches must sign out/in once to grant it (calendar reads
+  still work under `calendar.events`).
 - **Vercel deploys from `main`.** Open a PR → merge → Vercel auto-deploys.
 - **Branch hygiene:** PRs are squash-merged, so the long-lived dev branch
   (`claude/practical-allen-uh4ckg`) diverges from `main`. Before pushing a new
@@ -327,6 +345,9 @@ The `library-pdfs` Storage bucket is created automatically on first upload.
 ## Roadmap
 
 ### Shipped
+- **Schedule next session** — in-app GCal event creation from the notes panel
+  (right-edge slide-over → `POST /api/clients/[id]/schedule`), invites the client;
+  uses the writable `calendar.events` scope.
 - Plaud transcript import (Drive list + per-client import; unmatched transcripts
   surface in the Practice review queue with preview + delete).
 - Emailed scorecard — auto-emails the coach after each scored session, plus an

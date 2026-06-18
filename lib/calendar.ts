@@ -63,6 +63,52 @@ export function zonedWallClockToUtc(dateStr: string, timeStr: string, timeZone: 
   return new Date(wallMs - offset)
 }
 
+export interface CoachingEventInput {
+  /** The signed-in coach's live Google access token (calendar.events scope). */
+  accessToken: string
+  summary: string
+  description: string
+  /** Absolute ISO instants for the event bounds. */
+  startISO: string
+  endISO: string
+  /** IANA zone the event is displayed in (the coach's timezone). */
+  timeZone: string
+  /** Client to invite; omitted when the client has no email on file. */
+  attendeeEmail?: string | null
+}
+
+export interface CreatedEvent {
+  id: string | null
+  htmlLink: string | null
+}
+
+/**
+ * Create a coaching session on the signed-in coach's primary calendar and email
+ * the invite to the client (`sendUpdates: 'all'`). Uses the live session access
+ * token — the coach is actively in the UI — so it needs the writable
+ * `calendar.events` scope (added at sign-in). Throws on the Google API error so
+ * the route can map an insufficient-scope 403 to a "reconnect Google" message.
+ */
+export async function createCoachingEvent(input: CoachingEventInput): Promise<CreatedEvent> {
+  const auth = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET)
+  auth.setCredentials({ access_token: input.accessToken })
+  const calendar = google.calendar({ version: 'v3', auth })
+
+  const res = await calendar.events.insert({
+    calendarId: 'primary',
+    sendUpdates: 'all',
+    requestBody: {
+      summary: input.summary,
+      description: input.description,
+      start: { dateTime: input.startISO, timeZone: input.timeZone },
+      end: { dateTime: input.endISO, timeZone: input.timeZone },
+      attendees: input.attendeeEmail ? [{ email: input.attendeeEmail }] : undefined,
+    },
+  })
+
+  return { id: res.data.id ?? null, htmlLink: res.data.htmlLink ?? null }
+}
+
 function coachEmails(coach: Coach): string[] {
   return [
     coach.email,

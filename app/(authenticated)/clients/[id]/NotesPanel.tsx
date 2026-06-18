@@ -6,6 +6,7 @@ import { KeyInfoCard } from './KeyInfoCard'
 import { CoachingMapCard } from './CoachingMapCard'
 import { EngagementGoalsCard } from './EngagementGoalsCard'
 import { SendToClientModal } from './SendToClientModal'
+import { ScheduleSessionModal } from './ScheduleSessionModal'
 import { PrepSheetCard } from './PrepSheetCard'
 import { extractCaptures } from '@/lib/notes/extract'
 import { billedHours } from '@/lib/billing'
@@ -58,6 +59,7 @@ export function NotesPanel({ clientId, autoNew = false }: { clientId: string; au
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [activeId, setActiveId] = useState<string | null>(null)
+  const [scheduleOpen, setScheduleOpen] = useState(false)
   const autoNewDone = useRef(false)
 
   // The session-notes panel surfaces persistent, per-client context (key info,
@@ -139,13 +141,35 @@ export function NotesPanel({ clientId, autoNew = false }: { clientId: string; au
         <p className="text-[11px] font-medium uppercase tracking-[2px] text-tlw-warm-gray">
           Session notes
         </p>
-        <button
-          onClick={newNote}
-          className="rounded-tlw-lg bg-tlw-navy-rich px-3 py-1.5 text-[12px] font-medium text-tlw-cream transition-colors hover:bg-tlw-navy-rich/85"
-        >
-          + New note
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setScheduleOpen(true)}
+            disabled={!client?.email}
+            title={
+              client?.email
+                ? 'Create the next session on your calendar and invite the client'
+                : 'Add an email on the client to enable scheduling'
+            }
+            className="rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-1.5 text-[12px] font-medium text-tlw-espresso transition-colors hover:border-tlw-warm-gray/50 disabled:opacity-40"
+          >
+            Schedule next session
+          </button>
+          <button
+            onClick={newNote}
+            className="rounded-tlw-lg bg-tlw-navy-rich px-3 py-1.5 text-[12px] font-medium text-tlw-cream transition-colors hover:bg-tlw-navy-rich/85"
+          >
+            + New note
+          </button>
+        </div>
       </div>
+
+      {scheduleOpen && client && (
+        <ScheduleSessionModal
+          client={client}
+          noteId={activeId ?? undefined}
+          onClose={() => setScheduleOpen(false)}
+        />
+      )}
 
       {loading ? (
         <div className="p-5">
