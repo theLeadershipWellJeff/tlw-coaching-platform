@@ -43,9 +43,10 @@ export async function sendScorecardEmail(
   const gmail = google.gmail({ version: 'v1', auth })
 
   const html = buildScorecardEmailHTML(report)
-  const subject = `Session scorecard · ${report.session.client_initials || '—'} · ${report.band.toLowerCase()} ${report.overall_score.toFixed(
-    1
-  )}`
+  // Keep the subject plain ASCII so it never depends on a mail client decoding
+  // RFC 2047 encoded-words — no mojibake, even in older clients.
+  const who = report.session.client_initials || 'session'
+  const subject = `Session scorecard - ${who} - ${report.band.toLowerCase()} ${report.overall_score.toFixed(1)}`
   const raw = makeRawEmail(from, to, subject, html)
 
   const res = await gmail.users.messages.send({ userId: 'me', requestBody: { raw } })

@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import type { Database } from '@/lib/supabase/types'
+import { syncNoteActions } from '@/lib/notes/sync-actions'
 
 // Update a note (title / content / session date).
 export async function PATCH(
@@ -32,7 +33,16 @@ export async function PATCH(
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ note: data })
+
+  // Keep the note's persisted ACTION: items in step with its content, so they
+  // flow to the workspace and the {{unfinished_actions}} field as the coach
+  // edits — and so the capture panel's checkboxes can mark them done.
+  let actions
+  if ('content' in patch) {
+    actions = await syncNoteActions(supabase, params.id, params.noteId, data.content || '')
+  }
+
+  return NextResponse.json({ note: data, actions })
 }
 
 // Delete a note.
