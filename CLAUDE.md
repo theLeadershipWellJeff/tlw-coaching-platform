@@ -344,8 +344,8 @@ Supabase (`NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_API_SECRET_KEY`),
   ignored by `engine.ts#resolveModel` so a stale env var can't break scoring.
   Set it to a current id (e.g. `claude-opus-4-8`) for stronger judgment.
 - **Branch hygiene:** PRs are squash-merged, so the long-lived dev branch
-  (`claude/practical-allen-uh4ckg`) diverges from `main`. Before pushing a new
-  PR, reconcile with: `git fetch origin main && git merge -X ours origin/main`
+  (currently `claude/great-mccarthy-5xjw41`) diverges from `main`. Before pushing
+  a new PR, reconcile with: `git fetch origin main && git merge -X ours origin/main`
   (branch content is the superset; this avoids phantom add/add conflicts).
   Verify `git diff --stat origin/main..HEAD` shows only the intended files.
 
