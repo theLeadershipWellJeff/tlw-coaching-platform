@@ -42,6 +42,18 @@ Plus a **client workspace** (per-client hub) and **roster**.
   `email-template.ts`, `zoom.ts`, `notes/extract.ts`.
 - `supabase/migrations/*` — SQL, applied by hand in the Supabase SQL editor.
 
+### Config-driven rendering (block registry) — planned, read before touching `clients/[id]`
+The client workspace is slated to move from hard-coded JSX to a **block registry +
+slot model**: the page loads a layout config and renders pre-built blocks into named
+slots (`SurfaceRenderer`), instead of wiring components by hand. Spec lives in
+`spec/TLW_Block_Registry_Architecture_v1.md` — **read it before refactoring the
+client workspace or adding new workspace panels.** Tier 1 (build now) = the registry,
+slot model, validator, default layout, and the Note Editor + Actions/Insights panel
+rebuilt **as blocks**. Tier 2 (`workspace_layouts` per-coach override) and Tier 3
+(AI customization dialogue) are reserved seams, **not** to be built yet. Tenant
+isolation = every block's data access filtered server-side by the session `coachId`
+(NextAuth, not Supabase RLS).
+
 ## Data model (Supabase)
 
 All tables are RLS-enabled with **no public policies** — reached only via the
