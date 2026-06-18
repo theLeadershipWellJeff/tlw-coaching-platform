@@ -4,7 +4,8 @@ import { getSessionCoach } from '@/lib/coach'
 import { ingestMarkdown } from '@/lib/transcripts/ingest'
 
 export const runtime = 'nodejs'
-export const maxDuration = 60
+// Scoring a full transcript can exceed a minute (engine times out at 100s).
+export const maxDuration = 120
 
 /**
  * Manual transcript add — paste a transcript into the app (e.g. to backfill

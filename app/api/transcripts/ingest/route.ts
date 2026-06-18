@@ -3,9 +3,12 @@ import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { getOrCreateCoach } from '@/lib/coach'
 import { ingestMarkdown } from '@/lib/transcripts/ingest'
 
-// Scoring calls Claude on a full transcript — give the function room to run.
+// Scoring calls Claude on a full transcript — give the function room to run. A
+// long session can take well over a minute; the engine's own 100s client
+// timeout sits just under this so a slow call fails clean instead of being
+// killed mid-score.
 export const runtime = 'nodejs'
-export const maxDuration = 60
+export const maxDuration = 120
 
 /**
  * Transcript ingest webhook.

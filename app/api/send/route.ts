@@ -7,6 +7,7 @@ import { buildClientEmailHTML } from '@/lib/email-template'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { getSessionCoach } from '@/lib/coach'
 import { persistActionLinks } from '@/lib/actions'
+import { findClientByEmailOrName } from '@/lib/client-lookup'
 import { getBaseUrl } from '@/lib/url'
 import { headerSafe, encodeHeaderValue } from '@/lib/email-mime'
 
@@ -72,15 +73,7 @@ export async function POST(req: NextRequest) {
   let matchedCoachId: string | null = null
   try {
     const supabase = getSupabaseAdmin()
-    let row: { id: string } | null = null
-    if (clientEmail) {
-      const { data } = await supabase.from('clients').select('id').ilike('email', clientEmail).limit(1).maybeSingle()
-      row = data
-    }
-    if (!row && clientName) {
-      const { data } = await supabase.from('clients').select('id').ilike('name', clientName).limit(1).maybeSingle()
-      row = data
-    }
+    const row = await findClientByEmailOrName(supabase, { email: clientEmail, name: clientName })
     if (row?.id) {
       matchedClientId = row.id
       const actions: string[] = Array.isArray(content?.actions) ? content.actions : []

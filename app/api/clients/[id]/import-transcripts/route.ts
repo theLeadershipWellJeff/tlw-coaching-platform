@@ -7,7 +7,8 @@ import { driveClient, readFileText } from '@/lib/drive'
 import { ingestMarkdown } from '@/lib/transcripts/ingest'
 
 export const runtime = 'nodejs'
-export const maxDuration = 60
+// Scoring a full transcript can exceed a minute (engine times out at 100s).
+export const maxDuration = 120
 
 /**
  * Import selected Plaud transcript files from Drive and attach them to this
