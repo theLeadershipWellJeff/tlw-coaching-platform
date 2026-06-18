@@ -332,6 +332,17 @@ Supabase (`NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_API_SECRET_KEY`),
   sessions — existing coaches must sign out/in once to grant it (calendar reads
   still work under `calendar.events`).
 - **Vercel deploys from `main`.** Open a PR → merge → Vercel auto-deploys.
+- **Email subjects must survive any mail client.** Non-ASCII header values
+  (em-dashes, middots, smart quotes) are wrapped as RFC 2047 encoded-words by
+  `lib/email-mime.ts#encodeHeaderValue` (used by every send path) — without it
+  they render as mojibake. Hardcoded subjects (scorecard, prep, intro) are kept
+  **plain ASCII** so they never depend on the recipient decoding an encoded-word;
+  the encoder still covers AI/coach-authored subjects that contain fancy
+  punctuation. (Email **bodies** are UTF-8 fine — this is a header-only concern.)
+- **Scoring model:** `SCORING_MODEL` overrides the safe default
+  (`claude-sonnet-4-6`); a **retired** id (e.g. `claude-sonnet-4-20250514`) is
+  ignored by `engine.ts#resolveModel` so a stale env var can't break scoring.
+  Set it to a current id (e.g. `claude-opus-4-8`) for stronger judgment.
 - **Branch hygiene:** PRs are squash-merged, so the long-lived dev branch
   (`claude/practical-allen-uh4ckg`) diverges from `main`. Before pushing a new
   PR, reconcile with: `git fetch origin main && git merge -X ours origin/main`
