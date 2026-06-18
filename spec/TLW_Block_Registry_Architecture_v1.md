@@ -31,6 +31,49 @@ The whole point: **Tier 1 is the commitment.** Tiers 2 and 3 are seams we *reser
 
 ---
 
+## 2a. Tier 0 — tenant scoping (PREREQUISITE, build before Tier 1 blocks)
+
+> Added after an engineering review of the existing codebase. This is the one
+> thing the spec assumes but the current schema does not yet provide.
+
+§4's block contract makes a hard promise: *"a block accesses data only through
+its `context` scope … every query a block fires is filtered by `context.coachId`
+… no block ever reaches another coach's clients."* **The current data model
+cannot honor that promise yet.** The `clients` table has **no `coach_id` column**
+(the whole roster is shared today because there is one coach), and ~10 routes
+under `/api/clients/[id]/**` fetch a client — and its notes/actions/transcripts —
+by id alone, with no ownership check. With a single coach this is harmless. The
+moment a second coach or the supervisor role (#40) exists, coach B who guesses a
+client UUID can read or mutate coach A's client.
+
+If we build the blocks first and add tenant scoping later, we defeat the entire
+reason for building the seam now — we'd be retrofitting isolation through every
+block's data access by hand, which is exactly the expensive retrofit this
+architecture exists to avoid. So tenant scoping is **Tier 0: a prerequisite, not
+a parallel track.**
+
+**Definition of done for Tier 0 (do this first):**
+
+1. **Schema.** Add coach ownership to the roster — a `clients.coach_id` column
+   (or a `coach_clients` junction if a client may belong to more than one coach),
+   in a new numbered migration, with the matching hand-written type in
+   `lib/supabase/types.ts`. Backfill existing rows to the sole coach.
+2. **One scoped data-access layer.** The block contract's `context.coachId`
+   filter must be enforced **structurally**, not remembered per block. Add a
+   small server-side helper (e.g. `lib/api-handler.ts` — see §9) that resolves
+   the session coach and exposes coach-scoped reads/writes; blocks (and the
+   routes that feed them) go through it. **Server-side filtering by the session
+   `coachId` on every query is the isolation boundary** — not Supabase RLS (we're
+   on NextAuth; see the §10 stack note).
+3. **Close the existing gap.** Add the coach-ownership check to the
+   `/api/clients/[id]/**` routes while we're here, so the workspace the blocks
+   render into is already isolated before any block reads from it.
+
+Until Tier 0 lands, `context.coachId` is decorative. After it lands, acceptance
+criterion §13.6 ("no cross-coach reads possible") is actually true.
+
+---
+
 ## 3. Slot model
 
 A **slot** is a named, layout-safe region of a surface. Blocks may only mount into defined slots — never arbitrary positions. This is what keeps layout and accessibility from breaking when arrangement changes.

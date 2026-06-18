@@ -124,7 +124,33 @@ export async function ingestMarkdown(
     .insert(insert)
     .select('*')
     .single()
-  if (insErr) throw new Error(`Supabase: ${insErr.message}`)
+  if (insErr) {
+    // The content_hash dedupe above is read-then-write, so two concurrent
+    // ingests of the same transcript (e.g. the Plaud webhook and the Drive
+    // backup firing together) can both pass the check and race to insert. The
+    // unique index on content_hash makes the loser fail with 23505 — treat that
+    // as the duplicate it is rather than a 500, so we never double-score.
+    if (insErr.code === '23505') {
+      const { data: existing } = await supabase
+        .from('transcripts')
+        .select('id, match_status, match_confidence, client_initials')
+        .eq('content_hash', contentHash)
+        .maybeSingle()
+      if (existing) {
+        return {
+          duplicate: true,
+          transcriptId: existing.id,
+          matchStatus: existing.match_status,
+          matchConfidence: existing.match_confidence ?? 0,
+          clientInitials: existing.client_initials,
+          speakerSeparated: parsed.isSpeakerSeparated,
+          reportId: null,
+          scoringError: null,
+        }
+      }
+    }
+    throw new Error(`Supabase: ${insErr.message}`)
+  }
 
   const autoScore = input.autoScore !== false
   let reportId: string | null = null

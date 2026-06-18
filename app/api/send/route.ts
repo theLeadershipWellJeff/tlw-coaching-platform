@@ -98,8 +98,10 @@ export async function POST(req: NextRequest) {
         .single()
       if (agenda?.token) agendaUrl = `${getBaseUrl()}/agenda/${agenda.token}`
     }
-  } catch {
-    // Tracking is additive — never block the prep email on it.
+  } catch (e) {
+    // Tracking is additive — never block the prep email on it — but log it so a
+    // broken action-link / agenda flow doesn't fail silently.
+    console.error('[send] prep tracking (action links / agenda) failed', e)
   }
 
   const html = buildClientEmailHTML(clientName, content, actionLinks, agendaUrl)
@@ -116,8 +118,9 @@ export async function POST(req: NextRequest) {
         html,
         sent_at: new Date().toISOString(),
       })
-    } catch {
-      // Persisting the prep sheet is additive.
+    } catch (e) {
+      // Persisting the prep sheet is additive — log, don't block the send.
+      console.error('[send] prep sheet snapshot failed', { clientId: matchedClientId, error: e })
     }
   }
 

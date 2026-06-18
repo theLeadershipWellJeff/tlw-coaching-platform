@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
+import { escapeHtml } from '@/lib/html'
 
 export const runtime = 'nodejs'
 
@@ -47,13 +48,18 @@ export async function GET(req: NextRequest) {
   }
 
   if (action.status !== 'done') {
-    await supabase
+    const { error } = await supabase
       .from('actions')
       .update({ status: 'done', completed_at: new Date().toISOString(), completed_via: 'email' })
       .eq('id', action.id)
+    if (error) {
+      console.error('[actions/complete] failed to mark action done', { actionId: action.id, error: error.message })
+      return page('Something went wrong', 'We couldn’t log that just now. Please try the link again in a moment.', 500)
+    }
   }
 
-  const desc = action.description ? `“${action.description}”` : 'your action'
+  // action.description is coach-authored — escape before it enters the HTML page.
+  const desc = action.description ? `“${escapeHtml(action.description)}”` : 'your action'
   return page(
     'Marked complete ✓',
     `Nice work — we’ve logged ${desc} as done. Your coach will see it.`

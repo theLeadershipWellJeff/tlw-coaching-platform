@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
+import { escapeHtml } from '@/lib/html'
 
 export const runtime = 'nodejs'
 
@@ -43,12 +44,17 @@ export async function GET(req: NextRequest) {
   if (!agreement) return page('Link not recognized', 'This agreement couldn’t be found. It may have been withdrawn.', 404)
 
   if (agreement.status !== 'signed') {
-    await supabase
+    const { error } = await supabase
       .from('agreements')
       .update({ status: 'signed', signed_at: new Date().toISOString() })
       .eq('id', agreement.id)
+    if (error) {
+      console.error('[agreements/sign] failed to record signature', { agreementId: agreement.id, error: error.message })
+      return page('Something went wrong', 'We couldn’t record that just now. Please try the link again in a moment.', 500)
+    }
   }
 
-  const title = agreement.title ? `“${agreement.title}”` : 'your agreement'
+  // agreement.title is coach-authored — escape before it enters the HTML page.
+  const title = agreement.title ? `“${escapeHtml(agreement.title)}”` : 'your agreement'
   return page('Thank you — agreement signed ✓', `We’ve recorded that you’ve read and agreed to ${title}. Your coach has been notified.`)
 }
