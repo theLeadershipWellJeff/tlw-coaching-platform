@@ -6,6 +6,7 @@ import { KeyInfoCard } from './KeyInfoCard'
 import { CoachingMapCard } from './CoachingMapCard'
 import { EngagementGoalsCard } from './EngagementGoalsCard'
 import { SendToClientModal } from './SendToClientModal'
+import { ScheduleSessionModal } from './ScheduleSessionModal'
 import { PrepSheetCard } from './PrepSheetCard'
 import { extractCaptures } from '@/lib/notes/extract'
 import { billedHours } from '@/lib/billing'
@@ -256,6 +257,7 @@ function NoteEditor({
   const [text, setText] = useState(() => htmlToText(note.content))
   const [state, setState] = useState<SaveState>('idle')
   const [sendOpen, setSendOpen] = useState(false)
+  const [scheduleOpen, setScheduleOpen] = useState(false)
   const [noteActions, setNoteActions] = useState<NoteAction[]>([])
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const dirty = useRef(false)
@@ -440,13 +442,21 @@ function NoteEditor({
             ? `Sends a cleaned-up version of this note to ${client.name}.`
             : 'Add an email on the client to enable sending.'}
         </p>
-        <button
-          onClick={() => setSendOpen(true)}
-          disabled={!client?.email}
-          className="rounded-tlw-lg bg-tlw-navy-rich px-4 py-2 text-[13px] font-medium text-tlw-cream transition-opacity hover:opacity-90 disabled:opacity-40"
-        >
-          Send to client →
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setScheduleOpen(true)}
+            className="rounded-tlw-lg border border-tlw-warm-gray/30 px-4 py-2 text-[13px] font-medium text-tlw-espresso transition-colors hover:border-tlw-warm-gray/50"
+          >
+            Schedule next session
+          </button>
+          <button
+            onClick={() => setSendOpen(true)}
+            disabled={!client?.email}
+            className="rounded-tlw-lg bg-tlw-navy-rich px-4 py-2 text-[13px] font-medium text-tlw-cream transition-opacity hover:opacity-90 disabled:opacity-40"
+          >
+            Send to client →
+          </button>
+        </div>
       </div>
 
       {sendOpen && client && (
@@ -458,6 +468,14 @@ function NoteEditor({
           actions={captures.actions.map((a) => a.text)}
           insights={captures.insights.map((i) => i.text)}
           onClose={() => setSendOpen(false)}
+        />
+      )}
+
+      {scheduleOpen && (
+        <ScheduleSessionModal
+          clientId={clientId}
+          clientName={client?.name || ''}
+          onClose={() => setScheduleOpen(false)}
         />
       )}
     </div>
