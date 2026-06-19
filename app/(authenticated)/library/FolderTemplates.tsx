@@ -2,27 +2,26 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { NoteTemplate } from '@/lib/supabase/types'
 import { RichNoteEditor } from '../clients/[id]/RichNoteEditor'
-import { AssignAgreementModal } from './AssignAgreementModal'
 
 type Editing = { id: string | null; name: string; content: string } | null
 
 /**
  * Manage the templates inside one Library folder. `folderId` is a folder uuid,
- * or 'none' for unfiled templates. When the folder's `kind` is 'agreement',
- * each item can be assigned to a client to sign (otherwise it's a note template
- * that surfaces in the editor's Templates dropdown).
+ * or 'none' for unfiled templates. These are note/worksheet templates that
+ * surface in the editor's Templates dropdown. The coaching agreement is no
+ * longer a folder template — it lives in its own structured editor at
+ * /library/agreement (migration 018).
  */
 export function FolderTemplates({ folderId, kind = 'note' }: { folderId: string; kind?: string }) {
   const isAgreement = kind === 'agreement'
   const isWorksheet = kind === 'worksheet'
-  const noun = isAgreement ? 'agreement' : 'template'
+  const noun = 'template'
   const [templates, setTemplates] = useState<NoteTemplate[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [editing, setEditing] = useState<Editing>(null)
   const [busy, setBusy] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
-  const [assigning, setAssigning] = useState<{ id: string; name: string } | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -151,7 +150,7 @@ export function FolderTemplates({ folderId, kind = 'note' }: { folderId: string;
         <div className="rounded-tlw-xl border border-dashed border-tlw-warm-gray/25 bg-tlw-surface/60 p-8 text-center">
           <p className="text-[13px] text-tlw-warm-gray">
             {isAgreement
-              ? 'No agreements in this folder yet. Create one, then assign it to a client to sign.'
+              ? 'The coaching agreement now lives in its own editor — open Library → Coaching Agreement to edit and issue it.'
               : "No templates in this folder yet. Create one and it'll appear in the note editor's Templates dropdown."}
           </p>
         </div>
@@ -164,14 +163,6 @@ export function FolderTemplates({ folderId, kind = 'note' }: { folderId: string;
             >
               <p className="truncate text-[14px] font-medium text-tlw-navy-deep">{t.name}</p>
               <div className="flex shrink-0 items-center gap-3 text-[12px] font-medium">
-                {isAgreement && (
-                  <button
-                    onClick={() => setAssigning({ id: t.id, name: t.name })}
-                    className="text-tlw-signal-orange hover:underline"
-                  >
-                    assign to client
-                  </button>
-                )}
                 <button
                   onClick={() => setEditing({ id: t.id, name: t.name, content: t.content })}
                   className="text-tlw-warm-gray hover:text-tlw-espresso"
@@ -198,13 +189,6 @@ export function FolderTemplates({ folderId, kind = 'note' }: { folderId: string;
         </div>
       )}
 
-      {assigning && (
-        <AssignAgreementModal
-          templateId={assigning.id}
-          templateName={assigning.name}
-          onClose={() => setAssigning(null)}
-        />
-      )}
     </div>
   )
 }

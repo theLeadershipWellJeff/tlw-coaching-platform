@@ -8,6 +8,7 @@ import { TranscriptsCard, NotesCard } from './SummaryCards'
 import { GoalsCard } from './GoalsCard'
 import { ActionsCard } from './ActionsCard'
 import { AgreementsCard } from './AgreementsCard'
+import { IssueAgreementModal } from './IssueAgreementModal'
 import { AgendaCard } from './AgendaCard'
 import { EmailModal } from './EmailModal'
 import { CommunicationCard } from './CommunicationCard'
@@ -19,11 +20,14 @@ export function ClientDetail({ clientId }: { clientId: string }) {
   const [error, setError] = useState('')
   const [emailing, setEmailing] = useState(false)
   const [importing, setImporting] = useState(false)
+  const [issuing, setIssuing] = useState(false)
   const [txReload, setTxReload] = useState(0)
   // Bumped on book/cancel so the Sessions card and the name-card list refetch together.
   const [apptReload, setApptReload] = useState(0)
   // Bumped after a send so the Recent Communication card refreshes.
   const [commReload, setCommReload] = useState(0)
+  // Bumped after issuing an agreement so the Agreement card refetches.
+  const [agrReload, setAgrReload] = useState(0)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -66,6 +70,16 @@ export function ClientDetail({ clientId }: { clientId: string }) {
 
       <NameCard client={client} onUpdated={setClient} apptReload={apptReload} />
 
+      {/* Compliance guardrail — non-dismissible (migration 018). */}
+      {client.recording_authorized === false && (
+        <div
+          className="rounded-tlw-lg px-4 py-2.5 text-[13px] font-medium"
+          style={{ background: 'rgba(232,101,10,.10)', color: '#E8650A' }}
+        >
+          ⚑ No recording — this client has not authorized AI processing.
+        </div>
+      )}
+
       <ScheduleCard clientId={clientId} reloadKey={apptReload} onChanged={() => setApptReload((n) => n + 1)} />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -102,7 +116,15 @@ export function ClientDetail({ clientId }: { clientId: string }) {
 
       <AgendaCard clientId={clientId} />
 
-      <AgreementsCard clientId={clientId} />
+      <AgreementsCard client={client} reloadKey={agrReload} onIssue={() => setIssuing(true)} />
+
+      {issuing && (
+        <IssueAgreementModal
+          client={client}
+          onClose={() => setIssuing(false)}
+          onSent={() => { setAgrReload((n) => n + 1); setCommReload((n) => n + 1) }}
+        />
+      )}
 
       {emailing && (
         <EmailModal
