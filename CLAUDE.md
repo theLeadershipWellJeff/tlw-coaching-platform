@@ -281,8 +281,18 @@ the shared send+log: it CLAIMS the `(appointment_id, kind)` slot in
 so a reminder can never fire twice. The nudge is driven by **Vercel Cron**
 (`vercel.json` → hourly `GET /api/cron/reminders`, gated by `CRON_SECRET` as a
 Bearer token): it scans `scheduled` appointments in the next 24h that haven't been
-nudged and sends. `appointments` (not the calendar) is the source of truth the
-cron reads, so an edited/missing calendar event never drops a reminder.
+nudged and sends.
+
+**Calendar is the boss — appointments track it.** The coach typically reschedules
+by dragging the event in Google Calendar. Each cron run first **reconciles** every
+upcoming appointment with its event (`lib/calendar.ts#getClientEventState` →
+`lib/appointments.ts#syncAppointmentFromCalendar`): a moved event updates
+`scheduled_at`/duration, and a move of **>1h re-arms the 24h nudge** (deletes the
+`nudge_24h` row) so the reminder shifts with the session; a deleted event cancels
+the appointment. The workspace list (`GET /api/clients/[id]/appointments`) runs the
+same sync on view so displayed times are fresh. Sync always uses the appointment's
+**owning** coach's token (a different coach's token would 404 and wrongly cancel),
+and any non-404 read failure leaves the row untouched (no cancel/move on a blip).
 
 The Sessions card lists upcoming sessions with **cancel** (`DELETE
 /api/clients/[id]/appointments/[appointmentId]` — removes the calendar event,

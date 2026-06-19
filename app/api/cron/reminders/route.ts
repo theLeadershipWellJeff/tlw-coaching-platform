@@ -1,15 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
-import { sendAppointmentReminder } from '@/lib/appointments'
+import { sendAppointmentReminder, syncAppointmentFromCalendar } from '@/lib/appointments'
 import type { Coach } from '@/lib/supabase/types'
 
 export const runtime = 'nodejs'
 
 /**
- * Reminder engine. Vercel Cron hits this hourly; it sends the 24h-before nudge
- * for any scheduled session falling inside the next 24 hours that hasn't been
- * nudged yet. Idempotent via the appointment_reminders unique index, so running
- * it every hour only ever sends each nudge once.
+ * Reminder engine. Vercel Cron hits this hourly. Each run first RECONCILES every
+ * upcoming session with its Google Calendar event (so a session the coach dragged
+ * to a new time has its stored time — and its 24h nudge — shifted to match, and a
+ * deleted event cancels the appointment), then sends the 24h-before nudge for any
+ * scheduled session now inside the next 24 hours that hasn't been nudged yet.
+ * Idempotent via the appointment_reminders unique index, so running it every hour
+ * only ever sends each nudge once.
  *
  * Protected by CRON_SECRET — Vercel Cron passes it as a Bearer token. The route
  * refuses to run if the secret isn't configured, so it can't be triggered openly.
@@ -25,6 +28,27 @@ export async function GET(req: NextRequest) {
   const now = Date.now()
   const windowEnd = new Date(now + 24 * 60 * 60 * 1000).toISOString()
 
+  // Pass 1 — reconcile upcoming sessions with the calendar. Look back a couple of
+  // days (an appointment moved later) and ahead far enough to catch one dragged
+  // closer; volume is small, so syncing all of them each hour is cheap.
+  const { data: toSync } = await supabase
+    .from('appointments')
+    .select('id, coach_id, scheduled_at, google_event_id, status')
+    .eq('status', 'scheduled')
+    .not('google_event_id', 'is', null)
+    .gte('scheduled_at', new Date(now - 2 * 24 * 60 * 60 * 1000).toISOString())
+    .lte('scheduled_at', new Date(now + 45 * 24 * 60 * 60 * 1000).toISOString())
+  if (toSync && toSync.length > 0) {
+    const syncCoachIds = Array.from(new Set(toSync.map((a) => a.coach_id).filter(Boolean) as string[]))
+    const { data: syncCoaches } = await supabase.from('coaches').select('*').in('id', syncCoachIds)
+    const syncCoachMap = new Map((syncCoaches || []).map((c) => [c.id, c as Coach]))
+    for (const appt of toSync) {
+      const coach = appt.coach_id ? syncCoachMap.get(appt.coach_id) : null
+      if (coach) await syncAppointmentFromCalendar(supabase, coach, appt)
+    }
+  }
+
+  // Pass 2 — send the nudge. Re-read against the now-reconciled times.
   const { data: due, error } = await supabase
     .from('appointments')
     .select('id, coach_id, client_id, scheduled_at')

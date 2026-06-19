@@ -12,8 +12,55 @@ import type { Appointment, Coach, Database } from './supabase/types'
 import { formatWhenInTimeZone } from './datetime'
 import { buildAppointmentEmailHTML } from './appointment-email'
 import { sendCoachHtmlEmail } from './gmail'
+import { getClientEventState } from './calendar'
 
 export type ReminderKind = 'confirmation' | 'nudge_24h'
+
+// A reschedule of more than this re-arms the 24h nudge, so a meaningful move in
+// Google Calendar sends a fresh reminder for the new time. Smaller drags just
+// update the stored time without re-emailing (avoids spamming on a 10-min tweak).
+const NUDGE_REARM_MS = 60 * 60 * 1000
+
+/**
+ * Reconcile one appointment with its Google Calendar event so the stored time —
+ * and the reminder — tracks what the coach does in their calendar:
+ *  - event deleted  → cancel the appointment (drops from the list; no nudge),
+ *  - event moved    → update scheduled_at/duration; if moved materially, clear
+ *                     the 24h nudge so it re-fires for the new time.
+ * Pass the appointment's OWNING coach (whose calendar holds the event) — calling
+ * with a different coach's token would 404 and wrongly cancel.
+ */
+export async function syncAppointmentFromCalendar(
+  supabase: SupabaseClient<Database>,
+  coach: Coach,
+  appt: Pick<Appointment, 'id' | 'scheduled_at' | 'google_event_id' | 'status'>
+): Promise<void> {
+  if (appt.status !== 'scheduled' || !appt.google_event_id) return
+
+  const state = await getClientEventState(coach, appt.google_event_id)
+  if (!state.found || state.cancelled) {
+    await supabase.from('appointments').update({ status: 'cancelled' }).eq('id', appt.id)
+    return
+  }
+  if (!state.startsAt) return // couldn't read a time — leave the row untouched
+
+  const drift = Math.abs(state.startsAt.getTime() - new Date(appt.scheduled_at).getTime())
+  if (drift < 60 * 1000) return // within a minute: treat as unchanged
+
+  const update: { scheduled_at: string; duration_minutes?: number } = {
+    scheduled_at: state.startsAt.toISOString(),
+  }
+  if (state.durationMinutes) update.duration_minutes = state.durationMinutes
+  await supabase.from('appointments').update(update).eq('id', appt.id)
+
+  if (drift >= NUDGE_REARM_MS) {
+    await supabase
+      .from('appointment_reminders')
+      .delete()
+      .eq('appointment_id', appt.id)
+      .eq('kind', 'nudge_24h')
+  }
+}
 
 type ClientLite = { name: string; email: string | null; timezone: string | null }
 
