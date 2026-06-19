@@ -106,9 +106,15 @@ threshold flags (talk-time, flagged emotion <2/=2/>2, feeling explorations
 0/1/≥2, **question:statement computed from the ratio** — parity or statements-lead
 is red, consultant-move math + >3 mode-drift), the equal-weighted overall, band
 derivation, and the **three §10 gates**. Gate 3 (zero feeling explorations → C6 ≤
-band 3) is recomputed arithmetically; **Gate 1** (no AI/tech disclosure → C1 ≤
-band 2) and **Gate 2** (no named insight at close AND no standing engagement → C3
-≤ band 2) are applied as code ceilings off booleans the model returns. The finer
+band 3) is recomputed arithmetically; **Gate 1** (two-tier disclosure, v0.4.1 —
+no recording consent on file AND no verbal consent to record at open → C1 ≤ band 2)
+is recomputed from the client record (`store.ts` reads `clients.agreement_on_file`
++ `clients.recording_authorized` — consent is "on file" when an agreement exists
+and the client didn't explicitly decline recording) + `verbal_consent_to_record`
+(model); a session with no agreement still surfaces `session.agreement_gap` as an
+administrative follow-up (no extra penalty);
+**Gate 2** (no named insight at close AND no standing engagement → C3
+≤ band 2) is applied as a code ceiling off a boolean the model returns. The finer
 judgment calls live in the prompt: the **three-way emotion classification**
 (reflection / coping inquiry / feeling exploration — coping inquiry counts as
 neither a flagged emotion nor an exploration), the **evocative-reframe vs.
@@ -197,22 +203,46 @@ folder).
   `POST /api/library/pdfs`, **4 MB cap** — serverless body limit), views (signed
   URL via `GET /api/library/pdfs/[id]`), deletes.
 
-Folders carry a `kind` (note|agreement|worksheet|generic; migration 011). A
-folder's kind drives the builder inside it — `FolderTemplates` shows an "assign
-to client" action for `agreement` folders (worksheet kind is a later phase).
+Folders carry a `kind` (note|agreement|worksheet|generic; migration 011), kept for
+worksheets; the coaching agreement is no longer a folder template (migration 018,
+below).
 
-### Coaching agreements e-sign (`agreements`)
-Templates in an **agreement-kind** folder can be assigned to a client to sign
-(`AssignAgreementModal` → `POST /api/agreements` {templateId, clientId}). That
-**snapshots** the template body into an `agreements` row (so a later edit never
-changes what was agreed) and emails the client the agreement
-(`lib/agreement-email.ts`) with an "I have read and agree" checkbox link —
-`${getBaseUrl()}/api/agreements/sign?token=…`, the same click-to-log mechanism as
-actions. `GET /api/agreements/sign` is **public** (token = credential): flips
-status to `signed` (idempotent) + sets `signed_at`, returns a confirmation page.
-The client workspace `AgreementsCard` (`/api/clients/[id]/agreements`) shows
-sent vs signed. Agreement editing disables merge fields (bodies are snapshotted
-raw, so unresolved `{{…}}` would leak).
+### Coaching agreement system (`agreement_templates`, `agreements`; migration 018)
+A single **structured master template per coach** (`agreement_templates`,
+get-or-create seeded from `lib/agreement-template.ts`), edited at
+**`/library/agreement`** (`AgreementTemplateEditor`, two-column editable sections
++ interleaved ICF/legal **locked** blocks + live Cormorant preview; `GET/PUT
+/api/agreements/template`). The locked text and the **document renderer**
+(`renderAgreementHtml`) live in `lib/agreement-template.ts` so the editor preview,
+the issue review, the signing page, and the signed snapshot can never drift.
+
+**Issue** (client workspace Agreement card → `IssueAgreementModal`: details →
+payment → review with a **scroll-to-bottom gate** → send; also the roster's
+"issue now?" prompt after creating a client, via `/clients/[id]?issue=1`).
+`POST /api/agreements/issue` captures the per-client merge vars, snapshots the
+fully-rendered document into `agreements.body_html`, mints a 30-day magic-link
+token, and emails the client a **CTA delivery vehicle** (`buildAgreementEmailHTML`,
+hosted PNG logo — never SVG) linking to `${getBaseUrl()}/sign/<token>`.
+
+**Sign** at the **public** page `app/sign/[token]/page.tsx` (server-renders the
+snapshot + validates not-found/expired/already-signed; the GET is folded into the
+server component). `SigningForm` collects a **one-of-two recording-authorization**
+choice + a **typed-name acceptance** (≥2 chars). `POST /api/agreements/sign`
+(public, token = credential) validates server-side, writes `status='active'`,
+`signed_at`, `recording_authorized`, `signer_typed_name`, `signer_ip`, an
+immutable `signed_agreement_html`, invalidates the token, **promotes
+`agreement_on_file` + `recording_authorized` onto the client record**, then emails
+the coach a notification + the client their copy (both via
+`lib/gmail.ts#sendCoachHtmlEmail`, unattended).
+
+The workspace `AgreementsCard` shows none/awaiting/active, recording status, and
+the **no-recording compliance flag** (the one Signal-Orange instance), with
+Issue/View/Re-issue. The same non-dismissible no-recording banner shows in the
+client header (`ClientDetail`). The roster flags an agreement **unsigned > 7 days**
+(amber dot; `pendingAgreements` from `GET /api/clients`). `clients.agreement_on_file`
++ `clients.recording_authorized` are the **source of truth the scoring Gate 1
+reads** (see the scoring engine section). Status vocabulary is `sent | active`
+(`none` = no row).
 
 ### Note templates + merge fields
 `note_templates` (coach-scoped, migration 008) holds reusable rich-text note
@@ -418,8 +448,11 @@ agenda requests · 013 revenue + competency focus + prep sheets
 client routes filter on) · 016 appointments (`appointments` +
 `appointment_reminders` — scheduled sessions and the reminder log) · 017 email
 signatures + communications (`email_signatures` single-source signature +
-`communications` outbound log; seeds Jeff's signature). Run new migrations by hand
-in the Supabase SQL editor.
+`communications` outbound log; seeds Jeff's signature) · 018 agreement system
+(`agreement_templates` structured master template; extends `agreements` with the
+signing fields; adds `clients.agreement_on_file/recording_authorized/agreement_id`;
+migrates legacy `signed`→`active` + backfills `agreement_on_file`). Run new
+migrations by hand in the Supabase SQL editor.
 
 **Tenant scoping (015).** `coach_clients` (coach_id, client_id, role) is the
 ownership link. Client access is enforced **server-side** by the session coach,
@@ -436,7 +469,7 @@ the projection uses the scheduled calendar-event length.
 
 **Pending — apply in Supabase:** `014_note_duration.sql`,
 `015_coach_clients.sql`, `016_appointments.sql`, and
-`017_email_signatures_communications.sql`. ⚠️ **015 must be run BEFORE
+`017_email_signatures_communications.sql`, and `018_agreement_system.sql`. ⚠️ **015 must be run BEFORE
 the tenant-scoping code is deployed to `main`** — until the table exists and is
 backfilled, the roster would filter to zero clients. Read the backfill comment in
 015 first (it assumes all current coach logins are the same person). **016 must be
@@ -499,10 +532,13 @@ and back in** to grant calendar-write + populate the refresh token with it;
   (Attunement Standard, Exploration Gate, Authorship Hinge, Consultant Pull
   Signature), the three-way emotion classification (reflection / coping inquiry /
   exploration), the evocative-reframe vs. consultant-move test, single-instance
-  band-4 standards, and the three §10 gates (1: AI/tech disclosure → C1≤2; 2: no
-  named insight at close AND no standing engagement → C3≤2; 3: zero feeling
-  explorations → C6≤3) surfaced as `gates_triggered` on the report. The report
-  page shows a red gate note on any capped competency.
+  band-4 standards, and the three §10 gates (1, v0.4.1: no signed agreement on
+  file AND no verbal consent to record → C1≤2; 2: no named insight at close AND no
+  standing engagement → C3≤2; 3: zero feeling explorations → C6≤3) surfaced as
+  `gates_triggered` on the report. The report page shows a red gate note on any
+  capped competency, and an `agreement_gap` administrative flag when no signed
+  agreement is on file. The coaching/counseling boundary (1.06) flags only
+  wound-repair/diagnosis, not psychological depth or emotional exploration.
 
 ### Open — keep these tracked (also GitHub issues)
 - **Worksheets (client fill-in) — to be built (#38).** Worksheet-kind Library folders

@@ -1,64 +1,86 @@
 /**
- * HTML email for a coaching agreement sent to a client to sign. Shows the
- * agreement body (coach-authored) and a prominent "I have read and agree"
- * checkbox link — tapping it signs the agreement (the token is the credential),
- * mirroring the action-completion loop.
+ * Emails for the coaching-agreement signing flow.
+ *
+ * The agreement email is a DELIVERY VEHICLE — it does not embed the agreement
+ * text. It carries a single CTA to the magic-link signing page where the
+ * agreement lives. The logo is the hosted raster PNG (never SVG — stripped by
+ * mail clients).
  */
+import { getBaseUrl } from './url'
+
 const NAVY = '#0C1940'
 const NAVY_DEEP = '#111226'
 const CREAM = '#F2F2F0'
 const WARM = '#8B8680'
-const ORANGE = '#E8650A'
 
 function esc(s: string): string {
   return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
-export function buildAgreementEmailHTML(opts: {
-  clientName: string
-  title: string
-  bodyHtml: string
-  signUrl: string
-}): string {
-  const { clientName, title, bodyHtml, signUrl } = opts
+function logoImg(): string {
+  const src = `${getBaseUrl()}/logo-email.png`
+  return `<img src="${src}" width="150" alt="theLeadershipWell" style="display:block;margin:0 auto;border:0;outline:none;text-decoration:none;height:auto;" />`
+}
 
-  const logo = `<svg width="44" height="44" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <polyline points="62,10 10,10 10,90 90,90 90,46" stroke="${CREAM}" stroke-width="7" fill="none" stroke-linecap="square" stroke-opacity=".92"/>
-    <line x1="76" y1="16" x2="76" y2="40" stroke="${ORANGE}" stroke-width="7" stroke-linecap="round"/>
-    <line x1="64" y1="28" x2="88" y2="28" stroke="${ORANGE}" stroke-width="7" stroke-linecap="round"/>
-  </svg>`
+/** The agreement invitation — CTA to the signing page. */
+export function buildAgreementEmailHTML(opts: { clientName: string; signUrl: string }): string {
+  const { clientName, signUrl } = opts
+  const firstName = clientName.split(' ')[0] || 'there'
 
   return `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
 <body style="margin:0;padding:0;background:#DDD9D3;font-family:'DM Sans',Helvetica,Arial,sans-serif;">
+  <div style="max-width:600px;margin:0 auto;background:#ffffff;">
+    <div style="background:linear-gradient(160deg,${NAVY_DEEP} 0%,${NAVY} 100%);padding:30px 44px 26px;text-align:center;">
+      ${logoImg()}
+    </div>
+    <div style="padding:30px 44px 8px;">
+      <p style="margin:0 0 14px;font-size:15px;color:#1f2937;line-height:1.7;">Hi ${esc(firstName)},</p>
+      <p style="margin:0 0 22px;font-size:15px;color:#1f2937;line-height:1.7;">I'm looking forward to working together. Please review and sign your coaching agreement at the link below. This takes about 5 minutes.</p>
+      <table cellpadding="0" cellspacing="0" style="margin:0 auto 8px;"><tr><td style="border-radius:8px;background:${NAVY};">
+        <a href="${esc(signUrl)}" style="display:inline-block;padding:14px 30px;font-size:15px;font-weight:600;color:${CREAM};text-decoration:none;">Sign Your Agreement &rarr;</a>
+      </td></tr></table>
+    </div>
+    <div style="padding:18px 44px 30px;">
+      <p style="margin:0;font-size:12px;color:${WARM};line-height:1.6;">This link expires in 30 days. If you have questions, reply to this email.</p>
+    </div>
+    <div style="background:${NAVY_DEEP};padding:14px 44px;text-align:center;font-size:11px;color:${WARM};letter-spacing:1px;">
+      theLeadershipWell &nbsp;&middot;&nbsp; Confidential
+    </div>
+  </div>
+</body></html>`
+}
+
+/** Coach notification — sent to Jeff when a client signs. */
+export function buildSignedNotificationHTML(opts: { clientName: string; signedAt: string; recordingAuthorized: boolean }): string {
+  const { clientName, signedAt, recordingAuthorized } = opts
+  return `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:24px;background:#F2F2F0;font-family:'DM Sans',Helvetica,Arial,sans-serif;color:#111226;">
+  <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;padding:28px 30px;">
+    <p style="margin:0 0 12px;font-size:16px;font-weight:600;">${esc(clientName)} has signed their coaching agreement.</p>
+    <p style="margin:0 0 6px;font-size:14px;color:#403832;">Signed ${esc(signedAt)}.</p>
+    <p style="margin:0;font-size:14px;color:#403832;">Recording &amp; AI processing: <strong>${recordingAuthorized ? 'Authorized' : 'NOT authorized'}</strong>${recordingAuthorized ? '' : ' — sessions for this client must not be recorded or AI-processed.'}</p>
+  </div>
+</body></html>`
+}
+
+/** The client's copy of their signed agreement. */
+export function buildClientCopyHTML(opts: { clientName: string; agreementHtml: string }): string {
+  const { clientName, agreementHtml } = opts
+  const src = `${getBaseUrl()}/logo-email.png`
+  return `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#DDD9D3;font-family:'DM Sans',Helvetica,Arial,sans-serif;">
   <div style="max-width:640px;margin:0 auto;background:#ffffff;">
-    <div style="background:linear-gradient(160deg,${NAVY_DEEP} 0%,${NAVY} 100%);padding:30px 44px 24px;text-align:center;">
-      <div style="margin-bottom:10px;">${logo}</div>
-      <div style="color:${WARM};font-size:9px;letter-spacing:5px;text-transform:uppercase;">theLeadershipWell</div>
+    <div style="background:linear-gradient(160deg,${NAVY_DEEP} 0%,${NAVY} 100%);padding:26px 44px;text-align:center;">
+      <img src="${src}" width="150" alt="theLeadershipWell" style="display:block;margin:0 auto;border:0;height:auto;" />
     </div>
-
-    <div style="padding:26px 44px 6px;">
-      <p style="margin:0 0 14px;font-size:14px;color:#1f2937;line-height:1.7;">Hi ${esc(clientName.split(' ')[0] || 'there')},</p>
-      <p style="margin:0 0 16px;font-size:14px;color:#1f2937;line-height:1.7;">Please review the agreement below. When you're ready, tap the box at the bottom to confirm you've read and agree.</p>
-      <div style="font-size:11px;letter-spacing:3px;text-transform:uppercase;color:${WARM};font-weight:700;margin-bottom:8px;">${esc(title)}</div>
-      <div style="border:1px solid #e5e0d8;border-radius:8px;padding:18px 20px;font-size:14px;color:#1f2937;line-height:1.7;">
-        ${bodyHtml}
-      </div>
+    <div style="padding:28px 44px 10px;">
+      <p style="margin:0 0 18px;font-size:15px;color:#1f2937;line-height:1.7;">Hi ${esc(clientName.split(' ')[0] || 'there')}, thank you for signing. Your copy is below for your records.</p>
+      <div style="border-top:1px solid #e5e0d8;padding-top:18px;">${agreementHtml}</div>
     </div>
-
-    <div style="padding:20px 44px 8px;">
-      <table cellpadding="0" cellspacing="0"><tr>
-        <td style="padding-right:14px;vertical-align:middle;">
-          <a href="${esc(signUrl)}" style="display:inline-block;width:22px;height:22px;border:2px solid ${NAVY};border-radius:4px;text-decoration:none;font-size:1px;line-height:22px;">&nbsp;</a>
-        </td>
-        <td style="font-size:14px;color:#111226;font-weight:600;line-height:1.5;">
-          <a href="${esc(signUrl)}" style="color:#111226;text-decoration:none;">I have read and agree to this agreement</a>
-          <div style="font-size:12px;color:${WARM};font-weight:400;">Tap the box to sign &mdash; it records your agreement with your coach.</div>
-        </td>
-      </tr></table>
-    </div>
-
-    <div style="background:${NAVY_DEEP};padding:14px 44px;text-align:center;font-size:11px;color:${WARM};letter-spacing:1px;margin-top:18px;">
+    <div style="background:${NAVY_DEEP};padding:14px 44px;text-align:center;font-size:11px;color:${WARM};letter-spacing:1px;">
       theLeadershipWell &nbsp;&middot;&nbsp; Confidential &nbsp;&middot;&nbsp; ${esc(clientName)}
     </div>
   </div>

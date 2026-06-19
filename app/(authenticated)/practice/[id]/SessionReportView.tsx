@@ -8,7 +8,7 @@ import { BandChip, BandPill, MetricCard, Section, flagColor } from '../ui'
 
 /** Human labels for the spec §10 gate ceilings, shown on a capped competency. */
 const GATE_LABELS: Record<string, string> = {
-  gate_1: 'gate 1 · no AI/tech disclosure — capped at developing',
+  gate_1: 'gate 1 · no agreement on file & no recording consent — capped at developing',
   gate_2: 'gate 2 · no named insight at close — capped at developing',
   gate_3: 'gate 3 · zero feeling explorations — capped at proficient',
 }
@@ -311,6 +311,11 @@ export function SessionReportView({ id }: { id: string }) {
               <> · session {s.session_number}{s.engagement_total != null ? ` of ${s.engagement_total}` : ''}</>
             )}
           </p>
+          {s.agreement_gap && (
+            <p className="mt-1 text-[12px]" style={{ color: 'var(--color-warning)' }}>
+              ⚑ No signed coaching agreement on file — administrative follow-up (not a score penalty).
+            </p>
+          )}
         </div>
         <div className="flex flex-col items-end gap-2">
           <BandPill band={report.band} />

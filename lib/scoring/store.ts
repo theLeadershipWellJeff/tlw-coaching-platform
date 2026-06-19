@@ -22,6 +22,25 @@ export async function runAndStoreReport(
   const sendEmail = opts.sendEmail ?? true
   const parsed = parseTranscript(transcript.filename, transcript.raw_md)
 
+  // Competency 1 disclosure gate (spec v0.4 §9 C1). The client record is the
+  // source of truth (migration 018): agreement_on_file = a signed coaching
+  // agreement exists; recording_authorized = the client's explicit AI/recording
+  // decision (true = consented, false = declined, null = legacy/unknown). A
+  // signed agreement is the controlling document, so consent is "on file" unless
+  // the client explicitly declined recording. An unmatched transcript (no
+  // client_id) falls back to false → the engine looks for verbal consent instead.
+  let agreementOnFile = false
+  let recordingAuthorized: boolean | null = null
+  if (transcript.client_id) {
+    const { data: client } = await supabase
+      .from('clients')
+      .select('agreement_on_file, recording_authorized')
+      .eq('id', transcript.client_id)
+      .maybeSingle()
+    agreementOnFile = !!client?.agreement_on_file
+    recordingAuthorized = client?.recording_authorized ?? null
+  }
+
   const ctx: ScoringContext = {
     coachName: coach.name,
     clientInitials: transcript.client_initials || parsed.clientInitials || '—',
@@ -34,6 +53,8 @@ export async function runAndStoreReport(
       transcript.session_date ||
       parsed.sessionDate ||
       todayInTimeZone(coach.timezone || DEFAULT_TIMEZONE),
+    agreementOnFile,
+    recordingAuthorized,
   }
 
   // Feed the transcript body (front matter stripped) to the engine.

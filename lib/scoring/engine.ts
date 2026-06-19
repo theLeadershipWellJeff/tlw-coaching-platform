@@ -8,10 +8,11 @@
  * the three hard-ceiling gates (§10), and the equal-weighted overall average.
  *
  * Gate enforcement: the engine recomputes Gate 3 (zero feeling explorations →
- * C6 ≤ 3) from the metric arithmetically, and applies the model-judged Gate 1
- * (no AI/technology disclosure → C1 ≤ 2) and Gate 2 (no named insight at close
- * AND no standing engagement → C3 ≤ 2) as code ceilings off the booleans the
- * model returns. The finer judgment calls (single-instance band-4 standards,
+ * C6 ≤ 3) from the metric arithmetically and Gate 1 (no signed agreement on file
+ * AND no verbal consent to record → C1 ≤ 2) from agreement_on_file (platform) +
+ * verbal_consent_to_record (model), and applies the model-judged Gate 2 (no named
+ * insight at close AND no standing engagement → C3 ≤ 2) as a code ceiling off the
+ * boolean the model returns. The finer judgment calls (single-instance band-4 standards,
  * evocative-reframe vs. consultant-move classification, the three-way emotion
  * classification) are instructed in the prompt — they need reading, not math.
  */
@@ -47,6 +48,14 @@ export interface ScoringContext {
   sessionNumber?: number | null
   engagementTotal?: number | null
   sessionDate: string // YYYY-MM-DD
+  // True when the platform finds a signed coaching agreement on file for this
+  // client (spec v0.4 §9 C1, Tier 1). The agreement is the controlling document
+  // for AI-evaluation consent.
+  agreementOnFile: boolean
+  // The client's explicit recording/AI decision captured at signing: true =
+  // consented, false = declined, null = legacy/unknown. Recording consent counts
+  // as "on file" when there is an agreement and the client did not decline.
+  recordingAuthorized?: boolean | null
 }
 
 const SYSTEM = `You are theLeadershipWell's coaching evaluation engine. You score a single executive-coaching session against the ICF 2025 Core Competencies, refined by theLeadershipWell's proprietary standards. You are rigorous and honest, not generous: a solid PCC-level coach lands around 3 on the 5-point scale. Every competency score must be tied to specific evidence from the transcript. Return ONLY a valid JSON object — no markdown fences, no preamble.`
@@ -96,6 +105,8 @@ SESSION CONTEXT
   type: ${ctx.sessionType || 'unspecified'}
   session number: ${ctx.sessionNumber ?? 'unknown'} of ${ctx.engagementTotal ?? 'unknown'}
   date: ${ctx.sessionDate}
+  agreement_on_file: ${ctx.agreementOnFile} (platform-set: a signed coaching agreement exists for this client)
+  recording_authorized: ${ctx.recordingAuthorized === null || ctx.recordingAuthorized === undefined ? 'unknown' : ctx.recordingAuthorized} (platform-set: the client's signed recording/AI decision — false means they declined)
 
 THE 5-POINT BAND SCALE
   1 Emerging — below competent practice
@@ -131,8 +142,15 @@ CONSULTANT MOVE vs. EVOCATIVE REFRAME (the who-synthesises test):
   - Evocative reframe: coach offers a frame, label, or observation and the CLIENT performs the final synthesis (insight is client-owned). Counts toward evocation (Competency 7), NOT as a consultant move.
   - Consultant move: coach delivers advice, a framework, or a directive conclusion without the client doing the final synthesis — regardless of relational warmth or a positive outcome. Direct advice with no signaling/permission is an unsignaled consultant move (scores 1-2/4, flags red).
 
+AI / RECORDING DISCLOSURE — TWO-TIER STANDARD (spec v0.4 §9 C1; drives Gate 1):
+  - Tier 1 — agreement on file: if agreement_on_file is true AND recording_authorized is not false (see SESSION CONTEXT), the disclosure obligation is FULLY satisfied by the signed coaching agreement. Do NOT evaluate session-level disclosure at all, and do NOT penalize its absence. Set verbal_consent_to_record to false (it is not needed) and Gate 1 does not trigger. (If recording_authorized is false, the client declined in the agreement — treat as Tier 2 below.)
+  - Tier 2 — no agreement on file: scan the first ~5 minutes for any explicit client consent to RECORD the session. ANY affirmative client response to a recording request passes — the coach does NOT need to describe the AI evaluation function, scoring process, or storage. Set verbal_consent_to_record true if such consent is present, otherwise false.
+  - You are NOT required to find a description of the AI scoring function anywhere. The signed agreement carries those obligations; their absence at the session level is an administrative gap, not a disclosure failure or a score penalty.
+
+COACHING / COUNSELING BOUNDARY (spec v0.4 §9 C1.06): the boundary is crossed ONLY when the coach attempts to repair psychological wounds. The following are coaching, NOT a boundary violation — do not flag or down-score them: psychological analysis of third parties as context; exploring the client's emotional patterns, triggers, or responses; emotional-wellbeing management and regulation strategies; relational-dynamics work where the client is the focal point of change; extended exploration of the client's internal experience, beliefs, or identity. Flag a boundary crossing ONLY on clear evidence of: diagnosing a psychological condition (in the client or a third party), therapeutic intervention aimed at resolving trauma / repairing wounds, or a sustained therapeutic frame (repeated trauma processing, grief-therapy techniques) rather than a coaching frame. When in doubt, do NOT flag.
+
 GATE RULES (hard ceilings — a competency cannot exceed the ceiling once its gate triggers). Report each gate's boolean in "gates_triggered" and list the gate id on the affected competency's "gates_triggered":
-  - Gate 1 → Competency 1 capped at band 2: NO AI/technology disclosure to the client (recording / transcription / AI-assisted evaluation). Conversely, explicit disclosure + client consent at session open is the C1 band-4 marker (it need not be repeated mid-session).
+  - Gate 1 → Competency 1 capped at band 2: triggers ONLY when there is NO agreement on file AND no verbal consent to record was obtained at session open (i.e. agreement_on_file is false AND verbal_consent_to_record is false). The engine recomputes this from agreement_on_file + verbal_consent_to_record — report verbal_consent_to_record accurately and it will resolve the gate. Conversely, recording consent (via agreement or verbal) is the C1 band-4 marker; it need not be repeated mid-session.
   - Gate 2 → Competency 3 capped at band 2: NO client-named insight at close AND NO standing engagement agreement. If this is a standing/ongoing engagement (set session.standing_engagement true) and the client names a self-generated insight at close, Gate 2 does NOT trigger (band 3 floor).
   - Gate 3 → Competency 6 capped at band 3: ZERO qualifying feeling explorations (the engine also recomputes this from the metric).
 
@@ -165,6 +183,7 @@ Return EXACTLY this JSON shape:
     },
     "source": "parsed"
   },
+  "verbal_consent_to_record": false,
   "gates_triggered": { "gate_1": false, "gate_2": false, "gate_3": false },
   "win": { "went_well": "...", "improve": "one thing only", "next_step": "one concrete behavioral step for next session" },
   "evidence_moments": [ { "competency": "6.04", "timestamp": "00:00:00", "quote_short": "...", "note": "..." } ]
@@ -291,7 +310,8 @@ function enforceMetrics(raw: any): Metrics {
  * Enforce the deterministic scoring rules (spec v0.4 §10 gates + §6.4 average):
  *   - Gate 3: zero feeling explorations caps Competency 6 at band 3 (recomputed
  *     here from the metric — authoritative over the model).
- *   - Gate 1: model-judged "no AI/technology disclosure" caps Competency 1 at 2.
+ *   - Gate 1: no signed agreement on file AND no verbal consent to record caps
+ *     Competency 1 at band 2 (two-tier disclosure standard, revised v0.4).
  *   - Gate 2: model-judged "no named insight at close" caps Competency 3 at 2,
  *     but ONLY when this is not a standing engagement (revised v0.4).
  *   - overall = equal-weighted mean of the 8 competency scores, 1 decimal.
@@ -308,11 +328,28 @@ export function enforceRules(raw: any, ctx: ScoringContext): SessionReportJson {
   const metrics = enforceMetrics(raw?.metrics)
   const explorations = metrics.feeling_explorations
 
-  // Resolve the three gates. Gate 3 is arithmetic (authoritative); gates 1 and 2
-  // are model judgments. Gate 2 only fires when there's no standing engagement.
+  // Resolve the three gates. Gate 3 is arithmetic (authoritative); Gate 2 is a
+  // model judgment that only fires when there's no standing engagement.
   const standingEngagement = !!raw?.session?.standing_engagement
   const g = raw?.gates_triggered || {}
-  const gate1 = !!g.gate_1
+  // Gate 1 (spec v0.4 §9 C1, two-tier): a signed agreement on file satisfies the
+  // disclosure obligation outright; otherwise verbal consent to record at session
+  // open passes. The gate caps C1 only when BOTH are absent. Recomputed here from
+  // agreement_on_file (platform) + verbal_consent_to_record (model) — authoritative
+  // over the model's own gate_1 boolean. agreement_gap is the administrative
+  // follow-up flag: no signed agreement on file (independent of verbal consent —
+  // a verbal-only session is still missing the controlling document). It carries
+  // no score penalty beyond Gate 1.
+  const agreementOnFile = !!ctx.agreementOnFile
+  const recordingAuthorized = ctx.recordingAuthorized ?? null
+  const verbalConsent = !!raw?.verbal_consent_to_record
+  // Recording consent is "on file" when a signed agreement exists and the client
+  // did not explicitly decline recording (recording_authorized !== false). An
+  // explicit decline falls back to the verbal-consent check like a no-agreement
+  // session would. Gate 1 caps C1 only when consent is on neither path.
+  const recordingConsentOnFile = agreementOnFile && recordingAuthorized !== false
+  const gate1 = !recordingConsentOnFile && !verbalConsent
+  const agreementGap = !agreementOnFile
   const gate2 = !!g.gate_2 && !standingEngagement
   const gate3 = explorations === 0 // null (unavailable metrics) → false
 
@@ -351,6 +388,9 @@ export function enforceRules(raw: any, ctx: ScoringContext): SessionReportJson {
       engagement_total: ctx.engagementTotal ?? null,
       date: ctx.sessionDate,
       standing_engagement: standingEngagement,
+      agreement_on_file: agreementOnFile,
+      agreement_gap: agreementGap,
+      recording_authorized: recordingAuthorized,
     },
     overall_score: overall,
     band: bandForScore(overall),

@@ -214,12 +214,27 @@ These named principles are theLeadershipWell proprietary standards. They appear 
 | Score | Band | Definition | Key markers |
 |------:|------|------------|-------------|
 | 1 | Emerging | Ethical obligations not met; confidentiality or role distinctions breached. | — |
-| 2 | Developing | Partial ethical practice; AI/technology disclosure absent. | Gate 1 triggered — band 2 ceiling. |
-| 3 | Proficient | Ethical standards met; role distinctions generally maintained; no disclosure issues. | No violations observed. |
-| 4 | Strong | Recording/AI disclosure made explicitly at session open with client consent. Role distinctions maintained throughout. | Explicit consent captured. ICF 1.06, 2.5 met. |
+| 2 | Developing | Partial ethical practice; no signed agreement on file AND no verbal consent to record at session open. | Gate 1 triggered — band 2 ceiling. |
+| 3 | Proficient | Ethical standards met; role distinctions generally maintained; recording consent in place (signed agreement on file or verbal consent at open). | No violations observed. |
+| 4 | Strong | Recording/AI consent established — by a signed coaching agreement on file or explicit verbal consent at session open. Role distinctions maintained throughout. | Consent captured. ICF 1.06, 2.5 met. |
 | 5 | Masterful | Ethics woven into the coaching relationship itself — proactive, transparent, client-empowering. Client experiences the ethical stance as care, not compliance. | — |
 
-> **Engine rule:** recording/AI disclosure + explicit client consent at session open = C1 band 4 marker. Disclosure does not need to be repeated mid-session.
+#### AI / recording disclosure — two-tier standard (v0.4)
+
+The prior gate required verbal disclosure of the AI evaluation at session open and penalized incomplete description of the AI scoring function. That is replaced in full by a two-tier standard.
+
+- **Tier 1 — agreement on file (preferred).** When `agreement_on_file: true` and the client did not decline recording (`recording_authorized` is not `false`), the disclosure obligation is fully satisfied by the signed coaching agreement, which is the controlling document for AI-evaluation permissions (consent, storage, review). No session-level verbal disclosure is required, and the engine does not evaluate the content or completeness of session-level disclosure. If the client explicitly declined recording in the agreement (`recording_authorized: false`), there is no recording consent on file and Tier 2 applies.
+- **Tier 2 — no agreement on file.** When `agreement_on_file` is `false` or absent, the engine scans the first ~5 minutes for explicit client consent to **record**. Any affirmative client response to a recording request passes the gate. The coach is **not** required to describe the AI evaluation function, scoring process, or storage at the session level — those obligations are carried by the agreement.
+- **Gate failure (band-2 ceiling)** applies only when **both** are absent: no agreement on file **and** no verbal consent to record at session open.
+- **Administrative flag.** Absence of a signed agreement is recorded separately as `agreement_gap: true` for follow-up. The flag alone never applies the band ceiling.
+
+> **Engine rule:** check `agreement_on_file` first — if `true`, pass the gate and do not evaluate session-level disclosure. If `false`/absent, any explicit verbal consent to record near session open passes (`verbal_consent_to_record: true`). Recording consent (agreement or verbal) = C1 band-4 marker; it need not be repeated mid-session.
+
+#### Coaching / counseling boundary (1.06, v0.4)
+
+The coaching/counseling boundary is crossed when the coach attempts to **repair psychological wounds** — not when the work has psychological depth. The following are explicitly within the coaching role and do **not** trigger a 1.06 boundary flag: psychological analysis of third parties as context; exploration of the client's emotional patterns, responses, or triggers; client emotional-wellbeing management and regulation strategies; relational-dynamics work where the client is the focal point of change; extended exploration of the client's internal experience, beliefs, or identity. The boundary **is** crossed when the coach: diagnoses a psychological condition (in the client or a third party); provides therapeutic intervention aimed at resolving trauma or repairing wounds; or sustains a therapeutic frame (e.g. repeated trauma processing, grief-therapy techniques) rather than a coaching frame.
+
+> **Engine rule:** do not flag 1.06 unless the transcript shows clear wound-repair attempts or diagnostic language. Psychological depth, emotional exploration, and third-party analysis are coaching, not counseling. When in doubt, do not flag.
 > ICF refs: 1.04, 1.05, 1.06, 2.5.
 
 ---
@@ -358,7 +373,7 @@ Gates are hard ceilings. When triggered, the competency cannot score above the c
 
 | Gate | Condition | Competency affected | Ceiling | Version |
 |------|-----------|---------------------|---------|---------|
-| Gate 1 | No AI/technology disclosure to client | C1 | Band 2 | v0.1 |
+| Gate 1 | No signed agreement on file AND no verbal consent to record at session open | C1 | Band 2 | v0.4 revised |
 | Gate 2 | No named insight at close AND no standing engagement agreement | C3 | Band 2 | v0.4 revised |
 | Gate 3 | Zero feeling explorations in session | C6 | Band 3 | v0.2 |
 
@@ -430,7 +445,9 @@ The evaluation engine outputs a structured object that the report template rende
     "session_number": 3,
     "engagement_total": 12,
     "date": "2026-06-19",
-    "standing_engagement": true
+    "standing_engagement": true,
+    "agreement_on_file": true,
+    "agreement_gap": false
   },
   "overall_score": 3.3,
   "band": "Proficient",
@@ -471,6 +488,7 @@ The evaluation engine outputs a structured object that the report template rende
     },
     "source": "estimated"
   },
+  "verbal_consent_to_record": false,
   "gates_triggered": {
     "gate_1": false,
     "gate_2": false,
@@ -491,6 +509,13 @@ The evaluation engine outputs a structured object that the report template rende
   ]
 }
 ```
+
+**Disclosure fields (v0.4):**
+
+- `session.agreement_on_file` — boolean; set by the platform when a signed coaching agreement exists for this client. Drives the Competency 1 disclosure gate (Tier 1): when `true` and recording was not declined, the gate is satisfied outright and session-level disclosure is not evaluated.
+- `session.recording_authorized` — boolean | null; the client's signed recording/AI decision (`true` = consented, `false` = declined, `null` = legacy/unknown). Recording consent counts as "on file" only when an agreement exists AND this is not `false`. An explicit decline also raises the platform's non-dismissible no-recording compliance flag.
+- `session.agreement_gap` — boolean; administrative follow-up flag set by the engine when no signed agreement is on file (`agreement_on_file: false`). Surfaced as an administrative flag only — it carries no competency-score penalty beyond the Gate 1 ceiling, and a session can pass Gate 1 on verbal consent while still showing an agreement gap.
+- `verbal_consent_to_record` — boolean; set by the engine (Tier 2) when, with no agreement on file, an explicit client consent to record is detected near session open. Any affirmative response to a recording request passes; describing the AI evaluation function is not required.
 
 **Required input:** speaker-separated verbatim transcript (e.g. Zoom VTT). Speaker attribution enables talk-time, question/statement ratio, and emotion-flag counting. An AI summary alone is insufficient and will materially limit scoring on Competencies 5, 6, and 7.
 
@@ -535,6 +560,7 @@ Each reconciliation session is a calibration opportunity. After several rounds, 
 - **v0.2** — Added `feeling_explorations` as sixth conversation metric. Added §7.2 defining the reflection/exploration distinction and its scoring gate (gate 3). Updated JSON data model. K.V. session documented as calibration anchor.
 - **v0.3** — Added consultant moves as seventh conversation metric with four-criteria sub-rubric and threshold logic. Added explicit band definitions (3/4/5) for Competency 2. Updated JSON data model. H.B. session documented as calibration anchor for consultant moves metric. Competency 2 diagnosis: pull toward frameworks attributed to bias (2.04) and process-curiosity (2.09) rather than impact awareness (2.10).
 - **v0.4** — Full consolidated spec. Added explicit band definitions for all eight competencies. C1 band 4: explicit recording/AI disclosure + client consent at session open satisfies ethical practice at band 4; engine no longer under-scores on this. C2 calibration note: evocative reframing vs. unsignaled consultant move determined by who performs the final synthesis — client = evocation, coach = consultant move. C3 band definitions (3/4/5) added; session agreement mechanics clarified (client response to open agenda invitation = co-created session focus, ICF 3.06); gate 2 revised — applies only when no insight named AND no standing engagement agreement exists. C4, C5, C7, C8 band definitions added. C6: coping inquiry formally excluded from feeling exploration definition; three-way classification table (reflection / coping inquiry / exploration) added to engine spec. Cross-competency principles named as theLeadershipWell IP: Attunement Standard, Exploration Gate, Authorship Hinge, Consultant Pull Signature. Gate rules consolidated into single reference table with `standing_engagement` field and `gates_triggered` object added to data model. Calibration anchor: unnamed client session, June 2026.
+- **v0.4.1** — Revised Competency 1 disclosure gate to a two-tier standard: a signed agreement on file (`agreement_on_file: true`) satisfies the gate outright (Tier 1); with no agreement, explicit verbal consent to record at session open passes (Tier 2). Removed the requirement to describe the AI evaluation function at session level. Gate 1 now caps C1 at band 2 only when both an agreement and verbal consent are absent. Revised the coaching/counseling boundary (1.06): the threshold is wound-repair attempts, diagnostic language, or a sustained therapeutic frame — not psychological depth, emotional exploration, or third-party analysis. Added `agreement_on_file`, `agreement_gap` (session metadata) and `verbal_consent_to_record` (engine output) to the data model.
 
 ---
 
