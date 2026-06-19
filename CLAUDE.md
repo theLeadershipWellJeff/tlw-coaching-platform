@@ -338,8 +338,18 @@ clients). `coach_id` nullable: a NULL row is the global default. The
 it with no refactor. The workspace **Recent Communication** card
 (`CommunicationCard`, `GET /api/clients/[id]/communications`) shows the latest 5
 (✉ email / 🔔 reminder icon, subject/label, preview, relative time, muted-red
-`failed` chip), with a "View all" expander. Logo is currently a **placeholder
-PNG** — swap in the real Square Well logo at `public/logo-email.png`.
+`failed` chip), with a "View all" expander.
+
+**Brand mark / email logo.** `public/logo-email.png` is the wordmark embedded in
+the signature: "THE LEADERSHIP WELL" in a black outlined box (ink `#111226`) with
+an orange `+` (`#F5821F`, the one permitted accent) tucked into a **voided
+top-right corner** — the plus's top edge meets the top border line and its right
+edge meets the right border line. It's regenerated to spec by
+`scripts/generate-email-logo.py` (`pip install Pillow`, then
+`python3 scripts/generate-email-logo.py`); tweak the plus weight/size/inset via
+the CONFIG dials at the top of that file. Keep the colors/text in sync with
+`lib/signature.ts`. If the designer ever supplies the official asset, just drop it
+in at the same path — the signature points there, so no code change is needed.
 
 ### Coaching goals = the source of truth (and of the prep plan)
 `clients.coaching_goals` is the sacred goal list. Each goal is `{title,
