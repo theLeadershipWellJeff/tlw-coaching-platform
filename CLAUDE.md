@@ -312,6 +312,35 @@ submit (stores `items` = `[{q,a}]`, status → submitted). The workspace
 `AgendaCard` (`/api/clients/[id]/agenda`, latest request) shows the client's
 answers (or "awaiting their response").
 
+### Branded email send + communications log (`email_signatures`, `communications`)
+The client workspace **Compose Email** button (`ClientDetail` → `EmailModal`) is a
+raw compose → **review → send** flow: To (prefilled client email), editable Cc
+(default `jeff@theleadershipwell.com`), Subject, a plain-text body `<textarea>`,
+and a **locked, non-editable signature preview** fetched from
+`GET /api/email/signature` (so the coach sees exactly what will append). On send it
+POSTs `{clientId, to, cc, subject, bodyHtml}` to `POST /api/email/send`, which:
+1. tenant-gates on `requireClientCoach`;
+2. fetches the active signature (`lib/signature.ts#getActiveSignatureHtml` — coach
+   row wins, else the global `coach_id IS NULL` row, else `DEFAULT_SIGNATURE_HTML`)
+   and **appends it server-side** (never trusts the client to include it);
+3. sends HTML via the signed-in coach's Gmail access token (lands in their Sent
+   folder, Cc the coach);
+4. **logs every send** to `communications` (`lib/communications.ts#logCommunication`)
+   — `status='sent'` with the returned `gmail_message_id`, or `status='failed'` +
+   `error_detail` on a transport error (never a silent drop).
+
+`email_signatures` is the single source of truth for the signature: email-safe
+table HTML with a **raster PNG** logo (`public/logo-email.png` →
+`https://theleadershipwell.online/logo-email.png` — SVG is stripped by mail
+clients). `coach_id` nullable: a NULL row is the global default. The
+`communications` log is type-discriminated (`type` email|reminder|prep_sheet,
+`direction` outbound|inbound) so reminders and future inbound reply-capture reuse
+it with no refactor. The workspace **Recent Communication** card
+(`CommunicationCard`, `GET /api/clients/[id]/communications`) shows the latest 5
+(✉ email / 🔔 reminder icon, subject/label, preview, relative time, muted-red
+`failed` chip), with a "View all" expander. Logo is currently a **placeholder
+PNG** — swap in the real Square Well logo at `public/logo-email.png`.
+
 ### Coaching goals = the source of truth (and of the prep plan)
 `clients.coaching_goals` is the sacred goal list. Each goal is `{title,
 description, metrics?}` (`metrics` = up to three measures of fulfillment).
@@ -372,8 +401,10 @@ agenda requests · 013 revenue + competency focus + prep sheets
 014 note duration (`notes.duration_minutes`, default 60) · 015 coach_clients
 (tenant scoping — links each client to its coach(es); the isolation boundary the
 client routes filter on) · 016 appointments (`appointments` +
-`appointment_reminders` — scheduled sessions and the reminder log). Run new
-migrations by hand in the Supabase SQL editor.
+`appointment_reminders` — scheduled sessions and the reminder log) · 017 email
+signatures + communications (`email_signatures` single-source signature +
+`communications` outbound log; seeds Jeff's signature). Run new migrations by hand
+in the Supabase SQL editor.
 
 **Tenant scoping (015).** `coach_clients` (coach_id, client_id, role) is the
 ownership link. Client access is enforced **server-side** by the session coach,
@@ -389,7 +420,8 @@ units with a 1-hour minimum, rounding up once past 15 min into a half hour
 the projection uses the scheduled calendar-event length.
 
 **Pending — apply in Supabase:** `014_note_duration.sql`,
-`015_coach_clients.sql`, and `016_appointments.sql`. ⚠️ **015 must be run BEFORE
+`015_coach_clients.sql`, `016_appointments.sql`, and
+`017_email_signatures_communications.sql`. ⚠️ **015 must be run BEFORE
 the tenant-scoping code is deployed to `main`** — until the table exists and is
 backfilled, the roster would filter to zero clients. Read the backfill comment in
 015 first (it assumes all current coach logins are the same person). **016 must be
@@ -405,6 +437,14 @@ and back in** to grant calendar-write + populate the refresh token with it;
 ## Roadmap
 
 ### Shipped
+- **Branded email send + Recent Communication card (Phase 1B)** — Compose Email
+  in the client workspace sends branded HTML via the coach's Gmail (signature
+  appended server-side from `email_signatures`, Cc the firm), with review-before-
+  send and a locked signature preview. Every send logs to `communications`
+  (`status` sent/failed), surfaced in the workspace **Recent Communication** card
+  (migration 017, forward-compatible with reminders + inbound reply-capture).
+  Needs migration 017 applied and the real logo PNG dropped at
+  `public/logo-email.png`. Templates/AI compose deferred to Phase 2/3.
 - **Scheduling next sessions + reminders** — workspace Sessions card books the
   next session (Google Calendar event + client guest), confirmation email at
   booking, and a 24h-before nudge via hourly Vercel Cron (`appointments` +
