@@ -223,7 +223,7 @@ These named principles are theLeadershipWell proprietary standards. They appear 
 
 The prior gate required verbal disclosure of the AI evaluation at session open and penalized incomplete description of the AI scoring function. That is replaced in full by a two-tier standard.
 
-- **Tier 1 — agreement on file (preferred).** When `agreement_on_file: true`, the disclosure obligation is fully satisfied by the signed coaching agreement, which is the controlling document for AI-evaluation permissions (consent, storage, review). No session-level verbal disclosure is required, and the engine does not evaluate the content or completeness of session-level disclosure.
+- **Tier 1 — agreement on file (preferred).** When `agreement_on_file: true` and the client did not decline recording (`recording_authorized` is not `false`), the disclosure obligation is fully satisfied by the signed coaching agreement, which is the controlling document for AI-evaluation permissions (consent, storage, review). No session-level verbal disclosure is required, and the engine does not evaluate the content or completeness of session-level disclosure. If the client explicitly declined recording in the agreement (`recording_authorized: false`), there is no recording consent on file and Tier 2 applies.
 - **Tier 2 — no agreement on file.** When `agreement_on_file` is `false` or absent, the engine scans the first ~5 minutes for explicit client consent to **record**. Any affirmative client response to a recording request passes the gate. The coach is **not** required to describe the AI evaluation function, scoring process, or storage at the session level — those obligations are carried by the agreement.
 - **Gate failure (band-2 ceiling)** applies only when **both** are absent: no agreement on file **and** no verbal consent to record at session open.
 - **Administrative flag.** Absence of a signed agreement is recorded separately as `agreement_gap: true` for follow-up. The flag alone never applies the band ceiling.
@@ -512,7 +512,8 @@ The evaluation engine outputs a structured object that the report template rende
 
 **Disclosure fields (v0.4):**
 
-- `session.agreement_on_file` — boolean; set by the platform when a signed coaching agreement exists for this client. Drives the Competency 1 disclosure gate (Tier 1): when `true`, the gate is satisfied outright and session-level disclosure is not evaluated.
+- `session.agreement_on_file` — boolean; set by the platform when a signed coaching agreement exists for this client. Drives the Competency 1 disclosure gate (Tier 1): when `true` and recording was not declined, the gate is satisfied outright and session-level disclosure is not evaluated.
+- `session.recording_authorized` — boolean | null; the client's signed recording/AI decision (`true` = consented, `false` = declined, `null` = legacy/unknown). Recording consent counts as "on file" only when an agreement exists AND this is not `false`. An explicit decline also raises the platform's non-dismissible no-recording compliance flag.
 - `session.agreement_gap` — boolean; administrative follow-up flag set by the engine when no signed agreement is on file (`agreement_on_file: false`). Surfaced as an administrative flag only — it carries no competency-score penalty beyond the Gate 1 ceiling, and a session can pass Gate 1 on verbal consent while still showing an agreement gap.
 - `verbal_consent_to_record` — boolean; set by the engine (Tier 2) when, with no agreement on file, an explicit client consent to record is detected near session open. Any affirmative response to a recording request passes; describing the AI evaluation function is not required.
 

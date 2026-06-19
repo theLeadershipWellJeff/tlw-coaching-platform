@@ -1,16 +1,21 @@
 'use client'
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import type { Client } from '@/lib/supabase/types'
 
 const STATUSES = ['active', 'prospect', 'inactive'] as const
 
 export function ClientsRoster() {
+  const router = useRouter()
   const [clients, setClients] = useState<Client[]>([])
+  const [pendingAgreements, setPendingAgreements] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [filter, setFilter] = useState('')
   const [showAdd, setShowAdd] = useState(false)
+  // After creating a client, offer to issue the coaching agreement now.
+  const [justCreated, setJustCreated] = useState<{ id: string; name: string } | null>(null)
   const [importing, setImporting] = useState(false)
   const [importMsg, setImportMsg] = useState('')
   const [importingNotes, setImportingNotes] = useState(false)
@@ -24,6 +29,7 @@ export function ClientsRoster() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to load')
       setClients(data.clients || [])
+      setPendingAgreements(data.pendingAgreements || {})
     } catch (e: any) {
       setError(e.message)
     }
@@ -133,6 +139,28 @@ export function ClientsRoster() {
       {importMsg && <p className="text-[13px] text-tlw-warm-gray">{importMsg}</p>}
       {notesMsg && <p className="text-[13px] text-tlw-warm-gray">{notesMsg}</p>}
 
+      {justCreated && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-tlw-xl border border-tlw-warm-gray/20 bg-tlw-surface p-4">
+          <p className="text-[13px] text-tlw-espresso">
+            Would you like to issue a coaching agreement to <span className="font-medium">{justCreated.name}</span> now?
+          </p>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setJustCreated(null)}
+              className="text-[13px] text-tlw-warm-gray hover:text-tlw-espresso"
+            >
+              Skip for now
+            </button>
+            <button
+              onClick={() => router.push(`/clients/${justCreated.id}?issue=1`)}
+              className="rounded-tlw-lg bg-tlw-navy-rich px-4 py-2 text-[13px] font-medium text-tlw-cream transition-opacity hover:opacity-90"
+            >
+              Issue Agreement
+            </button>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <div className="space-y-2">
           {[0, 1, 2, 3].map((i) => (
@@ -181,7 +209,16 @@ export function ClientsRoster() {
             >
               <div className="flex items-center justify-between gap-4">
                 <div className="min-w-0">
-                  <p className="font-medium text-tlw-navy-deep">{c.name}</p>
+                  <p className="flex items-center gap-1.5 font-medium text-tlw-navy-deep">
+                    {c.name}
+                    {pendingAgreements[c.id] != null && pendingAgreements[c.id] > 7 && (
+                      <span
+                        title={`Agreement unsigned — sent ${pendingAgreements[c.id]} days ago`}
+                        className="inline-block h-2 w-2 shrink-0 rounded-full"
+                        style={{ background: '#E8650A' }}
+                      />
+                    )}
+                  </p>
                   <p className="mt-0.5 truncate text-[12px] text-tlw-warm-gray">
                     {[c.title, c.company].filter(Boolean).join(' · ') || c.email || '—'}
                   </p>
@@ -207,6 +244,7 @@ export function ClientsRoster() {
           onCreated={(c) => {
             setShowAdd(false)
             setClients((prev) => [...prev, c].sort((a, b) => a.name.localeCompare(b.name)))
+            setJustCreated({ id: c.id, name: c.name })
           }}
         />
       )}

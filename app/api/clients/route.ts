@@ -18,7 +18,24 @@ export async function GET(req: NextRequest) {
 
     const { data, error } = await query
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    return NextResponse.json({ clients: data })
+
+    // Pending-agreement indicator (migration 018): clientId → days since the most
+    // recent unsigned ('sent') agreement was issued, for the roster's 7-day flag.
+    const pendingAgreements: Record<string, number> = {}
+    const { data: pending } = await supabase
+      .from('agreements')
+      .select('client_id, sent_at')
+      .in('client_id', ids)
+      .eq('status', 'sent')
+      .order('sent_at', { ascending: false })
+    for (const row of pending || []) {
+      if (row.client_id in pendingAgreements) continue // keep the most recent
+      pendingAgreements[row.client_id] = Math.floor(
+        (Date.now() - new Date(row.sent_at).getTime()) / (24 * 60 * 60 * 1000)
+      )
+    }
+
+    return NextResponse.json({ clients: data, pendingAgreements })
   } catch (e) {
     return toErrorResponse(e)
   }

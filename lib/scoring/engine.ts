@@ -49,10 +49,13 @@ export interface ScoringContext {
   engagementTotal?: number | null
   sessionDate: string // YYYY-MM-DD
   // True when the platform finds a signed coaching agreement on file for this
-  // client. The agreement is the controlling document for AI-evaluation consent,
-  // so when true the Competency 1 disclosure gate is satisfied outright and no
-  // session-level verbal consent is required (spec v0.4 §9 C1, Tier 1).
+  // client (spec v0.4 §9 C1, Tier 1). The agreement is the controlling document
+  // for AI-evaluation consent.
   agreementOnFile: boolean
+  // The client's explicit recording/AI decision captured at signing: true =
+  // consented, false = declined, null = legacy/unknown. Recording consent counts
+  // as "on file" when there is an agreement and the client did not decline.
+  recordingAuthorized?: boolean | null
 }
 
 const SYSTEM = `You are theLeadershipWell's coaching evaluation engine. You score a single executive-coaching session against the ICF 2025 Core Competencies, refined by theLeadershipWell's proprietary standards. You are rigorous and honest, not generous: a solid PCC-level coach lands around 3 on the 5-point scale. Every competency score must be tied to specific evidence from the transcript. Return ONLY a valid JSON object — no markdown fences, no preamble.`
@@ -103,6 +106,7 @@ SESSION CONTEXT
   session number: ${ctx.sessionNumber ?? 'unknown'} of ${ctx.engagementTotal ?? 'unknown'}
   date: ${ctx.sessionDate}
   agreement_on_file: ${ctx.agreementOnFile} (platform-set: a signed coaching agreement exists for this client)
+  recording_authorized: ${ctx.recordingAuthorized === null || ctx.recordingAuthorized === undefined ? 'unknown' : ctx.recordingAuthorized} (platform-set: the client's signed recording/AI decision — false means they declined)
 
 THE 5-POINT BAND SCALE
   1 Emerging — below competent practice
@@ -139,7 +143,7 @@ CONSULTANT MOVE vs. EVOCATIVE REFRAME (the who-synthesises test):
   - Consultant move: coach delivers advice, a framework, or a directive conclusion without the client doing the final synthesis — regardless of relational warmth or a positive outcome. Direct advice with no signaling/permission is an unsignaled consultant move (scores 1-2/4, flags red).
 
 AI / RECORDING DISCLOSURE — TWO-TIER STANDARD (spec v0.4 §9 C1; drives Gate 1):
-  - Tier 1 — agreement on file: if agreement_on_file is true (see SESSION CONTEXT), the disclosure obligation is FULLY satisfied by the signed coaching agreement. Do NOT evaluate session-level disclosure at all, and do NOT penalize its absence. Set verbal_consent_to_record to false (it is not needed) and Gate 1 does not trigger.
+  - Tier 1 — agreement on file: if agreement_on_file is true AND recording_authorized is not false (see SESSION CONTEXT), the disclosure obligation is FULLY satisfied by the signed coaching agreement. Do NOT evaluate session-level disclosure at all, and do NOT penalize its absence. Set verbal_consent_to_record to false (it is not needed) and Gate 1 does not trigger. (If recording_authorized is false, the client declined in the agreement — treat as Tier 2 below.)
   - Tier 2 — no agreement on file: scan the first ~5 minutes for any explicit client consent to RECORD the session. ANY affirmative client response to a recording request passes — the coach does NOT need to describe the AI evaluation function, scoring process, or storage. Set verbal_consent_to_record true if such consent is present, otherwise false.
   - You are NOT required to find a description of the AI scoring function anywhere. The signed agreement carries those obligations; their absence at the session level is an administrative gap, not a disclosure failure or a score penalty.
 
@@ -337,8 +341,14 @@ export function enforceRules(raw: any, ctx: ScoringContext): SessionReportJson {
   // a verbal-only session is still missing the controlling document). It carries
   // no score penalty beyond Gate 1.
   const agreementOnFile = !!ctx.agreementOnFile
+  const recordingAuthorized = ctx.recordingAuthorized ?? null
   const verbalConsent = !!raw?.verbal_consent_to_record
-  const gate1 = !agreementOnFile && !verbalConsent
+  // Recording consent is "on file" when a signed agreement exists and the client
+  // did not explicitly decline recording (recording_authorized !== false). An
+  // explicit decline falls back to the verbal-consent check like a no-agreement
+  // session would. Gate 1 caps C1 only when consent is on neither path.
+  const recordingConsentOnFile = agreementOnFile && recordingAuthorized !== false
+  const gate1 = !recordingConsentOnFile && !verbalConsent
   const agreementGap = !agreementOnFile
   const gate2 = !!g.gate_2 && !standingEngagement
   const gate3 = explorations === 0 // null (unavailable metrics) → false
@@ -380,6 +390,7 @@ export function enforceRules(raw: any, ctx: ScoringContext): SessionReportJson {
       standing_engagement: standingEngagement,
       agreement_on_file: agreementOnFile,
       agreement_gap: agreementGap,
+      recording_authorized: recordingAuthorized,
     },
     overall_score: overall,
     band: bandForScore(overall),

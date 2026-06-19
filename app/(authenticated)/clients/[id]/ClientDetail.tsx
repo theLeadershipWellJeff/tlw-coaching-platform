@@ -1,6 +1,7 @@
 'use client'
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import type { Client } from '@/lib/supabase/types'
 import { NameCard } from './NameCard'
 import { ScheduleCard } from './ScheduleCard'
@@ -46,6 +47,12 @@ export function ClientDetail({ clientId }: { clientId: string }) {
   useEffect(() => {
     load()
   }, [load])
+
+  // Opened from the roster's "issue agreement now?" prompt.
+  const searchParams = useSearchParams()
+  useEffect(() => {
+    if (searchParams.get('issue') === '1') setIssuing(true)
+  }, [searchParams])
 
   if (loading) {
     return <div className="h-40 animate-pulse rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface/60" />

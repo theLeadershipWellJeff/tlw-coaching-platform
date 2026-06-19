@@ -22,20 +22,23 @@ export async function runAndStoreReport(
   const sendEmail = opts.sendEmail ?? true
   const parsed = parseTranscript(transcript.filename, transcript.raw_md)
 
-  // Tier 1 of the Competency 1 disclosure gate (spec v0.4 §9 C1): a signed
-  // coaching agreement on file is the controlling document for AI-evaluation
-  // consent and satisfies the gate outright. Best-effort lookup — an unmatched
-  // transcript (no client_id) or a query hiccup falls back to false, which just
-  // means the engine looks for verbal consent at session open instead.
+  // Competency 1 disclosure gate (spec v0.4 §9 C1). The client record is the
+  // source of truth (migration 018): agreement_on_file = a signed coaching
+  // agreement exists; recording_authorized = the client's explicit AI/recording
+  // decision (true = consented, false = declined, null = legacy/unknown). A
+  // signed agreement is the controlling document, so consent is "on file" unless
+  // the client explicitly declined recording. An unmatched transcript (no
+  // client_id) falls back to false → the engine looks for verbal consent instead.
   let agreementOnFile = false
+  let recordingAuthorized: boolean | null = null
   if (transcript.client_id) {
-    const { data: signed } = await supabase
-      .from('agreements')
-      .select('id')
-      .eq('client_id', transcript.client_id)
-      .eq('status', 'signed')
-      .limit(1)
-    agreementOnFile = !!(signed && signed.length > 0)
+    const { data: client } = await supabase
+      .from('clients')
+      .select('agreement_on_file, recording_authorized')
+      .eq('id', transcript.client_id)
+      .maybeSingle()
+    agreementOnFile = !!client?.agreement_on_file
+    recordingAuthorized = client?.recording_authorized ?? null
   }
 
   const ctx: ScoringContext = {
@@ -51,6 +54,7 @@ export async function runAndStoreReport(
       parsed.sessionDate ||
       todayInTimeZone(coach.timezone || DEFAULT_TIMEZONE),
     agreementOnFile,
+    recordingAuthorized,
   }
 
   // Feed the transcript body (front matter stripped) to the engine.

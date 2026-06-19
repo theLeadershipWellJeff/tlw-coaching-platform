@@ -81,6 +81,10 @@ export interface SessionMeta {
   // agreement is on file (it does NOT add a score penalty beyond Gate 1).
   agreement_on_file?: boolean
   agreement_gap?: boolean
+  // The client's signed recording/AI decision (true = consented, false =
+  // declined, null = legacy/unknown). Recording consent on file requires an
+  // agreement AND not an explicit decline.
+  recording_authorized?: boolean | null
 }
 
 /** The three hard-ceiling gates (spec §10). */
