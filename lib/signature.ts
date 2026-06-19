@@ -29,6 +29,9 @@ export const DEFAULT_SIGNATURE_HTML =
   `&nbsp;&middot;&nbsp;` +
   `<a href="https://www.theleadershipwell.com" style="color:#0C1940;text-decoration:none;">theleadershipwell.com</a>` +
   `</div>` +
+  `<div style="font-size:12px;margin-top:4px;">` +
+  `<a href="https://meetings-na2.hubspot.com/dr-jeff" style="color:#0C1940;text-decoration:none;font-weight:600;">Book a session &rarr;</a>` +
+  `</div>` +
   `</td>` +
   `</tr>` +
   `</table>`
