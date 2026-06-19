@@ -1,209 +1,541 @@
-# theLeadershipWell — Coaching Session Report Spec
-*Specification delta: v0.3 → v0.4* | Owner: Dr. Jeff Holmes | Status: approved, build from here
-
-This document records only the changes introduced in v0.4. All other sections of the spec remain as locked in v0.3. Read this alongside the v0.3 baseline.
+# theLeadershipWell — Coaching Session Report
+**Specification v0.4** · Status: locked, build from here · Owner: Dr. Jeff Holmes  
+_Consolidated from v0.1 baseline + v0.2, v0.3, and v0.4 deltas. This is the single source of truth for the scoring engine._
 
 ---
 
-## § rubric — Competency 1 band definitions (new)
+## 1. Purpose
 
-Explicit band definitions for Competency 1 (Demonstrates Ethical Practice). Four ethical pressure points are woven into the bands: role boundary drift (ICF 1.06), agenda contamination (ICF 2.01), AI/technology disclosure (ICF 2.5), and competence boundaries (ICF 1.07).
+The Session Report turns a recorded coaching session into structured, evidence-based developmental feedback for the coach. It scores the session against the ICF 2025 Core Competencies, refined by theLeadershipWell's own standards, and surfaces a set of behavioral metrics drawn directly from the session transcript.
+
+The report serves two goals:
+
+1. **Sharpen the coach.** Give every coach an objective, repeatable read on their craft and a single forward practice step.
+2. **Build the asset.** Establish a calibrated, defensible evaluation methodology that is sharper than the generic ICF model — proprietary IP for theLeadershipWell.
+
+---
+
+## 2. Scope and phases
+
+- **Phase 1 (current).** Self-development only. The report is generated for and seen by the coach themselves. No manager or firm-level visibility.
+- **Phase 2 (future).** A firm-facing dashboard per coach, showing progress over time and against cohort context. Same scoring engine, same scale; the per-client toggle becomes a per-coach toggle.
+
+This spec defines the Phase 1 single-session report and the scoring foundation both phases share.
+
+---
+
+## 3. Privacy and confidentiality
+
+- **Clients are identified by initials only** (e.g. `M.W.`). Full names are never stored in the report.
+- Phase 1 reports are private to the coach.
+- Handling of recordings, transcripts, and reports must respect ICF confidentiality obligations (ICF Code of Ethics 2.1–2.5).
+- Client consent for recording and AI evaluation is resolved via coaching agreements with per-session verbal check-ins.
+- **Fail-loud matching principle:** when client name matching confidence is not clear from the transcript, flag for manual confirmation rather than guess. Never auto-assign client initials at low confidence.
+
+---
+
+## 4. Design language
+
+The report is intentionally calm, flat, and document-like.
+
+- **Flat surfaces.** No gradients, drop shadows, or decorative effects. Plain background, 0.5px dividers between sections.
+- **Generous whitespace.** Sections separated by a top border and vertical breathing room.
+- **Restraint with color.** Color carries meaning only (status, scoring band). Never decorative.
+- **Sentence case everywhere.** No Title Case, no ALL CAPS.
+- **Two type weights only** — regular and medium. Numbers are the largest type on the page; labels are small and muted.
+- **Scannable hierarchy.** Summary cards readable at a glance; competency detail available on drill-down.
+
+---
+
+## 5. Report anatomy
+
+Sections appear in this fixed order:
+
+1. **Header** — report title; coach name; client initials; session type; session number within engagement; overall band pill (e.g. "Proficient · PCC range").
+2. **Score summary** — three metric cards plus scale key: this session score (out of 5); strongest competency (with name); lowest competency (with name); one-line scale key beneath.
+3. **Conversation metrics** — seven behavioral metric cards drawn from the transcript (see §7). Caption notes whether figures are estimated or parsed.
+4. **ICF competency read** — eight competencies grouped under four domains, each with band-and-score chip and one-line evidence note tied to a sub-competency number.
+5. **WIN debrief** — What went well · Improve (one) · Next step (see §11).
+6. **Score trend** — overall and per-client trajectory (see §12).
+7. **Actions** — lightweight buttons (e.g. "see evidence moments," "add my own scores").
+
+---
+
+## 6. Scoring model
+
+### 6.1 The 5-point band scale
+
+| Score | Band | Reference |
+|------:|------|-----------|
+| 1 | Emerging | Below competent practice |
+| 2 | Developing | Approaching competent practice |
+| 3 | Proficient | Competent practice (≈ PCC range) |
+| 4 | Strong | Consistently skilled |
+| 5 | Masterful | Mastery (≈ MCC range) |
+
+A solid PCC-level coach is expected to land around a 3. This is honest, not generous, and leaves real headroom to show growth toward 4 and 5.
+
+### 6.2 Competencies scored
+
+All eight ICF 2025 Core Competencies, grouped by domain:
+
+- **A · Foundation:** 1. Demonstrates ethical practice · 2. Embodies a coaching mindset
+- **B · Co-creating the relationship:** 3. Establishes and maintains agreements · 4. Cultivates trust and safety · 5. Maintains presence
+- **C · Communicating effectively:** 6. Listens actively · 7. Evokes awareness
+- **D · Cultivating learning and growth:** 8. Facilitates client growth
+
+> Competency names and numbering per ICF 2025 Core Competencies (© International Coaching Federation). Evidence notes cite specific sub-competency numbers (e.g. 6.04).
+
+### 6.3 Evidence-linked scoring
+
+Each competency score carries a one-line evidence note tied to a specific moment in the session and a sub-competency number. The score is never a bare number — it always points to *why*.
+
+### 6.4 Overall session score
+
+**Equal-weighted average of the eight competency scores**, rounded to one decimal.
+
+Open option (not yet enabled): weight a coach's active development edges more heavily so the overall score moves when they work on them.
+
+### 6.5 Band chips
+
+Each competency displays a chip combining band word and numeric score (e.g. "Strong · 4.0"). Chip color:
+
+- Strong / Masterful → success color (green family)
+- Proficient → info color (blue family)
+- Developing / Emerging → warning color (amber family)
+
+---
+
+## 7. Conversation metrics and threshold logic
+
+Seven behavioral metrics drawn from the transcript. Speaker-attributed verbatim transcript required (see §14).
+
+| # | Metric | Definition | Threshold logic | Source |
+|---|--------|------------|-----------------|--------|
+| 1 | Coach talk-time | % of words spoken by the coach | 🔴 Red if > 40% | theLeadershipWell rule |
+| 2 | Flagged emotion (6.04) | Count of coach moves that tune into client emotion (see §7.1) | 🔴 Red if < 2 · 🟡 Amber if = 2 · 🟢 Green if > 2 | theLeadershipWell rule |
+| 3 | Feeling explorations | Count of coach moves that stay with an emotion and deepen into its origin, meaning, function, or cost (see §7.2) | 🔴 Red if 0 (triggers C6 gate) · 🟡 Amber if 1 · 🟢 Green if ≥ 2 | theLeadershipWell rule |
+| 4 | Question : statement | Ratio of coach questions to coach statements | 🟢 Green when questions exceed statements · 🔴 Red when statements exceed or at parity | theLeadershipWell rule |
+| 5 | Reflective pauses | Count of deliberate pauses / silences the coach creates | Count only, no threshold yet | — |
+| 6 | Role shifts flagged | Count of times the coach explicitly named a shift out of the coaching role | Count only, no threshold yet | — |
+| 7 | Consultant moves | Count of moves into consulting, teaching, mentoring, or framework-offering; each scored on four criteria (see §7.3) | See §7.3 threshold table | theLeadershipWell rule |
+
+### 7.1 Flagged emotion — what counts (four triggers)
+
+A flagged-emotion event is any of:
+
+1. **Naming a feeling observed** — e.g. "you sound frustrated."
+2. **Asking a feeling question** — e.g. "how are you feeling about that?"
+3. **Reflecting an energy shift** — e.g. "something just changed when you said that."
+4. **Mirroring the coach's own felt response** — counts only when it hands the emotion back to the client (e.g. "…what's that like for you?"). A mirror that centers the coach's own experience does not count.
+
+> ICF ref: 6.04 — Notices, acknowledges and explores the client's emotions, energy shifts, non-verbal cues or other behaviors.
+
+### 7.2 Feeling exploration — three-way classification
+
+The engine must classify each coach emotion move into one of three types:
+
+| Move type | Definition | Engine scoring |
+|-----------|------------|----------------|
+| **Feeling reflection** | Coach names, mirrors, or reflects the client's emotion. e.g. "I'm hearing frustration," "you sound angry." | Counts as flagged emotion event (metric 2). Does NOT count as exploration. |
+| **Coping inquiry** | Coach asks how the client is managing or dealing with the emotion. e.g. "How are you coping with that?", "How do you deal with the frustration?" | Does NOT count as feeling exploration. Does NOT count as flagged emotion event. Redirects away from the emotion rather than deepening into it. |
+| **Feeling exploration** | Coach stays with the emotion and asks about its origin, meaning, function, or cost. e.g. "What does that frustration feel like?", "Where does that come from?", "What is it costing you?", "What does the anger want you to know?" | Counts as qualifying exploration (metric 3). Also counts as flagged emotion event (metric 2). Required for C6 band 4+. |
+
+**Gate 3:** zero feeling explorations caps Competency 6 at band 3 regardless of flagged emotion count.
+
+> Calibration anchor (v0.4, June 2026): Coach named frustration and asked "how are you dealing with that?" — classified as reflection + coping inquiry, not exploration. Zero qualifying explorations. C6 band 3 ceiling confirmed.
+
+### 7.3 Consultant moves — sub-rubric
+
+**Definition:** count of times the coach steps into a consulting, teaching, mentoring, or framework-offering role within a session. Each move is scored individually on four binary criteria. The pattern across moves feeds the Competency 2 score.
+
+**The four criteria (each scores 0 or 1):**
+
+| Criterion | Description |
+|-----------|-------------|
+| Signaled | Coach explicitly names the role shift before making the move |
+| Permissioned | Client agrees (explicitly or clearly implicitly) before the move proceeds |
+| Brief | The move is terse; does not crowd out the client's discovery time |
+| Floor returned | Coach immediately invites the client to reflect after the move |
+
+**Score per move: 0–4 criteria met.**
+
+**Threshold logic:**
+
+| Condition | Status | Flag |
+|-----------|--------|------|
+| Any move scoring 0–2 on four criteria | Poor execution | 🔴 Red |
+| Any move scoring 3 on four criteria | Acceptable — watch pattern | 🟡 Amber |
+| Any move scoring 4 on four criteria | Well executed | 🟢 Green |
+| Move count > 3 in a session | Drift from coaching mode | 🔴 Red |
+| Move count ≤ 3, all well executed | Strong execution | 🟢 Green |
+
+**Evocative reframe vs. consultant move — engine classification rule:**
+
+The engine must distinguish between a coach reframe offered evocatively and a direct consultant move:
+
+- **Evocative reframe:** coach offers a frame, label, or observation and the *client* performs the final synthesis. The insight is client-owned. Counts toward evocation (C7), not as a consultant move.
+- **Consultant move:** coach delivers advice, a framework, or a directive conclusion without the client doing the final synthesis. Counts as a consultant move regardless of relational warmth or positive outcome.
+- **Direct advice without signaling or permission** = unsignaled consultant move, scores 1–2/4 criteria, flags red.
+
+> Design note: the consultant or teaching move is not inherently a mindset failure. What matters is execution quality and the who-synthesises test, not the mere presence of the move. Count threshold of 3 is an independent flag — more than three moves signals drift from coaching as the dominant mode even if each individual move is well executed.
+
+---
+
+## 8. theLeadershipWell standards
+
+ICF is the floor. These standards are layered on top and make the methodology proprietary.
+
+- **Coach talk-time ≤ 40%.** Client should be doing most of the talking. To be re-anchored over time against the coach's own strongest sessions.
+- **Flagged emotion ≥ 2 per session minimum.** Below 2 flags red; exactly 2 is the floor (amber); above 2 is green. Tracks the firm's emphasis on emotional attunement (ICF 6.04 / 4.05).
+- **Feeling exploration ≥ 1 per session minimum.** Zero flags red and triggers C6 band 3 ceiling gate. Distinguishes between naming emotions (reflection) and genuinely staying with them (exploration).
+- **Questions should outnumber statements.** Parity (1:1) is scored red.
+- **Teaching / co-thinking standard.** Teaching is welcome only when terse and returned immediately to the client's reflection. Extended teaching = role drift even when relationally warm.
+- **Role-shift flagging is expected.** When the coach steps out of the coaching role, they name it. Flagging is necessary but not sufficient.
+- **Consultant moves ≤ 3 per session.** More than three moves signals drift from coaching as the dominant mode regardless of individual execution quality.
+
+### theLeadershipWell named IP principles (cross-competency)
+
+These named principles are theLeadershipWell proprietary standards. They appear in scoring rationale and calibration documentation.
+
+| Principle | Definition | Applies to |
+|-----------|------------|------------|
+| **The Attunement Standard** | The hinge between Proficient (band 3) and Strong (band 4). Focus earns a 3; attunement earns a 4. | C5, C6, C8 |
+| **The Exploration Gate** | Zero feeling explorations caps C6 at band 3 regardless of emotion-flag count. Named in scoring output when triggered. | C6 |
+| **The Authorship Hinge** | Client-generated vs. coach-packaged actions is the hinge between bands 3 and 4. | C8 |
+| **The Consultant Pull Signature** | When the coach perceives ~60% questions but the engine reads statements exceeding questions, this measurable gap is the signature of consultant pull under emotional or intellectual engagement. | C2, metric 4 |
+
+---
+
+## 9. Scoring rubric — band definitions by competency
+
+### Competency 1 — Demonstrates ethical practice
+
+| Score | Band | Definition | Key markers |
+|------:|------|------------|-------------|
+| 1 | Emerging | Ethical obligations not met; confidentiality or role distinctions breached. | — |
+| 2 | Developing | Partial ethical practice; AI/technology disclosure absent. | Gate 1 triggered — band 2 ceiling. |
+| 3 | Proficient | Ethical standards met; role distinctions generally maintained; no disclosure issues. | No violations observed. |
+| 4 | Strong | Recording/AI disclosure made explicitly at session open with client consent. Role distinctions maintained throughout. | Explicit consent captured. ICF 1.06, 2.5 met. |
+| 5 | Masterful | Ethics woven into the coaching relationship itself — proactive, transparent, client-empowering. Client experiences the ethical stance as care, not compliance. | — |
+
+> **Engine rule:** recording/AI disclosure + explicit client consent at session open = C1 band 4 marker. Disclosure does not need to be repeated mid-session.
+> ICF refs: 1.04, 1.05, 1.06, 2.5.
+
+---
+
+### Competency 2 — Embodies a coaching mindset
 
 | Score | Band | Definition |
 |------:|------|------------|
-| 1 | Emerging | Ethical boundaries regularly violated or unrecognized. Role drift unnamed. Client confidentiality not protected. Coach agenda dominates. |
-| 2 | Developing | Coach shows some awareness of ethical obligations but applies them inconsistently. Role shifts occur without naming. Coach occasionally steers toward preferred outcomes. **Absence of client disclosure around AI or technology use in session evaluation is an automatic band 2 ceiling for this competency regardless of other ethical behaviors.** |
-| 3 | Proficient | Coach generally avoids ethical violations. Role shifts may occur but are recognized after the fact. Client is mostly in the driver's seat but coach occasionally leads or loads questions with agenda. Confidentiality maintained. Competence boundaries respected but the coach/counseling line is managed reactively rather than proactively. |
-| 4 | Strong | Role clarity is consistent and proactive. When role shifts occur they are named and permissioned. Client remains in the driver's seat throughout — coach questions and moves are transparently for the client's benefit, not the coach's agenda. AI and technology use is disclosed and consented to. Coach/counseling boundary is actively managed. |
-| 5 | Masterful | A clear, explicit coaching container is established and maintained. Ethical practice is architectural — it shapes the session before problems arise. Client autonomy is structurally protected, not just preserved in the moment. Role, confidentiality, technology, and competence boundaries are all proactively named and held. |
+| 1 | Emerging | Coach-centered; curiosity absent; client's choices not respected. |
+| 2 | Developing | Approaching client-centeredness; frequent unsignaled consultant moves; framework-filling is the dominant mode. |
+| 3 | Proficient | Generally client-centered; names role shifts when they occur; curiosity present but process-curiosity underdeveloped. Consultant moves may occur without full signaling or permission. |
+| 4 | Strong | Consultant moves are signaled, permissioned, brief, and returned to the client. Coach shows awareness of bias toward frameworks and content. Nurtures the client's own curiosity rather than filling space with frameworks. |
+| 5 | Masterful | Deep mastery of 2.01, 2.04, 2.05, 2.09. Coach holds not-knowing with the client. Curiosity is contagious. Framework offers feel like the client's own discovery. Consultant moves are rare, surgical, and indistinguishable from evocation. |
 
-**Gate rule:** Absence of AI/technology disclosure to the client is an automatic band 2 ceiling on Competency 1 regardless of all other ethical behaviors.
+**Sub-competencies driving the 3→4 transition:**
 
-**Calibration note — sub-competencies driving the 3→4 transition:**
-- 1.06 — Maintains the distinctions between coaching, consulting, psychotherapy and other support professions
-- 1.07 — Refers clients to other support professionals as appropriate
 - 2.01 — Acknowledges that clients are responsible for their own choices
+- 2.04 — Remains aware of and open to the influence of biases, context and culture on self and others (includes bias toward frameworks and content)
 - 2.05 — Uses awareness of self and one's intuition to benefit clients
+- 2.09 — Nurtures openness and curiosity in oneself, the client, and the coaching process
+
+> Diagnosis note: pull toward consulting and frameworks attributed primarily to bias toward action (2.04) and insufficient process-curiosity (2.09), not failure of impact awareness (2.10). 2.10 is a documented strength.
 
 ---
 
-## § rubric — Competency 3 band definitions (new)
+### Competency 3 — Establishes and maintains agreements
 
-Explicit band definitions for Competency 3 (Establishes and Maintains Agreements). Three behavioral anchors structure the bands: opening (session focus and engagement objectives made available), thread (coach tracks and holds stated focus), and close (session lands with insight and forward clarity).
+**Session agreement mechanics:**
 
-| Score | Band | Definition |
-|------:|------|------------|
-| 1 | Emerging | No session agreement established. Coach sets direction unilaterally. Engagement objectives absent or ignored. Session ends without closure. |
-| 2 | Developing | Session focus is loosely established but not co-created. Engagement objectives not referenced. Coach may follow client tangents without returning to stated focus. **Failure to circle back to session insights or close the session is an automatic band 2 ceiling for this competency regardless of other agreement behaviors.** |
-| 3 | Proficient | Session focus is established collaboratively at the opening. Coach tracks the thread and returns to it when the session drifts. Engagement objectives may not be explicitly referenced but their spirit is present. **Session closes with explicit acknowledgment of at least one insight or learning from the session.** |
-| 4 | Strong | Coach invites the client to reference engagement objectives at the opening as a resource, without imposing them. Session focus is co-created and revisited if the client signals a shift. Thread is held consistently. Close is deliberate — learning is named and next steps are clear. |
-| 5 | Masterful | Engagement objectives and session focus are held fluidly — the client experiences them as their own compass, not the coach's agenda. Pivots are recognized and explicitly agreed upon. The close integrates session learning with the broader engagement arc. The client leaves knowing where they are in their own journey. |
+The session agreement is established when the coach explicitly invites the client's agenda and the client responds. The client's response to "what would be most helpful today?" or equivalent = co-created session focus satisfying ICF 3.06. In established ongoing engagements, the standing engagement agreement provides the containing context.
 
-**Gate rule:** Failure to close the session with at least one named insight or learning is an automatic band 2 ceiling on Competency 3 regardless of opening and thread quality.
+| Score | Band | Definition | Key markers |
+|------:|------|------------|-------------|
+| 1 | Emerging | No session focus established; no engagement agreement referenced. | — |
+| 2 | Developing | Session focus emerges without coach invitation; no named insight at close; no standing engagement agreement. | Gate 2 triggered. |
+| 3 | Proficient | Session focus emerges organically; client's agenda received by coach. Standing engagement agreement present. | Client names what they want to discuss. |
+| 4 | Strong | Coach explicitly invites the client's agenda and receives it. Client names at least one insight at close. | Explicit agenda invitation (ICF 3.06) + named insight at close. |
+| 5 | Masterful | Coach reflects the agenda back and partners on its completeness or priority before proceeding. Close includes consolidated insight and forward movement. | "Here's what I heard — what's missing or how does this feel as our focus?" ICF 3.06, 3.08, 3.09. |
 
-**theLeadershipWell standard — engagement objectives:** Engagement objectives are a resource, not a script. The coach's job is to make them available at the opening as an invitation, not to enforce them as an agenda. A brief reference at the start of the session satisfies this standard.
-
----
-
-## § rubric — Competency 4 band definitions (new)
-
-Explicit band definitions for Competency 4 (Cultivates Trust and Safety). The hinge between band 3 and band 4 is the shift from coach behaviors to client enablement. At band 3 the coach is evaluated on what they do. At band 4 the coach is evaluated on what the client is enabled to do. The transcript is the evidence.
-
-**Three client enablement indicators (band 4 and above):**
-1. Deep unprompted disclosure
-2. Willingness to sit with a hard question without deflecting
-3. Self-generated insight that surprised the client
-
-One clear instance of any of the three qualifies for band 4.
-
-| Score | Band | Definition |
-|------:|------|------------|
-| 1 | Emerging | Coach behaviors actively undermine trust. Client is guarded, redirected, or dismissed. No safe container established. |
-| 2 | Developing | Coach is generally respectful but trust-building behaviors are inconsistent. Client disclosure stays surface level. Empathy is stated but not felt. Coach may inadvertently minimize client experience. |
-| 3 | Proficient | Coach demonstrates consistent respect, empathy, and support. Client feels heard. Trust-building behaviors are present and reliable — the coach adapts tone and language to the client, acknowledges feelings, and avoids judgment. |
-| 4 | Strong | The coaching container produces visible evidence of client enablement. At least one of the following is present in the transcript: deep unprompted disclosure, willingness to sit with a hard question without deflecting, or self-generated insight that surprised the client. The coach's trust-building behaviors are the conditions that made this possible. |
-| 5 | Masterful | All three enablement indicators are present. The client operates with full psychological safety — taking risks, naming fears, and generating insight that extends beyond the session into their broader worldview. The coach is nearly invisible as the source of safety; it feels like the client's own courage. |
+> **Gate 2 (revised v0.4):** applies only when no insight is named at close AND no standing engagement agreement exists. Established engagements where the client names a self-generated insight at close = band 3 floor minimum. Gate 2 not triggered.
 
 ---
 
-## § rubric — Competency 5 band definitions (new)
+### Competency 4 — Cultivates trust and safety
 
-Explicit band definitions for Competency 5 (Maintains Presence). The hinge between band 3 and band 4 is the *presence-as-instrument* move — the coach notices what is emerging internally and uses their own felt response as a signal to surface something for the client. This is distinct from self-disclosure; the coach's feeling is the instrument, not the subject.
+| Score | Band | Definition | Key markers |
+|------:|------|------------|-------------|
+| 1 | Emerging | Client does not feel safe; coach behavior undermines trust. | — |
+| 2 | Developing | Some warmth present; trust fragile or inconsistent. | — |
+| 3 | Proficient | Client feels safe to share; coach demonstrates consistent respect and empathy. | ICF 4.04, 4.05 met. |
+| 4 | Strong | Client shares freely and candidly, including emotionally raw content. Coach adapts to client's style and identity. One clear qualifying trust-deepening move present. | ICF 4.01, 4.02, 4.05, 4.06. Single-instance standard. |
+| 5 | Masterful | Client experiences the relationship itself as generative. Coach vulnerability and transparency deepen trust actively. | ICF 4.06. |
 
-**Presence-as-instrument move (band 4 qualifier):** Coach uses own felt response as a signal — noticing what is emerging internally and bridging it back to the client as an invitation to reflect. One clear instance qualifies. This move is scored as an attunement move, not as talk-time or statement inflation.
-
-| Score | Band | Definition |
-|------:|------|------------|
-| 1 | Emerging | Coach is distracted, reactive, or self-focused. Client experience is not tracked. Silence is absent or uncomfortable. |
-| 2 | Developing | Coach is generally attentive but presence is inconsistent. Emotional content in the session is noted but not responded to. Silence is managed but not created deliberately. |
-| 3 | Proficient | Coach stays focused on the client; manages own reactions without losing the thread; creates space for the client to think. Presence is consistent but primarily receptive. |
-| 4 | Strong | Coach uses own felt response as a signal — noticing what is emerging internally and bridging it back to the client as an invitation to reflect. This *presence-as-instrument* move is distinct from self-disclosure; the coach's feeling is the instrument, not the subject. One clear instance qualifies. |
-| 5 | Masterful | Presence-as-instrument is fluid and frequent. Coach and client are co-regulating in real time. The coach's internal state and the client's state move together visibly. |
-
-**Scoring note:** Presence-as-instrument moves must not be counted as talk-time inflation or statement entries in the conversation metrics. They are attunement moves scored within the C5 rubric only.
+> **Single-instance standard:** one clear qualifying trust-deepening move is sufficient to reach band 4.
 
 ---
 
-## § rubric — Competency 6 band definitions (updated)
+### Competency 5 — Maintains presence
 
-Explicit band definitions for Competency 6 (Listens Actively). The hinge between band 3 and band 4 is the *attunement observation* — the coach names resistance, energy shift, or emotional undercurrent observed in the client. This goes beyond reflecting stated content and qualifies as a feeling exploration, not merely a statement.
+**The Attunement Standard applies:** focus earns a 3; attunement earns a 4.
 
-**Attunement observation (band 4 qualifier):** Coach notices resistance, energy shift, or emotional undercurrent and names it directly. One clear instance qualifies. This move is scored as a feeling exploration, not as a statement or reflection.
+| Score | Band | Definition | Key markers |
+|------:|------|------------|-------------|
+| 1 | Emerging | Coach distracted, agenda-driven, or disengaged. | — |
+| 2 | Developing | Partial presence; coach moves away from client's energy toward own plan. | — |
+| 3 | Proficient | Coach is focused and tracks the conversation; picks up threads; responds to content. | ICF 5.01, 5.02. |
+| 4 | Strong | Coach is attuned — present to what is emerging beneath the content (emotion, energy, the unsaid). Creates space for silence. One clear qualifying attunement move present. | ICF 5.03, 5.06, 5.07. Single-instance standard. |
+| 5 | Masterful | Coach's presence is generative. The client slows down and goes deeper because of the quality of attention in the room. | ICF 5.03–5.07. |
 
-**Two named move types for scoring engine:**
-- *Attunement observation* — coach names resistance, energy shift, or emotional undercurrent observed in the client (counts as feeling exploration, not statement)
-- *Presence-as-instrument* — coach uses own felt response as signal and bridges back to client (scored in C5 rubric only, not C6)
-
-| Score | Band | Definition |
-|------:|------|------------|
-| 1 | Emerging | Coach does not listen. Interrupts, redirects, or imposes own agenda. Client's words are not tracked or reflected. |
-| 2 | Developing | Coach hears surface content but misses subtext. Reflections are inaccurate or generic. Emotional content is consistently missed or avoided. |
-| 3 | Proficient | Coach reflects and summarizes accurately; names feelings when observable; emotions are acknowledged but not consistently deepened. |
-| 4 | Strong | Coach notices resistance, energy shift, or emotional undercurrent and names it directly — an *attunement observation* that goes beyond reflecting stated content. One clear instance qualifies. Feeling explorations present (deepening questions follow the emotion). |
-| 5 | Masterful | Attunement is continuous. Coach tracks emotional undercurrent across the full session, not just at peak moments. Patterns across the session are named and explored. |
-
-**Existing gate rule (carried from v0.2):** A session with zero feeling explorations caps Competency 6 at a 3 regardless of emotion-flag count.
+> **Single-instance standard:** one clear qualifying attunement move is sufficient to reach band 4.
 
 ---
 
-## § rubric — Competency 7 band definitions (new)
+### Competency 6 — Listens actively
 
-Explicit band definitions for Competency 7 (Evokes Awareness). The hinge between band 3 and band 4 is the observable sequence: **good question → pause → unconsidered insight.** The question lands somewhere the client has not been. The insight is the client's own, not the coach's reframe handed to them.
+**The Attunement Standard applies:** focus earns a 3; attunement earns a 4.  
+**The Exploration Gate applies:** zero feeling explorations caps at band 3.
 
-**Three levels of insight depth (band 5 territory):**
-- *Identity level* — client sees themselves fundamentally differently
-- *System level* — client sees the patterns, structures, or dynamics they operate within fundamentally differently
-- *Process level* — client sees how they think, decide, or move through the world fundamentally differently
+| Score | Band | Definition | Key markers |
+|------:|------|------------|-------------|
+| 1 | Emerging | Coach not tracking client; interrupting or redirecting without basis. | — |
+| 2 | Developing | Surface listening; coach reflects content but misses subtext. | — |
+| 3 | Proficient | Coach reflects and summarizes content accurately. Emotion named or mirrored at least twice. Stays focused on what the client is saying. | ICF 6.02, 6.04. Reflection present; no exploration. |
+| 4 | Strong | Coach is attuned to what is beneath the content — emotion, energy, the unsaid. At least one qualifying feeling exploration present (see §7.2). One clear qualifying attunement move present. | ICF 6.03, 6.04, 6.05. Single-instance standard. |
+| 5 | Masterful | Coach hears what the client cannot yet say. Reflects patterns across the session and engagement. Emotion exploration is deep, sustained, and transformative. | ICF 6.03, 6.04, 6.05, 6.06. |
 
-Any one of the three levels qualifies for band 5. Frequency alone does not — depth is the measure.
-
-| Score | Band | Definition |
-|------:|------|------------|
-| 1 | Emerging | Questions are primarily informational or leading. Coach tells more than asks. No observable client insight generated. |
-| 2 | Developing | Coach asks questions but they are predictable from the conversation — the client could have anticipated them. Questions move the conversation forward but do not open new territory. Insight is surface level or coach-supplied. |
-| 3 | Proficient | Coach asks questions that are genuinely curious and client-centered. Some questions land in unconsidered territory. Client generates their own responses without being led. Occasional insight observable but not consistently deep. |
-| 4 | Strong | At least one question produces the observable sequence — good question → pause → unconsidered insight. The question came from outside the client's current frame and landed somewhere they had not been. The insight is the client's own, not the coach's reframe handed to them. |
-| 5 | Masterful | Multiple questions produce deep unconsidered insight. At least one insight reaches identity, system, or process level — the client sees themselves, their patterns, or how they operate fundamentally differently as a result. The questions feel inevitable in retrospect but were invisible in advance. |
-
-**Scoring note:** Frequency of powerful questions is not a band 5 indicator. Excessive questioning can disrupt the session's rhythm. Depth of the insight produced is the only band 5 measure. Coach cannot be scored on client follow-through — carry-forward to new behavior is the client's work, not the coach's.
+> **Gate 3 (unchanged):** zero feeling explorations caps C6 at band 3 regardless of flagged emotion count.  
+> **Single-instance standard:** one clear qualifying feeling exploration is sufficient to reach band 4.
 
 ---
 
-## § rubric — Competency 8 band definitions (new)
+### Competency 7 — Evokes awareness
 
-Explicit band definitions for Competency 8 (Facilitates Client Growth). The hinge between band 3 and band 4 is authorship of actions — who generates the next steps, the coach or the client. At band 5, the client is willingly examining their own beliefs, values, and behaviors with a desire to change toward a better version of themselves.
+**Insight depth levels:**
 
-**Authorship rule:** Coach-summarized or coach-packaged actions = band 3 ceiling. Client-generated actions = band 4 qualifier.
+| Level | Definition |
+|-------|------------|
+| Process level | Client gains awareness of what is happening in a situation or pattern. |
+| System level | Client gains awareness of how their context, relationships, or environment shape the pattern. |
+| Identity level | Client gains awareness of how their sense of self, values, or core beliefs are implicated. |
 
-| Score | Band | Definition |
-|------:|------|------------|
-| 1 | Emerging | No integration of learning into action. Session ends without forward movement. Coach may generate conclusions on behalf of the client or skip closure entirely. |
-| 2 | Developing | Some action items identified but primarily coach-generated or coach-suggested. Client is passive in the design of next steps. Learning is not explicitly connected to action. Accountability is absent or superficial. |
-| 3 | Proficient | Actions are identified and the client understands them. Coach may summarize or package next steps on the client's behalf. Learning is acknowledged. Some client ownership of actions but the coach is doing meaningful integration work. Accountability is present but loosely held. |
-| 4 | Strong | Client generates their own actions without the coach summarizing or packaging them. Coach creates conditions — through questions and silence — for the client to name what they will do and why. Actions are connected to the client's own insight from the session. Accountability is co-designed, not assigned. |
-| 5 | Masterful | Client willingly examines their own beliefs, values, and behaviors with a desire to change toward a better version of themselves. The coach is operating at that beliefs, values, and behaviors level through questions alone. The client engages deep change courageously and apparently on their own — the coach's role is nearly invisible. Actions emerge naturally from identity, system, or process-level insight rather than being constructed at the surface. |
+Any one clear instance at any level qualifies for band 5 if the insight is genuinely generative and client-owned.
 
-**Scoring note:** Coach cannot be scored on client follow-through between sessions. Band 5 is evaluated entirely within the session itself — the client's willingness to examine and desire to change must be visible in the transcript.
+| Score | Band | Definition | Key markers |
+|------:|------|------------|-------------|
+| 1 | Emerging | Coach not evoking; advice-giving dominant. | — |
+| 2 | Developing | Some questions present but coach-directed; insight not generated. | — |
+| 3 | Proficient | Coach uses powerful questions; client generates awareness at process level. Coach may use reframes or metaphors. | ICF 7.03, 7.04, 7.10. |
+| 4 | Strong | Coach evokes awareness at system or identity level. Questions go beyond the situation to the client's patterns, values, or worldview. One clear qualifying insight present. | ICF 7.02, 7.03, 7.08. Single-instance standard. |
+| 5 | Masterful | Any one clear instance of identity-, system-, or process-level insight that is deeply generative and fully client-owned. Coach nearly invisible. | ICF 7.02, 7.08, 7.11. |
 
----
-
-## § rubric — cross-competency principles (new)
-
-These principles apply across all eight competencies and are established in v0.4 as the philosophical foundation of the rubric.
-
-**The Attunement Standard (theLeadershipWell IP):** The hinge between Proficient (band 3) and Strong (band 4) across Competencies 5, 6, and 8 is the shift from *focused* to *attuned*. Focus earns a 3; attunement earns a 4.
-
-**The Enablement Standard (theLeadershipWell IP):** At band 4, scoring shifts from evaluating coach behaviors to evaluating what those behaviors enable in the client. The transcript is the evidence. One clear instance of client enablement qualifies.
-
-**The Invisibility Standard (theLeadershipWell IP):** At band 5, the coach is nearly invisible as the source of the work. The client's courage, insight, and action feel self-generated. The coach's role is architectural — it created the conditions, then stepped back.
-
-**The Depth Standard (theLeadershipWell IP):** Band 5 on Competency 7 and Competency 8 is measured by depth of insight, not frequency of moves. Insight that reaches identity, system, or process level qualifies. Situational insight does not.
+> **Single-instance standard:** one clear qualifying insight is sufficient to reach band 5 for C7.
 
 ---
 
-## § scoring engine — move classification updates (new)
+### Competency 8 — Facilitates client growth
 
-The following move types must be classified correctly by the scoring engine. Misclassification of these moves was identified as the primary source of scoring error in the B.W. session calibration (June 2026).
+**The Authorship Hinge:** client-generated vs. coach-packaged actions is the hinge between bands 3 and 4.  
+**Band 4 vs. 5:** band 4 = what the coach enables in the client; band 5 = the coach becomes nearly invisible as the client does the deeper work.
 
-| Move type | Description | Correct classification |
-|-----------|-------------|----------------------|
-| Attunement observation | Coach names resistance, energy shift, or emotional undercurrent observed in the client | Feeling exploration (C6) — not a statement |
-| Presence-as-instrument | Coach uses own felt response as signal and bridges back to client | Attunement move (C5 rubric) — not talk-time inflation, not a statement |
-| "It sounds like..." observation | Coach names what they observe in the client's energy or resistance | Attunement observation — classify per C6 above |
-| "If I were feeling this, I'd..." bridge | Coach uses own felt response as signal, bridges to client | Presence-as-instrument — classify per C5 above |
+| Score | Band | Definition | Key markers |
+|------:|------|------------|-------------|
+| 1 | Emerging | No closing or integration; session ends without learning consolidated. | — |
+| 2 | Developing | Coach attempts close but insight or action is thin, coach-packaged, or absent. No return to agreed session actions. | ICF 8.06 absent or weak. |
+| 3 | Proficient | Coach consolidates learning at close; client names an insight. Actions may be coach-suggested. | ICF 8.01, 8.06, 8.09. |
+| 4 | Strong | Client generates their own insight and at least one self-authored action or commitment. Coach partners on accountability. | ICF 8.02, 8.03. Authorship hinge met. |
+| 5 | Masterful | Client integrates insight into their worldview and self-generates a growth plan. Coach nearly invisible in the growth design. | ICF 8.01, 8.02, 8.07. |
 
-**Engine rule:** Neither attunement observations nor presence-as-instrument moves should inflate coach talk-time percentage, statement count, or reduce the question-to-statement ratio. They are attunement moves with their own classification.
-
----
-
-## Reconciled calibration scores — B.W. session (June 2026)
-
-This session is the first calibration anchor for Competencies 1, 3, 4, 5, 6, 7, and 8 band definitions, and the first session to surface the attunement observation and presence-as-instrument move classification issue.
-
-| # | Competency | App score | Self score | Reconciled | Notes |
-|---|-----------|-----------|------------|------------|-------|
-| 1 | Demonstrates ethical practice | — | 4 | 4 | Role clarity strong; Voss move named |
-| 2 | Embodies a coaching mindset | — | 4 | 3 | Content pull present; Voss move insufficiently permissioned |
-| 3 | Establishes and maintains agreements | — | 4 | 3 | Close was coach-summarized; thread held well |
-| 4 | Cultivates trust and safety | — | 4 | 5 | All three enablement indicators present |
-| 5 | Maintains presence | — | 4 | 4 | Presence-as-instrument move confirmed |
-| 6 | Listens actively | — | 4 | 4 | Attunement observation confirmed; two feeling explorations |
-| 7 | Evokes awareness | — | 3 | 5 | Multiple unconsidered insights; process-level insight at close |
-| 8 | Facilitates client growth | — | 3 | 5 | Client reached process-level insight with desire to change |
-
-**Reconciled overall: 4.1 · Strong**
-
-**Primary engine error identified:** App scored 2.8. Gap of 1.3 from reconciled score attributed primarily to misclassification of attunement observations and presence-as-instrument moves as statements or talk-time, suppressing C5, C6, C7, and C8 scores.
+> **Engine rule:** "What is your insight or awareness?" is a valid close structure. Score on whether the client generates the insight (band 3+) and whether the coach consolidates, expands, and partners on forward action (band 4+). Absence of any consolidation or forward partnering = band 2.
 
 ---
 
-## § 15 — Version history (updated)
+## 10. Gate rules
 
-- **v0.1** — Baseline locked. Five conversation metrics, eight competencies, theLeadershipWell standards, WIN debrief, two-axis trend, design language, data model.
-- **v0.2** — Added feeling_explorations as sixth conversation metric. Added §7.2 defining the reflection/exploration distinction and its scoring gate. Updated JSON data model. K.V. session documented as calibration anchor.
-- **v0.3** — Added consultant moves as seventh conversation metric with four-criteria sub-rubric and threshold logic. Added explicit band definitions (3/4/5) for Competency 2. Updated JSON data model. H.B. session documented as calibration anchor for consultant moves metric. Competency 2 diagnosis refined.
-- **v0.4** — Added explicit band definitions (1–5) for Competencies 1, 3, 4, 5, 6, 7, and 8. Added two named move classifications to scoring engine: attunement observation (C6) and presence-as-instrument (C5). Added engine rule preventing these moves from inflating talk-time or statement counts. Added cross-competency principles: Attunement Standard, Enablement Standard, Invisibility Standard, Depth Standard. Added gate rules to Competencies 1 and 3. B.W. session documented as calibration anchor; primary engine scoring error identified and resolved.
+Gates are hard ceilings. When triggered, the competency cannot score above the ceiling regardless of other evidence.
+
+| Gate | Condition | Competency affected | Ceiling | Version |
+|------|-----------|---------------------|---------|---------|
+| Gate 1 | No AI/technology disclosure to client | C1 | Band 2 | v0.1 |
+| Gate 2 | No named insight at close AND no standing engagement agreement | C3 | Band 2 | v0.4 revised |
+| Gate 3 | Zero feeling explorations in session | C6 | Band 3 | v0.2 |
 
 ---
 
-*theLeadershipWell Coaching Session Report Spec · delta v0.3 → v0.4 · Dr. Jeff Holmes · June 2026*
+## 11. WIN debrief
+
+The WIN block is the human reflection layer, structurally separate from the machine-generated scores.
+
+- **What went well** — genuine strengths of the session, stated specifically. Coach generates this list via "what else?" until ideas are exhausted.
+- **Improve (one)** — a single most-important improvement, not a list.
+- **Next step** — one concrete, behavioral practice step the coach will take in the next session. Connects to the coach's running development edges.
+
+**Protocol:** coach scores themselves first (WIN self-assessment) before receiving machine-generated feedback. WIN is coach-owned, not machine-generated.
+
+---
+
+## 12. Trend mechanics
+
+Two trend questions:
+
+1. **Am I getting better overall?** A line across all the coach's scored sessions, all clients.
+2. **Am I getting better with this client?** A line across only this client's sessions (by initials).
+
+The per-client line is separate because a coach's edges often show up most with particular clients (e.g. business-rich clients that tempt consultant drift). Per-client line running below the overall line is a primary insight of the tool.
+
+- Trend baselines at first scored session; chart populates as more sessions are scored.
+- Score deltas display green when rising, red when falling. No prior data = neutral baseline.
+- Y-axis is the band scale (developing / proficient / strong), not raw numbers.
+
+---
+
+## 13. Color and typography tokens
+
+All colors must work in both light and dark mode (semantic theme variables; never hard-coded except categorical band ramps).
+
+**Semantic status colors**
+
+- Red / danger → threshold breach, falling score
+- Amber / warning → at threshold, development band
+- Green / success → threshold met or exceeded, strength band, rising score
+- Blue / info → proficient band, neutral informational accent
+- Tertiary / muted → baseline and "no comparison yet" states
+
+**Typography**
+
+- Numbers (scores, metrics): largest, medium weight.
+- Section titles: medium weight, ~16px.
+- Labels and captions: small, muted, regular weight.
+- Sentence case throughout. Two weights only (regular, medium).
+
+**Layout**
+
+- Metric cards: muted surface fill, no border, medium corner radius, responsive grid (`auto-fit`, ~140–150px min column).
+- Section dividers: 0.5px top border, generous vertical padding.
+
+---
+
+## 14. Data model
+
+The evaluation engine outputs a structured object that the report template renders. This decouples scoring from presentation and feeds both the report and the trend store.
+
+```json
+{
+  "session": {
+    "coach": "Jeff H.",
+    "client_initials": "M.W.",
+    "type": "1:1 leadership",
+    "session_number": 3,
+    "engagement_total": 12,
+    "date": "2026-06-19",
+    "standing_engagement": true
+  },
+  "overall_score": 3.3,
+  "band": "Proficient",
+  "competencies": [
+    {
+      "id": 6,
+      "name": "Listens actively",
+      "domain": "Communicating effectively",
+      "score": 3.0,
+      "band": "Proficient",
+      "evidence": "Named frustration once; coping inquiry present but no feeling exploration; gate 3 triggered",
+      "subcompetency_refs": ["6.04", "6.02"],
+      "gates_triggered": ["gate_3"]
+    }
+  ],
+  "metrics": {
+    "coach_talk_time_pct": 38,
+    "flagged_emotion_count": 2,
+    "feeling_explorations": 0,
+    "question_to_statement": "1:1.4",
+    "reflective_pauses": 2,
+    "role_shifts_flagged": 0,
+    "consultant_moves": {
+      "count": 4,
+      "moves": [
+        {
+          "description": "Direct advice — less is more strategy",
+          "signaled": false,
+          "permissioned": false,
+          "brief": true,
+          "floor_returned": false,
+          "score": 1,
+          "status": "red"
+        }
+      ],
+      "count_flag": "red",
+      "execution_flag": "red"
+    },
+    "source": "estimated"
+  },
+  "gates_triggered": {
+    "gate_1": false,
+    "gate_2": false,
+    "gate_3": true
+  },
+  "win": {
+    "went_well": "",
+    "improve": "",
+    "next_step": ""
+  },
+  "evidence_moments": [
+    {
+      "competency": "6.04",
+      "timestamp": "00:47:50",
+      "quote_short": "I am hearing frustration and anger — am I hearing that right?",
+      "note": "Feeling reflection present; followed by coping inquiry, not exploration"
+    }
+  ]
+}
+```
+
+**Required input:** speaker-separated verbatim transcript (e.g. Zoom VTT). Speaker attribution enables talk-time, question/statement ratio, and emotion-flag counting. An AI summary alone is insufficient and will materially limit scoring on Competencies 5, 6, and 7.
+
+---
+
+## 15. Calibration approach
+
+1. The engine scores a session blind.
+2. The coach scores the same session using the WIN framework first.
+3. The two are reconciled; gaps refine the rubric.
+
+Each reconciliation session is a calibration opportunity. After several rounds, the rubric becomes theLeadershipWell's documented standard rather than generic AI judgment. The coarse 5-band scale is intentional — it makes "strong" mean the same thing across coaches, which matters most in Phase 2.
+
+**Calibration anchors on file:**
+
+| Client | Delta version | Key anchor |
+|--------|---------------|------------|
+| K.H. | Outstanding | Draft pending |
+| K.V. | v0.2 | Feeling exploration distinction; reflection/exploration gate (gate 3) |
+| H.B. | v0.3 | Consultant moves sub-rubric; two moves at 3/4 amber; coaching mindset diagnosis |
+| Unnamed | v0.4 | C1 disclosure rule; C3 gate 2 revision; C6 coping inquiry exclusion; C2 evocation vs. consultant move classification |
+
+**Spec files:** `coaching-eval/spec/`  
+**Calibration anchors:** `coaching-eval/calibration/`
+
+---
+
+## 16. Open items
+
+- **Question : statement parity case.** Parity (1:1) currently treated as red. May be revised to amber as calibration data accumulates.
+- **Talk-time threshold.** 40% is a working rule to be re-anchored against the coach's strongest sessions over time.
+- **Edge weighting.** Whether to over-weight a coach's active development edges in the overall average. Not yet enabled.
+- **Thresholds for pauses and role-shift flags.** Currently counts only; thresholds pending calibration data.
+- **K.H. and K.V. calibration anchor documents.** Outstanding drafts from prior sessions; needed to complete the anchor library.
+- **Automation pipeline.** Plaud.ai → Zapier → Google Drive → Claude Code daily routine → scored report by email. Client name matching (fail-loud logic) and email delivery remain to be completed.
+
+---
+
+## 17. Version history
+
+- **v0.1** — Baseline. Report anatomy, 5-band scale, eight-competency model, five conversation metrics with threshold logic, theLeadershipWell standards, WIN debrief, two-axis trend, design language, data model.
+- **v0.2** — Added `feeling_explorations` as sixth conversation metric. Added §7.2 defining the reflection/exploration distinction and its scoring gate (gate 3). Updated JSON data model. K.V. session documented as calibration anchor.
+- **v0.3** — Added consultant moves as seventh conversation metric with four-criteria sub-rubric and threshold logic. Added explicit band definitions (3/4/5) for Competency 2. Updated JSON data model. H.B. session documented as calibration anchor for consultant moves metric. Competency 2 diagnosis: pull toward frameworks attributed to bias (2.04) and process-curiosity (2.09) rather than impact awareness (2.10).
+- **v0.4** — Full consolidated spec. Added explicit band definitions for all eight competencies. C1 band 4: explicit recording/AI disclosure + client consent at session open satisfies ethical practice at band 4; engine no longer under-scores on this. C2 calibration note: evocative reframing vs. unsignaled consultant move determined by who performs the final synthesis — client = evocation, coach = consultant move. C3 band definitions (3/4/5) added; session agreement mechanics clarified (client response to open agenda invitation = co-created session focus, ICF 3.06); gate 2 revised — applies only when no insight named AND no standing engagement agreement exists. C4, C5, C7, C8 band definitions added. C6: coping inquiry formally excluded from feeling exploration definition; three-way classification table (reflection / coping inquiry / exploration) added to engine spec. Cross-competency principles named as theLeadershipWell IP: Attunement Standard, Exploration Gate, Authorship Hinge, Consultant Pull Signature. Gate rules consolidated into single reference table with `standing_engagement` field and `gates_triggered` object added to data model. Calibration anchor: unnamed client session, June 2026.
+
+---
+
+_theLeadershipWell Coaching Session Report Spec · v0.4 · Dr. Jeff Holmes · June 2026_

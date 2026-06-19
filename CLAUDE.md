@@ -11,10 +11,10 @@ A coaching platform for Dr. Jeff Holmes (theLeadershipWell). Two pillars:
    transcript context) and uses Claude to generate a personalized prep email,
    sent via Gmail.
 2. **Coaching scorecard** — scores recorded sessions against the ICF 2025 Core
-   Competencies refined by theLeadershipWell's standards. Spec baseline lives in
-   `spec/theLeadershipWell_Session_Report_Spec_v0.3.md`; the v0.4 delta
-   (`..._v0.4.md`) locks the per-competency band definitions — read both before
-   touching scoring.
+   Competencies refined by theLeadershipWell's standards. The **consolidated
+   spec `spec/theLeadershipWell_Session_Report_Spec_v0.4.md` is the single
+   source of truth** — read it before touching scoring (the older `..._v0.3.md`
+   is kept for history only).
 
 Plus a **client workspace** (per-client hub) and **roster**.
 
@@ -62,7 +62,7 @@ comment there).
 - `transcripts` — ingested transcript md + match result. `content_hash` (unique)
   dedupes ingestion. `match_status` = matched|needs_review|unmatched.
 - `session_reports` — one scored report per transcript. `report` jsonb holds the
-  full engine output (spec §16); scalar columns are denormalized for
+  full engine output (spec §14); scalar columns are denormalized for
   aggregation. `coach_self_scores`/`coach_overall`/`coach_notes` = the coach's
   parallel assessment, which **never overwrites** the machine score.
 
@@ -85,20 +85,25 @@ manual paste and per-client Drive import):
 Uncertain/ambiguous matches → `needs_review` (never guessed).
 
 ### Scoring engine (`lib/scoring/engine.ts`)
-Prompts Claude with the rubric — including the locked **per-competency band
-definitions** (spec v0.4, rendered from `rubric.ts#COMPETENCY_BANDS`) and the
-cross-competency principles (`CROSS_COMPETENCY_PRINCIPLES`) — then **enforces the
-§17 arithmetic gates in code** (feeling-explorations cap on Competency 6,
-consultant-move math + >3 mode-drift flag, threshold flags, equal-weighted
-overall, band derivation). The **judgment gates** are instructed in the prompt
-(they need reading, not arithmetic): attunement for 5/6/8, the Competency-2
-band-4 gate, and the v0.4 **Competency-1 AI/technology-disclosure** and
-**Competency-3 session-close** band-2 ceilings. v0.4 also adds two move
-classifications the prompt pins down — *attunement observation* (counts as a C6
-feeling exploration) and *presence-as-instrument* (a C5 move) — neither of which
-may inflate talk-time or statement counts. Output shape = spec §16
-(`lib/scoring/types.ts`). `lib/scoring/aggregate.ts` rolls reports into the
-dashboard/scorecard headline numbers.
+Prompts Claude with the consolidated v0.4 rubric — the **per-competency band
+definitions** (rendered from `rubric.ts#COMPETENCY_BANDS`, all eight) and the
+named **cross-competency IP principles** (`CROSS_COMPETENCY_PRINCIPLES`:
+Attunement Standard, Exploration Gate, Authorship Hinge, Consultant Pull
+Signature) — then **enforces the deterministic rules in code**: the metric
+threshold flags (talk-time, flagged emotion <2/=2/>2, feeling explorations
+0/1/≥2, **question:statement computed from the ratio** — parity or statements-lead
+is red, consultant-move math + >3 mode-drift), the equal-weighted overall, band
+derivation, and the **three §10 gates**. Gate 3 (zero feeling explorations → C6 ≤
+band 3) is recomputed arithmetically; **Gate 1** (no AI/tech disclosure → C1 ≤
+band 2) and **Gate 2** (no named insight at close AND no standing engagement → C3
+≤ band 2) are applied as code ceilings off booleans the model returns. The finer
+judgment calls live in the prompt: the **three-way emotion classification**
+(reflection / coping inquiry / feeling exploration — coping inquiry counts as
+neither a flagged emotion nor an exploration), the **evocative-reframe vs.
+consultant-move** who-synthesises test, and the **single-instance band-4
+standard** for C4–C7. Output carries `gates_triggered` (per competency + session)
+and `session.standing_engagement`; shape = spec §14 (`lib/scoring/types.ts`).
+`lib/scoring/aggregate.ts` rolls reports into the dashboard/scorecard numbers.
 
 **Rescore.** `runAndStoreReport` upserts on `transcript_id`, so re-running it
 replaces the machine report in place (coach self-scores/notes live in separate
@@ -328,12 +333,16 @@ The `library-pdfs` Storage bucket is created automatically on first upload.
   the workspace `ActionsCard`.
 - **Coaching agreements** — build → assign → e-sign → `AgreementsCard`.
 - **Prep-sheet agenda fill-ins** → public page → `AgendaCard`.
-- **Band definitions locked (spec v0.4) (#39)** — explicit 1–5 band definitions
-  for Competencies 1 and 3–8 (C2 already done), held in `rubric.ts#COMPETENCY_BANDS`,
-  rendered into both the engine prompt and the competency expander. Adds the
-  cross-competency principles and the attunement-observation / presence-as-instrument
-  move classifications, plus the C1 (AI/tech disclosure) and C3 (session close)
-  judgment gates. B.W. is the calibration anchor.
+- **Consolidated v0.4 rubric (#39)** — explicit 1–5 band definitions for all
+  eight competencies (`rubric.ts#COMPETENCY_BANDS`), rendered into both the engine
+  prompt and the competency expander. Named cross-competency IP principles
+  (Attunement Standard, Exploration Gate, Authorship Hinge, Consultant Pull
+  Signature), the three-way emotion classification (reflection / coping inquiry /
+  exploration), the evocative-reframe vs. consultant-move test, single-instance
+  band-4 standards, and the three §10 gates (1: AI/tech disclosure → C1≤2; 2: no
+  named insight at close AND no standing engagement → C3≤2; 3: zero feeling
+  explorations → C6≤3) surfaced as `gates_triggered` on the report. The report
+  page shows a red gate note on any capped competency.
 
 ### Open — keep these tracked (also GitHub issues)
 - **Worksheets (client fill-in) — to be built (#38).** Worksheet-kind Library folders

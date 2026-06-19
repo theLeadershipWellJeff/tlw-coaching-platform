@@ -6,6 +6,13 @@ import type { SessionReport } from '@/lib/supabase/types'
 import type { Band, Metrics } from '@/lib/scoring/types'
 import { BandChip, BandPill, MetricCard, Section, flagColor } from '../ui'
 
+/** Human labels for the spec §10 gate ceilings, shown on a capped competency. */
+const GATE_LABELS: Record<string, string> = {
+  gate_1: 'gate 1 · no AI/tech disclosure — capped at developing',
+  gate_2: 'gate 2 · no named insight at close — capped at developing',
+  gate_3: 'gate 3 · zero feeling explorations — capped at proficient',
+}
+
 function fmtDate(d: string | null | undefined): string {
   if (!d) return '—'
   return new Date(d + 'T00:00:00').toLocaleDateString('en-US', {
@@ -53,7 +60,13 @@ function ConversationMetrics({ m }: { m: Metrics }) {
           label="feeling explorations"
           value={m.feeling_explorations ?? '—'}
           flag={m.feeling_explorations_flag}
-          status={m.feeling_explorations === 0 ? 'caps competency 6 at 3' : 'staying with feeling'}
+          status={
+            m.feeling_explorations === 0
+              ? 'zero — gate 3 caps competency 6 at 3'
+              : m.feeling_explorations === 1
+              ? 'at the minimum of 1'
+              : 'staying with feeling'
+          }
         />
         <MetricCard
           label="question : statement"
@@ -452,6 +465,11 @@ export function SessionReportView({ id }: { id: string }) {
                             </span>
                           </button>
                           {c.evidence && <p className="mt-1.5 text-[12px] text-tlw-warm-gray">{c.evidence}</p>}
+                          {c.gates_triggered && c.gates_triggered.length > 0 && (
+                            <p className="mt-1.5 text-[11px] font-medium" style={{ color: 'var(--color-danger)' }}>
+                              {c.gates_triggered.map((gid) => GATE_LABELS[gid] || gid).join(' · ')}
+                            </p>
+                          )}
                           {c.subcompetency_refs.length > 0 && (
                             <p className="mt-1 text-[11px]" style={{ color: 'var(--color-muted)' }}>
                               {c.subcompetency_refs.join(' · ')}

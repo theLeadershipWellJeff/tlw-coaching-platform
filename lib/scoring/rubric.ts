@@ -60,31 +60,33 @@ export const BAND_DESCRIPTIONS: Record<Band, string> = {
 }
 
 /**
- * Per-competency band definitions, locked in spec v0.4 (Competencies 1, 3–8)
- * with Competency 2 carried from v0.3. These OVERRIDE the generic
- * BAND_DESCRIPTIONS for the competency expander, and are folded verbatim into
- * the engine prompt so the rubric the coach reads and the rubric Claude scores
- * against are the same text. A competency/band missing here falls back to the
- * generic description (see `bandDefinition`); not every competency has all five
- * bands authored (C2 only has 3–5).
+ * Per-competency band definitions, locked in spec v0.4 (consolidated, all eight
+ * competencies). These OVERRIDE the generic BAND_DESCRIPTIONS for the competency
+ * expander, and are folded into the engine prompt so the rubric the coach reads
+ * and the rubric Claude scores against are the same text. A competency/band
+ * missing here falls back to the generic description (see `bandDefinition`).
  */
 export const COMPETENCY_BANDS: Record<number, Partial<Record<Band, string>>> = {
-  // 1 — Demonstrates ethical practice (v0.4). Gate: absent AI/technology
-  // disclosure caps this competency at Developing (band 2).
+  // 1 — Demonstrates ethical practice. Gate 1: absent AI/technology disclosure
+  // caps at Developing (band 2). Disclosure + consent at open = band-4 marker.
   1: {
     Emerging:
-      'Ethical boundaries regularly violated or unrecognized. Role drift unnamed. Client confidentiality not protected. Coach agenda dominates.',
+      'Ethical obligations not met; confidentiality or role distinctions breached.',
     Developing:
-      'Some awareness of ethical obligations but applied inconsistently. Role shifts occur without naming. Coach occasionally steers toward preferred outcomes. Absence of client disclosure around AI/technology use is an automatic band-2 ceiling here regardless of other ethical behaviors.',
+      'Partial ethical practice; AI/technology disclosure absent (Gate 1 — band-2 ceiling).',
     Proficient:
-      'Generally avoids ethical violations. Role shifts may occur but are recognized after the fact. Client mostly in the driver’s seat, though the coach occasionally leads or loads questions with agenda. Confidentiality maintained. Coach/counseling line managed reactively.',
+      'Ethical standards met; role distinctions generally maintained; no disclosure issues.',
     Strong:
-      'Role clarity is consistent and proactive; role shifts are named and permissioned. Client remains in the driver’s seat throughout — moves are transparently for the client’s benefit, not the coach’s agenda. AI/technology use is disclosed and consented to. Coach/counseling boundary actively managed.',
+      'Recording/AI disclosure made explicitly at session open with client consent. Role distinctions maintained throughout (ICF 1.06, 2.5).',
     Masterful:
-      'A clear, explicit coaching container is established and maintained. Ethical practice is architectural — it shapes the session before problems arise. Client autonomy is structurally protected. Role, confidentiality, technology, and competence boundaries are all proactively named and held.',
+      'Ethics woven into the coaching relationship itself — proactive, transparent, client-empowering. The client experiences the ethical stance as care, not compliance.',
   },
-  // 2 — Embodies a coaching mindset (v0.3). Bands 1–2 fall back to generic.
+  // 2 — Embodies a coaching mindset.
   2: {
+    Emerging:
+      'Coach-centered; curiosity absent; client’s choices not respected.',
+    Developing:
+      'Approaching client-centeredness; frequent unsignaled consultant moves; framework-filling is the dominant mode.',
     Proficient:
       'Generally client-centered; names role shifts when they occur; curiosity present but process-curiosity underdeveloped. Consultant moves may occur without full signaling or permission.',
     Strong:
@@ -92,115 +94,109 @@ export const COMPETENCY_BANDS: Record<number, Partial<Record<Band, string>>> = {
     Masterful:
       'Deep mastery of 2.01/2.04/2.05/2.09. Coach holds not-knowing with the client. Curiosity is contagious. Framework offers feel like the client’s own discovery. Consultant moves are rare, surgical, and indistinguishable from evocation.',
   },
-  // 3 — Establishes and maintains agreements (v0.4). Gate: a session that does
-  // not close with at least one named insight/learning caps at band 2.
+  // 3 — Establishes and maintains agreements. Gate 2: no named insight at close
+  // AND no standing engagement → band 2.
   3: {
     Emerging:
-      'No session agreement established. Coach sets direction unilaterally. Engagement objectives absent or ignored. Session ends without closure.',
+      'No session focus established; no engagement agreement referenced.',
     Developing:
-      'Session focus is loosely established but not co-created. Engagement objectives not referenced. Coach may follow tangents without returning to the stated focus. Failure to circle back to session insights or close the session is an automatic band-2 ceiling here regardless of other agreement behaviors.',
+      'Session focus emerges without coach invitation; no named insight at close; no standing engagement agreement (Gate 2).',
     Proficient:
-      'Session focus established collaboratively at the opening. Coach tracks the thread and returns to it when the session drifts. Engagement objectives may not be explicitly referenced but their spirit is present. Session closes with explicit acknowledgment of at least one insight or learning.',
+      'Session focus emerges organically; client’s agenda received by the coach. Standing engagement agreement present.',
     Strong:
-      'Coach invites the client to reference engagement objectives at the opening as a resource, without imposing them. Focus is co-created and revisited if the client signals a shift. Thread held consistently. Close is deliberate — learning is named and next steps are clear.',
+      'Coach explicitly invites the client’s agenda and receives it (ICF 3.06). Client names at least one insight at close.',
     Masterful:
-      'Engagement objectives and session focus are held fluidly — the client experiences them as their own compass, not the coach’s agenda. Pivots are recognized and explicitly agreed upon. The close integrates session learning with the broader engagement arc. The client leaves knowing where they are in their own journey.',
+      'Coach reflects the agenda back and partners on its completeness or priority before proceeding. Close includes consolidated insight and forward movement (ICF 3.06, 3.08, 3.09).',
   },
-  // 4 — Cultivates trust and safety (v0.4). Band-4 hinge: client enablement
-  // (deep unprompted disclosure / sitting with a hard question / surprising
-  // self-generated insight). One clear instance qualifies.
+  // 4 — Cultivates trust and safety. Single-instance standard for band 4.
   4: {
     Emerging:
-      'Coach behaviors actively undermine trust. Client is guarded, redirected, or dismissed. No safe container established.',
+      'Client does not feel safe; coach behavior undermines trust.',
     Developing:
-      'Generally respectful but trust-building behaviors are inconsistent. Client disclosure stays surface level. Empathy is stated but not felt. Coach may inadvertently minimize client experience.',
+      'Some warmth present; trust fragile or inconsistent.',
     Proficient:
-      'Consistent respect, empathy, and support. Client feels heard. Trust-building behaviors are present and reliable — the coach adapts tone and language to the client, acknowledges feelings, and avoids judgment.',
+      'Client feels safe to share; coach demonstrates consistent respect and empathy (ICF 4.04, 4.05).',
     Strong:
-      'The container produces visible evidence of client enablement: at least one of deep unprompted disclosure, willingness to sit with a hard question without deflecting, or self-generated insight that surprised the client. The coach’s trust-building behaviors made it possible.',
+      'Client shares freely and candidly, including emotionally raw content. Coach adapts to the client’s style and identity. One clear qualifying trust-deepening move present (single-instance standard; ICF 4.01, 4.02, 4.05, 4.06).',
     Masterful:
-      'All three enablement indicators present. The client operates with full psychological safety — taking risks, naming fears, generating insight that extends beyond the session. The coach is nearly invisible as the source of safety; it feels like the client’s own courage.',
+      'Client experiences the relationship itself as generative. Coach vulnerability and transparency deepen trust actively (ICF 4.06).',
   },
-  // 5 — Maintains presence (v0.4). Band-4 hinge: presence-as-instrument move
-  // (coach uses own felt response as a signal, bridged back to the client).
+  // 5 — Maintains presence. Attunement Standard; single-instance standard for band 4.
   5: {
     Emerging:
-      'Coach is distracted, reactive, or self-focused. Client experience is not tracked. Silence is absent or uncomfortable.',
+      'Coach distracted, agenda-driven, or disengaged.',
     Developing:
-      'Generally attentive but presence is inconsistent. Emotional content is noted but not responded to. Silence is managed but not created deliberately.',
+      'Partial presence; coach moves away from the client’s energy toward own plan.',
     Proficient:
-      'Stays focused on the client; manages own reactions without losing the thread; creates space for the client to think. Presence is consistent but primarily receptive.',
+      'Coach is focused and tracks the conversation; picks up threads; responds to content (ICF 5.01, 5.02).',
     Strong:
-      'Uses own felt response as a signal — noticing what is emerging internally and bridging it back to the client as an invitation to reflect. This presence-as-instrument move is distinct from self-disclosure; the coach’s feeling is the instrument, not the subject. One clear instance qualifies.',
+      'Coach is attuned — present to what is emerging beneath the content (emotion, energy, the unsaid). Creates space for silence. One clear qualifying attunement move present (single-instance standard; ICF 5.03, 5.06, 5.07).',
     Masterful:
-      'Presence-as-instrument is fluid and frequent. Coach and client co-regulate in real time. The coach’s internal state and the client’s state move together visibly.',
+      'Coach’s presence is generative. The client slows down and goes deeper because of the quality of attention in the room (ICF 5.03–5.07).',
   },
-  // 6 — Listens actively (v0.4). Band-4 hinge: attunement observation (coach
-  // names resistance, energy shift, or emotional undercurrent) — counts as a
-  // feeling exploration. Zero feeling explorations still caps this at band 3.
+  // 6 — Listens actively. Attunement Standard; Exploration Gate (Gate 3); single
+  // instance for band 4.
   6: {
     Emerging:
-      'Coach does not listen. Interrupts, redirects, or imposes own agenda. Client’s words are not tracked or reflected.',
+      'Coach not tracking client; interrupting or redirecting without basis.',
     Developing:
-      'Hears surface content but misses subtext. Reflections are inaccurate or generic. Emotional content is consistently missed or avoided.',
+      'Surface listening; coach reflects content but misses subtext.',
     Proficient:
-      'Reflects and summarizes accurately; names feelings when observable; emotions are acknowledged but not consistently deepened.',
+      'Coach reflects and summarizes content accurately. Emotion named or mirrored at least twice. Stays focused on what the client is saying (reflection present; no exploration; ICF 6.02, 6.04).',
     Strong:
-      'Notices resistance, energy shift, or emotional undercurrent and names it directly — an attunement observation that goes beyond reflecting stated content. One clear instance qualifies. Feeling explorations present (deepening questions follow the emotion).',
+      'Coach is attuned to what is beneath the content — emotion, energy, the unsaid. At least one qualifying feeling exploration present. One clear qualifying attunement move present (single-instance standard; ICF 6.03, 6.04, 6.05).',
     Masterful:
-      'Attunement is continuous. Coach tracks emotional undercurrent across the full session, not just at peak moments. Patterns across the session are named and explored.',
+      'Coach hears what the client cannot yet say. Reflects patterns across the session and engagement. Emotion exploration is deep, sustained, and transformative (ICF 6.03–6.06).',
   },
-  // 7 — Evokes awareness (v0.4). Band-4 hinge: good question → pause →
-  // unconsidered insight. Band 5 is measured by DEPTH (identity/system/process),
-  // not frequency.
+  // 7 — Evokes awareness. Band 5 = one clear identity/system/process-level
+  // insight, deeply generative and client-owned.
   7: {
     Emerging:
-      'Questions are primarily informational or leading. Coach tells more than asks. No observable client insight generated.',
+      'Coach not evoking; advice-giving dominant.',
     Developing:
-      'Asks questions but they are predictable from the conversation — the client could have anticipated them. Questions move the conversation forward but do not open new territory. Insight is surface level or coach-supplied.',
+      'Some questions present but coach-directed; insight not generated.',
     Proficient:
-      'Asks questions that are genuinely curious and client-centered. Some land in unconsidered territory. Client generates their own responses without being led. Occasional insight observable but not consistently deep.',
+      'Coach uses powerful questions; client generates awareness at process level. Coach may use reframes or metaphors (ICF 7.03, 7.04, 7.10).',
     Strong:
-      'At least one question produces the observable sequence — good question → pause → unconsidered insight. The question came from outside the client’s current frame; the insight is the client’s own, not the coach’s reframe handed to them.',
+      'Coach evokes awareness at system or identity level. Questions go beyond the situation to the client’s patterns, values, or worldview. One clear qualifying insight present (single-instance standard; ICF 7.02, 7.03, 7.08).',
     Masterful:
-      'Multiple questions produce deep unconsidered insight. At least one reaches identity, system, or process level — the client sees themselves, their patterns, or how they operate fundamentally differently. The questions feel inevitable in retrospect but were invisible in advance.',
+      'Any one clear instance of identity-, system-, or process-level insight that is deeply generative and fully client-owned. Coach nearly invisible (ICF 7.02, 7.08, 7.11).',
   },
-  // 8 — Facilitates client growth (v0.4). Band-4 hinge: authorship — client
-  // generates their own actions (coach-packaged actions cap at band 3).
+  // 8 — Facilitates client growth. Authorship Hinge between bands 3 and 4.
   8: {
     Emerging:
-      'No integration of learning into action. Session ends without forward movement. Coach may generate conclusions on the client’s behalf or skip closure.',
+      'No closing or integration; session ends without learning consolidated.',
     Developing:
-      'Some action items identified but primarily coach-generated or coach-suggested. Client is passive in designing next steps. Learning is not explicitly connected to action. Accountability absent or superficial.',
+      'Coach attempts close but insight or action is thin, coach-packaged, or absent. No return to agreed session actions (ICF 8.06 absent or weak).',
     Proficient:
-      'Actions are identified and the client understands them. Coach may summarize or package next steps on the client’s behalf. Learning acknowledged. Some client ownership, but the coach is doing meaningful integration work. Accountability loosely held.',
+      'Coach consolidates learning at close; client names an insight. Actions may be coach-suggested (ICF 8.01, 8.06, 8.09).',
     Strong:
-      'Client generates their own actions without the coach summarizing or packaging them. Coach creates conditions — through questions and silence — for the client to name what they will do and why. Actions connect to the client’s own insight. Accountability is co-designed, not assigned.',
+      'Client generates their own insight and at least one self-authored action or commitment. Coach partners on accountability (authorship hinge met; ICF 8.02, 8.03).',
     Masterful:
-      'Client willingly examines their own beliefs, values, and behaviors with a desire to change toward a better version of themselves — the coach operates at that level through questions alone. The client engages deep change courageously and apparently on their own; the coach is nearly invisible. Actions emerge from identity, system, or process-level insight.',
+      'Client integrates insight into their worldview and self-generates a growth plan. Coach nearly invisible in the growth design (ICF 8.01, 8.02, 8.07).',
   },
 }
 
 /**
- * theLeadershipWell cross-competency principles (spec v0.4) — the philosophical
- * foundation the whole rubric rests on. Folded into the engine prompt.
+ * theLeadershipWell named IP principles (spec v0.4 §8) — cross-competency
+ * standards that appear in scoring rationale. Folded into the engine prompt.
  */
 export const CROSS_COMPETENCY_PRINCIPLES: { name: string; text: string }[] = [
   {
-    name: 'Attunement Standard',
-    text: 'The hinge from Proficient (3) to Strong (4) across Competencies 5, 6, and 8 is the shift from focused to attuned. Focus earns a 3; attunement earns a 4.',
+    name: 'The Attunement Standard',
+    text: 'The hinge between Proficient (band 3) and Strong (band 4) for Competencies 5, 6, and 8. Focus earns a 3; attunement earns a 4.',
   },
   {
-    name: 'Enablement Standard',
-    text: 'At band 4, scoring shifts from evaluating coach behaviors to evaluating what those behaviors enable in the client. The transcript is the evidence; one clear instance of client enablement qualifies.',
+    name: 'The Exploration Gate',
+    text: 'Zero feeling explorations caps Competency 6 at band 3 regardless of emotion-flag count. Named in the scoring output when triggered.',
   },
   {
-    name: 'Invisibility Standard',
-    text: 'At band 5, the coach is nearly invisible as the source of the work. The client’s courage, insight, and action feel self-generated. The coach’s role is architectural — it created the conditions, then stepped back.',
+    name: 'The Authorship Hinge',
+    text: 'For Competency 8, client-generated vs. coach-packaged actions is the hinge between bands 3 and 4.',
   },
   {
-    name: 'Depth Standard',
-    text: 'Band 5 on Competencies 7 and 8 is measured by depth of insight (identity, system, or process level), not frequency of moves. Situational insight does not qualify.',
+    name: 'The Consultant Pull Signature',
+    text: 'When the coach perceives ~60% questions but the engine reads statements exceeding questions, that measurable gap is the signature of consultant pull under emotional or intellectual engagement (Competency 2, metric 4).',
   },
 ]
 

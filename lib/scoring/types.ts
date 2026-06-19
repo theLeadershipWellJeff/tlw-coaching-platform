@@ -18,6 +18,7 @@ export interface CompetencyScore {
   band: Band
   evidence: string // one-line, evidence-linked (spec §6.3)
   subcompetency_refs: string[] // e.g. ["6.04", "6.02"]
+  gates_triggered?: string[] // gate ids that capped this competency, e.g. ["gate_3"]
 }
 
 export interface ConsultantMove {
@@ -72,6 +73,14 @@ export interface SessionMeta {
   session_number: number | null
   engagement_total: number | null
   date: string // YYYY-MM-DD
+  standing_engagement?: boolean // an ongoing engagement is in place (spec §9 C3, gate 2)
+}
+
+/** The three hard-ceiling gates (spec §10). */
+export interface GatesTriggered {
+  gate_1: boolean // no AI/technology disclosure → C1 capped at band 2
+  gate_2: boolean // no named insight at close AND no standing engagement → C3 capped at band 2
+  gate_3: boolean // zero feeling explorations → C6 capped at band 3
 }
 
 export interface SessionReportJson {
@@ -80,6 +89,7 @@ export interface SessionReportJson {
   band: Band
   competencies: CompetencyScore[]
   metrics: Metrics
+  gates_triggered: GatesTriggered // session-level gate state (spec §10)
   win: Win
   evidence_moments: EvidenceMoment[]
   // Suggested coaching moves to raise a competency, generated on demand and
