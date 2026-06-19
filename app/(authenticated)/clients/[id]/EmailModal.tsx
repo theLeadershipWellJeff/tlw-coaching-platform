@@ -143,7 +143,10 @@ export function EmailModal({
             {cc.trim() && <div>Cc <span className="text-tlw-espresso">{cc}</span></div>}
             <div className="mt-1">Subject <span className="text-tlw-espresso">{subject}</span></div>
           </div>
-          <div className="max-h-72 overflow-y-auto rounded-tlw-md border border-tlw-warm-gray/20 bg-tlw-surface p-3">
+          <p className="text-[11px] uppercase tracking-[1.5px] text-tlw-warm-gray">
+            Exactly what will send — message + signature
+          </p>
+          <div className="max-h-80 overflow-y-auto rounded-tlw-md border border-tlw-warm-gray/20 bg-white p-4">
             <div
               className="text-[13px] leading-relaxed text-tlw-espresso"
               dangerouslySetInnerHTML={{ __html: textToHtml(body) }}

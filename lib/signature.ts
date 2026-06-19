@@ -18,10 +18,12 @@ export const SIGNATURE_LOGO_URL = 'https://theleadershipwell.online/logo-email.p
 export const DEFAULT_SIGNATURE_HTML =
   `<table cellpadding="0" cellspacing="0" style="margin-top:24px;border-top:1px solid #e5e0d8;padding-top:16px;font-family:'DM Sans',Helvetica,Arial,sans-serif;">` +
   `<tr>` +
-  `<td style="padding-right:14px;vertical-align:middle;">` +
-  `<img src="${SIGNATURE_LOGO_URL}" width="40" height="40" alt="theLeadershipWell" style="display:block;border:0;" />` +
+  `<td style="padding-bottom:10px;">` +
+  `<img src="${SIGNATURE_LOGO_URL}" width="200" alt="theLeadershipWell" style="display:block;border:0;height:auto;" />` +
   `</td>` +
-  `<td style="vertical-align:middle;">` +
+  `</tr>` +
+  `<tr>` +
+  `<td>` +
   `<div style="font-weight:700;font-size:14px;color:#111226;">Jeff Holmes</div>` +
   `<div style="font-size:12px;color:#8B8680;margin-top:1px;">Executive Coach &middot; theLeadershipWell</div>` +
   `<div style="font-size:12px;color:#8B8680;margin-top:4px;">` +
