@@ -1,5 +1,6 @@
 'use client'
 import { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
 import { FolderTemplates } from './FolderTemplates'
 import { FolderPdfs } from './FolderPdfs'
 
@@ -49,9 +50,21 @@ export function LibrarySpace() {
       <div>
         {crumb}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <SectionTile label="Templates" description="Note, worksheet and agreement templates — organized in folders." onClick={() => setSection('templates')} />
+          <SectionTile label="Templates" description="Note and worksheet templates — organized in folders." onClick={() => setSection('templates')} />
           <SectionTile label="PDF Resources" description="Upload and organize PDF files in folders." onClick={() => setSection('pdf')} />
         </div>
+        <Link
+          href="/library/agreement"
+          className="mt-4 block rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface p-6 text-left transition-colors hover:border-tlw-warm-gray/35"
+        >
+          <div className="mb-2 flex items-center gap-2">
+            <FolderIcon />
+            <p className="text-[15px] font-medium text-tlw-navy-deep">Coaching Agreement</p>
+          </div>
+          <p className="text-[13px] text-tlw-warm-gray">
+            Edit the master coaching agreement sent to all clients. Issue it to a client from their profile.
+          </p>
+        </Link>
       </div>
     )
   }

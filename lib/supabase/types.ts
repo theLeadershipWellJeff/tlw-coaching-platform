@@ -49,6 +49,12 @@ export type Client = {
   coaching_map: string | null
   // Flat per-session fee, in dollars. Drives the Practice revenue cards.
   session_fee: number | null
+  // Agreement state (migration 018) — the source of truth the workspace and the
+  // scoring engine's Gate 1 read. recording_authorized: true = consented,
+  // false = explicit decline (compliance flag), null = unknown / no decision.
+  agreement_on_file: boolean
+  recording_authorized: boolean | null
+  agreement_id: string | null
   created_at: Timestamp
   updated_at: Timestamp
 }
@@ -105,13 +111,48 @@ export type Agreement = {
   id: string
   coach_id: string | null
   client_id: string
-  template_id: string | null
+  template_id: string | null // legacy: note_templates origin (pre-018)
+  agreement_template_id: string | null // structured master template (018)
   title: string
   body_html: string
-  status: string // sent | signed
+  status: string // sent | active  ('none' is the absence of a row)
   sign_token: string
+  // Per-issue merge values captured when the agreement is sent (018).
+  client_name: string | null
+  client_email: string | null
+  coach_name: string | null
+  zoom_link: string | null
+  phone: string | null
+  payment_terms: string | null
+  // Signing capture (018).
+  recording_authorized: boolean | null // null until signed
+  signer_typed_name: string | null
+  signer_ip: string | null
+  signing_token_expires_at: Timestamp | null
+  signed_agreement_html: string | null // immutable snapshot at signing
   sent_at: Timestamp
   signed_at: Timestamp | null
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
+export type AgreementTemplate = {
+  id: string
+  coach_id: string
+  name: string
+  description_of_coaching: string
+  agreement_logistics: string
+  method_of_contact: string
+  late_policy: string
+  cancellation_policy: string
+  payment_terms: string | null
+  locked_coach_client_relationship: string
+  locked_confidentiality: string
+  locked_ai_recording: string
+  locked_release_of_information: string
+  locked_termination: string
+  locked_limited_liability: string
+  locked_standard_legal: string
   created_at: Timestamp
   updated_at: Timestamp
 }
@@ -255,7 +296,7 @@ export type SessionReport = {
  * any nullable column is optional too (Postgres fills NULL). Everything else
  * is required.
  */
-type Defaulted = 'id' | 'created_at' | 'updated_at' | 'sent_at'
+type Defaulted = 'id' | 'created_at' | 'updated_at' | 'sent_at' | 'agreement_on_file'
 type NullableKeys<T> = { [K in keyof T]-?: null extends T[K] ? K : never }[keyof T]
 type OptionalOnInsert<T> = Defaulted | Extract<keyof T, NullableKeys<T>>
 
@@ -312,6 +353,12 @@ export type Database = {
         Row: Agreement
         Insert: Insertable<Agreement>
         Update: Updatable<Agreement>
+        Relationships: []
+      }
+      agreement_templates: {
+        Row: AgreementTemplate
+        Insert: Insertable<AgreementTemplate>
+        Update: Updatable<AgreementTemplate>
         Relationships: []
       }
       agenda_requests: {
