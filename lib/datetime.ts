@@ -27,6 +27,43 @@ export function todayInTimeZone(timeZone: string): string {
   return ymdInTimeZone(new Date(), timeZone)
 }
 
+/**
+ * A human "when" label for an instant, read on a clock in `timeZone` —
+ * e.g. "Thursday, June 26 at 2:00 PM PDT". Used in scheduling emails and the
+ * workspace upcoming-sessions list so a time never reads in the server's UTC.
+ */
+export function formatWhenInTimeZone(at: Date, timeZone: string): string {
+  const day = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  }).format(at)
+  const time = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short',
+  }).format(at)
+  return `${day} at ${time}`
+}
+
+/** A short "when" label — e.g. "Thu, Jun 26 · 2:00 PM". For compact lists. */
+export function formatWhenShort(at: Date, timeZone: string): string {
+  const day = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  }).format(at)
+  const time = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(at)
+  return `${day} · ${time}`
+}
+
 /** Is `tz` an IANA timezone the runtime understands? */
 export function isValidTimeZone(tz: string): boolean {
   if (!tz) return false

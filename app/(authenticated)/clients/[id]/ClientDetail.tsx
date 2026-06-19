@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import type { Client } from '@/lib/supabase/types'
 import { NameCard } from './NameCard'
+import { ScheduleCard } from './ScheduleCard'
 import { TranscriptsCard, NotesCard } from './SummaryCards'
 import { GoalsCard } from './GoalsCard'
 import { ActionsCard } from './ActionsCard'
@@ -18,6 +19,8 @@ export function ClientDetail({ clientId }: { clientId: string }) {
   const [emailing, setEmailing] = useState(false)
   const [importing, setImporting] = useState(false)
   const [txReload, setTxReload] = useState(0)
+  // Bumped on book/cancel so the Sessions card and the name-card list refetch together.
+  const [apptReload, setApptReload] = useState(0)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -58,7 +61,9 @@ export function ClientDetail({ clientId }: { clientId: string }) {
         ← Back to roster
       </Link>
 
-      <NameCard client={client} onUpdated={setClient} />
+      <NameCard client={client} onUpdated={setClient} apptReload={apptReload} />
+
+      <ScheduleCard clientId={clientId} reloadKey={apptReload} onChanged={() => setApptReload((n) => n + 1)} />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <TranscriptsCard clientId={clientId} reloadKey={txReload} />

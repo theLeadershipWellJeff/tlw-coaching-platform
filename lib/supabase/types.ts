@@ -158,6 +158,25 @@ export type CoachClient = {
   created_at: Timestamp
 }
 
+export type Appointment = {
+  id: string
+  coach_id: string | null
+  client_id: string
+  scheduled_at: Timestamp
+  duration_minutes: number
+  google_event_id: string | null
+  status: string // scheduled | cancelled | completed
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
+export type AppointmentReminder = {
+  id: string
+  appointment_id: string
+  kind: string // confirmation | nudge_24h
+  sent_at: Timestamp
+}
+
 export type PrepSheet = {
   id: string
   coach_id: string | null
@@ -298,6 +317,18 @@ export type Database = {
         Row: CoachClient
         Insert: Insertable<CoachClient>
         Update: Updatable<CoachClient>
+        Relationships: []
+      }
+      appointments: {
+        Row: Appointment
+        Insert: Insertable<Appointment>
+        Update: Updatable<Appointment>
+        Relationships: []
+      }
+      appointment_reminders: {
+        Row: AppointmentReminder
+        Insert: Insertable<AppointmentReminder>
+        Update: Updatable<AppointmentReminder>
         Relationships: []
       }
     }
