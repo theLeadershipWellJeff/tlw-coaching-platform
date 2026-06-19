@@ -10,6 +10,7 @@ import { ActionsCard } from './ActionsCard'
 import { AgreementsCard } from './AgreementsCard'
 import { AgendaCard } from './AgendaCard'
 import { EmailModal } from './EmailModal'
+import { CommunicationCard } from './CommunicationCard'
 import { ImportTranscriptsModal } from './ImportTranscriptsModal'
 
 export function ClientDetail({ clientId }: { clientId: string }) {
@@ -21,6 +22,8 @@ export function ClientDetail({ clientId }: { clientId: string }) {
   const [txReload, setTxReload] = useState(0)
   // Bumped on book/cancel so the Sessions card and the name-card list refetch together.
   const [apptReload, setApptReload] = useState(0)
+  // Bumped after a send so the Recent Communication card refreshes.
+  const [commReload, setCommReload] = useState(0)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -81,7 +84,7 @@ export function ClientDetail({ clientId }: { clientId: string }) {
           onClick={() => setEmailing(true)}
           className="rounded-tlw-lg border border-tlw-warm-gray/30 px-4 py-2 text-[13px] font-medium text-tlw-espresso transition-colors hover:border-tlw-warm-gray/50"
         >
-          Send an email
+          Compose Email
         </button>
         <button
           onClick={() => setImporting(true)}
@@ -95,12 +98,20 @@ export function ClientDetail({ clientId }: { clientId: string }) {
 
       <ActionsCard clientId={clientId} />
 
+      <CommunicationCard clientId={clientId} reloadKey={commReload} />
+
       <AgendaCard clientId={clientId} />
 
       <AgreementsCard clientId={clientId} />
 
       {emailing && (
-        <EmailModal to={client.email || ''} clientName={client.name} onClose={() => setEmailing(false)} />
+        <EmailModal
+          clientId={clientId}
+          to={client.email || ''}
+          clientName={client.name}
+          onClose={() => setEmailing(false)}
+          onSent={() => setCommReload((n) => n + 1)}
+        />
       )}
 
       {importing && (

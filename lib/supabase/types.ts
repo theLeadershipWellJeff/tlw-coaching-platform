@@ -177,6 +177,31 @@ export type AppointmentReminder = {
   sent_at: Timestamp
 }
 
+export type EmailSignature = {
+  id: string
+  // null = the global default signature; a coach-specific row overrides it.
+  coach_id: string | null
+  html: string
+  logo_url: string | null
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
+export type Communication = {
+  id: string
+  coach_id: string | null
+  client_id: string
+  type: string // 'email' | 'reminder' | 'prep_sheet'
+  direction: string // 'outbound' | 'inbound'
+  subject: string | null
+  preview: string | null
+  body_html: string | null
+  status: string // 'sent' | 'failed' | 'scheduled'
+  gmail_message_id: string | null
+  error_detail: string | null
+  sent_at: Timestamp
+}
+
 export type PrepSheet = {
   id: string
   coach_id: string | null
@@ -230,7 +255,7 @@ export type SessionReport = {
  * any nullable column is optional too (Postgres fills NULL). Everything else
  * is required.
  */
-type Defaulted = 'id' | 'created_at' | 'updated_at'
+type Defaulted = 'id' | 'created_at' | 'updated_at' | 'sent_at'
 type NullableKeys<T> = { [K in keyof T]-?: null extends T[K] ? K : never }[keyof T]
 type OptionalOnInsert<T> = Defaulted | Extract<keyof T, NullableKeys<T>>
 
@@ -311,6 +336,18 @@ export type Database = {
         Row: PrepSheet
         Insert: Insertable<PrepSheet>
         Update: Updatable<PrepSheet>
+        Relationships: []
+      }
+      email_signatures: {
+        Row: EmailSignature
+        Insert: Insertable<EmailSignature>
+        Update: Updatable<EmailSignature>
+        Relationships: []
+      }
+      communications: {
+        Row: Communication
+        Insert: Insertable<Communication>
+        Update: Updatable<Communication>
         Relationships: []
       }
       coach_clients: {
