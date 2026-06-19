@@ -104,6 +104,8 @@ function FolderList({ section, onOpen }: { section: Section; onOpen: (f: OpenFol
   const [newKind, setNewKind] = useState('note')
   const [busy, setBusy] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [renaming, setRenaming] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -158,6 +160,29 @@ function FolderList({ section, onOpen }: { section: Section; onOpen: (f: OpenFol
         setDeleting(null)
         await load()
       }
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function rename(id: string) {
+    const trimmed = renameValue.trim()
+    if (!trimmed) return
+    setBusy(true)
+    setError('')
+    try {
+      const res = await fetch(`/api/library/folders/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: trimmed }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Could not rename folder')
+      setRenaming(null)
+      setRenameValue('')
+      await load()
+    } catch (e: any) {
+      setError(e.message)
     } finally {
       setBusy(false)
     }
@@ -238,18 +263,43 @@ function FolderList({ section, onOpen }: { section: Section; onOpen: (f: OpenFol
         <div className="space-y-2">
           {folders.map((f) => (
             <div key={f.id} className="flex items-center justify-between gap-4 rounded-tlw-xl border border-tlw-warm-gray/15 bg-tlw-surface p-4">
-              <button onClick={() => onOpen({ id: f.id, name: f.name, kind: f.kind })} className="flex min-w-0 items-center gap-3 text-left">
-                <FolderIcon />
-                <span className="truncate text-[14px] font-medium text-tlw-navy-deep">{f.name}</span>
-                {KIND_LABEL[f.kind] && (
-                  <span className="shrink-0 rounded-full bg-tlw-canvas px-2 py-0.5 text-[10px] uppercase tracking-[1px] text-tlw-warm-gray">
-                    {KIND_LABEL[f.kind]}
-                  </span>
-                )}
-                <span className="shrink-0 text-[12px] text-tlw-warm-gray">{f.count} item{f.count === 1 ? '' : 's'}</span>
-              </button>
+              {renaming === f.id ? (
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                  <FolderIcon />
+                  <input
+                    value={renameValue}
+                    onChange={(e) => setRenameValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') rename(f.id)
+                      if (e.key === 'Escape') { setRenaming(null); setRenameValue('') }
+                    }}
+                    autoFocus
+                    className="min-w-0 flex-1 border-none bg-transparent text-[14px] font-medium text-tlw-navy-deep outline-none placeholder:text-tlw-warm-gray/60"
+                  />
+                </div>
+              ) : (
+                <button onClick={() => onOpen({ id: f.id, name: f.name, kind: f.kind })} className="flex min-w-0 items-center gap-3 text-left">
+                  <FolderIcon />
+                  <span className="truncate text-[14px] font-medium text-tlw-navy-deep">{f.name}</span>
+                  {KIND_LABEL[f.kind] && (
+                    <span className="shrink-0 rounded-full bg-tlw-canvas px-2 py-0.5 text-[10px] uppercase tracking-[1px] text-tlw-warm-gray">
+                      {KIND_LABEL[f.kind]}
+                    </span>
+                  )}
+                  <span className="shrink-0 text-[12px] text-tlw-warm-gray">{f.count} item{f.count === 1 ? '' : 's'}</span>
+                </button>
+              )}
               <div className="flex shrink-0 items-center gap-3 text-[12px] font-medium">
-                {deleting === f.id ? (
+                {renaming === f.id ? (
+                  <>
+                    <button onClick={() => rename(f.id)} disabled={busy || !renameValue.trim()} className="text-tlw-navy-rich hover:underline disabled:opacity-40">
+                      save
+                    </button>
+                    <button onClick={() => { setRenaming(null); setRenameValue('') }} className="text-tlw-warm-gray hover:text-tlw-espresso">
+                      cancel
+                    </button>
+                  </>
+                ) : deleting === f.id ? (
                   <>
                     <button onClick={() => remove(f.id)} disabled={busy} className="text-red-600 hover:underline disabled:opacity-40">
                       delete folder &amp; contents
@@ -259,9 +309,17 @@ function FolderList({ section, onOpen }: { section: Section; onOpen: (f: OpenFol
                     </button>
                   </>
                 ) : (
-                  <button onClick={() => setDeleting(f.id)} className="text-red-600 hover:underline">
-                    delete
-                  </button>
+                  <>
+                    <button
+                      onClick={() => { setRenaming(f.id); setRenameValue(f.name); setDeleting(null) }}
+                      className="text-tlw-warm-gray hover:text-tlw-espresso"
+                    >
+                      rename
+                    </button>
+                    <button onClick={() => setDeleting(f.id)} className="text-red-600 hover:underline">
+                      delete
+                    </button>
+                  </>
                 )}
               </div>
             </div>
