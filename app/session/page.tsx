@@ -190,7 +190,7 @@ function SessionPage() {
         <TLWLogo size={48} light />
         <h2 className="font-serif text-3xl font-light text-tlw-cream mt-6 mb-3">Sent ✓</h2>
         <p className="text-tlw-warm-gray text-sm mb-2">Session prep delivered to {clientName}</p>
-        <p className="text-tlw-warm-gray text-xs mb-8">CC'd to jeff@theleadershipwell.com</p>
+        <p className="text-tlw-warm-gray text-xs mb-8">CC&apos;d to jeff@theleadershipwell.com</p>
         <button onClick={() => router.push('/')} className="text-tlw-cream underline text-sm">← Back to dashboard</button>
       </div>
     )
@@ -279,7 +279,7 @@ function SessionPage() {
             {/* Coaching Plan */}
             <div style={{ padding: '20px 44px' }}>
               <p style={{ fontSize: 9, letterSpacing: 4, textTransform: 'uppercase', color: '#8B8680', fontWeight: 700, marginBottom: 6 }}>Your Coaching Plan</p>
-              <p style={{ fontSize: 12, color: '#8B8680', marginBottom: 16 }}>The areas we're working on together this season</p>
+              <p style={{ fontSize: 12, color: '#8B8680', marginBottom: 16 }}>The areas we&apos;re working on together this season</p>
               {content.coachingPlan.map((item, i) => (
                 <div key={i} style={{ padding: '13px 0', borderBottom: '1px solid #e5e0d8', display: 'flex', alignItems: 'flex-start', gap: 14 }}>
                   <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#0C1940', textAlign: 'center', lineHeight: '32px', fontSize: 15, flexShrink: 0 }}>{item.emoji}</div>
@@ -371,7 +371,7 @@ function SessionPage() {
               Send to {clientName} →
             </button>
           </div>
-          <p className="text-tlw-warm-gray text-xs text-center mt-2">Also CC'd to jeff@theleadershipwell.com</p>
+          <p className="text-tlw-warm-gray text-xs text-center mt-2">Also CC&apos;d to jeff@theleadershipwell.com</p>
         </div>
       </div>
     </div>

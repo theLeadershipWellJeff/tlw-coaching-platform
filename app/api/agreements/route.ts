@@ -5,6 +5,7 @@ import { google } from 'googleapis'
 import { authOptions } from '@/lib/authOptions'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { getSessionCoach } from '@/lib/coach'
+import { coachCanAccessClient } from '@/lib/client-access'
 import { getBaseUrl } from '@/lib/url'
 import { buildAgreementEmailHTML } from '@/lib/agreement-email'
 import { headerSafe, encodeHeaderValue } from '@/lib/email-mime'
@@ -49,6 +50,12 @@ export async function POST(req: NextRequest) {
     .eq('coach_id', coach.id)
     .maybeSingle()
   if (!template) return NextResponse.json({ error: 'Agreement template not found.' }, { status: 404 })
+
+  // Tenant boundary: the coach may only assign an agreement to a client they're
+  // linked to. 404 (not 403) so we never reveal that a foreign client id exists.
+  if (!(await coachCanAccessClient(supabase, coach.id, clientId))) {
+    return NextResponse.json({ error: 'Client not found.' }, { status: 404 })
+  }
 
   const { data: client } = await supabase
     .from('clients')

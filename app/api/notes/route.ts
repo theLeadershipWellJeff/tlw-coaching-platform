@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireSession, toErrorResponse } from '@/lib/api-handler'
 
 const CA_URL = 'https://www.coachaccountable.com/API/'
 const CA_ID = process.env.COACH_ACCOUNTABLE_API_ID!
@@ -24,6 +25,17 @@ function stripHTML(html: string): string {
 }
 
 export async function GET(req: NextRequest) {
+  // This proxies a client's Coach Accountable notes/actions using the server's
+  // CA credentials, so it must never be reachable unauthenticated. CA is keyed
+  // by name (not the local roster), so we gate on a signed-in session here; the
+  // per-client tenant boundary lives on the roster routes that read the `clients`
+  // table.
+  try {
+    await requireSession()
+  } catch (e) {
+    return toErrorResponse(e)
+  }
+
   const { searchParams } = new URL(req.url)
   const clientName = searchParams.get('clientName')
   const clientId = searchParams.get('clientId')
