@@ -1,8 +1,8 @@
 /**
  * Types for the coaching evaluation engine output.
  *
- * Mirrors the JSON data model in spec/theLeadershipWell_Session_Report_Spec_v0.3.md
- * (§16). The engine returns a `SessionReportJson`; the report UI renders directly
+ * Mirrors the JSON data model in spec/theLeadershipWell_Session_Report_Spec_v0.4.md
+ * (§14). The engine returns a `SessionReportJson`; the report UI renders directly
  * from it, which is what keeps scoring decoupled from presentation.
  */
 

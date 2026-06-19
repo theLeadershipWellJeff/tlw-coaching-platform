@@ -452,6 +452,19 @@ and back in** to grant calendar-write + populate the refresh token with it;
 ## Roadmap
 
 ### Shipped
+- **Tenant-isolation hardening on sibling client routes + lint/security upkeep.**
+  The `requireClientCoach` gate was applied consistently inside
+  `/api/clients/[id]/**`, but several sibling routes accepted a client id/name in
+  the body/query and were never brought under it. Closed: `GET /api/notes` (was
+  fully unauthenticated — proxied a client's Coach Accountable notes/actions with
+  the server's CA credentials; now requires a session), `POST /api/agreements`
+  (scope the target client via `coachCanAccessClient`), `GET /api/search`
+  (intersect both queries with `accessibleClientIds`; marked `force-dynamic`),
+  `POST /api/send` (only persist action-link/agenda/prep tracking when the matched
+  client belongs to the coach), `PATCH /api/transcripts/[id]` (assign only to a
+  linked client). Also bumped Next.js `14.2.3 → 14.2.35` (security advisory) and
+  added a real ESLint config (`next/core-web-vitals`) so `npm run lint` actually
+  runs — the documented pre-commit guardrail was previously unconfigured.
 - **Branded email send + Recent Communication card (Phase 1B)** — Compose Email
   in the client workspace sends branded HTML via the coach's Gmail (signature
   appended server-side from `email_signatures`, Cc the firm), with review-before-
@@ -515,3 +528,26 @@ and back in** to grant calendar-write + populate the refresh token with it;
   ready (`coach_id` + `role`), and coach self-scores are now captured, so the
   comparison data exists. Needs: a supervisor-scoped aggregate API and a
   `/supervision`-style page (gate on `role = 'supervisor'`).
+- **Block Registry / config-driven workspace — Tier 1 not yet built.** Spec is in
+  `spec/TLW_Block_Registry_Architecture_v1.md`; the client workspace is still
+  hand-wired JSX in `ClientDetail.tsx`. Tier 1 = the registry, slot model
+  (`SurfaceRenderer`), validator, default layout, and rebuilding the Note Editor +
+  Actions/Insights panel as blocks. Read the spec before refactoring the workspace
+  or adding new panels. (Tier 2/3 are reserved seams — do not build yet.)
+- **Multi-coach hardening follow-ups (latent until a 2nd coach exists).** The
+  platform is effectively single-coach today (migration 015's backfill assumes all
+  logins are Jeff), so the route fixes above closed the only *live* leak
+  (`/api/notes`); the rest were latent cross-tenant writes. Before onboarding a
+  second coach, audit the remaining sibling routes that take a client id/name
+  outside `/api/clients/[id]/**` for the same gate, and confirm 015 is applied +
+  backfilled (until then the roster filters to zero clients).
+- **Scoring spec internal tension — C8 attunement vs. authorship.** The engine
+  treats C8 as an Attunement Standard competency (`rubric.ts` `ATTUNEMENT_COMPETENCIES
+  = [5,6,8]`), following spec §8's IP table, but spec §9 frames C8's band-3→4 hinge
+  as the **Authorship Hinge**, not attunement. The code is faithful to §8; the two
+  spec sections disagree. Reconcile with the spec owner (Jeff) — not a code bug.
+- **Dev-hygiene gaps.** (1) `package-lock.json` is gitignored, so there's no
+  committed lockfile — dependency resolution isn't pinned for CI/Vercel beyond the
+  exact versions in `package.json`; consider committing a lockfile. (2) Stale doc
+  reference: `lib/scoring/types.ts:5` points at the retired `v0.3 §16`; the data
+  model is now v0.4 §14.
