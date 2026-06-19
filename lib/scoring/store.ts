@@ -22,6 +22,22 @@ export async function runAndStoreReport(
   const sendEmail = opts.sendEmail ?? true
   const parsed = parseTranscript(transcript.filename, transcript.raw_md)
 
+  // Tier 1 of the Competency 1 disclosure gate (spec v0.4 §9 C1): a signed
+  // coaching agreement on file is the controlling document for AI-evaluation
+  // consent and satisfies the gate outright. Best-effort lookup — an unmatched
+  // transcript (no client_id) or a query hiccup falls back to false, which just
+  // means the engine looks for verbal consent at session open instead.
+  let agreementOnFile = false
+  if (transcript.client_id) {
+    const { data: signed } = await supabase
+      .from('agreements')
+      .select('id')
+      .eq('client_id', transcript.client_id)
+      .eq('status', 'signed')
+      .limit(1)
+    agreementOnFile = !!(signed && signed.length > 0)
+  }
+
   const ctx: ScoringContext = {
     coachName: coach.name,
     clientInitials: transcript.client_initials || parsed.clientInitials || '—',
@@ -34,6 +50,7 @@ export async function runAndStoreReport(
       transcript.session_date ||
       parsed.sessionDate ||
       todayInTimeZone(coach.timezone || DEFAULT_TIMEZONE),
+    agreementOnFile,
   }
 
   // Feed the transcript body (front matter stripped) to the engine.

@@ -67,17 +67,20 @@ export const BAND_DESCRIPTIONS: Record<Band, string> = {
  * missing here falls back to the generic description (see `bandDefinition`).
  */
 export const COMPETENCY_BANDS: Record<number, Partial<Record<Band, string>>> = {
-  // 1 — Demonstrates ethical practice. Gate 1: absent AI/technology disclosure
-  // caps at Developing (band 2). Disclosure + consent at open = band-4 marker.
+  // 1 — Demonstrates ethical practice. Gate 1 (two-tier, v0.4): a signed
+  // agreement on file satisfies the disclosure obligation; else verbal consent
+  // to record at open passes. The band-2 ceiling applies only when BOTH are
+  // absent. Recording consent (agreement or verbal) = band-4 marker. The
+  // coaching/counseling boundary (1.06) is crossed only by wound-repair attempts.
   1: {
     Emerging:
       'Ethical obligations not met; confidentiality or role distinctions breached.',
     Developing:
-      'Partial ethical practice; AI/technology disclosure absent (Gate 1 — band-2 ceiling).',
+      'Partial ethical practice; no signed agreement on file AND no verbal consent to record at session open (Gate 1 — band-2 ceiling).',
     Proficient:
-      'Ethical standards met; role distinctions generally maintained; no disclosure issues.',
+      'Ethical standards met; role distinctions generally maintained; recording consent in place (signed agreement on file or verbal consent at open).',
     Strong:
-      'Recording/AI disclosure made explicitly at session open with client consent. Role distinctions maintained throughout (ICF 1.06, 2.5).',
+      'Recording/AI consent established — by a signed coaching agreement on file or explicit verbal consent at session open. Role distinctions maintained throughout (ICF 1.06, 2.5).',
     Masterful:
       'Ethics woven into the coaching relationship itself — proactive, transparent, client-empowering. The client experiences the ethical stance as care, not compliance.',
   },

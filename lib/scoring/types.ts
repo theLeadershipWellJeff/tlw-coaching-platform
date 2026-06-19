@@ -74,11 +74,20 @@ export interface SessionMeta {
   engagement_total: number | null
   date: string // YYYY-MM-DD
   standing_engagement?: boolean // an ongoing engagement is in place (spec §9 C3, gate 2)
+  // Two-tier AI/recording disclosure (spec v0.4 §9 C1). agreement_on_file is set
+  // by the platform when a signed coaching agreement exists for the client — it
+  // is the controlling document for AI-evaluation consent and satisfies Gate 1
+  // outright. agreement_gap is an administrative follow-up flag: no signed
+  // agreement is on file (it does NOT add a score penalty beyond Gate 1).
+  agreement_on_file?: boolean
+  agreement_gap?: boolean
 }
 
 /** The three hard-ceiling gates (spec §10). */
 export interface GatesTriggered {
-  gate_1: boolean // no AI/technology disclosure → C1 capped at band 2
+  // C1 capped at band 2 only when there is NO signed agreement on file AND no
+  // verbal consent to record was obtained at session open (spec v0.4 §9 C1).
+  gate_1: boolean
   gate_2: boolean // no named insight at close AND no standing engagement → C3 capped at band 2
   gate_3: boolean // zero feeling explorations → C6 capped at band 3
 }

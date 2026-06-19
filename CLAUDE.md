@@ -106,9 +106,13 @@ threshold flags (talk-time, flagged emotion <2/=2/>2, feeling explorations
 0/1/≥2, **question:statement computed from the ratio** — parity or statements-lead
 is red, consultant-move math + >3 mode-drift), the equal-weighted overall, band
 derivation, and the **three §10 gates**. Gate 3 (zero feeling explorations → C6 ≤
-band 3) is recomputed arithmetically; **Gate 1** (no AI/tech disclosure → C1 ≤
-band 2) and **Gate 2** (no named insight at close AND no standing engagement → C3
-≤ band 2) are applied as code ceilings off booleans the model returns. The finer
+band 3) is recomputed arithmetically; **Gate 1** (two-tier disclosure, v0.4.1 —
+no signed agreement on file AND no verbal consent to record at open → C1 ≤ band 2)
+is recomputed from `agreement_on_file` (platform-set in `store.ts` from a signed
+agreement) + `verbal_consent_to_record` (model); a session with no agreement still
+surfaces `session.agreement_gap` as an administrative follow-up (no extra penalty);
+**Gate 2** (no named insight at close AND no standing engagement → C3
+≤ band 2) is applied as a code ceiling off a boolean the model returns. The finer
 judgment calls live in the prompt: the **three-way emotion classification**
 (reflection / coping inquiry / feeling exploration — coping inquiry counts as
 neither a flagged emotion nor an exploration), the **evocative-reframe vs.
@@ -499,10 +503,13 @@ and back in** to grant calendar-write + populate the refresh token with it;
   (Attunement Standard, Exploration Gate, Authorship Hinge, Consultant Pull
   Signature), the three-way emotion classification (reflection / coping inquiry /
   exploration), the evocative-reframe vs. consultant-move test, single-instance
-  band-4 standards, and the three §10 gates (1: AI/tech disclosure → C1≤2; 2: no
-  named insight at close AND no standing engagement → C3≤2; 3: zero feeling
-  explorations → C6≤3) surfaced as `gates_triggered` on the report. The report
-  page shows a red gate note on any capped competency.
+  band-4 standards, and the three §10 gates (1, v0.4.1: no signed agreement on
+  file AND no verbal consent to record → C1≤2; 2: no named insight at close AND no
+  standing engagement → C3≤2; 3: zero feeling explorations → C6≤3) surfaced as
+  `gates_triggered` on the report. The report page shows a red gate note on any
+  capped competency, and an `agreement_gap` administrative flag when no signed
+  agreement is on file. The coaching/counseling boundary (1.06) flags only
+  wound-repair/diagnosis, not psychological depth or emotional exploration.
 
 ### Open — keep these tracked (also GitHub issues)
 - **Worksheets (client fill-in) — to be built (#38).** Worksheet-kind Library folders
