@@ -373,6 +373,32 @@ export function enforceRules(raw: any, ctx: ScoringContext): SessionReportJson {
   }
 }
 
+/**
+ * Reject a parsed response that isn't actually a session report before it
+ * reaches enforceRules. enforceRules is deliberately forgiving — a missing
+ * competency silently defaults to score 3 — which is right for ONE absent entry
+ * but disastrous if the regex grabbed the wrong object (e.g. an example fragment
+ * the model echoed) or the model returned an error/empty shape: we'd store a
+ * tidy all-"Proficient" report that looks real. Require most of the 8
+ * competencies to be present with numeric scores, so garbage fails loud (→
+ * scoringError, no report stored) instead of failing silent.
+ */
+function assertReportShape(parsed: any): void {
+  const comps = Array.isArray(parsed?.competencies) ? parsed.competencies : null
+  if (!comps) throw new Error('Engine response is missing the competencies array.')
+  const scoredIds = new Set(
+    comps
+      .filter((c: any) => c && typeof c.id === 'number' && Number.isFinite(Number(c.score)))
+      .map((c: any) => c.id)
+  )
+  const required = COMPETENCIES.length - 2 // tolerate up to two omissions
+  if (scoredIds.size < required) {
+    throw new Error(
+      `Engine response had only ${scoredIds.size}/${COMPETENCIES.length} scored competencies — refusing to store a malformed report.`
+    )
+  }
+}
+
 /** Score a transcript end to end: prompt Claude, parse JSON, enforce the rules. */
 export async function scoreTranscript(
   transcript: string,
@@ -383,12 +409,18 @@ export async function scoreTranscript(
   }
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-  const message = await client.messages.create({
-    model: MODEL,
-    max_tokens: 4000,
-    system: SYSTEM,
-    messages: [{ role: 'user', content: buildPrompt(transcript, ctx) }],
-  })
+  const message = await client.messages.create(
+    {
+      model: MODEL,
+      max_tokens: 4000,
+      system: SYSTEM,
+      messages: [{ role: 'user', content: buildPrompt(transcript, ctx) }],
+    },
+    // Fail before Vercel's function timeout (maxDuration on the calling routes is
+    // 120s) so a slow call surfaces as a clean scoring error, not a killed
+    // function. One retry, not the SDK default of two, to avoid retry storms.
+    { timeout: 100_000, maxRetries: 1 }
+  )
 
   const text = message.content.find((b) => b.type === 'text')
   const rawText = text && 'text' in text ? text.text : ''
@@ -402,6 +434,7 @@ export async function scoreTranscript(
   } catch {
     throw new Error('Engine returned invalid JSON.')
   }
+  assertReportShape(parsed)
   return enforceRules(parsed, ctx)
 }
 

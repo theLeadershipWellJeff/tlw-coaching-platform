@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { getSessionCoach } from '@/lib/coach'
+import { isValidTimeZone } from '@/lib/datetime'
 
 export const runtime = 'nodejs'
 
@@ -30,8 +31,9 @@ export async function GET() {
 }
 
 /**
- * Update the coach's editable profile. Currently just the supervisor email.
- * Body: { supervisorEmail: string | null }  ("" clears it)
+ * Update the coach's editable profile.
+ * Body may include: { supervisorEmail?: string | null, timezone?: string }
+ * ("" clears the supervisor email; timezone must be a valid IANA zone).
  */
 export async function PATCH(req: NextRequest) {
   let supabase: ReturnType<typeof getSupabaseAdmin>
@@ -45,26 +47,33 @@ export async function PATCH(req: NextRequest) {
   if (!coach) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json().catch(() => ({}))
+  const update: { supervisor_email?: string | null; timezone?: string } = {}
 
-  if (!('supervisorEmail' in body)) {
+  if ('supervisorEmail' in body) {
+    const raw = String(body.supervisorEmail ?? '').trim()
+    if (raw === '') {
+      update.supervisor_email = null
+    } else if (EMAIL_RE.test(raw)) {
+      update.supervisor_email = raw.toLowerCase()
+    } else {
+      return NextResponse.json({ error: 'Enter a valid email address.' }, { status: 400 })
+    }
+  }
+
+  if ('timezone' in body) {
+    const tz = String(body.timezone ?? '').trim()
+    if (!isValidTimeZone(tz)) {
+      return NextResponse.json({ error: 'Pick a valid timezone.' }, { status: 400 })
+    }
+    update.timezone = tz
+  }
+
+  if (Object.keys(update).length === 0) {
     return NextResponse.json({ error: 'Nothing to update.' }, { status: 400 })
   }
 
-  const raw = String(body.supervisorEmail ?? '').trim()
-  let supervisor_email: string | null
-  if (raw === '') {
-    supervisor_email = null
-  } else if (EMAIL_RE.test(raw)) {
-    supervisor_email = raw.toLowerCase()
-  } else {
-    return NextResponse.json({ error: 'Enter a valid email address.' }, { status: 400 })
-  }
-
-  const { error } = await supabase
-    .from('coaches')
-    .update({ supervisor_email })
-    .eq('id', coach.id)
+  const { error } = await supabase.from('coaches').update(update).eq('id', coach.id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  return NextResponse.json({ supervisor_email })
+  return NextResponse.json(update)
 }

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/authOptions'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
+import { toErrorResponse } from '@/lib/api-handler'
+import { requireClientCoach } from '@/lib/client-access'
+import { todayInTimeZone } from '@/lib/datetime'
+import { DEFAULT_TIMEZONE } from '@/lib/coach'
 import type { Database } from '@/lib/supabase/types'
 
 export const runtime = 'nodejs'
@@ -19,9 +21,9 @@ async function caPost(action: string, paramObj: Record<string, string> = {}) {
   return json.return
 }
 
-function safeDate(v: unknown): string {
+function safeDate(v: unknown, timeZone: string): string {
   const s = String(v || '').slice(0, 10)
-  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : new Date().toISOString().slice(0, 10)
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : todayInTimeZone(timeZone)
 }
 
 type NoteInsert = Database['public']['Tables']['notes']['Insert']
@@ -33,18 +35,19 @@ type NoteInsert = Database['public']['Tables']['notes']['Insert']
  * "import notes" action so each request stays well within limits.
  */
 export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!CA_ID || !CA_KEY) {
-    return NextResponse.json(
-      { error: 'Coach Accountable is not configured (COACH_ACCOUNTABLE_API_ID / _API_KEY).' },
-      { status: 400 }
-    )
-  }
+  try {
+    const supabase = getSupabaseAdmin()
+    const coach = await requireClientCoach(supabase, params.id)
+    const tz = coach.timezone || DEFAULT_TIMEZONE
 
-  const supabase = getSupabaseAdmin()
+    if (!CA_ID || !CA_KEY) {
+      return NextResponse.json(
+        { error: 'Coach Accountable is not configured (COACH_ACCOUNTABLE_API_ID / _API_KEY).' },
+        { status: 400 }
+      )
+    }
 
-  const { data: client, error: cErr } = await supabase
+    const { data: client, error: cErr } = await supabase
     .from('clients')
     .select('id, ca_client_id')
     .eq('id', params.id)
@@ -76,7 +79,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
     if (seen.has(caId)) continue
     toInsert.push({
       client_id: client.id,
-      session_date: safeDate(n.dateOf),
+      session_date: safeDate(n.dateOf, tz),
       title: n.title?.trim() || null,
       content: typeof n.content === 'string' ? n.content : '',
       duration_minutes: 60,
@@ -91,5 +94,8 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
     imported = count ?? toInsert.length
   }
 
-  return NextResponse.json({ imported, skipped: sessions.length - toInsert.length })
+    return NextResponse.json({ imported, skipped: sessions.length - toInsert.length })
+  } catch (e) {
+    return toErrorResponse(e)
+  }
 }

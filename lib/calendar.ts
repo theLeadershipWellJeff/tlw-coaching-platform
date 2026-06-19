@@ -163,6 +163,108 @@ export async function findClientFromCalendar(
   return { clientId: null, confidence: 0, status: 'needs_review', via: 'none', eventTitle, eventStart }
 }
 
+/**
+ * Create a Google Calendar event on the coach's primary calendar for a booked
+ * session, with the client as a guest (so Google also emails them the invite).
+ * Writes server-side using the coach's stored refresh token — requires the
+ * `calendar.events` scope (the coach must re-consent once after it was added).
+ * Best-effort: returns the new event id, or null if the write failed, so a
+ * calendar hiccup never blocks recording the appointment.
+ */
+export async function createClientEvent(
+  coach: Coach,
+  opts: {
+    summary: string
+    startsAt: Date
+    durationMinutes: number
+    attendeeEmail?: string | null
+    description?: string
+  }
+): Promise<string | null> {
+  if (!coach.google_refresh_token) return null
+
+  const auth = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET)
+  auth.setCredentials({ refresh_token: coach.google_refresh_token })
+  const calendar = google.calendar({ version: 'v3', auth })
+
+  const end = new Date(opts.startsAt.getTime() + opts.durationMinutes * 60 * 1000)
+  const attendees = opts.attendeeEmail ? [{ email: opts.attendeeEmail }] : undefined
+
+  try {
+    const res = await calendar.events.insert({
+      calendarId: 'primary',
+      sendUpdates: 'all',
+      requestBody: {
+        summary: opts.summary,
+        description: opts.description,
+        start: { dateTime: opts.startsAt.toISOString(), timeZone: coach.timezone },
+        end: { dateTime: end.toISOString(), timeZone: coach.timezone },
+        attendees,
+      },
+    })
+    return res.data.id || null
+  } catch (e) {
+    console.error('Calendar event create failed:', e)
+    return null
+  }
+}
+
+export interface EventState {
+  /** false = the event was deleted (404). */
+  found: boolean
+  /** true = the event exists but is cancelled. */
+  cancelled: boolean
+  /** The event's current start, or null if it couldn't be read (leave as-is). */
+  startsAt: Date | null
+  durationMinutes: number | null
+}
+
+/**
+ * Read an event's current state so an appointment can track calendar edits (the
+ * coach drags the session to a new time in Google Calendar). Returns the live
+ * start so callers can shift the stored time — and the 24h reminder — with it.
+ * A 404 means the event was deleted; any other read failure returns
+ * found/!cancelled with no time, so we never cancel or move on a transient error.
+ */
+export async function getClientEventState(coach: Coach, eventId: string): Promise<EventState> {
+  const unknown: EventState = { found: true, cancelled: false, startsAt: null, durationMinutes: null }
+  if (!coach.google_refresh_token || !eventId) return unknown
+
+  const auth = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET)
+  auth.setCredentials({ refresh_token: coach.google_refresh_token })
+  const calendar = google.calendar({ version: 'v3', auth })
+
+  try {
+    const res = await calendar.events.get({ calendarId: 'primary', eventId })
+    const e = res.data
+    const startIso = e.start?.dateTime || null
+    const endIso = e.end?.dateTime || null
+    const startsAt = startIso ? new Date(startIso) : null
+    const durationMinutes =
+      startIso && endIso ? Math.round((new Date(endIso).getTime() - new Date(startIso).getTime()) / 60000) : null
+    return { found: true, cancelled: e.status === 'cancelled', startsAt, durationMinutes }
+  } catch (e: any) {
+    if (Number(e?.code) === 404 || e?.response?.status === 404) {
+      return { found: false, cancelled: true, startsAt: null, durationMinutes: null }
+    }
+    console.error('Calendar event get failed:', e)
+    return unknown
+  }
+}
+
+/** Delete a calendar event the app created (best-effort; notifies guests). */
+export async function deleteClientEvent(coach: Coach, eventId: string): Promise<void> {
+  if (!coach.google_refresh_token || !eventId) return
+  const auth = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET)
+  auth.setCredentials({ refresh_token: coach.google_refresh_token })
+  const calendar = google.calendar({ version: 'v3', auth })
+  try {
+    await calendar.events.delete({ calendarId: 'primary', eventId, sendUpdates: 'all' })
+  } catch (e) {
+    console.error('Calendar event delete failed:', e)
+  }
+}
+
 export interface MatchedEvent {
   eventId: string
   clientId: string | null

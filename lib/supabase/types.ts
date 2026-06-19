@@ -23,6 +23,12 @@ export type CoachingGoal = {
   // Up to three measures of fulfillment for the goal (filled in with the
   // client). Optional so existing two-field goals keep working unchanged.
   metrics?: string[]
+  // Provenance. 'manual' = written or edited and saved by the coach — these are
+  // protected: "generate from notes" must never overwrite them. 'generated' = an
+  // AI draft the coach hasn't endorsed yet, which a later generate may replace.
+  // Absent on goals that predate this field — treated as protected, since we
+  // can't prove they weren't hand-written.
+  source?: 'manual' | 'generated'
 }
 
 export type Client = {
@@ -145,6 +151,57 @@ export type Coach = {
   updated_at: Timestamp
 }
 
+export type CoachClient = {
+  coach_id: string
+  client_id: string
+  role: string // 'primary' | 'shared'
+  created_at: Timestamp
+}
+
+export type Appointment = {
+  id: string
+  coach_id: string | null
+  client_id: string
+  scheduled_at: Timestamp
+  duration_minutes: number
+  google_event_id: string | null
+  status: string // scheduled | cancelled | completed
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
+export type AppointmentReminder = {
+  id: string
+  appointment_id: string
+  kind: string // confirmation | nudge_24h
+  sent_at: Timestamp
+}
+
+export type EmailSignature = {
+  id: string
+  // null = the global default signature; a coach-specific row overrides it.
+  coach_id: string | null
+  html: string
+  logo_url: string | null
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
+export type Communication = {
+  id: string
+  coach_id: string | null
+  client_id: string
+  type: string // 'email' | 'reminder' | 'prep_sheet'
+  direction: string // 'outbound' | 'inbound'
+  subject: string | null
+  preview: string | null
+  body_html: string | null
+  status: string // 'sent' | 'failed' | 'scheduled'
+  gmail_message_id: string | null
+  error_detail: string | null
+  sent_at: Timestamp
+}
+
 export type PrepSheet = {
   id: string
   coach_id: string | null
@@ -198,7 +255,7 @@ export type SessionReport = {
  * any nullable column is optional too (Postgres fills NULL). Everything else
  * is required.
  */
-type Defaulted = 'id' | 'created_at' | 'updated_at'
+type Defaulted = 'id' | 'created_at' | 'updated_at' | 'sent_at'
 type NullableKeys<T> = { [K in keyof T]-?: null extends T[K] ? K : never }[keyof T]
 type OptionalOnInsert<T> = Defaulted | Extract<keyof T, NullableKeys<T>>
 
@@ -279,6 +336,36 @@ export type Database = {
         Row: PrepSheet
         Insert: Insertable<PrepSheet>
         Update: Updatable<PrepSheet>
+        Relationships: []
+      }
+      email_signatures: {
+        Row: EmailSignature
+        Insert: Insertable<EmailSignature>
+        Update: Updatable<EmailSignature>
+        Relationships: []
+      }
+      communications: {
+        Row: Communication
+        Insert: Insertable<Communication>
+        Update: Updatable<Communication>
+        Relationships: []
+      }
+      coach_clients: {
+        Row: CoachClient
+        Insert: Insertable<CoachClient>
+        Update: Updatable<CoachClient>
+        Relationships: []
+      }
+      appointments: {
+        Row: Appointment
+        Insert: Insertable<Appointment>
+        Update: Updatable<Appointment>
+        Relationships: []
+      }
+      appointment_reminders: {
+        Row: AppointmentReminder
+        Insert: Insertable<AppointmentReminder>
+        Update: Updatable<AppointmentReminder>
         Relationships: []
       }
     }

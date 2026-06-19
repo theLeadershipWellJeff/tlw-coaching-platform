@@ -2,13 +2,16 @@
 import { useState } from 'react'
 import type { Client } from '@/lib/supabase/types'
 import { EditClientModal } from './EditClientModal'
+import { UpcomingSessions } from './UpcomingSessions'
 
 export function NameCard({
   client,
   onUpdated,
+  apptReload = 0,
 }: {
   client: Client
   onUpdated: (c: Client) => void
+  apptReload?: number
 }) {
   const [editing, setEditing] = useState(false)
 
@@ -28,6 +31,8 @@ export function NameCard({
               {client.address && <span>{client.address}</span>}
             </div>
           )}
+
+          <UpcomingSessions clientId={client.id} reloadKey={apptReload} compact />
         </div>
 
         <div className="flex shrink-0 items-center gap-3">

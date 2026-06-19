@@ -7,6 +7,7 @@ import { buildClientEmailHTML } from '@/lib/email-template'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { getSessionCoach } from '@/lib/coach'
 import { persistActionLinks } from '@/lib/actions'
+import { findClientByEmailOrName } from '@/lib/client-lookup'
 import { getBaseUrl } from '@/lib/url'
 import { headerSafe, encodeHeaderValue } from '@/lib/email-mime'
 
@@ -51,7 +52,7 @@ export async function POST(req: NextRequest) {
     const introRaw = makeRawEmail(
       clientEmail,
       cc,
-      'Quick favor — feedback on something I\'m building',
+      'Quick favor - feedback on something I\'m building',
       introText,
       false
     )
@@ -72,15 +73,7 @@ export async function POST(req: NextRequest) {
   let matchedCoachId: string | null = null
   try {
     const supabase = getSupabaseAdmin()
-    let row: { id: string } | null = null
-    if (clientEmail) {
-      const { data } = await supabase.from('clients').select('id').ilike('email', clientEmail).limit(1).maybeSingle()
-      row = data
-    }
-    if (!row && clientName) {
-      const { data } = await supabase.from('clients').select('id').ilike('name', clientName).limit(1).maybeSingle()
-      row = data
-    }
+    const row = await findClientByEmailOrName(supabase, { email: clientEmail, name: clientName })
     if (row?.id) {
       matchedClientId = row.id
       const actions: string[] = Array.isArray(content?.actions) ? content.actions : []
@@ -98,8 +91,10 @@ export async function POST(req: NextRequest) {
         .single()
       if (agenda?.token) agendaUrl = `${getBaseUrl()}/agenda/${agenda.token}`
     }
-  } catch {
-    // Tracking is additive — never block the prep email on it.
+  } catch (e) {
+    // Tracking is additive — never block the prep email on it — but log it so a
+    // broken action-link / agenda flow doesn't fail silently.
+    console.error('[send] prep tracking (action links / agenda) failed', e)
   }
 
   const html = buildClientEmailHTML(clientName, content, actionLinks, agendaUrl)
@@ -116,15 +111,16 @@ export async function POST(req: NextRequest) {
         html,
         sent_at: new Date().toISOString(),
       })
-    } catch {
-      // Persisting the prep sheet is additive.
+    } catch (e) {
+      // Persisting the prep sheet is additive — log, don't block the send.
+      console.error('[send] prep sheet snapshot failed', { clientId: matchedClientId, error: e })
     }
   }
 
   const prepRaw = makeRawEmail(
     clientEmail,
     cc,
-    'Your Session Preparation — theLeadershipWell',
+    'Your Session Preparation - theLeadershipWell',
     html,
     true
   )

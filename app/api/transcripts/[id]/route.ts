@@ -5,7 +5,8 @@ import { runAndStoreReport } from '@/lib/scoring/store'
 import { parseTranscript } from '@/lib/transcripts/parse'
 
 export const runtime = 'nodejs'
-export const maxDuration = 60
+// Scoring a full transcript can exceed a minute (engine times out at 100s).
+export const maxDuration = 120
 
 const PREVIEW_CHARS = 2000
 

@@ -42,6 +42,18 @@ Plus a **client workspace** (per-client hub) and **roster**.
   `email-template.ts`, `zoom.ts`, `notes/extract.ts`.
 - `supabase/migrations/*` — SQL, applied by hand in the Supabase SQL editor.
 
+### Config-driven rendering (block registry) — planned, read before touching `clients/[id]`
+The client workspace is slated to move from hard-coded JSX to a **block registry +
+slot model**: the page loads a layout config and renders pre-built blocks into named
+slots (`SurfaceRenderer`), instead of wiring components by hand. Spec lives in
+`spec/TLW_Block_Registry_Architecture_v1.md` — **read it before refactoring the
+client workspace or adding new workspace panels.** Tier 1 (build now) = the registry,
+slot model, validator, default layout, and the Note Editor + Actions/Insights panel
+rebuilt **as blocks**. Tier 2 (`workspace_layouts` per-coach override) and Tier 3
+(AI customization dialogue) are reserved seams, **not** to be built yet. Tenant
+isolation = every block's data access filtered server-side by the session `coachId`
+(NextAuth, not Supabase RLS).
+
 ## Data model (Supabase)
 
 All tables are RLS-enabled with **no public policies** — reached only via the
@@ -132,8 +144,10 @@ Drive folder; `/api/clients/[id]/import-transcripts` imports picks (forced to
 that client), then the UI scores each.
 
 ### Session-notes panel (`clients/[id]/NotesPanel.tsx`)
-The right-hand rail carries the live ACTION/INSIGHT capture **plus** persistent,
-per-client context loaded from the client record: **Key info** (`clients.key_info`,
+The right-hand rail carries the live ACTION/INSIGHT capture (`CaptureGroup` —
+newest-first, 5 visible with a "Show all" expander; the notes list does the same)
+**plus** persistent, per-client context loaded from the client record: **Key info**
+(`clients.key_info`,
 freeform reference — boss/spouse/kids), **Coaching map** (`clients.coaching_map`,
 a pulldown of the practice's maps — defined in `CoachingMapCard.tsx#MAPS`: The 6
 Components / The Airplane Model / First 90 Days / Who I Am Becoming; `blurb` field
@@ -145,6 +159,20 @@ goals** (the same `clients.coaching_goals` as the workspace card, edited via the
 **Key info is PRIVATE to the coach.** `clients.key_info` must never feed any
 client-facing generation (session prep, nudges, the "send to client" draft) —
 those use the note content only. Keep it out of those prompts.
+
+**Captured actions persist + are checkable.** A note's `ACTION:` lines are
+reconciled into the `actions` table (note_id set) on every open and save —
+`lib/notes/sync-actions.ts#syncNoteActions`, called from the note PATCH and
+`POST /api/clients/[id]/notes/[noteId]/actions` (the editor POSTs it on mount so
+older notes persist on view). So a note's actions flow to the workspace
+`ActionsCard` and the `{{unfinished_actions}}` field without a "send to client".
+The capture-panel checkbox toggles status coach-side via
+`PATCH /api/clients/[id]/actions/[actionId]` (`completed_via = 'coach'`; the
+client email link still uses public `/api/actions/complete`). Sync keeps `done`
+rows but drops still-`open` rows whose line the coach edited away; `send-note`'s
+`persistActionLinks` dedupes on the same `(note_id, description)`, so tokens stay
+stable. A just-typed line shows a plain (not-yet-checkable) box until autosave
+persists it.
 
 New note titles default to `"<client name> · <date>"` (`NotesPanel#newNote`).
 The editor toolbar has a **Templates** dropdown (`RichNoteEditor`, gated by
@@ -239,6 +267,46 @@ null), and passes the per-action links into `buildClientEmailHTML(..., actionLin
 so the prep "Your Action Items" boxes are click-to-log too. No client match → plain
 boxes, email still sends.
 
+### Scheduling next sessions + reminders (`appointments`)
+At the end of a session the coach books the next one from the client workspace
+**Sessions card** (`ScheduleCard`): a date/time/length form → `POST
+/api/clients/[id]/schedule`. The route converts the coach's wall-clock pick to an
+instant (`lib/calendar.ts#zonedWallClockToUtc`, coach timezone), creates a Google
+Calendar event with the client as guest (`createClientEvent`, **needs the
+`calendar.events` scope** — coach must re-consent once), records an `appointments`
+row, and emails a **confirmation** (`lib/appointment-email.ts` →
+`lib/gmail.ts#sendCoachHtmlEmail`, which sends via the coach's stored refresh
+token so the same path works unattended). Calendar/email are best-effort — a
+hiccup never loses the booking.
+
+**Reminders = simple confirmations.** Two sends: the confirmation at booking, and
+a single **24h-before nudge**. `lib/appointments.ts#sendAppointmentReminder` is
+the shared send+log: it CLAIMS the `(appointment_id, kind)` slot in
+`appointment_reminders` (unique index) before sending, rolling back on failure —
+so a reminder can never fire twice. The nudge is driven by **Vercel Cron**
+(`vercel.json` → hourly `GET /api/cron/reminders`, gated by `CRON_SECRET` as a
+Bearer token): it scans `scheduled` appointments in the next 24h that haven't been
+nudged and sends.
+
+**Calendar is the boss — appointments track it.** The coach typically reschedules
+by dragging the event in Google Calendar. Each cron run first **reconciles** every
+upcoming appointment with its event (`lib/calendar.ts#getClientEventState` →
+`lib/appointments.ts#syncAppointmentFromCalendar`): a moved event updates
+`scheduled_at`/duration, and a move of **>1h re-arms the 24h nudge** (deletes the
+`nudge_24h` row) so the reminder shifts with the session; a deleted event cancels
+the appointment. The workspace list (`GET /api/clients/[id]/appointments`) runs the
+same sync on view so displayed times are fresh. Sync always uses the appointment's
+**owning** coach's token (a different coach's token would 404 and wrongly cancel),
+and any non-404 read failure leaves the row untouched (no cancel/move on a blip).
+
+The Sessions card lists upcoming sessions with **cancel** (`DELETE
+/api/clients/[id]/appointments/[appointmentId]` — removes the calendar event,
+marks the row `cancelled`; a pending nudge then never fires). `GET
+/api/clients/[id]/appointments` returns future `scheduled` rows. `UpcomingSessions`
+renders them two ways: the full list in the Sessions card and a **compact** list
+on the `NameCard` (below name/email). Both refetch off a shared `apptReload` key
+in `ClientDetail`, bumped on book/cancel.
+
 ### Session-prep agenda fill-ins (`agenda_requests`)
 When `/api/send` matches a client it also creates an `agenda_requests` row
 (token) and passes `${getBaseUrl()}/agenda/<token>` into `buildClientEmailHTML`,
@@ -248,6 +316,45 @@ prompts (`lib/agenda.ts#AGENDA_PROMPTS`); `GET/POST /api/agenda/[token]` load an
 submit (stores `items` = `[{q,a}]`, status → submitted). The workspace
 `AgendaCard` (`/api/clients/[id]/agenda`, latest request) shows the client's
 answers (or "awaiting their response").
+
+### Branded email send + communications log (`email_signatures`, `communications`)
+The client workspace **Compose Email** button (`ClientDetail` → `EmailModal`) is a
+raw compose → **review → send** flow: To (prefilled client email), editable Cc
+(default `jeff@theleadershipwell.com`), Subject, a plain-text body `<textarea>`,
+and a **locked, non-editable signature preview** fetched from
+`GET /api/email/signature` (so the coach sees exactly what will append). On send it
+POSTs `{clientId, to, cc, subject, bodyHtml}` to `POST /api/email/send`, which:
+1. tenant-gates on `requireClientCoach`;
+2. fetches the active signature (`lib/signature.ts#getActiveSignatureHtml` — coach
+   row wins, else the global `coach_id IS NULL` row, else `DEFAULT_SIGNATURE_HTML`)
+   and **appends it server-side** (never trusts the client to include it);
+3. sends HTML via the signed-in coach's Gmail access token (lands in their Sent
+   folder, Cc the coach);
+4. **logs every send** to `communications` (`lib/communications.ts#logCommunication`)
+   — `status='sent'` with the returned `gmail_message_id`, or `status='failed'` +
+   `error_detail` on a transport error (never a silent drop).
+
+`email_signatures` is the single source of truth for the signature: email-safe
+table HTML with a **raster PNG** logo (`public/logo-email.png` →
+`https://theleadershipwell.online/logo-email.png` — SVG is stripped by mail
+clients). `coach_id` nullable: a NULL row is the global default. The
+`communications` log is type-discriminated (`type` email|reminder|prep_sheet,
+`direction` outbound|inbound) so reminders and future inbound reply-capture reuse
+it with no refactor. The workspace **Recent Communication** card
+(`CommunicationCard`, `GET /api/clients/[id]/communications`) shows the latest 5
+(✉ email / 🔔 reminder icon, subject/label, preview, relative time, muted-red
+`failed` chip), with a "View all" expander.
+
+**Brand mark / email logo.** `public/logo-email.png` is the wordmark embedded in
+the signature: "THE LEADERSHIP WELL" in a black outlined box (ink `#111226`) with
+an orange `+` (`#F5821F`, the one permitted accent) tucked into a **voided
+top-right corner** — the plus's top edge meets the top border line and its right
+edge meets the right border line. It's regenerated to spec by
+`scripts/generate-email-logo.py` (`pip install Pillow`, then
+`python3 scripts/generate-email-logo.py`); tweak the plus weight/size/inset via
+the CONFIG dials at the top of that file. Keep the colors/text in sync with
+`lib/signature.ts`. If the designer ever supplies the official asset, just drop it
+in at the same path — the signature points there, so no code change is needed.
 
 ### Coaching goals = the source of truth (and of the prep plan)
 `clients.coaching_goals` is the sacred goal list. Each goal is `{title,
@@ -273,7 +380,9 @@ Google OAuth (`GOOGLE_CLIENT_ID/SECRET`), `NEXTAUTH_URL/SECRET`,
 `ANTHROPIC_API_KEY`, Coach Accountable (`COACH_ACCOUNTABLE_API_ID/_API_KEY`),
 Supabase (`NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_API_SECRET_KEY`),
 `JEFF_FROM_EMAIL`/`JEFF_CC_EMAIL`, Zoom (`ZOOM_ACCOUNT_ID/CLIENT_ID/CLIENT_SECRET`),
-`INGEST_SECRET`, `DEFAULT_COACH_EMAIL` (= `jeff@jeffkholmes.com`),
+`INGEST_SECRET`, `CRON_SECRET` (Bearer token for the hourly reminder cron —
+`/api/cron/reminders`; set the same value in Vercel), `DEFAULT_COACH_EMAIL`
+(= `jeff@jeffkholmes.com`),
 `DEFAULT_COACH_NAME`. Optional: `SCORING_MODEL`, `GOALS_MODEL`, `AUTO_SCORE`,
 `DEFAULT_TIMEZONE`, `PLAUD_DRIVE_FOLDER` (default `Plaud-Transcripts`). See
 `.env.example`.
@@ -285,7 +394,9 @@ Supabase (`NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_API_SECRET_KEY`),
   the Cloud console if you hit "Drive API has not been used").
 - **Adding an OAuth scope requires the coach to sign out and back in** (the
   refresh token / access token only gains the scope on re-consent). This also
-  populates `coaches.google_refresh_token`.
+  populates `coaches.google_refresh_token`. ⚠️ The **scheduling** feature added
+  `calendar.events` (write) — booking a session and sending reminders won't work
+  until the coach re-consents.
 - **Vercel deploys from `main`.** Open a PR → merge → Vercel auto-deploys.
 - **Branch hygiene:** PRs are squash-merged, so the long-lived dev branch
   (`claude/practical-allen-uh4ckg`) diverges from `main`. Before pushing a new
@@ -302,20 +413,59 @@ supervisor email (coaches.supervisor_email) · 007 key info + map · 008 note
 templates · 009 action completion · 010 library folders · 011 agreements · 012
 agenda requests · 013 revenue + competency focus + prep sheets
 (`clients.session_fee`, `coaches.competency_focus` jsonb, `prep_sheets` table) ·
-014 note duration (`notes.duration_minutes`, default 60). Run new migrations by
-hand in the Supabase SQL editor.
+014 note duration (`notes.duration_minutes`, default 60) · 015 coach_clients
+(tenant scoping — links each client to its coach(es); the isolation boundary the
+client routes filter on) · 016 appointments (`appointments` +
+`appointment_reminders` — scheduled sessions and the reminder log) · 017 email
+signatures + communications (`email_signatures` single-source signature +
+`communications` outbound log; seeds Jeff's signature). Run new migrations by hand
+in the Supabase SQL editor.
+
+**Tenant scoping (015).** `coach_clients` (coach_id, client_id, role) is the
+ownership link. Client access is enforced **server-side** by the session coach,
+not Supabase RLS (we're on NextAuth): `lib/client-access.ts#requireClientCoach`
+gates every `/api/clients/[id]/**` route (404, not 403, on no access), the roster
+list filters via `accessibleClientIds`, and client create/import call
+`linkCoachToClient`. A client can be linked to more than one coach (occasional
+shared clients, role `shared`); the normal case is one `primary` link.
 
 **Revenue billing:** `session_fee` is an hourly rate; sessions bill in half-hour
 units with a 1-hour minimum, rounding up once past 15 min into a half hour
 (`lib/billing.ts`). Past-week revenue uses each note's logged `duration_minutes`;
 the projection uses the scheduled calendar-event length.
 
-**Pending — apply in Supabase:** `014_note_duration.sql` (013 already applied).
-The `library-pdfs` Storage bucket is created automatically on first upload.
+**Pending — apply in Supabase:** `014_note_duration.sql`,
+`015_coach_clients.sql`, `016_appointments.sql`, and
+`017_email_signatures_communications.sql`. ⚠️ **015 must be run BEFORE
+the tenant-scoping code is deployed to `main`** — until the table exists and is
+backfilled, the roster would filter to zero clients. Read the backfill comment in
+015 first (it assumes all current coach logins are the same person). **016 must be
+applied before scheduling is used.** The `library-pdfs` Storage bucket is created
+automatically on first upload.
+
+**Scheduling go-live checklist:** (1) apply `016_appointments.sql`; (2) set
+`CRON_SECRET` in Vercel (same value the cron sends); (3) enable the
+`calendar.events` scope is already in `authOptions` — **the coach must sign out
+and back in** to grant calendar-write + populate the refresh token with it;
+(4) Vercel picks up `vercel.json` crons on the next deploy from `main`.
 
 ## Roadmap
 
 ### Shipped
+- **Branded email send + Recent Communication card (Phase 1B)** — Compose Email
+  in the client workspace sends branded HTML via the coach's Gmail (signature
+  appended server-side from `email_signatures`, Cc the firm), with review-before-
+  send and a locked signature preview. Every send logs to `communications`
+  (`status` sent/failed), surfaced in the workspace **Recent Communication** card
+  (migration 017, forward-compatible with reminders + inbound reply-capture).
+  Needs migration 017 applied and the real logo PNG dropped at
+  `public/logo-email.png`. Templates/AI compose deferred to Phase 2/3.
+- **Scheduling next sessions + reminders** — workspace Sessions card books the
+  next session (Google Calendar event + client guest), confirmation email at
+  booking, and a 24h-before nudge via hourly Vercel Cron (`appointments` +
+  `appointment_reminders`, migration 016). Upcoming sessions show in the Sessions
+  card and compactly on the name card. Needs `calendar.events` re-consent +
+  `CRON_SECRET`.
 - Plaud transcript import (Drive list + per-client import; unmatched transcripts
   surface in the Practice review queue with preview + delete).
 - Emailed scorecard — auto-emails the coach after each scored session, plus an
@@ -324,6 +474,16 @@ The `library-pdfs` Storage bucket is created automatically on first upload.
 - Per-competency **suggested moves** on a report (Claude-generated, persisted).
 - Coach self-scoring (top of report) and supervisor email (`coaches.supervisor_email`,
   set on Account).
+- **Coach timezone setting (Account → Timezone).** `coaches.timezone` is now
+  editable via PATCH `/api/coach` (`TimezoneSettings`). The dashboard "Up next"
+  cards render every day/time label in that zone (passed down to `UpNextPanel`),
+  and "today" fallbacks for an undated transcript/CA note now resolve in the
+  coach's zone via `lib/datetime.ts#todayInTimeZone` — never the server's UTC
+  date, which was landing evening-Pacific sessions on the next day. The
+  `DEFAULT_TIMEZONE` env var stays the fallback for new coaches.
+- **Skip on session-prep cards.** Each "Up next" card has a Skip button that
+  hides that calendar session from the dashboard (persisted in `localStorage`,
+  `tlw-dashboard-skipped`, pruned to live event ids).
 - **Session-notes panel** — Key info (private), Coaching map pulldown, Engagement
   goals; default note titles; in-app full client names; browser app icon.
 - **Coaching goals** carry metrics and feed the session-prep coaching plan.

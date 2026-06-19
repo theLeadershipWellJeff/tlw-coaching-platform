@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/authOptions'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
+import { toErrorResponse } from '@/lib/api-handler'
+import { requireClientCoach } from '@/lib/client-access'
 import { extractCaptures } from '@/lib/notes/extract'
 
 function esc(s: string): string {
@@ -29,15 +29,15 @@ function list(items: string[], empty: string): string {
  * the last three insights. Body: { content } (HTML). Returns { content }.
  */
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  try {
+    const supabase = getSupabaseAdmin()
+    await requireClientCoach(supabase, params.id)
 
-  const body = await req.json().catch(() => ({}))
-  let content: string = typeof body.content === 'string' ? body.content : ''
-  if (!content) return NextResponse.json({ content: '' })
+    const body = await req.json().catch(() => ({}))
+    let content: string = typeof body.content === 'string' ? body.content : ''
+    if (!content) return NextResponse.json({ content: '' })
 
-  const supabase = getSupabaseAdmin()
-  const need = (token: string) => content.includes(token)
+    const need = (token: string) => content.includes(token)
 
   // Client (name + goals) — only fetched if a field needs it.
   if (need('{{client_name}}') || need('{{coaching_goals}}')) {
@@ -88,7 +88,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       if (insights.length >= 3) break
     }
     content = content.split('{{recent_insights}}').join(list(insights, 'No insights captured yet.'))
-  }
+    }
 
-  return NextResponse.json({ content })
+    return NextResponse.json({ content })
+  } catch (e) {
+    return toErrorResponse(e)
+  }
 }

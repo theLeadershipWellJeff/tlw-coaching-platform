@@ -56,11 +56,14 @@ ${noteText}`
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   try {
-    const message = await anthropic.messages.create({
-      model: MODEL,
-      max_tokens: 1500,
-      messages: [{ role: 'user', content: prompt }],
-    })
+    const message = await anthropic.messages.create(
+      {
+        model: MODEL,
+        max_tokens: 1500,
+        messages: [{ role: 'user', content: prompt }],
+      },
+      { timeout: 50_000, maxRetries: 1 }
+    )
     const block = message.content.find((b) => b.type === 'text')
     const raw = block && 'text' in block ? block.text : ''
     const clean = raw.replace(/```json\n?|```/g, '').trim()

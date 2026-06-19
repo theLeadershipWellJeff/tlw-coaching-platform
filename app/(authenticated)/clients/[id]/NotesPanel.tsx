@@ -12,6 +12,17 @@ import { billedHours } from '@/lib/billing'
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 
+// A note's persisted action item — captured from an ACTION: line and stored so
+// it flows to the workspace, the {{unfinished_actions}} field, and so the
+// capture-panel checkbox can mark it done.
+type NoteAction = {
+  id: string
+  description: string
+  status: string
+  completed_at: string | null
+  created_at: string
+}
+
 // Turn stored note HTML into plain text for ACTION:/INSIGHT: capture on first
 // render (before the editor has emitted any text). Block elements become
 // separate lines, matching how TipTap's getText() splits content so the
@@ -167,7 +178,7 @@ export function NotesPanel({ clientId, autoNew = false }: { clientId: string; au
             <p className="text-[13px] text-tlw-warm-gray">Select a note below to edit.</p>
           )}
 
-          {/* Last three session notes, with the rest a click away. */}
+          {/* Most recent session notes (5), with the rest a click away. */}
           <RecentNotes notes={notes} activeId={activeId} onSelect={setActiveId} />
 
           {/* The prep sheet we send out, alongside the notes. */}
@@ -188,7 +199,7 @@ function RecentNotes({
   onSelect: (id: string) => void
 }) {
   const [showAll, setShowAll] = useState(false)
-  const visible = showAll ? notes : notes.slice(0, 3)
+  const visible = showAll ? notes : notes.slice(0, 5)
 
   return (
     <div className="rounded-tlw-lg border border-tlw-warm-gray/15 bg-tlw-surface p-3">
@@ -196,7 +207,7 @@ function RecentNotes({
         <p className="text-[11px] font-semibold uppercase tracking-[1.5px] text-tlw-warm-gray">
           Last session notes
         </p>
-        {notes.length > 3 && (
+        {notes.length > 5 && (
           <button
             onClick={() => setShowAll((s) => !s)}
             className="text-[11px] font-medium text-tlw-signal-orange hover:underline"
@@ -245,11 +256,25 @@ function NoteEditor({
   const [text, setText] = useState(() => htmlToText(note.content))
   const [state, setState] = useState<SaveState>('idle')
   const [sendOpen, setSendOpen] = useState(false)
+  const [noteActions, setNoteActions] = useState<NoteAction[]>([])
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const dirty = useRef(false)
 
   // Live ACTION:/INSIGHT: capture, derived straight from the note text.
   const captures = useMemo(() => extractCaptures(text), [text])
+
+  // Persist this note's actions on open — so an older note's ACTION: lines flow
+  // to the workspace and their checkboxes are immediately checkable.
+  useEffect(() => {
+    let cancelled = false
+    fetch(`/api/clients/${clientId}/notes/${note.id}/actions`, { method: 'POST' })
+      .then((r) => (r.ok ? r.json() : { actions: [] }))
+      .then((d) => !cancelled && setNoteActions(d.actions || []))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [clientId, note.id])
 
   const save = useCallback(async () => {
     setState('saving')
@@ -264,10 +289,39 @@ function NoteEditor({
       dirty.current = false
       setState('saved')
       onSaved(data.note)
+      if (data.actions) setNoteActions(data.actions)
     } catch {
       setState('error')
     }
   }, [clientId, note.id, title, content, date, duration, onSaved])
+
+  // Coach-side check/uncheck of a captured action — optimistic, then persisted.
+  const toggleAction = useCallback(
+    async (row: NoteAction) => {
+      const next = row.status === 'done' ? 'open' : 'done'
+      setNoteActions((prev) =>
+        prev.map((a) =>
+          a.id === row.id
+            ? { ...a, status: next, completed_at: next === 'done' ? new Date().toISOString() : null }
+            : a
+        )
+      )
+      try {
+        const res = await fetch(`/api/clients/${clientId}/actions/${row.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: next }),
+        })
+        const data = await res.json()
+        if (res.ok && data.action) {
+          setNoteActions((prev) => prev.map((a) => (a.id === data.action.id ? data.action : a)))
+        }
+      } catch {
+        // Leave the optimistic state; the next open/save reconciles it.
+      }
+    },
+    [clientId]
+  )
 
   // Debounced autosave whenever an edited field changes.
   useEffect(() => {
@@ -329,7 +383,13 @@ function NoteEditor({
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[260px_1fr]">
-        <CapturePanel captures={captures} client={client} onClientUpdated={onClientUpdated} />
+        <CapturePanel
+          captures={captures}
+          noteActions={noteActions}
+          onToggleAction={toggleAction}
+          client={client}
+          onClientUpdated={onClientUpdated}
+        />
         <RichNoteEditor
           html={content}
           enableTemplates
@@ -404,34 +464,56 @@ function NoteEditor({
   )
 }
 
+// One row in a capture group. Actions carry their persisted done state + a
+// toggle (rendered as a clickable checkbox); insights are display-only.
+type CaptureItem = { text: string; done?: boolean; onToggle?: () => void }
+
 function CapturePanel({
   captures,
+  noteActions,
+  onToggleAction,
   client,
   onClientUpdated,
 }: {
   captures: ReturnType<typeof extractCaptures>
+  noteActions: NoteAction[]
+  onToggleAction: (row: NoteAction) => void
   client: Client | null
   onClientUpdated: (c: Client) => void
 }) {
   const { actions, insights } = captures
+
+  // Match each captured ACTION: line to its persisted row (by text) so the
+  // checkbox reflects/saves its done state. A freshly typed line has no row yet
+  // (it persists on autosave) — it shows as a plain, not-yet-checkable box.
+  const rowByDesc = new Map(noteActions.map((a) => [a.description, a]))
+  const actionItems: CaptureItem[] = actions.map((a) => {
+    const row = rowByDesc.get(a.text)
+    return {
+      text: a.text,
+      done: row?.status === 'done',
+      onToggle: row ? () => onToggleAction(row) : undefined,
+    }
+  })
+  const insightItems: CaptureItem[] = insights.map((i) => ({ text: i.text }))
 
   return (
     <div className="space-y-4 lg:sticky lg:top-4 lg:self-start">
       {/* Persistent client context sits above the live capture… */}
       {client && <KeyInfoCard client={client} onUpdated={onClientUpdated} />}
       <CaptureGroup
+        kind="action"
         label="Actions"
         emptyHint="Lines starting with ACTION:"
-        items={actions.map((a) => a.text)}
+        items={actionItems}
         accent="text-tlw-navy-rich"
-        icon={<span className="mt-[2px] inline-block h-3 w-3 shrink-0 rounded-[2px] border-2 border-tlw-navy-rich" />}
       />
       <CaptureGroup
+        kind="insight"
         label="Insights"
         emptyHint="Lines starting with INSIGHT:"
-        items={insights.map((i) => i.text)}
+        items={insightItems}
         accent="text-tlw-signal-orange"
-        icon={<span className="shrink-0 text-tlw-signal-orange">✦</span>}
       />
       {/* …and the assigned map + engagement goals below it. */}
       {client && <CoachingMapCard client={client} onUpdated={onClientUpdated} />}
@@ -440,19 +522,27 @@ function CapturePanel({
   )
 }
 
+// How many captures to show before the "more" expander kicks in.
+const CAPTURE_LIMIT = 5
+
 function CaptureGroup({
+  kind,
   label,
   emptyHint,
   items,
   accent,
-  icon,
 }: {
+  kind: 'action' | 'insight'
   label: string
   emptyHint: string
-  items: string[]
+  items: CaptureItem[]
   accent: string
-  icon: React.ReactNode
 }) {
+  const [showAll, setShowAll] = useState(false)
+  // Newest first — the latest captured line sits at the top of the list.
+  const ordered = [...items].reverse()
+  const visible = showAll ? ordered : ordered.slice(0, CAPTURE_LIMIT)
+
   return (
     <div className="rounded-tlw-lg border border-tlw-warm-gray/15 bg-tlw-surface p-3">
       <div className="mb-2 flex items-center justify-between">
@@ -468,15 +558,54 @@ function CaptureGroup({
       {items.length === 0 ? (
         <p className="text-[12px] text-tlw-warm-gray/70">{emptyHint}</p>
       ) : (
-        <ul className="space-y-1.5">
-          {items.map((t, i) => (
-            <li key={i} className="flex gap-2 text-[13px] leading-snug text-tlw-espresso">
-              {icon}
-              <span>{t}</span>
-            </li>
-          ))}
-        </ul>
+        <>
+          <ul className="space-y-1.5">
+            {visible.map((item, i) => (
+              <li
+                key={i}
+                className={`flex gap-2 text-[13px] leading-snug ${
+                  item.done ? 'text-tlw-warm-gray' : 'text-tlw-espresso'
+                }`}
+              >
+                {kind === 'action' ? (
+                  <ActionCheckbox done={!!item.done} onToggle={item.onToggle} />
+                ) : (
+                  <span className="shrink-0 text-tlw-signal-orange">✦</span>
+                )}
+                <span className={item.done ? 'line-through' : ''}>{item.text}</span>
+              </li>
+            ))}
+          </ul>
+          {items.length > CAPTURE_LIMIT && (
+            <button
+              onClick={() => setShowAll((s) => !s)}
+              className="mt-2 text-[11px] font-medium text-tlw-signal-orange hover:underline"
+            >
+              {showAll ? 'Show fewer' : `Show all ${items.length}`}
+            </button>
+          )}
+        </>
       )}
     </div>
+  )
+}
+
+// The captured-action checkbox. Clickable once the line is persisted (onToggle
+// set); a just-typed line shows as a plain box until autosave persists it.
+function ActionCheckbox({ done, onToggle }: { done: boolean; onToggle?: () => void }) {
+  const base = 'mt-[2px] flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[2px] border-2 border-tlw-navy-rich'
+  if (!onToggle) {
+    return <span className={base} aria-hidden />
+  }
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={done}
+      aria-label={done ? 'Mark action not done' : 'Mark action done'}
+      className={`${base} transition-colors ${done ? 'bg-tlw-navy-rich text-tlw-cream' : 'hover:bg-tlw-navy-rich/10'}`}
+    >
+      {done && <span className="text-[9px] font-bold leading-none">✓</span>}
+    </button>
   )
 }

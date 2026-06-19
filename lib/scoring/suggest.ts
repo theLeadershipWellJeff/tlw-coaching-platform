@@ -43,12 +43,15 @@ ${excerpt || '(no transcript text available)'}
 
 Give one specific move to raise competency ${c.id} (${c.name}) in the next session, grounded in what actually happened above.`
 
-  const message = await client.messages.create({
-    model: MODEL,
-    max_tokens: 400,
-    system: SYSTEM,
-    messages: [{ role: 'user', content: prompt }],
-  })
+  const message = await client.messages.create(
+    {
+      model: MODEL,
+      max_tokens: 400,
+      system: SYSTEM,
+      messages: [{ role: 'user', content: prompt }],
+    },
+    { timeout: 50_000, maxRetries: 1 }
+  )
 
   const block = message.content.find((b) => b.type === 'text')
   const text = block && 'text' in block ? block.text.trim() : ''

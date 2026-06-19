@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/authOptions'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
+import { requireCoach } from '@/lib/api-handler'
+import { linkCoachToClient } from '@/lib/client-access'
 import type { Database } from '@/lib/supabase/types'
 
 const CA_URL = 'https://www.coachaccountable.com/API/'
@@ -28,8 +28,15 @@ type ClientInsert = Database['public']['Tables']['clients']['Insert']
 // Pull the Coach Accountable roster into Supabase. Idempotent: clients already
 // imported (matched by ca_client_id) are skipped, so it's safe to re-run.
 export async function POST(_req: NextRequest) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  let supabase: ReturnType<typeof getSupabaseAdmin>
+  try {
+    supabase = getSupabaseAdmin()
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: 500 })
+  }
+
+  const coach = await requireCoach(supabase).catch(() => null)
+  if (!coach) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   if (!CA_ID || !CA_KEY) {
     return NextResponse.json(
@@ -43,13 +50,6 @@ export async function POST(_req: NextRequest) {
     caClients = (await caPost('Client.getAll')) || []
   } catch (e: any) {
     return NextResponse.json({ error: `Coach Accountable: ${e.message}` }, { status: 502 })
-  }
-
-  let supabase: ReturnType<typeof getSupabaseAdmin>
-  try {
-    supabase = getSupabaseAdmin()
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
   }
 
   // Which CA clients are already in Supabase?
@@ -80,11 +80,16 @@ export async function POST(_req: NextRequest) {
 
   let imported = 0
   if (toInsert.length > 0) {
-    const { error: insErr, count } = await supabase
+    const { data: inserted, error: insErr } = await supabase
       .from('clients')
-      .insert(toInsert, { count: 'exact' })
+      .insert(toInsert)
+      .select('id')
     if (insErr) return NextResponse.json({ error: `Supabase: ${insErr.message}` }, { status: 500 })
-    imported = count ?? toInsert.length
+    imported = inserted?.length ?? toInsert.length
+    // Link each newly imported client to the importing coach.
+    for (const row of inserted ?? []) {
+      await linkCoachToClient(supabase, coach.id, row.id, 'primary')
+    }
   }
 
   return NextResponse.json({

@@ -1,9 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import Anthropic from '@anthropic-ai/sdk'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
+import { requireSession, readJson, toErrorResponse } from '@/lib/api-handler'
 import type { CoachingGoal } from '@/lib/supabase/types'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+const GenerateSchema = z.object({
+  clientName: z.string().trim().min(1, 'clientName required'),
+  clientId: z.string().optional(),
+  notes: z
+    .array(z.object({ date: z.union([z.string(), z.number()]).optional(), content: z.string() }))
+    .default([]),
+  actions: z.array(z.any()).optional(),
+  zoomSummaries: z.array(z.any()).optional(),
+})
 
 // Emojis for the prep email's coaching-plan rows, assigned by position.
 const PLAN_EMOJIS = ['🧭', '🌱', '🕊️', '🌿', '⚓', '🔥', '💡', '🎯']
@@ -28,11 +40,9 @@ async function loadGoals(clientId?: string, clientName?: string): Promise<Coachi
 }
 
 export async function POST(req: NextRequest) {
-  const { clientName, clientId, notes, actions, zoomSummaries } = await req.json()
-
-  if (!clientName) {
-    return NextResponse.json({ error: 'clientName required' }, { status: 400 })
-  }
+  try {
+    await requireSession()
+    const { clientName, clientId, notes, actions, zoomSummaries } = await readJson(req, GenerateSchema)
 
   const notesText = notes
     .map((n: any) => `[${new Date(n.date).toLocaleDateString()}]\n${n.content}`)
@@ -136,22 +146,28 @@ ${actionsText}${zoomSection}
 Generate this exact JSON structure:
 ${jsonShape}`
 
-  const message = await client.messages.create({
-    model: process.env.GENERATE_MODEL || 'claude-sonnet-4-6',
-    max_tokens: 2000,
-    messages: [{ role: 'user', content: prompt }],
-  })
+  const message = await client.messages.create(
+    {
+      model: process.env.GENERATE_MODEL || 'claude-sonnet-4-6',
+      max_tokens: 2000,
+      messages: [{ role: 'user', content: prompt }],
+    },
+    { timeout: 50_000, maxRetries: 1 }
+  )
 
   const raw = message.content.find(b => b.type === 'text')?.text || ''
   const clean = raw.replace(/```json\n?|```/g, '').trim()
   const match = clean.match(/\{[\s\S]*\}/)
 
-  try {
-    const content = JSON.parse(match ? match[0] : clean)
-    // The stored goals are authoritative — overlay them onto the plan.
-    if (lockedPlan) content.coachingPlan = lockedPlan
-    return NextResponse.json({ content })
+    try {
+      const content = JSON.parse(match ? match[0] : clean)
+      // The stored goals are authoritative — overlay them onto the plan.
+      if (lockedPlan) content.coachingPlan = lockedPlan
+      return NextResponse.json({ content })
+    } catch {
+      return NextResponse.json({ error: 'Failed to parse AI response', raw }, { status: 500 })
+    }
   } catch (e) {
-    return NextResponse.json({ error: 'Failed to parse AI response', raw }, { status: 500 })
+    return toErrorResponse(e)
   }
 }

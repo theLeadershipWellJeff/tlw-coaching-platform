@@ -1,3 +1,5 @@
+import { escapeHtml as esc } from '@/lib/html'
+
 export interface PrepContent {
   coachingPlan: { emoji: string; title: string; description: string }[]
   exploring: { title: string; description: string }[]
@@ -40,13 +42,13 @@ export function buildClientEmailHTML(
     <div style="font-family:'Cormorant Garamond',Georgia,serif;font-size:32px;font-weight:300;color:#F2F2F0;margin-bottom:16px;line-height:1.15;">Your Session Preparation</div>
     <div style="width:48px;height:1px;background:#8B8680;margin:0 auto 14px;"></div>
     <div style="color:#8B8680;font-size:9px;letter-spacing:4px;text-transform:uppercase;margin-bottom:6px;">Prepared For You</div>
-    <div style="color:#F2F2F0;font-size:14px;letter-spacing:.5px;font-weight:500;">${clientName} &nbsp;&middot;&nbsp; theLeadershipWell</div>
+    <div style="color:#F2F2F0;font-size:14px;letter-spacing:.5px;font-weight:500;">${esc(clientName)} &nbsp;&middot;&nbsp; theLeadershipWell</div>
   </div>
 
   <!-- QUOTE -->
   <div style="background:rgba(17,18,38,.04);border-top:1px solid #e5e0d8;border-bottom:1px solid #e5e0d8;padding:18px 44px;text-align:center;">
-    <div style="font-family:'Cormorant Garamond',Georgia,serif;font-style:italic;font-size:15px;color:#403832;line-height:1.75;">&ldquo;${c.quote.text}&rdquo;</div>
-    <div style="font-size:10px;color:#8B8680;letter-spacing:2px;text-transform:uppercase;margin-top:6px;">&mdash; ${c.quote.author}</div>
+    <div style="font-family:'Cormorant Garamond',Georgia,serif;font-style:italic;font-size:15px;color:#403832;line-height:1.75;">&ldquo;${esc(c.quote.text)}&rdquo;</div>
+    <div style="font-size:10px;color:#8B8680;letter-spacing:2px;text-transform:uppercase;margin-top:6px;">&mdash; ${esc(c.quote.author)}</div>
   </div>
 
   <div style="height:1px;margin:20px 44px;background:linear-gradient(to right,transparent,rgba(139,134,128,.4),transparent);"></div>
@@ -60,11 +62,11 @@ export function buildClientEmailHTML(
       <tr><td style="padding:13px 0;border-bottom:1px solid #e5e0d8;vertical-align:top;">
         <table width="100%"><tr>
           <td width="40" style="vertical-align:top;padding-right:14px;padding-top:2px;">
-            <div style="width:32px;height:32px;border-radius:50%;background:#0C1940;text-align:center;line-height:32px;font-size:15px;">${item.emoji}</div>
+            <div style="width:32px;height:32px;border-radius:50%;background:#0C1940;text-align:center;line-height:32px;font-size:15px;">${esc(item.emoji)}</div>
           </td>
           <td>
-            <div style="font-weight:600;font-size:14px;color:#111226;margin-bottom:3px;">${item.title}</div>
-            <div style="font-size:13px;color:#6b7280;line-height:1.65;">${item.description}</div>
+            <div style="font-weight:600;font-size:14px;color:#111226;margin-bottom:3px;">${esc(item.title)}</div>
+            <div style="font-size:13px;color:#6b7280;line-height:1.65;">${esc(item.description)}</div>
           </td>
         </tr></table>
       </td></tr>`).join('')}
@@ -83,8 +85,8 @@ export function buildClientEmailHTML(
             <div style="width:26px;height:26px;border-radius:50%;background:#0C1940;text-align:center;line-height:26px;font-family:Georgia,serif;font-size:13px;color:#F2F2F0;">${i + 1}</div>
           </td>
           <td>
-            <div style="font-weight:600;font-size:14px;color:#111226;margin-bottom:3px;">${item.title}</div>
-            <div style="font-size:13px;color:#6b7280;line-height:1.65;">${item.description}</div>
+            <div style="font-weight:600;font-size:14px;color:#111226;margin-bottom:3px;">${esc(item.title)}</div>
+            <div style="font-size:13px;color:#6b7280;line-height:1.65;">${esc(item.description)}</div>
           </td>
         </tr></table>
       </td></tr>`).join('')}
@@ -100,7 +102,7 @@ export function buildClientEmailHTML(
       <tr><td style="padding:11px 0;border-bottom:1px solid #e5e0d8;">
         <table><tr>
           <td style="padding-right:14px;font-size:12px;color:#8B8680;vertical-align:top;padding-top:3px;">&#10022;</td>
-          <td style="font-size:14px;color:#1f2937;line-height:1.82;font-family:'Cormorant Garamond',Georgia,serif;font-style:italic;">${ins}</td>
+          <td style="font-size:14px;color:#1f2937;line-height:1.82;font-family:'Cormorant Garamond',Georgia,serif;font-style:italic;">${esc(ins)}</td>
         </tr></table>
       </td></tr>`).join('')}
     </table>
@@ -121,7 +123,7 @@ export function buildClientEmailHTML(
       <tr><td style="padding:11px 0;border-bottom:1px solid #e5e0d8;">
         <table><tr>
           <td style="padding-right:14px;vertical-align:top;padding-top:3px;">${box}</td>
-          <td style="font-size:14px;color:#1f2937;line-height:1.65;">${act}</td>
+          <td style="font-size:14px;color:#1f2937;line-height:1.65;">${esc(act)}</td>
         </tr></table>
       </td></tr>`
       }).join('')}
@@ -135,8 +137,8 @@ export function buildClientEmailHTML(
     <div style="font-size:12px;color:#8B8680;margin-bottom:16px;">Give yourself 5 quiet minutes before we meet:</div>
     ${c.questions.map((q, i) => `
     <div style="background:#111226;padding:18px 22px;margin:10px 0;border-radius:6px;border-left:3px solid #8B8680;">
-      <div style="font-size:9px;letter-spacing:2px;text-transform:uppercase;color:#8B8680;font-weight:700;margin-bottom:8px;">Question ${i + 1} &mdash; ${q.theme}</div>
-      <div style="font-size:15px;color:#F2F2F0;font-family:'Cormorant Garamond',Georgia,serif;font-style:italic;line-height:1.8;">${q.question}</div>
+      <div style="font-size:9px;letter-spacing:2px;text-transform:uppercase;color:#8B8680;font-weight:700;margin-bottom:8px;">Question ${i + 1} &mdash; ${esc(q.theme)}</div>
+      <div style="font-size:15px;color:#F2F2F0;font-family:'Cormorant Garamond',Georgia,serif;font-style:italic;line-height:1.8;">${esc(q.question)}</div>
     </div>`).join('')}
   </div>
 
@@ -150,7 +152,7 @@ export function buildClientEmailHTML(
 
   <!-- SIGNATURE -->
   <div style="padding:20px 44px 34px;">
-    <div style="font-family:'Cormorant Garamond',Georgia,serif;font-size:15px;color:#1f2937;line-height:1.9;font-style:italic;margin-bottom:22px;">${c.closingLine}</div>
+    <div style="font-family:'Cormorant Garamond',Georgia,serif;font-size:15px;color:#1f2937;line-height:1.9;font-style:italic;margin-bottom:22px;">${esc(c.closingLine)}</div>
     <table><tr>
       <td style="padding-right:14px;vertical-align:middle;">
         <svg width="38" height="38" viewBox="0 0 100 100" fill="none">
@@ -168,7 +170,7 @@ export function buildClientEmailHTML(
 
   <!-- FOOTER -->
   <div style="background:#111226;padding:14px 44px;text-align:center;font-size:11px;color:#8B8680;letter-spacing:1px;">
-    theLeadershipWell &nbsp;&middot;&nbsp; Confidential &nbsp;&middot;&nbsp; Prepared for ${clientName}
+    theLeadershipWell &nbsp;&middot;&nbsp; Confidential &nbsp;&middot;&nbsp; Prepared for ${esc(clientName)}
   </div>
 
 </div>
