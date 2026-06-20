@@ -184,6 +184,14 @@ New note titles default to `"<client name> · <date>"` (`NotesPanel#newNote`).
 The editor toolbar has a **Templates** dropdown (`RichNoteEditor`, gated by
 `enableTemplates`) that inserts a saved Library template at the cursor.
 
+**Custom Library labels (migration 019).** A coach can rename the fixed Library
+home nodes (the Templates / PDF Resources / Coaching Agreement tiles) and the
+virtual **Unfiled** bucket via an inline pencil on each (`LibrarySpace#HomeNode` /
+the Unfiled row). Labels persist per coach on `coaches.library_labels` (jsonb,
+keyed `templates|pdf|agreement|unfiled`; absent = built-in default) via
+`PATCH /api/coach { libraryLabels }`, read from `GET /api/coach`. Internal section
+keys (`templates|pdf`) are unchanged — only display labels.
+
 ### Library = folder system (`library/LibrarySpace.tsx`)
 The Library is a two-section folder browser (migration 010): **Templates** and
 **PDF Resources**. `library_folders` (coach-scoped, `section` = templates|pdf)
@@ -452,7 +460,9 @@ signatures + communications (`email_signatures` single-source signature +
 (`agreement_templates` structured master template; extends `agreements` with the
 signing fields; adds `clients.agreement_on_file/recording_authorized/agreement_id`;
 migrates legacy `signed`→`active` + backfills `agreement_on_file`). Run new
-migrations by hand in the Supabase SQL editor.
+migrations by hand in the Supabase SQL editor · 019 library labels
+(`coaches.library_labels` jsonb — per-coach custom labels for the fixed Library
+nodes).
 
 **Tenant scoping (015).** `coach_clients` (coach_id, client_id, role) is the
 ownership link. Client access is enforced **server-side** by the session coach,
@@ -469,7 +479,8 @@ the projection uses the scheduled calendar-event length.
 
 **Pending — apply in Supabase:** `014_note_duration.sql`,
 `015_coach_clients.sql`, `016_appointments.sql`, and
-`017_email_signatures_communications.sql`, and `018_agreement_system.sql`. ⚠️ **015 must be run BEFORE
+`017_email_signatures_communications.sql`, `018_agreement_system.sql`, and
+`019_library_labels.sql`. ⚠️ **015 must be run BEFORE
 the tenant-scoping code is deployed to `main`** — until the table exists and is
 backfilled, the roster would filter to zero clients. Read the backfill comment in
 015 first (it assumes all current coach logins are the same person). **016 must be

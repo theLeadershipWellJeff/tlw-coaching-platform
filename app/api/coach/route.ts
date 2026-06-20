@@ -26,9 +26,14 @@ export async function GET() {
       role: coach.role,
       timezone: coach.timezone,
       supervisor_email: coach.supervisor_email,
+      library_labels: coach.library_labels || {},
     },
   })
 }
+
+// Library nodes whose label a coach may customize, and a max label length.
+const LIBRARY_LABEL_KEYS = ['templates', 'pdf', 'agreement', 'unfiled'] as const
+const MAX_LABEL_LEN = 40
 
 /**
  * Update the coach's editable profile.
@@ -47,7 +52,7 @@ export async function PATCH(req: NextRequest) {
   if (!coach) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json().catch(() => ({}))
-  const update: { supervisor_email?: string | null; timezone?: string } = {}
+  const update: { supervisor_email?: string | null; timezone?: string; library_labels?: Record<string, string> } = {}
 
   if ('supervisorEmail' in body) {
     const raw = String(body.supervisorEmail ?? '').trim()
@@ -66,6 +71,23 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Pick a valid timezone.' }, { status: 400 })
     }
     update.timezone = tz
+  }
+
+  if ('libraryLabels' in body) {
+    const raw = body.libraryLabels
+    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+      return NextResponse.json({ error: 'Invalid library labels.' }, { status: 400 })
+    }
+    // Merge onto the existing map; an empty/whitespace value clears that key
+    // (falls back to the built-in default in the UI).
+    const merged: Record<string, string> = { ...(coach.library_labels || {}) }
+    for (const key of LIBRARY_LABEL_KEYS) {
+      if (!(key in raw)) continue
+      const val = String(raw[key] ?? '').trim().slice(0, MAX_LABEL_LEN)
+      if (val) merged[key] = val
+      else delete merged[key]
+    }
+    update.library_labels = merged
   }
 
   if (Object.keys(update).length === 0) {
