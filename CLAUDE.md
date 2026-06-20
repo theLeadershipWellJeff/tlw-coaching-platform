@@ -317,21 +317,50 @@ row, and emails a **confirmation** (`lib/appointment-email.ts` →
 token so the same path works unattended). Calendar/email are best-effort — a
 hiccup never loses the booking.
 
-**Reminders = simple confirmations.** Two sends: the confirmation at booking, and
-a single **24h-before nudge**. `lib/appointments.ts#sendAppointmentReminder` is
-the shared send+log: it CLAIMS the `(appointment_id, kind)` slot in
+**Conflict-aware picker + dual-timezone read-out (migration 020).** As the coach
+picks a slot, `ScheduleCard` calls `POST /api/clients/[id]/schedule/check`
+(debounced) and shows it in **both** the coach's and the **client's** timezone
+(`clients.timezone`, set via the edit-client modal dropdown; prompts to add it if
+unset) so the two can agree on the call. The check runs a Google **free/busy**
+query (`lib/calendar.ts#getCalendarConflicts`, covered by the already-granted
+`calendar.readonly` scope — no re-consent): a real conflict turns the Schedule
+button **grey + disabled**; a free, verified slot shows green and the button is
+**blue**. It also flags a pick **outside the coach's set availability**
+(`lib/scheduling.ts#isWithinAvailability`) as an amber warning that never blocks
+(product decision: warn, still allow). The conflict guard is client-side; the POST
+route stays best-effort (a flaky free/busy read never locks out a booking). The
+upcoming-sessions list renders in the coach's timezone (passed from `ClientDetail`).
+
+**Scheduling settings (Account → Scheduling, `SchedulingSettings`).** Per-coach
+**weekly availability** (`coaches.availability` jsonb, keyed "0".."6" = Sun..Sat,
+each `{enabled,start,end}` in the coach's zone) and **reminders**
+(`coaches.reminder_settings` jsonb, `{confirmation, reminders:[{hoursBefore,enabled}]}`).
+Canonical shapes, defaults (Mon–Fri 9–5; confirmation + a single 24h nudge), and
+pure helpers live in **`lib/scheduling.ts`** (dependency-free, shared by the
+settings UI, scheduler, schedule API, and cron). NULL columns = defaults, so
+existing coaches are unchanged. Read/written via `GET`/`PATCH /api/coach`
+(`availability`, `reminderSettings`); the GET always returns a normalized total
+shape. `lib/scheduling.ts` also centralizes the shared timezone option list
+(`orderedTimeZones`) reused by the timezone, client-edit, and scheduling UIs.
+
+**Reminders = confirmation + configurable nudges.** The confirmation fires at
+booking (if enabled); each enabled `reminder_settings.reminders` rule is a
+pre-session nudge at its own lead time. `lib/appointments.ts#sendAppointmentReminder`
+is the shared send+log: it CLAIMS the `(appointment_id, kind)` slot in
 `appointment_reminders` (unique index) before sending, rolling back on failure —
-so a reminder can never fire twice. The nudge is driven by **Vercel Cron**
-(`vercel.json` → hourly `GET /api/cron/reminders`, gated by `CRON_SECRET` as a
-Bearer token): it scans `scheduled` appointments in the next 24h that haven't been
-nudged and sends.
+so a reminder can never fire twice. `kind` = `confirmation` or `nudge_<n>h`
+(`lib/scheduling.ts#reminderKind`; 24h keeps the legacy `nudge_24h` name for
+dedupe). Nudges are driven by **Vercel Cron** (`vercel.json` → hourly `GET
+/api/cron/reminders`, gated by `CRON_SECRET` as a Bearer token): it scans
+`scheduled` appointments in a 14-day window and, per session, fires every enabled
+rule whose lead-time window has opened (`scheduled - hoursBefore ≤ now ≤ scheduled`).
 
 **Calendar is the boss — appointments track it.** The coach typically reschedules
 by dragging the event in Google Calendar. Each cron run first **reconciles** every
 upcoming appointment with its event (`lib/calendar.ts#getClientEventState` →
 `lib/appointments.ts#syncAppointmentFromCalendar`): a moved event updates
-`scheduled_at`/duration, and a move of **>1h re-arms the 24h nudge** (deletes the
-`nudge_24h` row) so the reminder shifts with the session; a deleted event cancels
+`scheduled_at`/duration, and a move of **>1h re-arms all nudges** (deletes the
+`nudge_%` rows) so every reminder shifts with the session; a deleted event cancels
 the appointment. The workspace list (`GET /api/clients/[id]/appointments`) runs the
 same sync on view so displayed times are fresh. Sync always uses the appointment's
 **owning** coach's token (a different coach's token would 404 and wrongly cancel),
@@ -481,7 +510,8 @@ signing fields; adds `clients.agreement_on_file/recording_authorized/agreement_i
 migrates legacy `signed`→`active` + backfills `agreement_on_file`). Run new
 migrations by hand in the Supabase SQL editor · 019 library labels
 (`coaches.library_labels` jsonb — per-coach custom labels for the fixed Library
-nodes).
+nodes) · 020 scheduling settings (`coaches.availability` + `coaches.reminder_settings`
+jsonb — per-coach weekly bookable hours and configurable reminders; NULL = defaults).
 
 **Tenant scoping (015).** `coach_clients` (coach_id, client_id, role) is the
 ownership link. Client access is enforced **server-side** by the session coach,
@@ -498,8 +528,10 @@ the projection uses the scheduled calendar-event length.
 
 **Pending — apply in Supabase:** `014_note_duration.sql`,
 `015_coach_clients.sql`, `016_appointments.sql`, and
-`017_email_signatures_communications.sql`, `018_agreement_system.sql`, and
-`019_library_labels.sql`. ⚠️ **015 must be run BEFORE
+`017_email_signatures_communications.sql`, `018_agreement_system.sql`,
+`019_library_labels.sql`, and `020_scheduling_settings.sql` (adds the two jsonb
+columns the scheduler/settings read — safe additive change, defaults until set).
+⚠️ **015 must be run BEFORE
 the tenant-scoping code is deployed to `main`** — until the table exists and is
 backfilled, the roster would filter to zero clients. Read the backfill comment in
 015 first (it assumes all current coach logins are the same person). **016 must be
@@ -529,6 +561,13 @@ and back in** to grant calendar-write + populate the refresh token with it;
   `appointment_reminders`, migration 016). Upcoming sessions show in the Sessions
   card and compactly on the name card. Needs `calendar.events` re-consent +
   `CRON_SECRET`.
+- **Conflict-aware scheduler + scheduling settings (migration 020)** — the picker
+  shows a slot in the coach's *and* the client's timezone, runs a Google free/busy
+  check (blue Schedule button when free, grey on a calendar conflict), and warns
+  when a pick is outside the coach's set hours. Account → Scheduling sets per-coach
+  weekly availability + configurable reminders (confirmation toggle + any number of
+  "X before" nudges). Uses the already-granted `calendar.readonly` scope (no new
+  consent). Needs `020_scheduling_settings.sql` applied.
 - Plaud transcript import (Drive list + per-client import; unmatched transcripts
   surface in the Practice review queue with preview + delete).
 - Emailed scorecard — auto-emails the coach after each scored session, plus an

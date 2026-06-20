@@ -191,6 +191,15 @@ export type Coach = {
   // Per-coach custom labels for the fixed Library nodes (migration 019), keyed by
   // node id: templates | pdf | agreement | unfiled. Absent key = built-in default.
   library_labels: Record<string, string> | null
+  // Scheduling settings (migration 020). null = use the built-in defaults.
+  // availability: bookable hours per weekday ("0".."6" = Sun..Sat); the scheduler
+  // warns (never blocks) outside these. reminder_settings: which reminders fire.
+  // Canonical shapes + defaults live in lib/scheduling.ts.
+  availability: Record<string, { enabled: boolean; start: string; end: string }> | null
+  reminder_settings: {
+    confirmation: boolean
+    reminders: { hoursBefore: number; enabled: boolean }[]
+  } | null
   created_at: Timestamp
   updated_at: Timestamp
 }

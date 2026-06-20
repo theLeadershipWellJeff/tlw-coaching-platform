@@ -252,6 +252,54 @@ export async function getClientEventState(coach: Coach, eventId: string): Promis
   }
 }
 
+export interface ConflictResult {
+  /** false = we couldn't read the calendar (no token / API error) — caller
+   *  should not treat this as "free" or "busy", just "unchecked". */
+  checked: boolean
+  /** true = the proposed window overlaps a busy block on the coach's calendar. */
+  busy: boolean
+  /** Up to a couple of conflicting busy intervals (ISO), for a helpful note. */
+  conflicts: { start: string; end: string }[]
+}
+
+/**
+ * Ask Google whether the coach's primary calendar is busy during [startsAt, end).
+ * Uses the freebusy endpoint (covered by the already-granted `calendar.readonly`
+ * scope — no re-consent), so it sees every busy block, not just app-created
+ * events. Best-effort: a read failure returns `checked: false` so the scheduler
+ * degrades to "couldn't verify" rather than wrongly blocking or clearing a slot.
+ */
+export async function getCalendarConflicts(
+  coach: Coach,
+  startsAt: Date,
+  endsAt: Date
+): Promise<ConflictResult> {
+  const unchecked: ConflictResult = { checked: false, busy: false, conflicts: [] }
+  if (!coach.google_refresh_token) return unchecked
+
+  const auth = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET)
+  auth.setCredentials({ refresh_token: coach.google_refresh_token })
+  const calendar = google.calendar({ version: 'v3', auth })
+
+  try {
+    const res = await calendar.freebusy.query({
+      requestBody: {
+        timeMin: startsAt.toISOString(),
+        timeMax: endsAt.toISOString(),
+        items: [{ id: 'primary' }],
+      },
+    })
+    const busyBlocks = res.data.calendars?.primary?.busy || []
+    const conflicts = busyBlocks
+      .filter((b) => b.start && b.end)
+      .map((b) => ({ start: b.start as string, end: b.end as string }))
+    return { checked: true, busy: conflicts.length > 0, conflicts: conflicts.slice(0, 2) }
+  } catch (e) {
+    console.error('Calendar freebusy query failed:', e)
+    return unchecked
+  }
+}
+
 /** Delete a calendar event the app created (best-effort; notifies guests). */
 export async function deleteClientEvent(coach: Coach, eventId: string): Promise<void> {
   if (!coach.google_refresh_token || !eventId) return

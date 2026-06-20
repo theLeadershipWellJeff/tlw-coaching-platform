@@ -1,5 +1,6 @@
 'use client'
 import { useCallback, useEffect, useState } from 'react'
+import { formatWhenShort } from '@/lib/datetime'
 
 export interface Appointment {
   id: string
@@ -8,7 +9,11 @@ export interface Appointment {
   status: string
 }
 
-function fmtLong(iso: string): string {
+/** Format an instant for display. When the coach's `timeZone` is known we render
+ *  in it (so an evening Pacific session never reads as the next morning); without
+ *  it we fall back to the browser's locale/zone. */
+function fmtLong(iso: string, timeZone?: string): string {
+  if (timeZone) return formatWhenShort(new Date(iso), timeZone)
   return new Date(iso).toLocaleString('en-US', {
     weekday: 'short',
     month: 'short',
@@ -29,11 +34,13 @@ export function UpcomingSessions({
   reloadKey = 0,
   compact = false,
   onChanged,
+  timeZone,
 }: {
   clientId: string
   reloadKey?: number
   compact?: boolean
   onChanged?: () => void
+  timeZone?: string
 }) {
   const [appts, setAppts] = useState<Appointment[]>([])
   const [loading, setLoading] = useState(true)
@@ -80,7 +87,7 @@ export function UpcomingSessions({
           {appts.slice(0, 3).map((a) => (
             <li key={a.id} className="flex items-center gap-2 text-[13px] text-tlw-espresso">
               <CalIcon />
-              <span>{fmtLong(a.scheduled_at)}</span>
+              <span>{fmtLong(a.scheduled_at, timeZone)}</span>
             </li>
           ))}
         </ul>
@@ -104,7 +111,7 @@ export function UpcomingSessions({
         >
           <span className="flex items-center gap-2 text-[14px] text-tlw-espresso">
             <CalIcon />
-            {fmtLong(a.scheduled_at)}
+            {fmtLong(a.scheduled_at, timeZone)}
             <span className="text-[12px] text-tlw-warm-gray">· {a.duration_minutes} min</span>
           </span>
           <div className="flex shrink-0 items-center gap-2 text-[12px] font-medium">
