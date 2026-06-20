@@ -1,14 +1,23 @@
 'use client'
 import { useCallback, useEffect, useState } from 'react'
-import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { FolderTemplates } from './FolderTemplates'
 import { FolderPdfs } from './FolderPdfs'
 
 type Section = 'templates' | 'pdf'
 type Folder = { id: string; name: string; kind: string; count: number }
 type OpenFolder = { id: string; name: string; kind: string }
+type Labels = Record<string, string>
 
-const SECTION_LABEL: Record<Section, string> = { templates: 'Templates', pdf: 'PDF Resources' }
+// Built-in defaults for the fixed Library nodes; a coach can override each label
+// (migration 019, stored on coaches.library_labels and applied here).
+const DEFAULT_LABELS: Record<string, string> = {
+  templates: 'Templates',
+  pdf: 'PDF Resources',
+  agreement: 'Coaching Agreement',
+  unfiled: 'Unfiled',
+}
+
 // Quick-add folders: label → kind.
 const TEMPLATE_SUGGESTIONS: { label: string; kind: string }[] = [
   { label: 'Note', kind: 'note' },
@@ -18,8 +27,38 @@ const TEMPLATE_SUGGESTIONS: { label: string; kind: string }[] = [
 const KIND_LABEL: Record<string, string> = { agreement: 'Agreements', worksheet: 'Worksheets' }
 
 export function LibrarySpace() {
+  const router = useRouter()
   const [section, setSection] = useState<Section | null>(null)
   const [folder, setFolder] = useState<OpenFolder | null>(null)
+  const [labels, setLabels] = useState<Labels>({})
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/coach')
+      .then((r) => (r.ok ? r.json() : { coach: {} }))
+      .then((d) => !cancelled && setLabels(d.coach?.library_labels || {}))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const labelFor = useCallback(
+    (key: string) => (labels[key]?.trim() ? labels[key] : DEFAULT_LABELS[key]),
+    [labels]
+  )
+
+  // Persist a custom label (empty resets to the built-in default).
+  const saveLabel = useCallback(async (key: string, value: string) => {
+    const res = await fetch('/api/coach', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ libraryLabels: { [key]: value } }),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Could not rename.')
+    setLabels(data.library_labels || {})
+  }, [])
 
   // Breadcrumb
   const crumb = (
@@ -31,7 +70,7 @@ export function LibrarySpace() {
         <>
           <span>/</span>
           <button onClick={() => setFolder(null)} className="hover:text-tlw-espresso">
-            {SECTION_LABEL[section]}
+            {labelFor(section)}
           </button>
         </>
       )}
@@ -50,21 +89,27 @@ export function LibrarySpace() {
       <div>
         {crumb}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <SectionTile label="Templates" description="Note and worksheet templates — organized in folders." onClick={() => setSection('templates')} />
-          <SectionTile label="PDF Resources" description="Upload and organize PDF files in folders." onClick={() => setSection('pdf')} />
+          <HomeNode
+            label={labelFor('templates')}
+            description="Note and worksheet templates — organized in folders."
+            onOpen={() => setSection('templates')}
+            onSave={(v) => saveLabel('templates', v)}
+          />
+          <HomeNode
+            label={labelFor('pdf')}
+            description="Upload and organize PDF files in folders."
+            onOpen={() => setSection('pdf')}
+            onSave={(v) => saveLabel('pdf', v)}
+          />
         </div>
-        <Link
-          href="/library/agreement"
-          className="mt-4 block rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface p-6 text-left transition-colors hover:border-tlw-warm-gray/35"
-        >
-          <div className="mb-2 flex items-center gap-2">
-            <FolderIcon />
-            <p className="text-[15px] font-medium text-tlw-navy-deep">Coaching Agreement</p>
-          </div>
-          <p className="text-[13px] text-tlw-warm-gray">
-            Edit the master coaching agreement sent to all clients. Issue it to a client from their profile.
-          </p>
-        </Link>
+        <div className="mt-4">
+          <HomeNode
+            label={labelFor('agreement')}
+            description="Edit the master coaching agreement sent to all clients. Issue it to a client from their profile."
+            onOpen={() => router.push('/library/agreement')}
+            onSave={(v) => saveLabel('agreement', v)}
+          />
+        </div>
       </div>
     )
   }
@@ -87,27 +132,107 @@ export function LibrarySpace() {
   return (
     <div>
       {crumb}
-      <FolderList section={section} onOpen={setFolder} />
+      <FolderList
+        section={section}
+        sectionLabel={labelFor(section)}
+        unfiledLabel={labelFor('unfiled')}
+        onRenameUnfiled={(v) => saveLabel('unfiled', v)}
+        onOpen={setFolder}
+      />
     </div>
   )
 }
 
-function SectionTile({ label, description, onClick }: { label: string; description: string; onClick: () => void }) {
+/**
+ * A fixed Library home node (a section tile or the agreement card) with an inline
+ * rename. Clicking the body opens it; the pencil renames it (per-coach label).
+ */
+function HomeNode({
+  label,
+  description,
+  onOpen,
+  onSave,
+}: {
+  label: string
+  description: string
+  onOpen: () => void
+  onSave: (value: string) => Promise<void>
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(label)
+  const [busy, setBusy] = useState(false)
+
+  async function save() {
+    setBusy(true)
+    try {
+      await onSave(draft.trim())
+      setEditing(false)
+    } catch {
+      /* surfaced inline elsewhere; keep the editor open */
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
-    <button
-      onClick={onClick}
-      className="rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface p-6 text-left transition-colors hover:border-tlw-warm-gray/35"
-    >
-      <div className="mb-2 flex items-center gap-2">
-        <FolderIcon />
-        <p className="text-[15px] font-medium text-tlw-navy-deep">{label}</p>
-      </div>
-      <p className="text-[13px] text-tlw-warm-gray">{description}</p>
-    </button>
+    <div className="relative rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface p-6 transition-colors hover:border-tlw-warm-gray/35">
+      {editing ? (
+        <div className="flex items-center gap-2">
+          <FolderIcon />
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') save()
+              if (e.key === 'Escape') { setEditing(false); setDraft(label) }
+            }}
+            autoFocus
+            placeholder={label}
+            className="min-w-0 flex-1 border-b border-tlw-warm-gray/30 bg-transparent text-[15px] font-medium text-tlw-navy-deep outline-none"
+          />
+          <button onClick={save} disabled={busy} className="text-[12px] font-medium text-tlw-navy-rich hover:underline disabled:opacity-40">
+            save
+          </button>
+          <button onClick={() => { setEditing(false); setDraft(label) }} className="text-[12px] text-tlw-warm-gray hover:text-tlw-espresso">
+            cancel
+          </button>
+        </div>
+      ) : (
+        <>
+          <button
+            onClick={() => { setEditing(true); setDraft(label) }}
+            title="Rename"
+            aria-label="Rename"
+            className="absolute right-3 top-3 text-tlw-warm-gray transition-colors hover:text-tlw-espresso"
+          >
+            <PencilIcon />
+          </button>
+          <button onClick={onOpen} className="block w-full text-left">
+            <div className="mb-2 flex items-center gap-2">
+              <FolderIcon />
+              <p className="text-[15px] font-medium text-tlw-navy-deep">{label}</p>
+            </div>
+            <p className="pr-6 text-[13px] text-tlw-warm-gray">{description}</p>
+          </button>
+        </>
+      )}
+    </div>
   )
 }
 
-function FolderList({ section, onOpen }: { section: Section; onOpen: (f: OpenFolder) => void }) {
+function FolderList({
+  section,
+  sectionLabel,
+  unfiledLabel,
+  onRenameUnfiled,
+  onOpen,
+}: {
+  section: Section
+  sectionLabel: string
+  unfiledLabel: string
+  onRenameUnfiled: (value: string) => Promise<void>
+  onOpen: (f: OpenFolder) => void
+}) {
   const [folders, setFolders] = useState<Folder[]>([])
   const [unfiled, setUnfiled] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -119,6 +244,8 @@ function FolderList({ section, onOpen }: { section: Section; onOpen: (f: OpenFol
   const [deleting, setDeleting] = useState<string | null>(null)
   const [renaming, setRenaming] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
+  const [renamingUnfiled, setRenamingUnfiled] = useState(false)
+  const [unfiledDraft, setUnfiledDraft] = useState(unfiledLabel)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -201,10 +328,23 @@ function FolderList({ section, onOpen }: { section: Section; onOpen: (f: OpenFol
     }
   }
 
+  async function saveUnfiled() {
+    setBusy(true)
+    setError('')
+    try {
+      await onRenameUnfiled(unfiledDraft.trim())
+      setRenamingUnfiled(false)
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-[11px] font-medium uppercase tracking-[2px] text-tlw-warm-gray">{SECTION_LABEL[section]} folders</p>
+        <p className="text-[11px] font-medium uppercase tracking-[2px] text-tlw-warm-gray">{sectionLabel} folders</p>
         {!adding && (
           <button
             onClick={() => setAdding(true)}
@@ -339,14 +479,49 @@ function FolderList({ section, onOpen }: { section: Section; onOpen: (f: OpenFol
           ))}
 
           {section === 'templates' && unfiled > 0 && (
-            <button
-              onClick={() => onOpen({ id: 'none', name: 'Unfiled', kind: 'note' })}
-              className="flex w-full items-center gap-3 rounded-tlw-xl border border-dashed border-tlw-warm-gray/25 bg-tlw-surface/60 p-4 text-left"
-            >
-              <FolderIcon />
-              <span className="text-[14px] font-medium text-tlw-navy-deep">Unfiled</span>
-              <span className="text-[12px] text-tlw-warm-gray">{unfiled} template{unfiled === 1 ? '' : 's'} from before folders</span>
-            </button>
+            <div className="flex items-center justify-between gap-4 rounded-tlw-xl border border-dashed border-tlw-warm-gray/25 bg-tlw-surface/60 p-4">
+              {renamingUnfiled ? (
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                  <FolderIcon />
+                  <input
+                    value={unfiledDraft}
+                    onChange={(e) => setUnfiledDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') saveUnfiled()
+                      if (e.key === 'Escape') { setRenamingUnfiled(false); setUnfiledDraft(unfiledLabel) }
+                    }}
+                    autoFocus
+                    placeholder={unfiledLabel}
+                    className="min-w-0 flex-1 border-none bg-transparent text-[14px] font-medium text-tlw-navy-deep outline-none"
+                  />
+                </div>
+              ) : (
+                <button onClick={() => onOpen({ id: 'none', name: unfiledLabel, kind: 'note' })} className="flex min-w-0 items-center gap-3 text-left">
+                  <FolderIcon />
+                  <span className="text-[14px] font-medium text-tlw-navy-deep">{unfiledLabel}</span>
+                  <span className="text-[12px] text-tlw-warm-gray">{unfiled} template{unfiled === 1 ? '' : 's'} from before folders</span>
+                </button>
+              )}
+              <div className="flex shrink-0 items-center gap-3 text-[12px] font-medium">
+                {renamingUnfiled ? (
+                  <>
+                    <button onClick={saveUnfiled} disabled={busy} className="text-tlw-navy-rich hover:underline disabled:opacity-40">
+                      save
+                    </button>
+                    <button onClick={() => { setRenamingUnfiled(false); setUnfiledDraft(unfiledLabel) }} className="text-tlw-warm-gray hover:text-tlw-espresso">
+                      cancel
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => { setRenamingUnfiled(true); setUnfiledDraft(unfiledLabel) }}
+                    className="text-tlw-warm-gray hover:text-tlw-espresso"
+                  >
+                    rename
+                  </button>
+                )}
+              </div>
+            </div>
           )}
         </div>
       )}
@@ -358,6 +533,15 @@ function FolderIcon() {
   return (
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" className="shrink-0 text-tlw-warm-gray">
       <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    </svg>
+  )
+}
+
+function PencilIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
     </svg>
   )
 }

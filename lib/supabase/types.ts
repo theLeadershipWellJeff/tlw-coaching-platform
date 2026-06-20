@@ -188,6 +188,9 @@ export type Coach = {
   supervisor_email: string | null
   // Per-competency improvement focus, keyed by competency id ("1".."8").
   competency_focus: Record<string, string> | null
+  // Per-coach custom labels for the fixed Library nodes (migration 019), keyed by
+  // node id: templates | pdf | agreement | unfiled. Absent key = built-in default.
+  library_labels: Record<string, string> | null
   created_at: Timestamp
   updated_at: Timestamp
 }
