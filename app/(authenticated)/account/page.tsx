@@ -3,6 +3,7 @@ import { authOptions } from '@/lib/authOptions'
 import { PageHeader } from '@/app/components/layout/PageHeader'
 import { SupervisorSettings } from './SupervisorSettings'
 import { TimezoneSettings } from './TimezoneSettings'
+import { SchedulingSettings } from './SchedulingSettings'
 
 export default async function AccountPage() {
   const session = await getServerSession(authOptions)
@@ -13,7 +14,7 @@ export default async function AccountPage() {
     <>
       <PageHeader title="Account" subtitle="Your coach profile and session settings." />
 
-      <div className="max-w-lg space-y-6">
+      <div className="max-w-2xl space-y-6">
         <div className="rounded-tlw-xl border border-tlw-warm-gray/15 bg-tlw-surface p-6">
           <p className="mb-4 text-[11px] font-medium uppercase tracking-[2px] text-tlw-warm-gray">
             Signed in as
@@ -31,6 +32,8 @@ export default async function AccountPage() {
         </div>
 
         <TimezoneSettings />
+
+        <SchedulingSettings />
 
         <SupervisorSettings />
 

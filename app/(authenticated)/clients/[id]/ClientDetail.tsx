@@ -17,6 +17,9 @@ import { ImportTranscriptsModal } from './ImportTranscriptsModal'
 
 export function ClientDetail({ clientId }: { clientId: string }) {
   const [client, setClient] = useState<Client | null>(null)
+  // The coach's timezone — so the scheduler and the upcoming-sessions list render
+  // every time in the coach's zone, not the browser's.
+  const [coachTimezone, setCoachTimezone] = useState<string | undefined>(undefined)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [emailing, setEmailing] = useState(false)
@@ -48,6 +51,13 @@ export function ClientDetail({ clientId }: { clientId: string }) {
     load()
   }, [load])
 
+  useEffect(() => {
+    fetch('/api/coach')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d?.coach?.timezone && setCoachTimezone(d.coach.timezone))
+      .catch(() => {})
+  }, [])
+
   // Opened from the roster's "issue agreement now?" prompt.
   const searchParams = useSearchParams()
   useEffect(() => {
@@ -75,7 +85,7 @@ export function ClientDetail({ clientId }: { clientId: string }) {
         ← Back to roster
       </Link>
 
-      <NameCard client={client} onUpdated={setClient} apptReload={apptReload} />
+      <NameCard client={client} onUpdated={setClient} apptReload={apptReload} coachTimezone={coachTimezone} />
 
       {/* Compliance guardrail — non-dismissible (migration 018). */}
       {client.recording_authorized === false && (
@@ -87,7 +97,12 @@ export function ClientDetail({ clientId }: { clientId: string }) {
         </div>
       )}
 
-      <ScheduleCard clientId={clientId} reloadKey={apptReload} onChanged={() => setApptReload((n) => n + 1)} />
+      <ScheduleCard
+        clientId={clientId}
+        reloadKey={apptReload}
+        onChanged={() => setApptReload((n) => n + 1)}
+        coachTimezone={coachTimezone}
+      />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <TranscriptsCard clientId={clientId} reloadKey={txReload} />

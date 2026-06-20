@@ -1,7 +1,8 @@
 'use client'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { Client } from '@/lib/supabase/types'
 import { Modal } from '@/app/components/shared/Modal'
+import { orderedTimeZones } from '@/lib/scheduling'
 
 const FIELDS: { key: keyof Client; label: string; type?: string; placeholder?: string }[] = [
   { key: 'name', label: 'Name' },
@@ -9,7 +10,6 @@ const FIELDS: { key: keyof Client; label: string; type?: string; placeholder?: s
   { key: 'title', label: 'Title / role' },
   { key: 'email', label: 'Email', type: 'email' },
   { key: 'phone', label: 'Phone' },
-  { key: 'timezone', label: 'Timezone', placeholder: 'e.g. America/Los_Angeles' },
   { key: 'address', label: 'Address' },
 ]
 
@@ -29,12 +29,14 @@ export function EditClientModal({
       status: client.status || 'active',
       bio: client.bio || '',
       session_fee: client.session_fee != null ? String(client.session_fee) : '',
+      timezone: client.timezone || '',
     }
     for (const { key } of FIELDS) f[key] = (client[key] as string) || ''
     return f
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const zones = useMemo(() => orderedTimeZones(), [])
 
   function set(key: string, val: string) {
     setForm((f) => ({ ...f, [key]: val }))
@@ -53,6 +55,7 @@ export function EditClientModal({
         status: form.status,
         bio: form.bio.trim() || null,
         session_fee: fee,
+        timezone: form.timezone.trim() || null,
       }
       for (const { key } of FIELDS) payload[key] = form[key].trim() || (key === 'name' ? form[key] : null)
       const res = await fetch(`/api/clients/${client.id}`, {
@@ -85,6 +88,29 @@ export function EditClientModal({
             />
           </label>
         ))}
+
+        <label className="block">
+          <span className="text-[11px] font-medium uppercase tracking-[1.5px] text-tlw-warm-gray">Timezone</span>
+          <select
+            value={form.timezone}
+            onChange={(e) => set('timezone', e.target.value)}
+            className="mt-1 w-full rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-surface px-3 py-2 text-[13px] text-tlw-espresso outline-none focus:border-tlw-signal-orange"
+          >
+            <option value="">— not set —</option>
+            {/* Keep a stored value selectable even if it's not in the list. */}
+            {form.timezone && !zones.includes(form.timezone) && (
+              <option value={form.timezone}>{form.timezone}</option>
+            )}
+            {zones.map((z) => (
+              <option key={z} value={z}>
+                {z.replace(/_/g, ' ')}
+              </option>
+            ))}
+          </select>
+          <span className="mt-1 block text-[11px] text-tlw-warm-gray">
+            Shown under the scheduler so you can confirm the client&apos;s local time.
+          </span>
+        </label>
 
         <label className="block">
           <span className="text-[11px] font-medium uppercase tracking-[1.5px] text-tlw-warm-gray">Status</span>

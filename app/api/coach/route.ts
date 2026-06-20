@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { getSessionCoach } from '@/lib/coach'
 import { isValidTimeZone } from '@/lib/datetime'
+import { normalizeAvailability, normalizeReminderSettings } from '@/lib/scheduling'
 
 export const runtime = 'nodejs'
 
@@ -27,6 +28,9 @@ export async function GET() {
       timezone: coach.timezone,
       supervisor_email: coach.supervisor_email,
       library_labels: coach.library_labels || {},
+      // Always hand the UI a complete, valid shape (defaults when unset).
+      availability: normalizeAvailability(coach.availability),
+      reminder_settings: normalizeReminderSettings(coach.reminder_settings),
     },
   })
 }
@@ -52,7 +56,13 @@ export async function PATCH(req: NextRequest) {
   if (!coach) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json().catch(() => ({}))
-  const update: { supervisor_email?: string | null; timezone?: string; library_labels?: Record<string, string> } = {}
+  const update: {
+    supervisor_email?: string | null
+    timezone?: string
+    library_labels?: Record<string, string>
+    availability?: ReturnType<typeof normalizeAvailability>
+    reminder_settings?: ReturnType<typeof normalizeReminderSettings>
+  } = {}
 
   if ('supervisorEmail' in body) {
     const raw = String(body.supervisorEmail ?? '').trim()
@@ -88,6 +98,14 @@ export async function PATCH(req: NextRequest) {
       else delete merged[key]
     }
     update.library_labels = merged
+  }
+
+  // Scheduling settings — normalize so only valid, total shapes are stored.
+  if ('availability' in body) {
+    update.availability = normalizeAvailability(body.availability)
+  }
+  if ('reminderSettings' in body) {
+    update.reminder_settings = normalizeReminderSettings(body.reminderSettings)
   }
 
   if (Object.keys(update).length === 0) {

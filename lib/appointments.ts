@@ -14,7 +14,9 @@ import { buildAppointmentEmailHTML } from './appointment-email'
 import { sendCoachHtmlEmail } from './gmail'
 import { getClientEventState } from './calendar'
 
-export type ReminderKind = 'confirmation' | 'nudge_24h'
+// 'confirmation' = the booking email; any other value is a pre-session nudge
+// slot name (e.g. 'nudge_24h', 'nudge_1h' — see lib/scheduling.ts#reminderKind).
+export type ReminderKind = string
 
 // A reschedule of more than this re-arms the 24h nudge, so a meaningful move in
 // Google Calendar sends a fresh reminder for the new time. Smaller drags just
@@ -54,11 +56,13 @@ export async function syncAppointmentFromCalendar(
   await supabase.from('appointments').update(update).eq('id', appt.id)
 
   if (drift >= NUDGE_REARM_MS) {
+    // Clear every nudge slot (not just 24h) so all of the coach's configured
+    // reminders re-fire relative to the new time.
     await supabase
       .from('appointment_reminders')
       .delete()
       .eq('appointment_id', appt.id)
-      .eq('kind', 'nudge_24h')
+      .like('kind', 'nudge_%')
   }
 }
 

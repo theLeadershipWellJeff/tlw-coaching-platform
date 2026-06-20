@@ -23,7 +23,7 @@ export function buildAppointmentEmailHTML(opts: {
   const { kind, clientName, coachName, whenLabel } = opts
   const first = clientName.split(' ')[0] || 'there'
 
-  const heading = kind === 'confirmation' ? 'Your next session is booked' : 'A reminder about tomorrow'
+  const heading = kind === 'confirmation' ? 'Your next session is booked' : 'A reminder about our session'
   const lead =
     kind === 'confirmation'
       ? `Thanks for our time today. I've scheduled our next session — you'll find it on your calendar, and the details are below.`

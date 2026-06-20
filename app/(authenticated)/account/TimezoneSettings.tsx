@@ -1,29 +1,6 @@
 'use client'
 import { useEffect, useMemo, useState } from 'react'
-
-/** A curated shortlist (most coaches are US-based) followed by the full IANA
- *  list, so the common picks are one scroll away but anything is reachable. */
-const COMMON = [
-  'America/Los_Angeles',
-  'America/Denver',
-  'America/Chicago',
-  'America/New_York',
-  'America/Phoenix',
-  'America/Anchorage',
-  'Pacific/Honolulu',
-  'UTC',
-]
-
-function allZones(): string[] {
-  // Intl.supportedValuesOf is widely available; fall back to the shortlist.
-  try {
-    const fn = (Intl as any).supportedValuesOf
-    if (typeof fn === 'function') return fn('timeZone') as string[]
-  } catch {
-    /* ignore */
-  }
-  return COMMON
-}
+import { orderedTimeZones } from '@/lib/scheduling'
 
 /** Set the coach's timezone — the zone the app reads every date/time in (session
  *  dates, the dashboard, scored reports). Stored on the coach profile. */
@@ -33,11 +10,7 @@ export function TimezoneSettings() {
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
-  const zones = useMemo(() => {
-    const full = allZones()
-    const rest = full.filter((z) => !COMMON.includes(z)).sort()
-    return [...COMMON.filter((z) => full.includes(z) || z === 'UTC'), ...rest]
-  }, [])
+  const zones = useMemo(() => orderedTimeZones(), [])
 
   useEffect(() => {
     fetch('/api/coach')

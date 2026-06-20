@@ -8,10 +8,12 @@ export function NameCard({
   client,
   onUpdated,
   apptReload = 0,
+  coachTimezone,
 }: {
   client: Client
   onUpdated: (c: Client) => void
   apptReload?: number
+  coachTimezone?: string
 }) {
   const [editing, setEditing] = useState(false)
 
@@ -32,7 +34,7 @@ export function NameCard({
             </div>
           )}
 
-          <UpcomingSessions clientId={client.id} reloadKey={apptReload} compact />
+          <UpcomingSessions clientId={client.id} reloadKey={apptReload} compact timeZone={coachTimezone} />
         </div>
 
         <div className="flex shrink-0 items-center gap-3">

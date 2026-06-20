@@ -5,6 +5,7 @@ import { readJson, toErrorResponse } from '@/lib/api-handler'
 import { requireClientCoach } from '@/lib/client-access'
 import { zonedWallClockToUtc, createClientEvent } from '@/lib/calendar'
 import { sendAppointmentReminder } from '@/lib/appointments'
+import { normalizeReminderSettings } from '@/lib/scheduling'
 
 export const runtime = 'nodejs'
 
@@ -66,10 +67,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return NextResponse.json({ error: insErr?.message || 'Could not save the appointment.' }, { status: 500 })
     }
 
-    // Confirmation email — best-effort; the booking stands regardless.
-    const emailed = await sendAppointmentReminder(supabase, coach, appointment, client, 'confirmation').catch(
-      () => false
-    )
+    // Confirmation email — best-effort, and only if the coach has it enabled.
+    // The booking stands regardless.
+    const wantsConfirmation = normalizeReminderSettings(coach.reminder_settings).confirmation
+    const emailed = wantsConfirmation
+      ? await sendAppointmentReminder(supabase, coach, appointment, client, 'confirmation').catch(() => false)
+      : false
 
     return NextResponse.json({ appointment, emailed }, { status: 201 })
   } catch (e) {
