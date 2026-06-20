@@ -412,6 +412,25 @@ reports, emails). In-app *lists* show the full client name, resolved in code via
 embedded select) — wired through `/api/reports`, `/api/transcripts`, and
 `/api/reports/[id]` (`clientName`).
 
+## Security & pipeline hardening (absorbed from PRs #45/#55)
+
+- **Tenant isolation on sibling routes.** `/api/notes` (CA proxy) now requires a
+  signed-in session; `/api/search` filters to `accessibleClientIds` (and is
+  `force-dynamic`); `/api/send` only ties tracking to a matched client the coach
+  is linked to; `PATCH /api/transcripts/[id]` only assigns to a linked client.
+- **Next.js bumped to 14.2.35** (security advisory) + a real **ESLint** config
+  (`next/core-web-vitals`); `next build` runs lint (warnings only, non-blocking).
+- **Scoring-model guard.** `engine.ts#resolveModel` ignores a retired
+  `SCORING_MODEL` id (e.g. the 2026-06-15-retired `claude-sonnet-4-20250514`) and
+  falls back to the safe default, so a stale Vercel env var can't silently break
+  scoring.
+- **Transcript pipeline.** Hashing canonicalizes the markdown
+  (`ingest.ts#canonicalizeForHash` — BOM/CRLF/whitespace) so Zapier (CRLF) and
+  Drive (LF) dedupe to one row; a forced per-client re-import **reconciles** onto
+  the existing row instead of duplicating; ingest emails the coach a
+  **needs-review** notice for an unmatched session (`lib/transcript-review-email.ts`);
+  the Practice queue shows an opening-line **preview** (`/api/transcripts`).
+
 ## Environment variables
 
 Google OAuth (`GOOGLE_CLIENT_ID/SECRET`), `NEXTAUTH_URL/SECRET`,

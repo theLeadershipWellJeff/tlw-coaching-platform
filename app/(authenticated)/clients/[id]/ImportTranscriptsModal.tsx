@@ -67,30 +67,49 @@ export function ImportTranscriptsModal({
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Import failed.')
 
-      const toScore: string[] = (data.results || [])
-        .filter((r: any) => r.transcriptId && !r.duplicate)
-        .map((r: any) => r.transcriptId)
-      const dupes = (data.results || []).filter((r: any) => r.duplicate).length
+      // Score every imported transcript — including any that deduped onto an
+      // already-ingested row (those are reconciled to this client server-side,
+      // so they still need scoring). One request at a time to stay within timeouts.
+      const results = (data.results || []) as { transcriptId?: string; error?: string }[]
+      const toScore = results.filter((r) => r.transcriptId).map((r) => r.transcriptId as string)
+      const importErrors = results.filter((r) => r.error).length
 
-      // Score each transcript one request at a time (keeps within timeouts).
       let scored = 0
-      for (const tid of toScore) {
-        setProgress(`Scoring ${scored + 1} of ${toScore.length}…`)
-        await fetch(`/api/transcripts/${tid}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
-        }).catch(() => {})
-        scored++
+      const failures: string[] = []
+      for (let i = 0; i < toScore.length; i++) {
+        setProgress(`Scoring ${i + 1} of ${toScore.length}…`)
+        try {
+          const r = await fetch(`/api/transcripts/${toScore[i]}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+          })
+          if (r.ok) {
+            scored++
+          } else {
+            const d = await r.json().catch(() => ({}))
+            failures.push(d.error || 'scoring failed')
+          }
+        } catch {
+          failures.push('network error')
+        }
       }
 
       onImported()
       setProgress(null)
-      setDone(
-        `Imported ${toScore.length} transcript${toScore.length === 1 ? '' : 's'}` +
-          (dupes ? ` (${dupes} already on file)` : '') +
-          '. Scored reports are on the Scorecard.'
-      )
+      if (failures.length) {
+        setError(
+          `Imported ${toScore.length}, but ${failures.length} couldn’t be scored: ${failures[0]}` +
+            (failures.length > 1 ? ` (and ${failures.length - 1} more)` : '') +
+            '. Try scoring from Practice.'
+        )
+      } else {
+        setDone(
+          `Imported and scored ${scored} transcript${scored === 1 ? '' : 's'}` +
+            (importErrors ? ` (${importErrors} file${importErrors === 1 ? '' : 's'} failed to import)` : '') +
+            '. Reports are on the Scorecard.'
+        )
+      }
     } catch (e: any) {
       setProgress(null)
       setError(e.message)
