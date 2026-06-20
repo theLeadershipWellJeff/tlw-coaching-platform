@@ -41,21 +41,66 @@ export interface IngestResult {
   scoringError: string | null
 }
 
+/**
+ * Canonicalize transcript text before hashing so the same session ingested via
+ * different transports dedupes. Zapier posts the markdown as a JSON string
+ * (often CRLF / trailing newlines); the Drive import reads it as `alt:'media'`
+ * (often LF) — identical content, different bytes. Strip the BOM, normalize line
+ * endings, drop trailing whitespace, and trim so both land on one hash.
+ */
+function canonicalizeForHash(md: string): string {
+  return md
+    .replace(/^﻿/, '')
+    .replace(/\r\n?/g, '\n')
+    .replace(/[ \t]+$/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
 export async function ingestMarkdown(
   supabase: SupabaseClient<Database>,
   input: IngestInput
 ): Promise<IngestResult> {
   const { coach, markdown } = input
   const filename = input.filename ?? null
-  const contentHash = createHash('sha256').update(markdown).digest('hex')
+  const contentHash = createHash('sha256').update(canonicalizeForHash(markdown)).digest('hex')
 
   // Idempotency: already ingested this exact transcript?
   const { data: dupe } = await supabase
     .from('transcripts')
-    .select('id, match_status, match_confidence, client_initials')
+    .select('id, client_id, match_status, match_confidence, client_initials')
     .eq('content_hash', contentHash)
     .maybeSingle()
   if (dupe) {
+    // A forced re-import (per-client "Import from Plaud") of a session already
+    // ingested — e.g. Zapier parked it in the review queue. Adopt the existing
+    // row and assign the client instead of creating a second copy; the caller
+    // (or auto-score) then scores that one row.
+    if (input.forceClient) {
+      const fc = input.forceClient
+      const initials = deriveInitials(fc.name)
+      if (dupe.client_id !== fc.id || dupe.match_status !== 'matched') {
+        await supabase
+          .from('transcripts')
+          .update({
+            client_id: fc.id,
+            client_initials: initials,
+            match_status: 'matched',
+            match_confidence: 1,
+          })
+          .eq('id', dupe.id)
+      }
+      return {
+        duplicate: true,
+        transcriptId: dupe.id,
+        matchStatus: 'matched',
+        matchConfidence: 1,
+        clientInitials: initials,
+        speakerSeparated: parseTranscript(filename, markdown).isSpeakerSeparated,
+        reportId: null,
+        scoringError: null,
+      }
+    }
     return {
       duplicate: true,
       transcriptId: dupe.id,
@@ -124,33 +169,7 @@ export async function ingestMarkdown(
     .insert(insert)
     .select('*')
     .single()
-  if (insErr) {
-    // The content_hash dedupe above is read-then-write, so two concurrent
-    // ingests of the same transcript (e.g. the Plaud webhook and the Drive
-    // backup firing together) can both pass the check and race to insert. The
-    // unique index on content_hash makes the loser fail with 23505 — treat that
-    // as the duplicate it is rather than a 500, so we never double-score.
-    if (insErr.code === '23505') {
-      const { data: existing } = await supabase
-        .from('transcripts')
-        .select('id, match_status, match_confidence, client_initials')
-        .eq('content_hash', contentHash)
-        .maybeSingle()
-      if (existing) {
-        return {
-          duplicate: true,
-          transcriptId: existing.id,
-          matchStatus: existing.match_status,
-          matchConfidence: existing.match_confidence ?? 0,
-          clientInitials: existing.client_initials,
-          speakerSeparated: parsed.isSpeakerSeparated,
-          reportId: null,
-          scoringError: null,
-        }
-      }
-    }
-    throw new Error(`Supabase: ${insErr.message}`)
-  }
+  if (insErr) throw new Error(`Supabase: ${insErr.message}`)
 
   const autoScore = input.autoScore !== false
   let reportId: string | null = null

@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/authOptions'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
+import { getSessionCoach } from '@/lib/coach'
+import { accessibleClientIds } from '@/lib/client-access'
 
 export const runtime = 'nodejs'
+// Authenticated, per-coach endpoint — never statically prerendered (it resolves
+// the session and the admin Supabase client at request time).
+export const dynamic = 'force-dynamic'
 
 export interface SearchResult {
   type: 'client' | 'note'
@@ -24,25 +27,32 @@ function likeEscape(s: string): string {
  * client name so the result is legible.
  */
 export async function GET(req: NextRequest) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const supabase = getSupabaseAdmin()
+  const coach = await getSessionCoach(supabase)
+  if (!coach) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const q = (new URL(req.url).searchParams.get('q') || '').trim()
   if (q.length < 2) return NextResponse.json({ results: [] })
 
-  const supabase = getSupabaseAdmin()
+  // Tenant boundary: only ever search across the clients this coach is linked to
+  // (and the notes hanging off them). No links → nothing to search.
+  const accessibleIds = await accessibleClientIds(supabase, coach.id)
+  if (accessibleIds.length === 0) return NextResponse.json({ results: [] })
+
   const like = `%${likeEscape(q)}%`
 
   const [clientsRes, notesRes] = await Promise.all([
     supabase
       .from('clients')
       .select('id, name, email, company')
+      .in('id', accessibleIds)
       .or(`name.ilike.${like},email.ilike.${like},company.ilike.${like}`)
       .order('name', { ascending: true })
       .limit(6),
     supabase
       .from('notes')
       .select('id, client_id, title, session_date')
+      .in('client_id', accessibleIds)
       .ilike('title', like)
       .order('session_date', { ascending: false })
       .limit(6),

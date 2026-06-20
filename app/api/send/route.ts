@@ -6,6 +6,7 @@ import { authOptions } from '@/lib/authOptions'
 import { buildClientEmailHTML } from '@/lib/email-template'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { getSessionCoach } from '@/lib/coach'
+import { coachCanAccessClient } from '@/lib/client-access'
 import { persistActionLinks } from '@/lib/actions'
 import { findClientByEmailOrName } from '@/lib/client-lookup'
 import { getBaseUrl } from '@/lib/url'
@@ -73,8 +74,13 @@ export async function POST(req: NextRequest) {
   let matchedCoachId: string | null = null
   try {
     const supabase = getSupabaseAdmin()
+    const coach = await getSessionCoach(supabase)
     const row = await findClientByEmailOrName(supabase, { email: clientEmail, name: clientName })
-    if (row?.id) {
+    // Tenant boundary: only tie tracking (action links, agenda, prep snapshot) to
+    // a matched client this coach is actually linked to. A foreign match is
+    // treated as no-match — the prep email still sends with plain boxes.
+    const ownsMatch = !!row?.id && !!coach && (await coachCanAccessClient(supabase, coach.id, row.id))
+    if (row?.id && ownsMatch) {
       matchedClientId = row.id
       const actions: string[] = Array.isArray(content?.actions) ? content.actions : []
       if (actions.length > 0) {
@@ -82,7 +88,6 @@ export async function POST(req: NextRequest) {
         const urlByDesc = new Map(links.map((l) => [l.description, l.url]))
         actionLinks = actions.map((a) => urlByDesc.get(String(a || '').trim()) || null)
       }
-      const coach = await getSessionCoach(supabase)
       matchedCoachId = coach?.id ?? null
       const { data: agenda } = await supabase
         .from('agenda_requests')

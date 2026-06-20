@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { getSessionCoach } from '@/lib/coach'
+import { coachCanAccessClient } from '@/lib/client-access'
 import { runAndStoreReport } from '@/lib/scoring/store'
 import { parseTranscript } from '@/lib/transcripts/parse'
 
@@ -83,6 +84,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   // Confirm the client assignment if one was provided.
   if (body.clientId) {
+    // Tenant boundary: a transcript may only be assigned to a client this coach
+    // is linked to. 400/Unknown so we don't reveal a foreign client id exists.
+    if (!(await coachCanAccessClient(supabase, coach.id, body.clientId))) {
+      return NextResponse.json({ error: 'Unknown client' }, { status: 400 })
+    }
     const { data: client } = await supabase
       .from('clients')
       .select('id, name')
