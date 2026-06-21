@@ -6,6 +6,7 @@ import { ScorecardSummary } from './ScorecardSummary'
 import { RosterPanel } from './RosterPanel'
 import { UpNextPanel, type UpcomingSession } from './UpNextPanel'
 import { SuggestedNudgesPanel } from './SuggestedNudgesPanel'
+import { UnmatchedBookingsPanel } from './UnmatchedBookingsPanel'
 
 const STORAGE_KEY = 'tlw-dashboard-layout'
 const SKIPPED_KEY = 'tlw-dashboard-skipped'
@@ -13,7 +14,7 @@ const SKIPPED_KEY = 'tlw-dashboard-skipped'
 // Roster on the left; scorecard summary, suggested nudges, and Up next stacked on
 // the right. Coaches can rearrange, move between columns, and add/remove panels
 // via the Arrange button.
-const DEFAULT_LAYOUT = [['roster'], ['summary', 'nudges', 'upnext']]
+const DEFAULT_LAYOUT = [['roster'], ['summary', 'unmatched', 'nudges', 'upnext']]
 
 export function DashboardBoard() {
   const [clients, setClients] = useState<Client[]>([])
@@ -133,6 +134,11 @@ export function DashboardBoard() {
       id: 'nudges',
       label: 'Suggested nudges',
       node: <SuggestedNudgesPanel timeZone={timeZone} />,
+    },
+    {
+      id: 'unmatched',
+      label: 'Unmatched bookings',
+      node: <UnmatchedBookingsPanel clients={clients} timeZone={timeZone} />,
     },
     {
       id: 'upnext',

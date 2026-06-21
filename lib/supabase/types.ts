@@ -207,6 +207,10 @@ export type Coach = {
   // Nudging settings (migration 022). null = use the built-in defaults. Canonical
   // shape + defaults live in lib/nudges/settings.ts.
   nudge_settings: NudgeSettings | null
+  // External booking capture (migration 025): the Google Calendar incremental-sync
+  // cursor. null until the first sync; cleared + re-seeded on a 410 (stale token).
+  calendar_sync_token: string | null
+  calendar_synced_at: Timestamp | null
   created_at: Timestamp
   updated_at: Timestamp
 }
@@ -221,11 +225,18 @@ export type CoachClient = {
 export type Appointment = {
   id: string
   coach_id: string | null
-  client_id: string
+  // Nullable: an external booking we captured from the calendar but couldn't tie
+  // to a roster client sits here as client_id=null (the unmatched review queue).
+  client_id: string | null
   scheduled_at: Timestamp
   duration_minutes: number
   google_event_id: string | null
-  status: string // scheduled | cancelled | completed
+  status: string // scheduled | cancelled | completed | ignored
+  // External booking capture (migration 025). source is best-effort/cosmetic.
+  source: string // native | calendly | hubspot | external
+  attendee_email: string | null
+  title: string | null
+  raw_event: Record<string, unknown> | null
   created_at: Timestamp
   updated_at: Timestamp
 }
