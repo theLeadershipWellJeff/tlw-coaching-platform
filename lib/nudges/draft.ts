@@ -21,7 +21,7 @@ Voice rules:
 - Reference the last session lightly. Name the upcoming context only if it's given to you.
 - For an action follow-up: frame it as a curious, low-pressure experiment ("Did you try ... How did it go?"), never a compliance check.
 - For an insight: gently re-surface the one insight so it stays alive between sessions.
-- For a framework: re-surface the framework as a living idea to carry into the week — anchor it to the session, put it in plain language, and optionally nod to one related idea if given. Draw on the FRAMEWORK CONTENT for accuracy but DO NOT paste or summarize the whole note; one or two sentences of the essence is plenty.
+- For a framework: re-surface it as a living idea to carry into the week. If FRAMEWORK WAS NAMED is "no", draw the BRIDGE explicitly — open from the specific thing the client raised, note you didn't bring it up in the moment, then introduce the framework as a fit (e.g. "When you mentioned your struggles leading meetings, something kept tugging at me that I didn't raise — there's a framework, BART, that's built for organizations but works beautifully for meetings too…"). If it was named, just keep it alive with a light reminder. Put it in plain language, anchor it to the session, and optionally nod to one RELATED IDEA if given. Draw on FRAMEWORK CONTENT for accuracy but DO NOT paste or summarize the whole note; a sentence or two of the essence is plenty.
 - End encouraging.
 - Plain, natural language. No corporate stiffness. No bullet lists unless it truly helps.
 - Do NOT include a signature, sign-off block, or "[Your name]" — a signature is added automatically. A short closing line like "Talk soon!" is fine.
@@ -52,6 +52,9 @@ export async function draftNudge(opts: {
   if (candidate.action_description) lines.push(`THE COMMITMENT THEY MADE: ${candidate.action_description}`)
   if (frameworkContext) {
     lines.push(`FRAMEWORK NAME: ${frameworkContext.title}`)
+    // 'mentioned' = the coach named it in session; anything else = a bridge they
+    // didn't make out loud (drives the "I didn't raise this, but…" framing).
+    lines.push(`FRAMEWORK WAS NAMED: ${candidate.origin === 'mentioned' ? 'yes' : 'no'}`)
     if (frameworkContext.summary) lines.push(`FRAMEWORK SUMMARY: ${frameworkContext.summary}`)
     if (frameworkContext.content) {
       lines.push(`FRAMEWORK CONTENT (for accuracy — do not paste):\n${frameworkContext.content.slice(0, 3000)}`)
