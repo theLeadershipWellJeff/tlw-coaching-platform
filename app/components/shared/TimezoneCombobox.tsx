@@ -23,13 +23,20 @@ type Group = { label: string | null; options: TzOption[] }
 export function TimezoneCombobox({
   value,
   onChange,
+  label,
   favorites = [],
   allowEmpty = true,
   placeholder = 'Type a city or zone…',
   disabled = false,
 }: {
   value: string
-  onChange: (zone: string) => void
+  // Receives the IANA zone plus the picked city label (e.g. "Austin"), so the
+  // caller can store the label and show it back instead of the zone's canonical
+  // city. A cleared selection passes ('', undefined).
+  onChange: (zone: string, label?: string) => void
+  // A stored custom display city for the current value — overrides the zone's
+  // representative city in the closed-input label (e.g. show "Austin" not "Chicago").
+  label?: string
   favorites?: string[]
   allowEmpty?: boolean
   placeholder?: string
@@ -78,8 +85,8 @@ export function TimezoneCombobox({
     return () => document.removeEventListener('mousedown', onDoc)
   }, [])
 
-  function choose(zone: string) {
-    onChange(zone)
+  function choose(opt: TzOption | null) {
+    onChange(opt?.zone ?? '', opt?.label)
     setOpen(false)
     setQuery('')
   }
@@ -97,14 +104,17 @@ export function TimezoneCombobox({
       setActive((a) => Math.max(a - 1, 0))
     } else if (e.key === 'Enter') {
       e.preventDefault()
-      if (flat[active]) choose(flat[active].zone)
+      if (flat[active]) choose(flat[active])
     } else if (e.key === 'Escape') {
       setOpen(false)
     }
   }
 
+  // The city shown for the current value: the stored custom label (e.g. "Austin")
+  // when set, else the zone's representative city.
+  const currentCity = label || (value ? optionForZone(value).label : '')
   // What the input shows: the live query while open, else the current selection.
-  const display = open ? query : value ? `${cityOf(value)} — ${gmtOffsetLabel(value)}` : ''
+  const display = open ? query : value ? `${currentCity} — ${gmtOffsetLabel(value)}` : ''
 
   let idx = -1 // running index into the flat list, for highlight matching
   return (
@@ -131,7 +141,7 @@ export function TimezoneCombobox({
           <button
             type="button"
             aria-label="Clear timezone"
-            onClick={() => choose('')}
+            onClick={() => choose(null)}
             className="absolute right-2 top-1/2 -translate-y-1/2 text-tlw-warm-gray hover:text-tlw-espresso"
           >
             ×
@@ -160,7 +170,7 @@ export function TimezoneCombobox({
                       key={`${opt.label}|${opt.zone}`}
                       type="button"
                       onMouseEnter={() => setActive(idx)}
-                      onClick={() => choose(opt.zone)}
+                      onClick={() => choose(opt)}
                       className={`flex w-full items-center justify-between gap-3 px-3 py-1.5 text-left text-[13px] ${
                         isActive ? 'bg-blue-50' : 'bg-white'
                       } ${isSelected ? 'font-medium text-tlw-navy-rich' : 'text-tlw-espresso'}`}

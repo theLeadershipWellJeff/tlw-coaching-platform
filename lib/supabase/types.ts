@@ -40,6 +40,10 @@ export type Client = {
   status: string
   phone: string | null
   timezone: string | null
+  // Friendly display city for `timezone` (migration 021) — the major city the
+  // coach picked (e.g. "Austin"), shown back instead of the zone's canonical city.
+  // Cosmetic only; all time math uses `timezone`. null = fall back to the zone.
+  timezone_label: string | null
   ca_client_id: string | null
   tags: string[]
   bio: string | null
