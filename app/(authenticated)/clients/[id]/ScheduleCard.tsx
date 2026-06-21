@@ -10,6 +10,7 @@ type Check = {
   coachTimezone: string
   coachTimeLabel: string
   clientTimezone: string | null
+  clientCity: string | null
   clientTimeLabel: string | null
   conflictChecked: boolean
   conflict: boolean
@@ -202,7 +203,7 @@ export function ScheduleCard({
                       <span className="text-tlw-espresso">
                         {check.clientTimeLabel}
                         <span className="ml-1 text-[11px] text-tlw-warm-gray">
-                          ({check.clientTimezone?.replace(/_/g, ' ')})
+                          ({check.clientCity || check.clientTimezone?.replace(/_/g, ' ')})
                         </span>
                       </span>
                     ) : (

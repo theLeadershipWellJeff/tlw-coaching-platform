@@ -5,6 +5,7 @@ import { readJson, toErrorResponse } from '@/lib/api-handler'
 import { requireClientCoach } from '@/lib/client-access'
 import { zonedWallClockToUtc, getCalendarConflicts } from '@/lib/calendar'
 import { formatWhenInTimeZone } from '@/lib/datetime'
+import { cityOf } from '@/lib/timezones'
 import {
   normalizeAvailability,
   isWithinAvailability,
@@ -41,10 +42,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const { data: client } = await supabase
       .from('clients')
-      .select('timezone')
+      .select('timezone, timezone_label')
       .eq('id', params.id)
       .maybeSingle()
     const clientTimezone = client?.timezone || null
+    // The friendly city to show the coach — their picked label, else the zone's city.
+    const clientCity = clientTimezone ? client?.timezone_label || cityOf(clientTimezone) : null
 
     // Free/busy on the coach's calendar (best-effort).
     const conflict = await getCalendarConflicts(coach, startsAt, endsAt)
@@ -64,6 +67,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       coachTimezone: coach.timezone,
       coachTimeLabel: formatWhenInTimeZone(startsAt, coach.timezone),
       clientTimezone,
+      clientCity,
       clientTimeLabel: clientTimezone ? formatWhenInTimeZone(startsAt, clientTimezone) : null,
       conflictChecked: conflict.checked,
       conflict: conflict.busy,

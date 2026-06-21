@@ -30,6 +30,7 @@ export function EditClientModal({
       bio: client.bio || '',
       session_fee: client.session_fee != null ? String(client.session_fee) : '',
       timezone: client.timezone || '',
+      timezone_label: client.timezone_label || '',
     }
     for (const { key } of FIELDS) f[key] = (client[key] as string) || ''
     return f
@@ -64,6 +65,7 @@ export function EditClientModal({
         bio: form.bio.trim() || null,
         session_fee: fee,
         timezone: form.timezone.trim() || null,
+        timezone_label: form.timezone.trim() ? form.timezone_label.trim() || null : null,
       }
       for (const { key } of FIELDS) payload[key] = form[key].trim() || (key === 'name' ? form[key] : null)
       const res = await fetch(`/api/clients/${client.id}`, {
@@ -102,9 +104,13 @@ export function EditClientModal({
           <div className="mt-1">
             <TimezoneCombobox
               value={form.timezone}
-              onChange={(z) => set('timezone', z)}
+              label={form.timezone_label || undefined}
+              onChange={(z, lbl) => {
+                set('timezone', z)
+                set('timezone_label', z ? lbl || '' : '')
+              }}
               favorites={favorites}
-              placeholder="Type a city — e.g. Dallas, London…"
+              placeholder="Type a city — e.g. Austin, London…"
             />
           </div>
           <span className="mt-1 block text-[11px] text-tlw-warm-gray">

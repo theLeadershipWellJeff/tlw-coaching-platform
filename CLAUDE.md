@@ -511,7 +511,10 @@ migrates legacy `signed`→`active` + backfills `agreement_on_file`). Run new
 migrations by hand in the Supabase SQL editor · 019 library labels
 (`coaches.library_labels` jsonb — per-coach custom labels for the fixed Library
 nodes) · 020 scheduling settings (`coaches.availability` + `coaches.reminder_settings`
-jsonb — per-coach weekly bookable hours and configurable reminders; NULL = defaults).
+jsonb — per-coach weekly bookable hours and configurable reminders; NULL = defaults) ·
+021 client timezone label (`clients.timezone_label` — the friendly major-city name
+the coach picked, e.g. "Austin", shown back instead of the zone's canonical city;
+cosmetic, all time math still uses `clients.timezone`).
 
 **Tenant scoping (015).** `coach_clients` (coach_id, client_id, role) is the
 ownership link. Client access is enforced **server-side** by the session coach,
@@ -529,9 +532,10 @@ the projection uses the scheduled calendar-event length.
 **Pending — apply in Supabase:** `014_note_duration.sql`,
 `015_coach_clients.sql`, `016_appointments.sql`, and
 `017_email_signatures_communications.sql`, `018_agreement_system.sql`,
-`019_library_labels.sql`, and `020_scheduling_settings.sql` (adds the two jsonb
-columns the scheduler/settings read — safe additive change, defaults until set).
-⚠️ **015 must be run BEFORE
+`019_library_labels.sql`, `020_scheduling_settings.sql` (adds the two jsonb
+columns the scheduler/settings read — safe additive change, defaults until set),
+and `021_client_timezone_label.sql` (adds `clients.timezone_label` — additive,
+nullable). ⚠️ **015 must be run BEFORE
 the tenant-scoping code is deployed to `main`** — until the table exists and is
 backfilled, the roster would filter to zero clients. Read the backfill comment in
 015 first (it assumes all current coach logins are the same person). **016 must be
