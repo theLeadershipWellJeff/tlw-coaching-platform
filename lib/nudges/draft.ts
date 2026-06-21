@@ -1,13 +1,18 @@
 /**
- * Nudge drafting (Phase A). Turns a single (already deduped, already capped)
+ * Nudge drafting (Phase A + B). Turns a single (already deduped, already capped)
  * candidate into a short client-facing message in the coach's voice (§7).
  *
  * Voice: warm, first-name, brief; reference the last session lightly; name the
  * upcoming context when known; frame actions as experiments; end encouraging.
  * Never write a signature — it's appended server-side at send time.
+ *
+ * Framework nudges (Phase B) additionally receive the leaf's LIVE content + summary
+ * + surfaceable neighbours; the draft re-voices the coach's own framework into a
+ * short reminder — it must not dump the note.
  */
 import { complete, parseJsonFrom } from './llm'
 import type { NudgeCandidate, NudgeDraft } from './types'
+import type { FrameworkDraftContext } from './garden'
 
 const SYSTEM = `You write a single short, warm, between-session email from an executive coach to their client. It must sound like the coach, not like software.
 
@@ -16,29 +21,53 @@ Voice rules:
 - Reference the last session lightly. Name the upcoming context only if it's given to you.
 - For an action follow-up: frame it as a curious, low-pressure experiment ("Did you try ... How did it go?"), never a compliance check.
 - For an insight: gently re-surface the one insight so it stays alive between sessions.
+- For a framework: re-surface the framework as a living idea to carry into the week — anchor it to the session, put it in plain language, and optionally nod to one related idea if given. Draw on the FRAMEWORK CONTENT for accuracy but DO NOT paste or summarize the whole note; one or two sentences of the essence is plenty.
 - End encouraging.
 - Plain, natural language. No corporate stiffness. No bullet lists unless it truly helps.
 - Do NOT include a signature, sign-off block, or "[Your name]" — a signature is added automatically. A short closing line like "Talk soon!" is fine.
 
 Return ONLY JSON: { "subject": string, "body": string }. The body is plain text (use blank lines between paragraphs).`
 
+function typeLabel(candidate: NudgeCandidate): string {
+  if (candidate.type === 'action_checkin') return 'action follow-up (experiment check-in)'
+  if (candidate.type === 'framework') return 'framework re-surfacing'
+  return 'insight re-surfacing'
+}
+
 export async function draftNudge(opts: {
   clientFirstName: string
   candidate: NudgeCandidate
   // Light, optional context the message may reference.
   upcomingContext?: string | null
+  // Present only for framework nudges (Phase B).
+  frameworkContext?: FrameworkDraftContext | null
 }): Promise<NudgeDraft | null> {
-  const { clientFirstName, candidate, upcomingContext } = opts
+  const { clientFirstName, candidate, upcomingContext, frameworkContext } = opts
 
   const lines: string[] = [
     `CLIENT FIRST NAME: ${clientFirstName}`,
-    `NUDGE TYPE: ${candidate.type === 'action_checkin' ? 'action follow-up (experiment check-in)' : 'insight re-surfacing'}`,
+    `NUDGE TYPE: ${typeLabel(candidate)}`,
     `WHAT IT'S ABOUT: ${candidate.trigger_excerpt}`,
   ]
   if (candidate.action_description) lines.push(`THE COMMITMENT THEY MADE: ${candidate.action_description}`)
+  if (frameworkContext) {
+    lines.push(`FRAMEWORK NAME: ${frameworkContext.title}`)
+    if (frameworkContext.summary) lines.push(`FRAMEWORK SUMMARY: ${frameworkContext.summary}`)
+    if (frameworkContext.content) {
+      lines.push(`FRAMEWORK CONTENT (for accuracy — do not paste):\n${frameworkContext.content.slice(0, 3000)}`)
+    }
+    if (frameworkContext.related.length) {
+      lines.push(
+        'RELATED IDEAS (optional, may nod to one):\n' +
+          frameworkContext.related
+            .map((r) => `- ${r.title}${r.summary ? `: ${r.summary}` : ''}`)
+            .join('\n')
+      )
+    }
+  }
   if (upcomingContext) lines.push(`UPCOMING CONTEXT (may reference): ${upcomingContext}`)
 
-  const raw = await complete({ system: SYSTEM, user: lines.join('\n'), maxTokens: 600 })
+  const raw = await complete({ system: SYSTEM, user: lines.join('\n'), maxTokens: 700 })
   let parsed: { subject?: unknown; body?: unknown }
   try {
     parsed = parseJsonFrom<{ subject?: unknown; body?: unknown }>(raw)

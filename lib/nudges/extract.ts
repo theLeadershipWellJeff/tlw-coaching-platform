@@ -1,16 +1,17 @@
 /**
- * Nudge extraction (Phase A). Given a client's coaching context and their latest
- * session material, propose candidate action check-ins and insight reminders.
+ * Nudge extraction (Phase A + B). Given a client's coaching context and their
+ * latest session material, propose candidate action check-ins, insight reminders,
+ * and — when the coach has surfaceable garden frameworks — framework re-surfacings.
  *
  * Hard rule (§3.1 — the key-info wall): this step NEVER receives the private
- * key-info field. The caller (generate.ts) is responsible for never loading it;
- * this signature simply has no place to put it.
+ * key-info field. The caller (generate.ts) is responsible for never loading it.
  *
  * Output is a structured candidate list (lib/nudges/types.ts#NudgeCandidate).
  * Dedup + the restraint cap are applied by the caller BEFORE drafting (§7).
  */
 import { complete, parseJsonFrom } from './llm'
 import type { NudgeCandidate } from './types'
+import type { SurfaceableLeaf } from './garden'
 
 export type ExtractionInput = {
   clientName: string
@@ -22,22 +23,27 @@ export type ExtractionInput = {
   recentNotes: string[]
   // The matched transcript body, if this run was triggered by a scored session.
   transcript?: string | null
+  // The coach's client-surfaceable frameworks (garden leaves). Empty = no framework
+  // candidates are possible this run.
+  frameworks?: SurfaceableLeaf[]
 }
 
-const SYSTEM = `You are an assistant to an executive coach. After a coaching session you propose short, warm, between-session "nudges" the coach might send the client. You ONLY propose two kinds:
+const SYSTEM = `You are an assistant to an executive coach. After a coaching session you propose short, warm, between-session "nudges" the coach might send the client. You propose at most three kinds:
 
 - "action_checkin": a gentle, experiment-framed follow-up on a SPECIFIC commitment the client made and that is still open. Frame it as curiosity about how an experiment went, never as a compliance check.
 - "insight": re-surfaces ONE meaningful insight from the session that is worth holding onto.
+- "framework": re-surfaces ONE of the coach's named frameworks (provided in AVAILABLE FRAMEWORKS) that is relevant to this session — either because the coach NAMED/taught it in the session, or because the session's themes clearly match the framework. Only ever choose from the provided list.
 
 Rules:
 - Propose only what is genuinely grounded in the material. If nothing warrants a nudge, return an empty array. Silence is a valid, good answer.
 - An action_checkin MUST correspond to one of the provided still-open actions; copy that action's text into "action_description" verbatim.
-- Never invent commitments or insights that aren't in the material.
+- A framework MUST be one of the AVAILABLE FRAMEWORKS; put its exact "id" into "framework_slug". Set "framework_basis" to "named" if the coach actually named/taught it this session, or "theme" if you're matching on themes. Do not propose a framework if none is genuinely relevant.
+- Never invent commitments, insights, or frameworks that aren't in the material/list.
 - Keep "trigger_excerpt" to a short quote/paraphrase from the source. Keep "rationale" to one plain sentence.
 - Do NOT write the message itself here — only the structured candidate. Drafting happens in a later step.
 
 Return ONLY a JSON array (no prose) of objects:
-[{ "type": "action_checkin" | "insight", "trigger_excerpt": string, "rationale": string, "action_description"?: string }]`
+[{ "type": "action_checkin" | "insight" | "framework", "trigger_excerpt": string, "rationale": string, "action_description"?: string, "framework_slug"?: string, "framework_basis"?: "named" | "theme" }]`
 
 function buildUser(input: ExtractionInput): string {
   const parts: string[] = []
@@ -52,6 +58,19 @@ function buildUser(input: ExtractionInput): string {
     'STILL-OPEN ACTIONS (an action_checkin may only follow up on one of these):\n' +
       (input.openActions.length ? input.openActions.map((a) => `- ${a}`).join('\n') : '(none)')
   )
+  if (input.frameworks && input.frameworks.length) {
+    parts.push(
+      'AVAILABLE FRAMEWORKS (a framework nudge may only use one of these; use the id):\n' +
+        input.frameworks
+          .map((f) => {
+            const themes = f.themes.length ? ` · themes: ${f.themes.join(', ')}` : ''
+            const aka = f.aliases.length ? ` · aka: ${f.aliases.join(', ')}` : ''
+            const sum = f.summary ? ` — ${f.summary}` : ''
+            return `- id: ${f.id} · ${f.title}${themes}${aka}${sum}`
+          })
+          .join('\n')
+    )
+  }
   if (input.recentNotes.length) {
     parts.push('RECENT SESSION NOTES (newest first):\n' + input.recentNotes.join('\n\n---\n\n'))
   }
@@ -66,7 +85,7 @@ export async function extractNudgeCandidates(input: ExtractionInput): Promise<Nu
   // Nothing to work from → nothing to propose.
   if (!input.openActions.length && !input.recentNotes.length && !input.transcript) return []
 
-  const raw = await complete({ system: SYSTEM, user: buildUser(input), maxTokens: 1200 })
+  const raw = await complete({ system: SYSTEM, user: buildUser(input), maxTokens: 1400 })
   let parsed: any[]
   try {
     parsed = parseJsonFrom<any[]>(raw)
@@ -75,16 +94,23 @@ export async function extractNudgeCandidates(input: ExtractionInput): Promise<Nu
   }
   if (!Array.isArray(parsed)) return []
 
+  const frameworkIds = new Set((input.frameworks || []).map((f) => f.id))
+
   return parsed
-    .filter((c) => c && (c.type === 'action_checkin' || c.type === 'insight'))
-    .map((c) => ({
+    .filter((c) => c && (c.type === 'action_checkin' || c.type === 'insight' || c.type === 'framework'))
+    .map((c): NudgeCandidate => ({
       type: c.type,
-      origin: 'auto' as const,
+      origin:
+        c.type === 'framework' ? (c.framework_basis === 'named' ? 'mentioned' : 'suggested') : 'auto',
       trigger_excerpt: String(c.trigger_excerpt || '').slice(0, 600),
       rationale: String(c.rationale || '').slice(0, 300),
       action_description:
         c.type === 'action_checkin' && c.action_description
           ? String(c.action_description)
+          : undefined,
+      framework_slug:
+        c.type === 'framework' && typeof c.framework_slug === 'string'
+          ? c.framework_slug.trim().toLowerCase()
           : undefined,
     }))
     // An action_checkin must match a real still-open action — drop hallucinations.
@@ -93,4 +119,6 @@ export async function extractNudgeCandidates(input: ExtractionInput): Promise<Nu
         c.type !== 'action_checkin' ||
         (c.action_description && input.openActions.includes(c.action_description))
     )
+    // A framework must reference a real surfaceable leaf — drop anything else.
+    .filter((c) => c.type !== 'framework' || (c.framework_slug && frameworkIds.has(c.framework_slug)))
 }

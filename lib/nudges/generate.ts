@@ -15,6 +15,7 @@ import type { CoachingGoal, Database, Nudge } from '@/lib/supabase/types'
 import { extractNudgeCandidates } from './extract'
 import { applyDedupAndCap } from './dedup'
 import { draftNudge } from './draft'
+import { loadSurfaceableLeaves, loadFrameworkContext } from './garden'
 
 // Strip note HTML to plain text (block tags → newlines). Local copy of the
 // helper in lib/notes/sync-actions.ts; kept here to avoid widening that module.
@@ -74,6 +75,10 @@ export async function generateNudgesForClient(
     .filter(Boolean)
     .slice(0, 3)
 
+  // The coach's client-surfaceable garden frameworks (Phase B). Empty = no
+  // framework candidates possible this run.
+  const frameworks = await loadSurfaceableLeaves(supabase, coachId)
+
   // --- Extract ---
   const candidates = await extractNudgeCandidates({
     clientName: client.name,
@@ -81,6 +86,7 @@ export async function generateNudgesForClient(
     openActions,
     recentNotes,
     transcript: transcriptBody,
+    frameworks,
   })
   if (!candidates.length) return { created: 0, nudges: [] }
 
@@ -97,7 +103,15 @@ export async function generateNudgesForClient(
   // --- Draft + persist ---
   const created: Nudge[] = []
   for (const candidate of trimmed) {
-    const draft = await draftNudge({ clientFirstName: firstName, candidate, upcomingContext })
+    // For a framework nudge, pull the leaf's live content + neighbours to draft from.
+    const frameworkContext =
+      candidate.type === 'framework' && candidate.framework_slug
+        ? await loadFrameworkContext(supabase, coachId, candidate.framework_slug)
+        : null
+    // A framework whose context can't be loaded (e.g. leaf pruned) is skipped.
+    if (candidate.type === 'framework' && !frameworkContext) continue
+
+    const draft = await draftNudge({ clientFirstName: firstName, candidate, upcomingContext, frameworkContext })
     if (!draft) continue
     const { data: row, error } = await supabase
       .from('nudges')
@@ -109,6 +123,7 @@ export async function generateNudgesForClient(
         origin: candidate.origin,
         trigger_excerpt: candidate.trigger_excerpt || null,
         rationale: candidate.rationale || null,
+        framework_slug: candidate.framework_slug || null,
         draft_subject: draft.subject,
         draft_body: draft.body,
         status: 'draft',

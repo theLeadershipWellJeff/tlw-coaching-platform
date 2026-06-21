@@ -15,9 +15,11 @@ const TYPES: { value: NudgeType; label: string; blurb: string }[] = [
  * open action or a captured insight, and either drafts with AI or writes it by
  * hand. Always created as a draft for review — nothing sends from here.
  *
- * Framework nudges pull from the coach's mind garden in Phase B; until the vault
- * is connected, framework is a hand-written draft (no AI assist, no auto-pull).
+ * Framework nudges (Phase B) pull from the coach's mind garden: pick a surfaceable
+ * leaf and AI-draft a re-surfacing from its live content. If the coach has no
+ * surfaceable leaves yet, framework falls back to a hand-written draft.
  */
+type FrameworkOption = { id: string; title: string; summary: string | null }
 export function CreateNudgeModal({
   clientId,
   clientName,
@@ -32,6 +34,7 @@ export function CreateNudgeModal({
   const [type, setType] = useState<NudgeType>('action_checkin')
   const [openActions, setOpenActions] = useState<string[]>([])
   const [recentInsights, setRecentInsights] = useState<string[]>([])
+  const [frameworks, setFrameworks] = useState<FrameworkOption[]>([])
   const [anchor, setAnchor] = useState('')
   const [subject, setSubject] = useState('')
   const [bodyText, setBodyText] = useState('')
@@ -47,6 +50,7 @@ export function CreateNudgeModal({
         if (cancelled) return
         setOpenActions(d.openActions || [])
         setRecentInsights(d.recentInsights || [])
+        setFrameworks(d.frameworks || [])
       })
       .catch(() => {})
     return () => {
@@ -60,7 +64,7 @@ export function CreateNudgeModal({
   }, [type])
 
   const anchorOptions = type === 'action_checkin' ? openActions : type === 'insight' ? recentInsights : []
-  const canAiDraft = (type === 'action_checkin' || type === 'insight') && !!anchor
+  const canAiDraft = !!anchor && (type === 'action_checkin' || type === 'insight' || type === 'framework')
   const canCreate = !!bodyText.trim() && !saving
 
   async function aiDraft() {
@@ -68,10 +72,14 @@ export function CreateNudgeModal({
     setDrafting(true)
     setError('')
     try {
+      const payload =
+        type === 'framework'
+          ? { type, framework_slug: anchor }
+          : { type, trigger_excerpt: anchor }
       const res = await fetch(`/api/clients/${clientId}/nudges/draft-one`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type, trigger_excerpt: anchor }),
+        body: JSON.stringify(payload),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Could not draft')
@@ -95,7 +103,8 @@ export function CreateNudgeModal({
           type,
           draft_subject: subject,
           draft_body: bodyText,
-          trigger_excerpt: anchor || undefined,
+          trigger_excerpt: type === 'framework' ? undefined : anchor || undefined,
+          framework_slug: type === 'framework' ? anchor || undefined : undefined,
         }),
       })
       const data = await res.json()
@@ -166,10 +175,38 @@ export function CreateNudgeModal({
         )}
 
         {type === 'framework' && (
-          <p className="rounded-tlw-md bg-tlw-canvas px-3 py-2 text-[12px] text-tlw-warm-gray">
-            Framework nudges will pull from your mind garden once the vault is connected. For now,
-            write the reminder by hand.
-          </p>
+          <div className="space-y-2">
+            <label className="text-[11px] uppercase tracking-[1.5px] text-tlw-warm-gray">
+              Framework to re-surface
+            </label>
+            {frameworks.length === 0 ? (
+              <p className="text-[12px] text-tlw-warm-gray">
+                No surfaceable frameworks yet — flip a leaf to{' '}
+                <code className="text-tlw-espresso">nudge_eligible: true</code> in your vault and sync,
+                or write the reminder by hand below.
+              </p>
+            ) : (
+              <select
+                value={anchor}
+                onChange={(e) => setAnchor(e.target.value)}
+                className="w-full rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-surface px-3 py-2 text-[13px] text-tlw-espresso outline-none focus:border-tlw-navy-rich"
+              >
+                <option value="">Choose one…</option>
+                {frameworks.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.title}
+                  </option>
+                ))}
+              </select>
+            )}
+            <button
+              onClick={aiDraft}
+              disabled={!canAiDraft || drafting}
+              className="rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-1.5 text-[12px] font-medium text-tlw-espresso transition-colors hover:border-tlw-warm-gray/50 disabled:opacity-40"
+            >
+              {drafting ? 'Drafting…' : '✨ Draft with AI'}
+            </button>
+          </div>
         )}
 
         {/* Draft */}
