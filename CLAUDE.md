@@ -801,3 +801,17 @@ and back in** to grant calendar-write + populate the refresh token with it;
   ready (`coach_id` + `role`), and coach self-scores are now captured, so the
   comparison data exists. Needs: a supervisor-scoped aggregate API and a
   `/supervision`-style page (gate on `role = 'supervisor'`).
+- **External booking capture — near-real-time push path (future work).** The
+  capture pipeline (migration 025) currently runs on the **hourly polling cron**
+  (`/api/cron/calendar-sync`) — deliberately chosen for v1 (no new infra/consent).
+  The upgrade, when sub-hour latency is wanted, is Google's `events.watch` push
+  channel instead of polling. The orchestrator (`lib/booking-sync.ts#syncExternalBookings`,
+  syncToken-based) and the schema already support it — only the *trigger* changes.
+  To build: (1) a public webhook endpoint (e.g. `POST /api/webhooks/google-calendar`)
+  that **validates Google's channel token/headers** (store a per-channel secret) and,
+  on a ping, calls `syncExternalBookings` for the owning coach — the ping carries no
+  event data, so we still pull the delta; (2) a `calendar.events.watch` registration
+  per coach (store `channel_id`/`resource_id`/`expiration` on `coaches`); (3) a
+  **renewal cron** to re-register before the ~7-day primary-calendar channel expiry
+  (and `events.stop` the old channel). Keep the hourly poll as a safety-net backstop
+  even with push on, so a missed/expired channel never silently drops bookings.
