@@ -1,13 +1,15 @@
 /**
  * Timezone display + search helpers for the searchable timezone picker.
  *
- * Dependency-free (Intl only) so client components can import it. Builds on the
- * shared zone list in `./scheduling` and adds: a current GMT-offset label, a
- * city/region label, a curated city-alias map (so typing a major city that
- * isn't literally in the IANA name — "Dallas", "Seattle" — still resolves), and
- * a ranked search over all of it.
+ * Dependency-free (Intl only) so client components can import it. Searches a
+ * combined index of curated major world cities (`./city-timezones`) plus every
+ * IANA zone, so typing a city the coach thinks of ("Mumbai", "Dubai", "Dallas")
+ * surfaces that city — mapped to the correct zone — even though the IANA database
+ * only names one representative city per zone. Selecting an option stores the
+ * IANA zone string.
  */
 import { allTimeZones } from './scheduling'
+import { MAJOR_CITIES } from './city-timezones'
 
 /** The city portion of an IANA zone — its last path segment, spaced out.
  *  e.g. "America/Argentina/Buenos_Aires" → "Buenos Aires". */
@@ -55,163 +57,84 @@ export function gmtOffsetLabel(zone: string, at: Date = new Date()): string {
   return `GMT${sign}${hh}:${mm}`
 }
 
-/** "New York · America — GMT-04:00" — the option label in the dropdown. */
+/** "New York · America — GMT-04:00" — a one-line label for a zone. */
 export function zoneLabel(zone: string, at: Date = new Date()): string {
   if (!zone) return ''
   return `${cityOf(zone)} · ${regionOf(zone)} — ${gmtOffsetLabel(zone, at)}`
 }
 
-/**
- * Common city names that don't appear in (or differ from) the IANA zone, mapped
- * to their zone — so the coach can type the city they think in. Keys are lower-
- * case. Not exhaustive; the IANA city names themselves are also matched directly.
- */
-export const CITY_ALIASES: Record<string, string> = {
-  // US — Eastern
-  nyc: 'America/New_York',
-  'new york city': 'America/New_York',
-  manhattan: 'America/New_York',
-  brooklyn: 'America/New_York',
-  boston: 'America/New_York',
-  philadelphia: 'America/New_York',
-  philly: 'America/New_York',
-  atlanta: 'America/New_York',
-  miami: 'America/New_York',
-  orlando: 'America/New_York',
-  tampa: 'America/New_York',
-  'washington dc': 'America/New_York',
-  washington: 'America/New_York',
-  dc: 'America/New_York',
-  charlotte: 'America/New_York',
-  raleigh: 'America/New_York',
-  cincinnati: 'America/New_York',
-  columbus: 'America/New_York',
-  cleveland: 'America/New_York',
-  pittsburgh: 'America/New_York',
-  baltimore: 'America/New_York',
-  // US — Central
-  chicago: 'America/Chicago',
-  dallas: 'America/Chicago',
-  'fort worth': 'America/Chicago',
-  houston: 'America/Chicago',
-  austin: 'America/Chicago',
-  'san antonio': 'America/Chicago',
-  'new orleans': 'America/Chicago',
-  'kansas city': 'America/Chicago',
-  minneapolis: 'America/Chicago',
-  'st paul': 'America/Chicago',
-  milwaukee: 'America/Chicago',
-  memphis: 'America/Chicago',
-  nashville: 'America/Chicago',
-  'st louis': 'America/Chicago',
-  'oklahoma city': 'America/Chicago',
-  tulsa: 'America/Chicago',
-  // US — Mountain
-  denver: 'America/Denver',
-  'salt lake city': 'America/Denver',
-  albuquerque: 'America/Denver',
-  boise: 'America/Denver',
-  // US — Mountain (no DST)
-  phoenix: 'America/Phoenix',
-  tucson: 'America/Phoenix',
-  mesa: 'America/Phoenix',
-  scottsdale: 'America/Phoenix',
-  // US — Pacific
-  'los angeles': 'America/Los_Angeles',
-  la: 'America/Los_Angeles',
-  'san francisco': 'America/Los_Angeles',
-  sf: 'America/Los_Angeles',
-  'san diego': 'America/Los_Angeles',
-  'san jose': 'America/Los_Angeles',
-  seattle: 'America/Los_Angeles',
-  portland: 'America/Los_Angeles',
-  sacramento: 'America/Los_Angeles',
-  oakland: 'America/Los_Angeles',
-  'las vegas': 'America/Los_Angeles',
-  // US — other
-  anchorage: 'America/Anchorage',
-  hawaii: 'Pacific/Honolulu',
-  honolulu: 'Pacific/Honolulu',
-  // Canada / Mexico
-  toronto: 'America/Toronto',
-  ottawa: 'America/Toronto',
-  montreal: 'America/Toronto',
-  vancouver: 'America/Vancouver',
-  calgary: 'America/Edmonton',
-  'mexico city': 'America/Mexico_City',
-  // Europe
-  london: 'Europe/London',
-  dublin: 'Europe/Dublin',
-  paris: 'Europe/Paris',
-  berlin: 'Europe/Berlin',
-  munich: 'Europe/Berlin',
-  frankfurt: 'Europe/Berlin',
-  madrid: 'Europe/Madrid',
-  barcelona: 'Europe/Madrid',
-  rome: 'Europe/Rome',
-  milan: 'Europe/Rome',
-  amsterdam: 'Europe/Amsterdam',
-  zurich: 'Europe/Zurich',
-  geneva: 'Europe/Zurich',
-  stockholm: 'Europe/Stockholm',
-  // Middle East / Asia / Pacific
-  dubai: 'Asia/Dubai',
-  'abu dhabi': 'Asia/Dubai',
-  'tel aviv': 'Asia/Jerusalem',
-  mumbai: 'Asia/Kolkata',
-  delhi: 'Asia/Kolkata',
-  bangalore: 'Asia/Kolkata',
-  bengaluru: 'Asia/Kolkata',
-  singapore: 'Asia/Singapore',
-  'hong kong': 'Asia/Hong_Kong',
-  tokyo: 'Asia/Tokyo',
-  beijing: 'Asia/Shanghai',
-  shanghai: 'Asia/Shanghai',
-  seoul: 'Asia/Seoul',
-  sydney: 'Australia/Sydney',
-  melbourne: 'Australia/Melbourne',
-  auckland: 'Pacific/Auckland',
-  // South America
-  'sao paulo': 'America/Sao_Paulo',
-  'são paulo': 'America/Sao_Paulo',
-  'buenos aires': 'America/Argentina/Buenos_Aires',
-  bogota: 'America/Bogota',
-  lima: 'America/Lima',
+/** A display option in the picker: a city/zone label, a context sub-label, and
+ *  the IANA zone it resolves to. */
+export type TzOption = { label: string; sublabel: string; zone: string }
+
+/** Build a single search index: curated cities first (so their richer label
+ *  wins), then every IANA zone by its representative city. De-duped on
+ *  (label, zone) so a curated city doesn't double up with its IANA twin. */
+let INDEX: TzOption[] | null = null
+function getIndex(): TzOption[] {
+  if (INDEX) return INDEX
+  const out: TzOption[] = []
+  const seen = new Set<string>()
+  const push = (label: string, sublabel: string, zone: string) => {
+    const key = `${label.toLowerCase()}|${zone}`
+    if (seen.has(key)) return
+    seen.add(key)
+    out.push({ label, sublabel, zone })
+  }
+  for (const c of MAJOR_CITIES) push(c.city, c.sublabel, c.zone)
+  for (const zone of allTimeZones()) push(cityOf(zone), regionOf(zone), zone)
+  INDEX = out
+  return out
+}
+
+/** A picker option for a known zone (used for favorites / the current value),
+ *  preferring the curated city label when one exists for that zone. */
+export function optionForZone(zone: string): TzOption {
+  const curated = MAJOR_CITIES.find((c) => c.zone === zone)
+  if (curated) return { label: curated.city, sublabel: curated.sublabel, zone }
+  return { label: cityOf(zone), sublabel: regionOf(zone), zone }
+}
+
+/** Lowercase and strip diacritics, so "bogota" matches "Bogotá", "sao" → "São". */
+function fold(s: string): string {
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 }
 
 /**
- * Ranked timezone search. Matches a typed city/zone/region/offset (and the
- * curated aliases) and returns zones best-match first. Empty query → [].
+ * Ranked search over the combined city + zone index. Matches the city label,
+ * the context sub-label (country/state), the raw zone path, and the GMT offset.
+ * Empty query → []. Returns best-match first, de-duped by resolved zone so the
+ * list isn't crowded with multiple cities pointing at the same zone.
  */
-export function searchTimezones(query: string, zones: string[] = allTimeZones()): string[] {
-  const q = query.trim().toLowerCase()
+export function searchTimezoneOptions(query: string, limit = 60): TzOption[] {
+  const q = fold(query.trim())
   if (!q) return []
   const now = new Date()
 
-  // Zones an alias city points at, when the typed text matches that city.
-  const aliasTargets = new Set<string>()
-  for (const [city, zone] of Object.entries(CITY_ALIASES)) {
-    if (city.includes(q)) aliasTargets.add(zone)
-  }
-
-  const scored: { zone: string; score: number; city: string }[] = []
-  for (const zone of zones) {
-    const city = cityOf(zone).toLowerCase()
-    const region = regionOf(zone).toLowerCase()
-    const full = zone.toLowerCase().replace(/_/g, ' ')
-    const offset = gmtOffsetLabel(zone, now).toLowerCase()
-
+  const scored: { opt: TzOption; score: number }[] = []
+  for (const opt of getIndex()) {
+    const city = fold(opt.label)
+    const sub = fold(opt.sublabel)
+    const zonePath = fold(opt.zone.replace(/_/g, ' '))
     let score = Infinity
     if (city === q) score = 0
     else if (city.startsWith(q)) score = 1
-    else if (aliasTargets.has(zone)) score = 1.5
     else if (city.includes(q)) score = 2
-    else if (full.includes(q)) score = 3
-    else if (region.includes(q)) score = 4
-    else if (offset.includes(q)) score = 5
-
-    if (score !== Infinity) scored.push({ zone, score, city })
+    else if (sub.includes(q)) score = 3
+    else if (zonePath.includes(q)) score = 4
+    else if (gmtOffsetLabel(opt.zone, now).toLowerCase().includes(q)) score = 5
+    if (score !== Infinity) scored.push({ opt, score })
   }
-  scored.sort((a, b) => a.score - b.score || a.city.localeCompare(b.city))
-  return scored.map((s) => s.zone)
+  scored.sort((a, b) => a.score - b.score || a.opt.label.localeCompare(b.opt.label))
+
+  // Keep the best option per zone so one zone doesn't fill the list.
+  const out: TzOption[] = []
+  const zonesSeen = new Set<string>()
+  for (const { opt } of scored) {
+    if (zonesSeen.has(opt.zone)) continue
+    zonesSeen.add(opt.zone)
+    out.push(opt)
+    if (out.length >= limit) break
+  }
+  return out
 }
