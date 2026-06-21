@@ -113,10 +113,9 @@ export async function PATCH(req: NextRequest) {
 
   // Vault settings (the editable part of nudge_settings) — merge onto the current
   // shape so we never drop the spacing/re-engagement fields.
-  if ('vaultFolderPath' in body || 'frameworkTag' in body) {
+  if ('vaultFolderPath' in body) {
     const next = normalizeNudgeSettings(coach.nudge_settings)
-    if ('vaultFolderPath' in body) next.vault_folder_path = String(body.vaultFolderPath ?? '')
-    if ('frameworkTag' in body) next.framework_tag = String(body.frameworkTag ?? '')
+    next.vault_folder_path = String(body.vaultFolderPath ?? '')
     update.nudge_settings = normalizeNudgeSettings(next)
   }
 

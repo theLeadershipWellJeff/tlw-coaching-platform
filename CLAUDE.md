@@ -426,38 +426,50 @@ Bearer) sends every coach-approved nudge whose `scheduled_for` has passed (`stat
 ='scheduled'`), via `sendNudge` — so a spacing-blocked nudge stays scheduled and
 retries; only the coach ever moves a nudge to `scheduled`.
 
-### Vault connection → framework index (`frameworks`; migration 023) — Phase A-parallel
+### Vault connection → garden index (`garden_notes` + `garden_edges`; migration 024, supersedes 023) — Phase A-parallel
 The coach's mind garden (the **`TheLeadershipWell-Vault`** GitHub repo) is the
-canonical source for frameworks. The deployed app **only reads** it (a single
-app-level fine-grained PAT, `contents: read`) and builds a **derived index** — the
-`frameworks` table holds **pointers + the 1-hop wikilink graph only, never note
-content**. Authoring is collaborative (Claude Code + Obsidian write to the repo);
+canonical source. The deployed app **only reads** it (a single app-level GitHub PAT,
+contents read) and builds a **derived node+edge index** — `garden_notes` (leaves) +
+`garden_edges` (the 1-hop association graph) hold **pointers + the graph only, never
+note content**. Authoring is collaborative (Claude Code + Obsidian write to the repo);
 Obsidian Git pushes the coach's edits up. Spec: handoff §5–§6.
+
+**Leaf vs. surfacing (the key model).** A note is an indexable **leaf** iff its
+frontmatter carries **`nudge_eligible`** (equivalently a **`themes`** array) — *not* a
+`type` value, because client-facing leaves are deliberately heterogeneous in type
+(`framework`/`principle`/`phrase`/`psycap-seed`/`psycap-deep-dive`), so keying on
+`type == framework` would silently miss leaves like Hope, Clarity, Delegate, Inner
+HERO. **`nudge_eligible: true`** is the separate client-**surfacing** gate (a leaf is
+indexed regardless; only `true` leaves are ever shown to a client).
 
 **Read (`lib/vault/`):** `client.ts` is read-only GitHub REST via `fetch` (no octokit)
 — `getTree` (one recursive call → paths + per-file SHAs + root tree SHA), `getBlob`,
 and `getContentByPath` (the **live** read used at Phase-B draft time). `parse.ts`
-(gray-matter) reads frontmatter (`slug/name/aliases/trigger_signals/when_to_use` + the
-nudge tag) and extracts `[[wikilinks]]` (plain / `|alias` / `#heading` forms).
-`sync.ts#syncFrameworks` orchestrates: tree → **.md files under `vault_folder_path`**
-(scope #1) → skip unchanged files by `blob_sha`, else fetch+parse and keep only notes
-with the **`framework: true`** tag (scope #2) → resolve link titles to `linked_slugs`
-among the tagged set (unknown titles kept raw) → upsert on `(coach_id, slug)` and
-**prune** rows whose note is gone/untagged. Content is never stored.
+(gray-matter) reads frontmatter (`id/title/type/themes/summary/nudge_eligible/aliases`)
+and collects link titles from `parent:` (relation `parent`), `frameworks:` (relation
+`framework`), and inline body `[[wikilinks]]` (relation `link`; plain / `|alias` /
+`#heading` forms). `sync.ts#syncGarden` orchestrates: tree → **.md files under
+`vault_folder_path`** → fetch+parse, keep only leaves → upsert `garden_notes` (PK
+`(coach_id, id)` where `id` = frontmatter slug) + **prune** the gone → resolve every
+link title to a target `id` (via id/title/aliases of the leaf set; unresolved or
+self-links dropped) and **rebuild** `garden_edges`. The vault is small, so it re-reads
+every leaf each run (edge resolution is global); `blob_sha` is stored but the skip is
+not active. Content is never stored.
 
-**Config** lives in `coaches.nudge_settings` (`vault_folder_path`, `framework_tag`,
-defaults in `lib/nudges/settings.ts`); the repo identity + token are env
-(`VAULT_GITHUB_TOKEN`, `VAULT_REPO`, `VAULT_BRANCH`). Read/written via `GET`/`PATCH
-/api/coach` (`vaultFolderPath`/`frameworkTag`).
+**Config** lives in `coaches.nudge_settings` (`vault_folder_path` only — leaves are
+detected structurally, so there's **no tag setting**); the repo identity + token are
+env (`VAULT_GITHUB_TOKEN`, `VAULT_REPO`, `VAULT_BRANCH`). Read/written via `GET`/`PATCH
+/api/coach` (`vaultFolderPath`).
 
 **Sync** runs two ways: manual **`POST /api/vault/sync`** (the Account → **Vault**
-panel's "Sync vault" button, returns indexed/ignored/removed counts) and the hourly
-**`GET /api/cron/vault-sync`** (`CRON_SECRET` Bearer; re-indexes every coach with a
-folder set — near-free when nothing changed thanks to the blob-SHA skip). The panel
-also lists the indexed frameworks (`GET /api/vault/frameworks`) so the coach can
-confirm tagging worked. **No nudge behavior consumes this yet** — Phase B wires
-`frameworks.aliases` into nudge extraction. Needs `023_frameworks.sql` + the
-`VAULT_*` env vars; the vault repo must be reachable by the PAT.
+panel's "Sync vault" button + the Nudges page button; returns `indexed`/`surfaceable`/
+`edges`/`ignored`/`removed` + a ready-built `message`, e.g. "Indexed 12 leaves … (0
+surfaceable, 8 edges)") and the hourly **`GET /api/cron/vault-sync`** (`CRON_SECRET`
+Bearer; re-indexes every coach with a folder set). The Account panel lists the indexed
+leaves with type/themes/eligibility + out-edges (`GET /api/vault/garden`) so the coach
+can confirm it worked. **No nudge behavior consumes this yet** — Phase B wires the
+garden into nudge extraction. Needs `024_garden.sql` + the `VAULT_*` env vars; the
+vault repo must be reachable by the PAT.
 
 ### Branded email send + communications log (`email_signatures`, `communications`)
 The client workspace **Compose Email** button (`ClientDetail` → `EmailModal`) is a
@@ -595,7 +607,8 @@ the coach picked, e.g. "Austin", shown back instead of the zone's canonical city
 cosmetic, all time math still uses `clients.timezone`) · 022 nudges (`nudges` table
 + `coaches.nudge_settings` jsonb — the between-session nudging system; additive,
 NULL settings = code defaults) · 023 frameworks (`frameworks` table — the derived
-index over the vault repo; additive).
+index over the vault repo; **superseded by 024**) · 024 garden (`garden_notes` +
+`garden_edges` — the node+edge garden index; **drops the empty `frameworks` table**).
 
 **Tenant scoping (015).** `coach_clients` (coach_id, client_id, role) is the
 ownership link. Client access is enforced **server-side** by the session coach,
@@ -617,9 +630,10 @@ the projection uses the scheduled calendar-event length.
 columns the scheduler/settings read — safe additive change, defaults until set),
 and `021_client_timezone_label.sql` (adds `clients.timezone_label` — additive,
 nullable), and `022_nudges.sql` (the `nudges` table + `coaches.nudge_settings`
-jsonb — additive; **apply before the Nudge Queue is used**), and `023_frameworks.sql`
-(the `frameworks` index over the vault repo — additive; **apply before vault sync
-is used**). ⚠️ **015 must be run BEFORE
+jsonb — additive; **apply before the Nudge Queue is used**), and `024_garden.sql`
+(the `garden_notes` + `garden_edges` index over the vault repo; **drops the empty
+`frameworks` table from 023** and is what vault sync now uses — apply before vault
+sync is used; if 023 was already applied, 024 cleans it up). ⚠️ **015 must be run BEFORE
 the tenant-scoping code is deployed to `main`** — until the table exists and is
 backfilled, the roster would filter to zero clients. Read the backfill comment in
 015 first (it assumes all current coach logins are the same person). **016 must be

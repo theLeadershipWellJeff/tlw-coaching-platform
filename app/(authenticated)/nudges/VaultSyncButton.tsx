@@ -5,6 +5,8 @@ type SyncResult = {
   configured?: boolean
   message?: string
   indexed?: number
+  surfaceable?: number
+  edges?: number
   ignored?: number
   removed?: number
   errors?: string[]
@@ -28,11 +30,7 @@ export function VaultSyncButton() {
       const res = await fetch('/api/vault/sync', { method: 'POST' })
       const data: SyncResult = await res.json().catch(() => ({}))
       if (res.ok) {
-        const extra =
-          data.ignored || data.removed
-            ? ` (${data.ignored || 0} untagged ignored, ${data.removed || 0} removed)`
-            : ''
-        setMsg({ ok: data.configured !== false, text: (data.message || 'Synced.') + extra })
+        setMsg({ ok: data.configured !== false, text: data.message || 'Synced.' })
       } else {
         setMsg({ ok: false, text: (data as any).error || 'Sync failed.' })
       }
