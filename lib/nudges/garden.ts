@@ -11,7 +11,10 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
 import { getVaultConfig, getContentByPath } from '@/lib/vault/client'
 
-// What extraction needs to match a session against the coach's frameworks.
+// What extraction needs to match a session against the coach's frameworks. `related`
+// is the 1-hop neighbourhood (titles of ANY connected leaf) — the authored garden
+// connections the model uses to bridge from what the client raised to a framework
+// that wasn't named (Phase C).
 export type SurfaceableLeaf = {
   id: string
   title: string
@@ -19,6 +22,7 @@ export type SurfaceableLeaf = {
   themes: string[]
   summary: string | null
   aliases: string[]
+  related: string[]
 }
 
 // What drafting needs to write a framework nudge.
@@ -28,11 +32,15 @@ export type FrameworkDraftContext = {
   summary: string | null
   // Live note body pulled from the vault at draft time (null if unreadable).
   content: string | null
-  // 1-hop related leaves, themselves surfaceable — light enrichment only.
-  related: { title: string; summary: string | null }[]
+  // 1-hop related leaves, themselves surfaceable — for the bridge + linked resource.
+  related: { id: string; title: string; summary: string | null }[]
 }
 
-/** The coach's client-surfaceable leaves (nudge_eligible = true). */
+/**
+ * The coach's client-surfaceable leaves (nudge_eligible = true), each annotated
+ * with its 1-hop neighbour titles (from garden_edges) so extraction can reason over
+ * the garden's authored connections.
+ */
 export async function loadSurfaceableLeaves(
   supabase: SupabaseClient<Database>,
   coachId: string
@@ -43,13 +51,33 @@ export async function loadSurfaceableLeaves(
     .eq('coach_id', coachId)
     .eq('nudge_eligible', true)
     .order('title', { ascending: true })
-  return (data || []).map((r) => ({
+  const leaves = data || []
+  if (!leaves.length) return []
+
+  // Resolve neighbour ids → titles across ALL leaves (a connection may run through
+  // a non-surfaceable hub), then attach each surfaceable leaf's neighbour titles.
+  const surfaceableIds = leaves.map((l) => l.id)
+  const [{ data: allNotes }, { data: edges }] = await Promise.all([
+    supabase.from('garden_notes').select('id, title').eq('coach_id', coachId),
+    supabase.from('garden_edges').select('source_id, target_id').eq('coach_id', coachId).in('source_id', surfaceableIds),
+  ])
+  const titleById = new Map((allNotes || []).map((n) => [n.id, n.title]))
+  const neighbours = new Map<string, Set<string>>()
+  for (const e of edges || []) {
+    const t = titleById.get(e.target_id)
+    if (!t) continue
+    if (!neighbours.has(e.source_id)) neighbours.set(e.source_id, new Set())
+    neighbours.get(e.source_id)!.add(t)
+  }
+
+  return leaves.map((r) => ({
     id: r.id,
     title: r.title,
     type: r.type,
     themes: r.themes || [],
     summary: r.summary,
     aliases: r.aliases || [],
+    related: Array.from(neighbours.get(r.id) || []),
   }))
 }
 
@@ -89,15 +117,15 @@ export async function loadFrameworkContext(
     .eq('coach_id', coachId)
     .eq('source_id', leafId)
   const targetIds = Array.from(new Set((edges || []).map((e) => e.target_id)))
-  let related: { title: string; summary: string | null }[] = []
+  let related: { id: string; title: string; summary: string | null }[] = []
   if (targetIds.length) {
     const { data: neighbours } = await supabase
       .from('garden_notes')
-      .select('title, summary')
+      .select('id, title, summary')
       .eq('coach_id', coachId)
       .eq('nudge_eligible', true)
       .in('id', targetIds)
-    related = (neighbours || []).map((n) => ({ title: n.title, summary: n.summary }))
+    related = (neighbours || []).map((n) => ({ id: n.id, title: n.title, summary: n.summary }))
   }
 
   return { id: leaf.id, title: leaf.title, summary: leaf.summary, content, related }

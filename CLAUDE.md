@@ -405,17 +405,25 @@ voice) → insert as `status='draft'`. Both Claude calls go through `llm.ts` (mo
 timing only: `scheduled_for` defaults to the **midpoint** between now and the next
 booked appointment, else null (coach sets it).
 
-**Framework nudges (Phase B, `garden.ts`).** A framework candidate is proposed when
-the session **named** a surfaceable leaf or its **themes match** (the model returns
-`framework_basis` named/theme → origin `mentioned`/`suggested`); only
-`nudge_eligible` leaves are ever offered, and a candidate must reference a real leaf
-id (`framework_slug`). At draft time `loadFrameworkContext` pulls the leaf's **live**
-content from GitHub (`vault/client#getContentByPath`) + summary + its **surfaceable**
-1-hop neighbours (the gate is re-applied to neighbours so a non-eligible note can't
-leak); `draft.ts` re-voices it into a short reminder (never a note dump). On demand:
-the manual `CreateNudgeModal` framework tile lists surfaceable leaves
-(`/nudges/context` → `frameworks`), AI-drafts via `/nudges/draft-one`
-(`{type:'framework', framework_slug}`), and persists `nudges.framework_slug`.
+**Framework nudges (Phases B + C, `garden.ts`).** A framework candidate is proposed
+on three bases (`framework_basis` → origin): the session **named** a leaf
+(named→`mentioned`), its **themes match** (theme→`suggested`), or — Phase C — a
+**connection**: something the client raised bridges to the framework through the
+garden's authored edges, even though the coach didn't mention it
+(connection→`suggested`). Extraction sees each surfaceable leaf annotated with its
+1-hop **`connects to:`** neighbour titles (`loadSurfaceableLeaves`) so the model can
+make that bridge. Only `nudge_eligible` leaves are ever offered, and a candidate must
+reference a real leaf id (`framework_slug`). At draft time `loadFrameworkContext`
+pulls the leaf's **live** content from GitHub (`vault/client#getContentByPath`) +
+summary + its **surfaceable** 1-hop neighbours (the gate is re-applied so a
+non-eligible note can't leak); `draft.ts` re-voices it into a short reminder (never a
+note dump) and, when the framework was **not named** (`origin !== 'mentioned'`),
+draws the explicit **bridge** ("when you mentioned X … I didn't raise it then, but
+there's a framework that fits"). `generate.ts` sets `linked_resource_slug` to one
+related surfaceable leaf. On demand: the manual `CreateNudgeModal` framework tile
+lists surfaceable leaves (`/nudges/context` → `frameworks`), AI-drafts via
+`/nudges/draft-one` (`{type:'framework', framework_slug}`), and persists
+`nudges.framework_slug`.
 
 **Triggered** after scoring — `store.ts#runAndStoreReport` calls it best-effort
 (never breaks scoring; skipped on a rescore), and on demand via `POST

@@ -113,6 +113,8 @@ export async function generateNudgesForClient(
 
     const draft = await draftNudge({ clientFirstName: firstName, candidate, upcomingContext, frameworkContext })
     if (!draft) continue
+    // Point a framework nudge at one genuinely related (surfaceable) leaf, if any.
+    const linkedResourceSlug = frameworkContext?.related[0]?.id ?? null
     const { data: row, error } = await supabase
       .from('nudges')
       .insert({
@@ -124,6 +126,7 @@ export async function generateNudgesForClient(
         trigger_excerpt: candidate.trigger_excerpt || null,
         rationale: candidate.rationale || null,
         framework_slug: candidate.framework_slug || null,
+        linked_resource_slug: linkedResourceSlug,
         draft_subject: draft.subject,
         draft_body: draft.body,
         status: 'draft',

@@ -32,12 +32,12 @@ const SYSTEM = `You are an assistant to an executive coach. After a coaching ses
 
 - "action_checkin": a gentle, experiment-framed follow-up on a SPECIFIC commitment the client made and that is still open. Frame it as curiosity about how an experiment went, never as a compliance check.
 - "insight": re-surfaces ONE meaningful insight from the session that is worth holding onto.
-- "framework": re-surfaces ONE of the coach's named frameworks (provided in AVAILABLE FRAMEWORKS) that is relevant to this session — either because the coach NAMED/taught it in the session, or because the session's themes clearly match the framework. Only ever choose from the provided list.
+- "framework": re-surfaces ONE of the coach's frameworks (provided in AVAILABLE FRAMEWORKS) that is relevant to this session. Relevance can be (a) the coach NAMED/taught it, (b) the session's themes clearly match it, or (c) a CONNECTION: something the client raised (a struggle, a situation) connects to the framework — including through the framework's "connects to" neighbourhood — even though the coach didn't bring it up. Only ever choose from the provided list.
 
 Rules:
 - Propose only what is genuinely grounded in the material. If nothing warrants a nudge, return an empty array. Silence is a valid, good answer.
 - An action_checkin MUST correspond to one of the provided still-open actions; copy that action's text into "action_description" verbatim.
-- A framework MUST be one of the AVAILABLE FRAMEWORKS; put its exact "id" into "framework_slug". Set "framework_basis" to "named" if the coach actually named/taught it this session, or "theme" if you're matching on themes. Do not propose a framework if none is genuinely relevant.
+- A framework MUST be one of the AVAILABLE FRAMEWORKS; put its exact "id" into "framework_slug". Set "framework_basis" to "named" (the coach named/taught it), "theme" (themes match), or "connection" (it connects to something the client raised but wasn't mentioned). For a connection, make "trigger_excerpt" the exact thing the client raised that it connects to (e.g. "struggles leading meetings"), and "rationale" the one-line bridge ("BART is an org framework that works well for meetings"). Do not propose a framework if none is genuinely relevant.
 - Never invent commitments, insights, or frameworks that aren't in the material/list.
 - Keep "trigger_excerpt" to a short quote/paraphrase from the source. Keep "rationale" to one plain sentence.
 - Do NOT write the message itself here — only the structured candidate. Drafting happens in a later step.
@@ -65,8 +65,9 @@ function buildUser(input: ExtractionInput): string {
           .map((f) => {
             const themes = f.themes.length ? ` · themes: ${f.themes.join(', ')}` : ''
             const aka = f.aliases.length ? ` · aka: ${f.aliases.join(', ')}` : ''
+            const rel = f.related.length ? ` · connects to: ${f.related.join(', ')}` : ''
             const sum = f.summary ? ` — ${f.summary}` : ''
-            return `- id: ${f.id} · ${f.title}${themes}${aka}${sum}`
+            return `- id: ${f.id} · ${f.title}${themes}${aka}${rel}${sum}`
           })
           .join('\n')
     )
@@ -100,6 +101,8 @@ export async function extractNudgeCandidates(input: ExtractionInput): Promise<Nu
     .filter((c) => c && (c.type === 'action_checkin' || c.type === 'insight' || c.type === 'framework'))
     .map((c): NudgeCandidate => ({
       type: c.type,
+      // named → 'mentioned' (the coach raised it); theme/connection → 'suggested'
+      // (the bridge the coach didn't make in session).
       origin:
         c.type === 'framework' ? (c.framework_basis === 'named' ? 'mentioned' : 'suggested') : 'auto',
       trigger_excerpt: String(c.trigger_excerpt || '').slice(0, 600),
