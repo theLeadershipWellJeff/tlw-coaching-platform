@@ -1,6 +1,6 @@
 'use client'
-import { useEffect, useMemo, useState } from 'react'
-import { orderedTimeZones } from '@/lib/scheduling'
+import { useEffect, useState } from 'react'
+import { TimezoneCombobox } from '@/app/components/shared/TimezoneCombobox'
 
 /** Set the coach's timezone — the zone the app reads every date/time in (session
  *  dates, the dashboard, scored reports). Stored on the coach profile. */
@@ -9,8 +9,7 @@ export function TimezoneSettings() {
   const [loaded, setLoaded] = useState(false)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
-
-  const zones = useMemo(() => orderedTimeZones(), [])
+  const [favorites, setFavorites] = useState<string[]>([])
 
   useEffect(() => {
     fetch('/api/coach')
@@ -24,6 +23,10 @@ export function TimezoneSettings() {
       })
       .catch(() => {})
       .finally(() => setLoaded(true))
+    fetch('/api/clients/timezones')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => Array.isArray(d?.favorites) && setFavorites(d.favorites))
+      .catch(() => {})
   }, [])
 
   async function save() {
@@ -52,24 +55,19 @@ export function TimezoneSettings() {
         The app reads every date and time in this zone — session dates, your dashboard, and scored
         reports. Set it to where you coach from.
       </p>
-      <div className="flex flex-wrap items-center gap-3">
-        <select
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          disabled={!loaded}
-          className="min-w-[240px] flex-1 rounded-tlw-md border border-tlw-warm-gray/25 bg-white px-3 py-2 text-[13px] text-tlw-espresso disabled:opacity-50"
-        >
-          {/* Keep the stored value selectable even if it's not in the list. */}
-          {value && !zones.includes(value) && <option value={value}>{value}</option>}
-          {zones.map((z) => (
-            <option key={z} value={z}>
-              {z.replace(/_/g, ' ')}
-            </option>
-          ))}
-        </select>
+      <div className="flex flex-wrap items-start gap-3">
+        <div className="min-w-[240px] flex-1">
+          <TimezoneCombobox
+            value={value}
+            onChange={setValue}
+            favorites={favorites}
+            allowEmpty={false}
+            disabled={!loaded}
+          />
+        </div>
         <button
           onClick={save}
-          disabled={saving || !loaded}
+          disabled={saving || !loaded || !value}
           className="rounded-tlw-md bg-tlw-navy-rich px-4 py-2 text-[13px] font-medium text-tlw-cream transition-opacity duration-tlw-base hover:opacity-90 disabled:opacity-40"
         >
           {saving ? 'saving…' : 'save'}

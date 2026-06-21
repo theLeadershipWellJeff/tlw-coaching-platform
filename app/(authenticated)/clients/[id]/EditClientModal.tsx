@@ -1,8 +1,8 @@
 'use client'
-import { useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Client } from '@/lib/supabase/types'
 import { Modal } from '@/app/components/shared/Modal'
-import { orderedTimeZones } from '@/lib/scheduling'
+import { TimezoneCombobox } from '@/app/components/shared/TimezoneCombobox'
 
 const FIELDS: { key: keyof Client; label: string; type?: string; placeholder?: string }[] = [
   { key: 'name', label: 'Name' },
@@ -36,7 +36,15 @@ export function EditClientModal({
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const zones = useMemo(() => orderedTimeZones(), [])
+  // Favorite zones learned from the coach's existing clients (+ their own zone).
+  const [favorites, setFavorites] = useState<string[]>([])
+
+  useEffect(() => {
+    fetch('/api/clients/timezones')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => Array.isArray(d?.favorites) && setFavorites(d.favorites))
+      .catch(() => {})
+  }, [])
 
   function set(key: string, val: string) {
     setForm((f) => ({ ...f, [key]: val }))
@@ -89,28 +97,20 @@ export function EditClientModal({
           </label>
         ))}
 
-        <label className="block">
+        <div className="block">
           <span className="text-[11px] font-medium uppercase tracking-[1.5px] text-tlw-warm-gray">Timezone</span>
-          <select
-            value={form.timezone}
-            onChange={(e) => set('timezone', e.target.value)}
-            className="mt-1 w-full rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-surface px-3 py-2 text-[13px] text-tlw-espresso outline-none focus:border-tlw-signal-orange"
-          >
-            <option value="">— not set —</option>
-            {/* Keep a stored value selectable even if it's not in the list. */}
-            {form.timezone && !zones.includes(form.timezone) && (
-              <option value={form.timezone}>{form.timezone}</option>
-            )}
-            {zones.map((z) => (
-              <option key={z} value={z}>
-                {z.replace(/_/g, ' ')}
-              </option>
-            ))}
-          </select>
+          <div className="mt-1">
+            <TimezoneCombobox
+              value={form.timezone}
+              onChange={(z) => set('timezone', z)}
+              favorites={favorites}
+              placeholder="Type a city — e.g. Dallas, London…"
+            />
+          </div>
           <span className="mt-1 block text-[11px] text-tlw-warm-gray">
-            Shown under the scheduler so you can confirm the client&apos;s local time.
+            Type a city to set the zone. Shown under the scheduler so you can confirm the client&apos;s local time.
           </span>
-        </label>
+        </div>
 
         <label className="block">
           <span className="text-[11px] font-medium uppercase tracking-[1.5px] text-tlw-warm-gray">Status</span>
