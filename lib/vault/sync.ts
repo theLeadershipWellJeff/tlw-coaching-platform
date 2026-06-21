@@ -1,11 +1,16 @@
 /**
- * Build/refresh the `frameworks` index for a coach from their vault folder.
+ * Build/refresh the garden index (garden_notes + garden_edges) for a coach from
+ * their vault folder.
  *
  * Flow: read the repo tree (one call) → keep only .md files UNDER the configured
- * folder (scope #1) → for each, skip unchanged files by blob SHA, otherwise fetch +
- * parse and keep only notes carrying the nudge tag (scope #2) → resolve wikilinks to
- * linked slugs → upsert, and prune index rows whose note is gone or no longer
- * tagged. Note bodies are never stored — pointers + the link graph only.
+ * folder → fetch + parse each, keeping only LEAVES (frontmatter has nudge_eligible
+ * or a themes array) → upsert garden_notes and prune the gone → resolve every link
+ * title (parent:/frameworks:/inline) to a target id via the leaf set and rebuild
+ * garden_edges. Note bodies are never stored — pointers + the graph only.
+ *
+ * The vault is small (tens of files), so we re-read every leaf each run rather than
+ * maintain a partial blob-SHA skip — edge resolution is global (a link can resolve
+ * to a leaf added this same run), and full re-read keeps that correct and simple.
  *
  * Safe to run on a schedule and on demand. Returns a summary for the settings UI.
  */
@@ -13,32 +18,33 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
 import { normalizeNudgeSettings } from '@/lib/nudges/settings'
 import { getVaultConfig, getTree, getBlob } from './client'
-import { parseFrameworkNote, slugFromPath } from './parse'
+import { parseGardenNote, idFromPath, type LinkRef } from './parse'
 
 export type SyncResult = {
   configured: boolean
   message: string
   indexed: number
+  surfaceable: number
+  edges: number
   ignored: number
   removed: number
   errors: string[]
 }
 
-type StagedNote = {
-  slug: string
-  name: string
+type StagedLeaf = {
+  id: string
+  title: string
+  type: string | null
+  themes: string[]
+  summary: string | null
+  nudgeEligible: boolean
   aliases: string[]
-  trigger_signals: string[]
-  when_to_use: string | null
   vault_path: string
   blob_sha: string
-  // New/changed notes carry link TITLES to resolve; carried-forward (unchanged)
-  // notes carry their already-resolved linked_slugs verbatim.
-  linkTitles?: string[]
-  linkedSlugs?: string[]
+  links: LinkRef[]
 }
 
-export async function syncFrameworks(
+export async function syncGarden(
   supabase: SupabaseClient<Database>,
   coachId: string
 ): Promise<SyncResult> {
@@ -55,16 +61,8 @@ export async function syncFrameworks(
   const settings = normalizeNudgeSettings(coach?.nudge_settings)
   const folder = settings.vault_folder_path
   if (!folder) {
-    return res(false, 'No vault folder set — choose the folder your frameworks live in, then sync.')
+    return res(false, 'No vault folder set — choose the folder your garden lives in, then sync.')
   }
-
-  // Existing index, full rows (to skip unchanged blobs and prune the gone).
-  const { data: existingRows } = await supabase
-    .from('frameworks')
-    .select('id, slug, name, aliases, trigger_signals, when_to_use, vault_path, linked_slugs, blob_sha')
-    .eq('coach_id', coachId)
-  const existing = existingRows || []
-  const existingByPath = new Map(existing.map((r) => [r.vault_path, r]))
 
   let tree
   try {
@@ -79,25 +77,10 @@ export async function syncFrameworks(
   )
 
   const errors: string[] = []
-  const staged: StagedNote[] = []
+  const staged: StagedLeaf[] = []
   let ignored = 0
 
   for (const file of mdFiles) {
-    const prior = existingByPath.get(file.path)
-    // Unchanged tagged file → carry the existing row forward verbatim (no blob fetch).
-    if (prior && prior.blob_sha === file.sha) {
-      staged.push({
-        slug: prior.slug,
-        name: prior.name,
-        aliases: prior.aliases || [],
-        trigger_signals: prior.trigger_signals || [],
-        when_to_use: prior.when_to_use,
-        vault_path: prior.vault_path,
-        blob_sha: file.sha,
-        linkedSlugs: prior.linked_slugs || [],
-      })
-      continue
-    }
     let content: string
     try {
       content = await getBlob(cfg, file.sha)
@@ -105,83 +88,122 @@ export async function syncFrameworks(
       errors.push(`${file.path}: ${e?.message || e}`)
       continue
     }
-    const parsed = parseFrameworkNote(content, settings.framework_tag)
-    if (!parsed.isFramework) {
+    const parsed = parseGardenNote(content)
+    if (!parsed.isLeaf) {
       ignored++
       continue
     }
     staged.push({
-      slug: parsed.slug || slugFromPath(file.path),
-      name: parsed.name || slugFromPath(file.path),
+      id: parsed.id || idFromPath(file.path),
+      title: parsed.title || idFromPath(file.path),
+      type: parsed.type,
+      themes: parsed.themes,
+      summary: parsed.summary,
+      nudgeEligible: parsed.nudgeEligible,
       aliases: parsed.aliases,
-      trigger_signals: parsed.trigger_signals,
-      when_to_use: parsed.when_to_use,
       vault_path: file.path,
       blob_sha: file.sha,
-      linkTitles: parsed.linkTitles,
+      links: parsed.links,
     })
   }
 
-  // De-dupe slugs (a collision keeps the first; flag the rest).
-  const bySlug = new Map<string, StagedNote>()
-  for (const note of staged) {
-    if (bySlug.has(note.slug)) {
-      errors.push(`Duplicate slug "${note.slug}" (${note.vault_path}) — skipped.`)
+  // De-dupe ids (a collision keeps the first; flag the rest).
+  const byId = new Map<string, StagedLeaf>()
+  for (const leaf of staged) {
+    if (byId.has(leaf.id)) {
+      errors.push(`Duplicate id "${leaf.id}" (${leaf.vault_path}) — skipped.`)
       continue
     }
-    bySlug.set(note.slug, note)
+    byId.set(leaf.id, leaf)
   }
+  const leaves = Array.from(byId.values())
 
-  // Resolve wikilink titles → slugs among the tagged set; unknown titles kept raw.
-  const titleToSlug = new Map<string, string>()
-  for (const note of Array.from(bySlug.values())) {
-    titleToSlug.set(note.name.toLowerCase(), note.slug)
-    titleToSlug.set(note.slug.toLowerCase(), note.slug)
-    for (const a of note.aliases) titleToSlug.set(a.toLowerCase(), note.slug)
+  // Resolution map: id / title / alias (lowercased) → id, among the leaf set.
+  const titleToId = new Map<string, string>()
+  for (const leaf of leaves) {
+    titleToId.set(leaf.id.toLowerCase(), leaf.id)
+    titleToId.set(leaf.title.toLowerCase(), leaf.id)
+    for (const a of leaf.aliases) titleToId.set(a.toLowerCase(), leaf.id)
   }
 
   const now = new Date().toISOString()
-  const upserts: Database['public']['Tables']['frameworks']['Insert'][] = Array.from(
-    bySlug.values()
-  ).map((note) => ({
+
+  // --- garden_notes: upsert all leaves, then prune the gone -------------------
+  const noteRows: Database['public']['Tables']['garden_notes']['Insert'][] = leaves.map((leaf) => ({
     coach_id: coachId,
-    slug: note.slug,
-    name: note.name,
-    aliases: note.aliases,
-    trigger_signals: note.trigger_signals,
-    when_to_use: note.when_to_use,
-    vault_path: note.vault_path,
-    linked_slugs:
-      note.linkedSlugs ??
-      Array.from(new Set((note.linkTitles || []).map((t) => titleToSlug.get(t.toLowerCase()) || t))),
-    blob_sha: note.blob_sha,
+    id: leaf.id,
+    title: leaf.title,
+    type: leaf.type,
+    themes: leaf.themes,
+    summary: leaf.summary,
+    nudge_eligible: leaf.nudgeEligible,
+    aliases: leaf.aliases,
+    vault_path: leaf.vault_path,
+    blob_sha: leaf.blob_sha,
     last_synced_at: now,
     updated_at: now,
   }))
 
-  if (upserts.length) {
+  // Edges reference notes (FK) — clear this coach's edges before pruning notes,
+  // then rebuild after the upsert.
+  await supabase.from('garden_edges').delete().eq('coach_id', coachId)
+
+  if (noteRows.length) {
     const { error } = await supabase
-      .from('frameworks')
-      .upsert(upserts, { onConflict: 'coach_id,slug' })
-    if (error) return res(true, `Index write failed: ${error.message}`, 0, ignored, 0, errors)
+      .from('garden_notes')
+      .upsert(noteRows, { onConflict: 'coach_id,id' })
+    if (error) return res(true, `Index write failed: ${error.message}`, 0, 0, 0, ignored, 0, errors)
   }
 
-  // Prune: index rows whose slug is no longer in the tagged set.
-  const keepSlugs = new Set(Array.from(bySlug.keys()))
-  const toRemove = existing.filter((r) => !keepSlugs.has(r.slug))
+  const { data: existing } = await supabase
+    .from('garden_notes')
+    .select('id')
+    .eq('coach_id', coachId)
+  const keep = new Set(leaves.map((l) => l.id))
+  const stale = (existing || []).map((r) => r.id).filter((id) => !keep.has(id))
   let removed = 0
-  if (toRemove.length) {
+  if (stale.length) {
     const { error } = await supabase
-      .from('frameworks')
+      .from('garden_notes')
       .delete()
-      .in('id', toRemove.map((r) => r.id))
-    if (!error) removed = toRemove.length
+      .eq('coach_id', coachId)
+      .in('id', stale)
+    if (!error) removed = stale.length
   }
 
+  // --- garden_edges: resolve link titles → ids, dedupe, insert ---------------
+  const edgeRows: Database['public']['Tables']['garden_edges']['Insert'][] = []
+  const seen = new Set<string>()
+  for (const leaf of leaves) {
+    for (const link of leaf.links) {
+      const target = titleToId.get(link.title.toLowerCase())
+      if (!target || target === leaf.id) continue // unresolved or self-link
+      const key = `${leaf.id}|${target}|${link.relation}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      edgeRows.push({
+        coach_id: coachId,
+        source_id: leaf.id,
+        target_id: target,
+        relation: link.relation,
+      })
+    }
+  }
+  if (edgeRows.length) {
+    const { error } = await supabase.from('garden_edges').insert(edgeRows)
+    if (error) errors.push(`Edge write failed: ${error.message}`)
+  }
+
+  const surfaceable = leaves.filter((l) => l.nudgeEligible).length
+  const edges = edgeRows.length
+  const tail = ignored ? ` ${ignored} non-leaf file${ignored === 1 ? '' : 's'} ignored.` : ''
   return res(
     true,
-    `Indexed ${upserts.length} framework${upserts.length === 1 ? '' : 's'} from ${folder}.`,
-    upserts.length,
+    `Indexed ${leaves.length} ${leaves.length === 1 ? 'leaf' : 'leaves'} from ${folder} ` +
+      `(${surfaceable} surfaceable, ${edges} edge${edges === 1 ? '' : 's'}).${tail}`,
+    leaves.length,
+    surfaceable,
+    edges,
     ignored,
     removed,
     errors
@@ -192,9 +214,11 @@ function res(
   configured: boolean,
   message: string,
   indexed = 0,
+  surfaceable = 0,
+  edges = 0,
   ignored = 0,
   removed = 0,
   errors: string[] = []
 ): SyncResult {
-  return { configured, message, indexed, ignored, removed, errors }
+  return { configured, message, indexed, surfaceable, edges, ignored, removed, errors }
 }

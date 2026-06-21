@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
-import { syncFrameworks } from '@/lib/vault/sync'
+import { syncGarden } from '@/lib/vault/sync'
 import { getVaultConfig } from '@/lib/vault/client'
 
 export const runtime = 'nodejs'
@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
     const folder = (c.nudge_settings as any)?.vault_folder_path
     if (!folder || typeof folder !== 'string') continue
     try {
-      const result = await syncFrameworks(supabase, c.id)
+      const result = await syncGarden(supabase, c.id)
       if (result.configured) {
         synced++
         indexed += result.indexed

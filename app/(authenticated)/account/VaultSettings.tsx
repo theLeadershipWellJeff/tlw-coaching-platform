@@ -1,36 +1,45 @@
 'use client'
 import { useEffect, useState } from 'react'
 
-interface FrameworkRow {
+interface GardenNote {
   id: string
-  slug: string
-  name: string
+  title: string
+  type: string | null
+  themes: string[]
+  summary: string | null
+  nudge_eligible: boolean
   aliases: string[]
-  trigger_signals: string[]
-  when_to_use: string | null
   vault_path: string
-  linked_slugs: string[]
   last_synced_at: string
+}
+interface GardenEdge {
+  source_id: string
+  target_id: string
+  relation: string
 }
 
 /**
- * Account → Vault. Point the framework indexer at one folder in the vault repo and
- * set the frontmatter tag, then sync (manual button; an hourly cron also runs).
- * Shows exactly what got indexed so the coach can confirm their tagging worked.
+ * Account → Vault. Point the garden indexer at one folder in the vault repo, then
+ * sync (manual button; an hourly cron also runs). Leaves are detected structurally
+ * (frontmatter nudge_eligible / themes) — there is no tag to set. Shows exactly
+ * what got indexed (with the surfacing gate) so the coach can confirm it worked.
  */
 export function VaultSettings() {
   const [folder, setFolder] = useState('')
-  const [tag, setTag] = useState('framework')
   const [loaded, setLoaded] = useState(false)
   const [saving, setSaving] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
-  const [frameworks, setFrameworks] = useState<FrameworkRow[]>([])
+  const [notes, setNotes] = useState<GardenNote[]>([])
+  const [edges, setEdges] = useState<GardenEdge[]>([])
 
-  function loadFrameworks() {
-    fetch('/api/vault/frameworks')
-      .then((r) => (r.ok ? r.json() : { frameworks: [] }))
-      .then((d) => setFrameworks(d.frameworks || []))
+  function loadGarden() {
+    fetch('/api/vault/garden')
+      .then((r) => (r.ok ? r.json() : { notes: [], edges: [] }))
+      .then((d) => {
+        setNotes(d.notes || [])
+        setEdges(d.edges || [])
+      })
       .catch(() => {})
   }
 
@@ -39,14 +48,11 @@ export function VaultSettings() {
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         const ns = d?.coach?.nudge_settings
-        if (ns) {
-          setFolder(ns.vault_folder_path || '')
-          setTag(ns.framework_tag || 'framework')
-        }
+        if (ns) setFolder(ns.vault_folder_path || '')
       })
       .catch(() => {})
       .finally(() => setLoaded(true))
-    loadFrameworks()
+    loadGarden()
   }, [])
 
   async function save() {
@@ -56,7 +62,7 @@ export function VaultSettings() {
       const res = await fetch('/api/coach', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ vaultFolderPath: folder, frameworkTag: tag }),
+        body: JSON.stringify({ vaultFolderPath: folder }),
       })
       const data = await res.json().catch(() => ({}))
       if (res.ok) setMsg({ ok: true, text: 'Saved.' })
@@ -75,12 +81,8 @@ export function VaultSettings() {
       const res = await fetch('/api/vault/sync', { method: 'POST' })
       const data = await res.json().catch(() => ({}))
       if (res.ok) {
-        const extra =
-          data.ignored || data.removed
-            ? ` (${data.ignored} untagged ignored, ${data.removed} removed)`
-            : ''
-        setMsg({ ok: data.configured !== false, text: (data.message || 'Synced.') + extra })
-        loadFrameworks()
+        setMsg({ ok: data.configured !== false, text: data.message || 'Synced.' })
+        loadGarden()
       } else {
         setMsg({ ok: false, text: data.error || 'Sync failed.' })
       }
@@ -91,39 +93,31 @@ export function VaultSettings() {
     }
   }
 
+  const surfaceable = notes.filter((n) => n.nudge_eligible).length
+
   return (
     <div className="rounded-tlw-xl border border-tlw-warm-gray/15 bg-tlw-surface p-6">
       <p className="mb-2 text-[11px] font-medium uppercase tracking-[2px] text-tlw-warm-gray">
-        Vault (frameworks)
+        Vault (garden)
       </p>
       <p className="mb-4 text-[13px] text-tlw-warm-gray">
-        Point the framework indexer at one folder in your vault repo. Only notes in that folder
-        whose frontmatter carries the tag below (e.g. <code className="text-tlw-espresso">framework: true</code>)
-        are indexed. Note content is never copied — it&apos;s pulled live when a nudge is drafted.
+        Point the indexer at one folder in your vault repo. Every note there with a{' '}
+        <code className="text-tlw-espresso">nudge_eligible</code> field (or a{' '}
+        <code className="text-tlw-espresso">themes</code> list) is indexed as a leaf; only{' '}
+        <code className="text-tlw-espresso">nudge_eligible: true</code> leaves are ever surfaced to a
+        client. Note content is never copied — it&apos;s pulled live when a nudge is drafted.
       </p>
 
-      <div className="space-y-3">
-        <label className="block">
-          <span className="mb-1 block text-[12px] text-tlw-warm-gray">Folder path in repo</span>
-          <input
-            value={folder}
-            onChange={(e) => setFolder(e.target.value)}
-            placeholder="e.g. Frameworks"
-            disabled={!loaded}
-            className="w-full rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-surface px-3 py-2 text-[13px] text-tlw-espresso outline-none focus:border-tlw-navy-rich"
-          />
-        </label>
-        <label className="block max-w-[220px]">
-          <span className="mb-1 block text-[12px] text-tlw-warm-gray">Frontmatter tag</span>
-          <input
-            value={tag}
-            onChange={(e) => setTag(e.target.value)}
-            placeholder="framework"
-            disabled={!loaded}
-            className="w-full rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-surface px-3 py-2 text-[13px] text-tlw-espresso outline-none focus:border-tlw-navy-rich"
-          />
-        </label>
-      </div>
+      <label className="block">
+        <span className="mb-1 block text-[12px] text-tlw-warm-gray">Folder path in repo</span>
+        <input
+          value={folder}
+          onChange={(e) => setFolder(e.target.value)}
+          placeholder="e.g. 06-Wissensgarten-Knowledge-Base"
+          disabled={!loaded}
+          className="w-full rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-surface px-3 py-2 text-[13px] text-tlw-espresso outline-none focus:border-tlw-navy-rich"
+        />
+      </label>
 
       <div className="mt-4 flex items-center gap-3">
         <button
@@ -148,24 +142,36 @@ export function VaultSettings() {
         </p>
       )}
 
-      {frameworks.length > 0 && (
+      {notes.length > 0 && (
         <div className="mt-5 border-t border-tlw-warm-gray/15 pt-4">
           <p className="mb-3 text-[11px] font-medium uppercase tracking-[1.5px] text-tlw-warm-gray">
-            Indexed frameworks · {frameworks.length}
+            Indexed leaves · {notes.length} · {surfaceable} surfaceable · {edges.length} edges
           </p>
           <ul className="space-y-2">
-            {frameworks.map((f) => (
-              <li key={f.id} className="text-[13px]">
-                <span className="font-medium text-tlw-espresso">{f.name}</span>
-                <span className="text-tlw-warm-gray"> · {f.slug}</span>
-                {f.aliases.length > 0 && (
-                  <span className="text-tlw-warm-gray"> — aliases: {f.aliases.join(', ')}</span>
-                )}
-                {f.linked_slugs.length > 0 && (
-                  <span className="text-tlw-warm-gray"> · links: {f.linked_slugs.join(', ')}</span>
-                )}
-              </li>
-            ))}
+            {notes.map((n) => {
+              const out = edges.filter((e) => e.source_id === n.id)
+              return (
+                <li key={n.id} className="text-[13px]">
+                  <span className="font-medium text-tlw-espresso">{n.title}</span>
+                  <span className="text-tlw-warm-gray"> · {n.id}</span>
+                  {n.type && <span className="text-tlw-warm-gray"> · {n.type}</span>}
+                  {n.nudge_eligible ? (
+                    <span style={{ color: 'var(--color-success)' }}> · surfaceable</span>
+                  ) : (
+                    <span className="text-tlw-warm-gray"> · not surfaced</span>
+                  )}
+                  {n.themes.length > 0 && (
+                    <span className="text-tlw-warm-gray"> — themes: {n.themes.join(', ')}</span>
+                  )}
+                  {out.length > 0 && (
+                    <span className="text-tlw-warm-gray">
+                      {' '}
+                      · links: {out.map((e) => e.target_id).join(', ')}
+                    </span>
+                  )}
+                </li>
+              )
+            })}
           </ul>
         </div>
       )}

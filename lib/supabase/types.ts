@@ -238,10 +238,10 @@ export type NudgeSettings = {
   // and the max number of re-engagement touches before stopping.
   reengagement_first_after_days: number
   reengagement_max_touches: number
-  // Vault connection (migration 023): the single folder in the vault repo the app
-  // indexes for frameworks, and the frontmatter key that marks a note nudgeable.
+  // Vault connection (migrations 023/024): the single folder in the vault repo the
+  // garden indexer reads. Leaves are detected structurally (frontmatter
+  // nudge_eligible / themes), so there is no tag to configure.
   vault_folder_path: string
-  framework_tag: string
 }
 
 export type Nudge = {
@@ -265,20 +265,34 @@ export type Nudge = {
   updated_at: Timestamp
 }
 
-export type Framework = {
-  id: string
+// A leaf in the coach's mind garden (derived index over the vault repo). `id` is
+// the frontmatter slug — the edge endpoint, unique per coach (composite PK with
+// coach_id). Note bodies are never stored; this is pointers + the graph only.
+export type GardenNote = {
   coach_id: string
-  slug: string
-  name: string
+  id: string
+  title: string
+  type: string | null
+  themes: string[]
+  summary: string | null
+  nudge_eligible: boolean
   aliases: string[]
-  trigger_signals: string[]
-  when_to_use: string | null
   vault_path: string
-  linked_slugs: string[]
   blob_sha: string | null
   last_synced_at: Timestamp
   created_at: Timestamp
   updated_at: Timestamp
+}
+
+// A 1-hop edge between two garden_notes (by their `id`). `relation` records where
+// the link came from: 'parent' | 'framework' | 'link' (inline body wikilink).
+export type GardenEdge = {
+  id: string
+  coach_id: string
+  source_id: string
+  target_id: string
+  relation: string
+  created_at: Timestamp
 }
 
 export type AppointmentReminder = {
@@ -491,10 +505,16 @@ export type Database = {
         Update: Updatable<Nudge>
         Relationships: []
       }
-      frameworks: {
-        Row: Framework
-        Insert: Insertable<Framework>
-        Update: Updatable<Framework>
+      garden_notes: {
+        Row: GardenNote
+        Insert: Insertable<GardenNote>
+        Update: Updatable<GardenNote>
+        Relationships: []
+      }
+      garden_edges: {
+        Row: GardenEdge
+        Insert: Insertable<GardenEdge>
+        Update: Updatable<GardenEdge>
         Relationships: []
       }
     }
