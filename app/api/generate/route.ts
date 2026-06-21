@@ -83,20 +83,25 @@ ${zoomText}`
         }))
       : null
 
+  // The Engagement section ("coachingPlan") is the durable contract — the stable
+  // goals of the engagement, not recent activity. Workspace goals win and are
+  // rendered verbatim; absent them, derive intake-first.
   const planInstruction = lockedPlan
-    ? `The coaching plan is FIXED — these are ${clientName}'s agreed engagement goals. Do NOT include a "coachingPlan" field; build the rest of the email around these goals, and make each "questions" item reference one goal by its EXACT title:
+    ? `ENGAGEMENT GOALS — the durable contract (what we're working on this engagement; stable, changes slowly):
+These are ${clientName}'s agreed engagement goals from the workspace. The coaching plan is FIXED. Do NOT include a "coachingPlan" field — these goals are rendered VERBATIM, exactly as written below, with NO rewording, summarizing, or re-titling. Make each "questions" item reference one goal by its EXACT title:
 ${lockedPlan.map((p, i) => `${i + 1}. ${p.title} — ${p.description}`).join('\n')}`
-    : `Generate a "coachingPlan" array of 3 items: {"emoji": "🧭", "title": "Track Name (3-5 words)", "description": "1-2 sentences specific to this client's actual coaching work"}. Each "questions" item must reference a coachingPlan title via its "theme".`
+    : `ENGAGEMENT GOALS — the durable contract (what we're working on this engagement; stable, changes slowly):
+There are no workspace goals on file, so derive the "coachingPlan". This is the STABLE engagement plan, NOT recent activity. Source the goals from the FIRST session's notes — intake / first-session goals ARE the engagement goals and persist as primary unless later notes explicitly establish new goals that supersede them. If the first session's notes establish no goals, derive them from the most recent 3 sessions. Produce a "coachingPlan" array of 3 items: {"emoji": "🧭", "title": "Track Name (3-5 words)", "description": "1-2 sentences specific to your actual coaching work"}. Each "questions" item must reference a coachingPlan title via its "theme".`
 
   const jsonShape = lockedPlan
     ? `{
   "exploring": [
-    {"title": "Topic Title", "description": "2-3 sentences on what we have specifically been working on — reference real details from the notes"}
+    {"title": "Topic Title", "description": "ONE tight sentence on the specific recent thing we moved on — reference a real detail from the latest notes"}
   ],
   "insights": ["A powerful, pithy breakthrough insight — declarative, memorable, 15-25 words, first person from client perspective", "..."],
-  "actions": ["Specific action item from their notes — start with a verb, include concrete detail, 10-20 words", "..."],
+  "actions": ["Specific action item from your notes — start with a verb, include concrete detail, 10-20 words", "..."],
   "questions": [
-    {"theme": "EXACT goal title", "question": "Open-ended reflection question deeply tied to that goal and their specific situation — 30-50 words"}
+    {"theme": "EXACT goal title", "question": "Open-ended reflection question deeply tied to that goal and your specific situation, addressed to you — 30-50 words"}
   ],
   "closingLine": "1-2 warm, specific, personal sentences from Jeff — acknowledge the real work this client is doing. No AI mention. No generic coaching language. Sound like Jeff.",
   "quote": {"text": "An inspiring quote relevant to this client's specific journey — not overused or cliché", "author": "Author Name"}
@@ -108,22 +113,22 @@ ${lockedPlan.map((p, i) => `${i + 1}. ${p.title} — ${p.description}`).join('\n
     {"emoji": "🕊️", "title": "Track Name", "description": "1-2 sentences"}
   ],
   "exploring": [
-    {"title": "Topic Title", "description": "2-3 sentences on what we have specifically been working on — reference real details from the notes"},
-    {"title": "Topic Title", "description": "2-3 sentences"},
-    {"title": "Topic Title", "description": "2-3 sentences"}
+    {"title": "Topic Title", "description": "ONE tight sentence on the specific recent thing we moved on — reference a real detail from the latest notes"},
+    {"title": "Topic Title", "description": "ONE tight sentence"},
+    {"title": "Topic Title", "description": "ONE tight sentence"}
   ],
   "insights": [
-    "A powerful, pithy breakthrough insight from their actual coaching — declarative, memorable, 15-25 words, first person from client perspective",
+    "A powerful, pithy breakthrough insight from your actual coaching — declarative, memorable, 15-25 words, first person from your perspective",
     "Powerful insight 2",
     "Powerful insight 3"
   ],
   "actions": [
-    "Specific action item from their notes — start with a verb, include concrete detail, 10-20 words",
+    "Specific action item from your notes — start with a verb, include concrete detail, 10-20 words",
     "Action item 2",
     "Action item 3"
   ],
   "questions": [
-    {"theme": "EXACT title from coachingPlan item 1", "question": "Open-ended reflection question deeply tied to their specific situation — thoughtful and specific, 30-50 words"},
+    {"theme": "EXACT title from coachingPlan item 1", "question": "Open-ended reflection question deeply tied to your specific situation, addressed to you — thoughtful and specific, 30-50 words"},
     {"theme": "EXACT title from coachingPlan item 2", "question": "Reflection question"},
     {"theme": "EXACT title from coachingPlan item 3", "question": "Reflection question"}
   ],
@@ -135,9 +140,24 @@ ${lockedPlan.map((p, i) => `${i + 1}. ${p.title} — ${p.description}`).join('\n
 
 Return ONLY a valid JSON object — no markdown fences, no preamble, no explanation.
 
+SOURCE PRECEDENCE:
+- Jeff's SESSION NOTES are the PRIMARY substance for every section — build the content from them first.
+- The ZOOM AI MEETING SUMMARIES are corroborating/supporting ONLY: use them to fill gaps, surface ${clientName}'s own language, and confirm. They never override or contradict the notes.
+- On any conflict, the NOTES WIN. If a summary implies something the notes don't support, defer to the notes.
+
+VOICE:
+- Address ${clientName} DIRECTLY in the second person — "you," "your." NEVER refer to ${clientName} in the third person ("the client," "she/he," "${clientName} has been…").
+- Second person applies to ${clientName} ONLY. Other people named (direct reports, colleagues, spouse, etc.) are referred to normally in the third person — do NOT second-person them.
+- Warm, direct, affirming, plain. Mirror Jeff's actual phrasing from the notes — preserve his words where they carry the meaning rather than paraphrasing into generic coaching-speak. Sound like Jeff.
+
 ${planInstruction}
 
-SESSION NOTES (most recent first):
+RECENT EXPLORATION ("exploring") — the recent motion, NOT the standing plan:
+- Capture what we've actually been moving on lately: recency-weighted activity, ONE tight sentence per item.
+- Source it from the latest session's notes (and that session's summary), then the prior two sessions — a 3-session lookback weighted to the most recent. Do NOT look back further than 3 sessions for this section.
+- Do NOT restate the engagement goals. If an item is just a goal rephrased as activity, cut it or sharpen it to the specific recent thing that happened. Engagement = the goal; Recent Exploration = the movement on it.
+
+SESSION NOTES (most recent first — the PRIMARY source):
 ${notesText}
 
 OPEN ACTION ITEMS FROM COACH ACCOUNTABLE:

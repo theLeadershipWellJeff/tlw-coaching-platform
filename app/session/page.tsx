@@ -276,6 +276,21 @@ function SessionPage() {
 
             <div style={{ height: 1, margin: '20px 44px', background: 'linear-gradient(to right,transparent,rgba(139,134,128,.4),transparent)' }} />
 
+            {/* What We Have Been Exploring */}
+            <div style={{ padding: '20px 44px' }}>
+              <p style={{ fontSize: 9, letterSpacing: 4, textTransform: 'uppercase', color: '#8B8680', fontWeight: 700, marginBottom: 16 }}>What We Have Been Exploring</p>
+              {content.exploring.map((item, i) => (
+                <div key={i} style={{ padding: '14px 0', borderBottom: '1px solid #e5e0d8', display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                  <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#0C1940', textAlign: 'center', lineHeight: '26px', fontSize: 13, color: '#F2F2F0', fontFamily: 'Georgia, serif', flexShrink: 0 }}>{i + 1}</div>
+                  <div style={{ flex: 1 }}>
+                    <Editable value={item.title} onChange={v => updateExploring(i, 'title', v)} multiline={false} style={{ fontWeight: 600, fontSize: 14, color: '#111226', display: 'block', marginBottom: 3 }} tag="div" />
+                    <Editable value={item.description} onChange={v => updateExploring(i, 'description', v)} style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.65, display: 'block' }} tag="div" />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{ height: 1, margin: '0 44px', background: '#e5e0d8' }} />
+
             {/* Coaching Plan */}
             <div style={{ padding: '20px 44px' }}>
               <p style={{ fontSize: 9, letterSpacing: 4, textTransform: 'uppercase', color: '#8B8680', fontWeight: 700, marginBottom: 6 }}>Your Coaching Plan</p>
@@ -286,21 +301,6 @@ function SessionPage() {
                   <div style={{ flex: 1 }}>
                     <Editable value={item.title} onChange={v => updateCoachingPlan(i, 'title', v)} multiline={false} style={{ fontWeight: 600, fontSize: 14, color: '#111226', display: 'block', marginBottom: 3 }} tag="div" />
                     <Editable value={item.description} onChange={v => updateCoachingPlan(i, 'description', v)} style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.65, display: 'block' }} tag="div" />
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div style={{ height: 1, margin: '0 44px', background: '#e5e0d8' }} />
-
-            {/* What We Have Been Exploring */}
-            <div style={{ padding: '20px 44px' }}>
-              <p style={{ fontSize: 9, letterSpacing: 4, textTransform: 'uppercase', color: '#8B8680', fontWeight: 700, marginBottom: 16 }}>What We Have Been Exploring</p>
-              {content.exploring.map((item, i) => (
-                <div key={i} style={{ padding: '14px 0', borderBottom: '1px solid #e5e0d8', display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-                  <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#0C1940', textAlign: 'center', lineHeight: '26px', fontSize: 13, color: '#F2F2F0', fontFamily: 'Georgia, serif', flexShrink: 0 }}>{i + 1}</div>
-                  <div style={{ flex: 1 }}>
-                    <Editable value={item.title} onChange={v => updateExploring(i, 'title', v)} multiline={false} style={{ fontWeight: 600, fontSize: 14, color: '#111226', display: 'block', marginBottom: 3 }} tag="div" />
-                    <Editable value={item.description} onChange={v => updateExploring(i, 'description', v)} style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.65, display: 'block' }} tag="div" />
                   </div>
                 </div>
               ))}
