@@ -1,16 +1,24 @@
 'use client'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { allTimeZones, COMMON_TIMEZONES } from '@/lib/scheduling'
-import { searchTimezones, zoneLabel, gmtOffsetLabel, cityOf } from '@/lib/timezones'
+import { COMMON_TIMEZONES } from '@/lib/scheduling'
+import {
+  searchTimezoneOptions,
+  optionForZone,
+  gmtOffsetLabel,
+  cityOf,
+  zoneLabel,
+  type TzOption,
+} from '@/lib/timezones'
 
-type Group = { label: string | null; zones: string[] }
+type Group = { label: string | null; options: TzOption[] }
 
 /**
- * A searchable timezone picker. Type a city ("Dallas", "London") or zone and it
- * resolves to the IANA zone, showing each option's current GMT offset. When the
- * box is empty it surfaces a **Favorites** group (passed in — e.g. the zones the
+ * A searchable timezone picker. Type a city ("Mumbai", "Dallas", "London") and
+ * it resolves to the IANA zone — searching a curated list of major world cities
+ * plus every IANA zone — showing each option's current GMT offset. When the box
+ * is empty it surfaces a **Favorites** group (passed in — e.g. the zones the
  * coach already uses) over a Common list, so the usual picks are one click away
- * and the long IANA list never has to be scrolled. Stores the IANA zone string.
+ * and the long zone list never has to be scrolled. Stores the IANA zone string.
  */
 export function TimezoneCombobox({
   value,
@@ -31,25 +39,33 @@ export function TimezoneCombobox({
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
   const rootRef = useRef<HTMLDivElement>(null)
-  const all = useMemo(() => allTimeZones(), [])
 
-  // Favorites first (valid + de-duped), then Common (minus favorites).
-  const favs = useMemo(() => favorites.filter((z) => all.includes(z)), [favorites, all])
-  const commonRest = useMemo(
-    () => COMMON_TIMEZONES.filter((z) => (all.includes(z) || z === 'UTC') && !favs.includes(z)),
-    [favs, all]
-  )
+  // Favorites (de-duped) then Common (minus favorites), as options.
+  const favOptions = useMemo(() => {
+    const seen = new Set<string>()
+    const out: TzOption[] = []
+    for (const z of favorites) {
+      if (!z || seen.has(z)) continue
+      seen.add(z)
+      out.push(optionForZone(z))
+    }
+    return out
+  }, [favorites])
+
+  const commonOptions = useMemo(() => {
+    const favZones = new Set(favOptions.map((o) => o.zone))
+    return COMMON_TIMEZONES.filter((z) => !favZones.has(z)).map(optionForZone)
+  }, [favOptions])
 
   const groups: Group[] = useMemo(() => {
-    if (query.trim()) return [{ label: null, zones: searchTimezones(query, all).slice(0, 60) }]
+    if (query.trim()) return [{ label: null, options: searchTimezoneOptions(query) }]
     return [
-      ...(favs.length ? [{ label: 'Favorites', zones: favs }] : []),
-      { label: favs.length ? 'All zones' : 'Common', zones: commonRest },
+      ...(favOptions.length ? [{ label: 'Favorites', options: favOptions }] : []),
+      { label: 'Common', options: commonOptions },
     ]
-  }, [query, all, favs, commonRest])
+  }, [query, favOptions, commonOptions])
 
-  // Flat list of selectable zones for keyboard navigation.
-  const flat = useMemo(() => groups.flatMap((g) => g.zones), [groups])
+  const flat = useMemo(() => groups.flatMap((g) => g.options), [groups])
 
   useEffect(() => setActive(0), [query])
 
@@ -81,7 +97,7 @@ export function TimezoneCombobox({
       setActive((a) => Math.max(a - 1, 0))
     } else if (e.key === 'Enter') {
       e.preventDefault()
-      if (flat[active]) choose(flat[active])
+      if (flat[active]) choose(flat[active].zone)
     } else if (e.key === 'Escape') {
       setOpen(false)
     }
@@ -99,6 +115,7 @@ export function TimezoneCombobox({
           value={display}
           disabled={disabled}
           placeholder={placeholder}
+          title={value ? zoneLabel(value) : undefined}
           onFocus={() => {
             setOpen(true)
             setQuery('')
@@ -129,31 +146,33 @@ export function TimezoneCombobox({
           ) : (
             groups.map((g, gi) => (
               <div key={gi}>
-                {g.label && g.zones.length > 0 && (
+                {g.label && g.options.length > 0 && (
                   <p className="sticky top-0 bg-tlw-canvas/90 px-3 py-1 text-[10px] font-semibold uppercase tracking-[1.5px] text-tlw-warm-gray">
                     {g.label}
                   </p>
                 )}
-                {g.zones.map((zone) => {
+                {g.options.map((opt) => {
                   idx++
                   const isActive = idx === active
-                  const isSelected = zone === value
+                  const isSelected = opt.zone === value
                   return (
                     <button
-                      key={zone}
+                      key={`${opt.label}|${opt.zone}`}
                       type="button"
                       onMouseEnter={() => setActive(idx)}
-                      onClick={() => choose(zone)}
+                      onClick={() => choose(opt.zone)}
                       className={`flex w-full items-center justify-between gap-3 px-3 py-1.5 text-left text-[13px] ${
                         isActive ? 'bg-blue-50' : 'bg-white'
                       } ${isSelected ? 'font-medium text-tlw-navy-rich' : 'text-tlw-espresso'}`}
                     >
-                      <span className="truncate">
-                        {cityOf(zone)}
-                        <span className="ml-1.5 text-[11px] text-tlw-warm-gray">{zoneRegionSuffix(zone)}</span>
+                      <span className="min-w-0 truncate">
+                        {opt.label}
+                        {opt.sublabel && (
+                          <span className="ml-1.5 text-[11px] text-tlw-warm-gray">{opt.sublabel}</span>
+                        )}
                       </span>
                       <span className="shrink-0 text-[11px] tabular-nums text-tlw-warm-gray">
-                        {gmtOffsetLabel(zone)}
+                        {gmtOffsetLabel(opt.zone)}
                       </span>
                     </button>
                   )
@@ -165,14 +184,6 @@ export function TimezoneCombobox({
       )}
     </div>
   )
-}
-
-/** A compact region suffix so duplicate city names stay distinguishable. */
-function zoneRegionSuffix(zone: string): string {
-  const parts = zone.split('/')
-  if (parts.length <= 1) return ''
-  // Show the region (and an intermediate segment when present, e.g. Argentina).
-  return parts.length > 2 ? `${parts[0]} · ${parts[1].replace(/_/g, ' ')}` : parts[0]
 }
 
 // Re-exported for callers that want the label elsewhere.
