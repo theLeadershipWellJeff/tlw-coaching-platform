@@ -238,6 +238,10 @@ export type NudgeSettings = {
   // and the max number of re-engagement touches before stopping.
   reengagement_first_after_days: number
   reengagement_max_touches: number
+  // Vault connection (migration 023): the single folder in the vault repo the app
+  // indexes for frameworks, and the frontmatter key that marks a note nudgeable.
+  vault_folder_path: string
+  framework_tag: string
 }
 
 export type Nudge = {
@@ -257,6 +261,22 @@ export type Nudge = {
   scheduled_for: Timestamp | null
   sent_at: Timestamp | null
   communication_id: string | null
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
+export type Framework = {
+  id: string
+  coach_id: string
+  slug: string
+  name: string
+  aliases: string[]
+  trigger_signals: string[]
+  when_to_use: string | null
+  vault_path: string
+  linked_slugs: string[]
+  blob_sha: string | null
+  last_synced_at: Timestamp
   created_at: Timestamp
   updated_at: Timestamp
 }
@@ -469,6 +489,12 @@ export type Database = {
         Row: Nudge
         Insert: Insertable<Nudge>
         Update: Updatable<Nudge>
+        Relationships: []
+      }
+      frameworks: {
+        Row: Framework
+        Insert: Insertable<Framework>
+        Update: Updatable<Framework>
         Relationships: []
       }
     }

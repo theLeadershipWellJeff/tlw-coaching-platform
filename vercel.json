@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/nudges",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/vault-sync",
+      "schedule": "0 * * * *"
     }
   ]
 }

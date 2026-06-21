@@ -4,6 +4,7 @@ import { PageHeader } from '@/app/components/layout/PageHeader'
 import { SupervisorSettings } from './SupervisorSettings'
 import { TimezoneSettings } from './TimezoneSettings'
 import { SchedulingSettings } from './SchedulingSettings'
+import { VaultSettings } from './VaultSettings'
 
 export default async function AccountPage() {
   const session = await getServerSession(authOptions)
@@ -34,6 +35,8 @@ export default async function AccountPage() {
         <TimezoneSettings />
 
         <SchedulingSettings />
+
+        <VaultSettings />
 
         <SupervisorSettings />
 

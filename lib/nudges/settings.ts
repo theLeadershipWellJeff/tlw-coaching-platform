@@ -14,6 +14,11 @@ export const DEFAULT_NUDGE_SETTINGS: NudgeSettings = {
   // booked session; stop after this many touches.
   reengagement_first_after_days: 10,
   reengagement_max_touches: 2,
+  // Vault connection (migration 023) — the one folder the framework indexer reads,
+  // and the frontmatter tag that marks a note nudgeable. Empty path = not yet
+  // configured (the sync no-ops until the coach points it at a folder).
+  vault_folder_path: '',
+  framework_tag: 'framework',
 }
 
 /**
@@ -27,6 +32,7 @@ export function normalizeNudgeSettings(raw: unknown): NudgeSettings {
   const r = (raw ?? {}) as Partial<NudgeSettings>
   const num = (v: unknown, fallback: number) =>
     typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.round(v) : fallback
+  const str = (v: unknown, fallback: string) => (typeof v === 'string' ? v.trim() : fallback)
   return {
     nudge_spacing_days: num(r.nudge_spacing_days, DEFAULT_NUDGE_SETTINGS.nudge_spacing_days),
     reengagement_first_after_days: num(
@@ -37,5 +43,10 @@ export function normalizeNudgeSettings(raw: unknown): NudgeSettings {
       r.reengagement_max_touches,
       DEFAULT_NUDGE_SETTINGS.reengagement_max_touches
     ),
+    // Normalize the folder path: trim, strip leading/trailing slashes (the GitHub
+    // tree paths have no leading slash).
+    vault_folder_path: str(r.vault_folder_path, DEFAULT_NUDGE_SETTINGS.vault_folder_path)
+      .replace(/^\/+|\/+$/g, ''),
+    framework_tag: str(r.framework_tag, DEFAULT_NUDGE_SETTINGS.framework_tag) || 'framework',
   }
 }

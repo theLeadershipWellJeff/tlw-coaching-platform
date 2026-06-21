@@ -16,6 +16,7 @@
     "@tiptap/react": "^2.27.2",
     "@tiptap/starter-kit": "^2.27.2",
     "googleapis": "^144.0.0",
+    "gray-matter": "^4.0.3",
     "next": "14.2.35",
     "next-auth": "^4.24.7",
     "react": "^18",
