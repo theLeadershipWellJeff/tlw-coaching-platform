@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
-import { toErrorResponse } from '@/lib/api-handler'
+import { toErrorResponse, readJson } from '@/lib/api-handler'
 import { requireClientCoach } from '@/lib/client-access'
 
 // A client's nudges for the workspace card — pending (draft/scheduled/snoozed) and
@@ -22,6 +23,46 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
     return NextResponse.json({ nudges: data || [] })
+  } catch (e) {
+    return toErrorResponse(e)
+  }
+}
+
+const CreateSchema = z.object({
+  type: z.enum(['action_checkin', 'insight', 'framework']),
+  draft_subject: z.string().max(300).optional(),
+  draft_body: z.string().max(8000).optional(),
+  trigger_excerpt: z.string().max(2000).optional(),
+})
+
+// Manually create a nudge for a client (origin = 'manual'). The coach picks the
+// type and supplies (or AI-drafts, then edits) the subject/body. Always lands as a
+// draft for review — nothing sends here.
+export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const supabase = getSupabaseAdmin()
+    const coach = await requireClientCoach(supabase, params.id)
+    const body = await readJson(req, CreateSchema)
+
+    const { data, error } = await supabase
+      .from('nudges')
+      .insert({
+        coach_id: coach.id,
+        client_id: params.id,
+        source_session_id: null,
+        type: body.type,
+        origin: 'manual',
+        trigger_excerpt: body.trigger_excerpt?.trim() || null,
+        rationale: null,
+        draft_subject: body.draft_subject?.trim() || null,
+        draft_body: body.draft_body?.trim() || null,
+        status: 'draft',
+      })
+      .select('*')
+      .single()
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    return NextResponse.json({ nudge: data }, { status: 201 })
   } catch (e) {
     return toErrorResponse(e)
   }

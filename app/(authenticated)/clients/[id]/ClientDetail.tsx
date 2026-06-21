@@ -135,7 +135,7 @@ export function ClientDetail({ clientId }: { clientId: string }) {
 
       <ActionsCard clientId={clientId} />
 
-      <NudgesCard clientId={clientId} />
+      <NudgesCard clientId={clientId} clientName={client.name} />
 
       <CommunicationCard clientId={clientId} reloadKey={commReload} />
 
