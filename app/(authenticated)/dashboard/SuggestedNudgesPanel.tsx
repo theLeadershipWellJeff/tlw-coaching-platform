@@ -27,6 +27,7 @@ export function SuggestedNudgesPanel({ timeZone }: { timeZone: string }) {
   const [items, setItems] = useState<Suggestion[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
+  const [skipping, setSkipping] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -41,6 +42,25 @@ export function SuggestedNudgesPanel({ timeZone }: { timeZone: string }) {
       cancelled = true
     }
   }, [])
+
+  // Skip a suggestion in place (PATCH … action:'skip'), optimistic with revert.
+  async function skip(id: string) {
+    const prev = items
+    setSkipping(id)
+    setItems((cur) => cur.filter((s) => s.id !== id))
+    try {
+      const res = await fetch(`/api/nudges/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'skip' }),
+      })
+      if (!res.ok) throw new Error()
+    } catch {
+      setItems(prev) // restore on failure
+    } finally {
+      setSkipping(null)
+    }
+  }
 
   function apptLabel(iso: string | null): string {
     if (!iso) return 'No recent session'
@@ -60,6 +80,11 @@ export function SuggestedNudgesPanel({ timeZone }: { timeZone: string }) {
       <div className="mb-2 flex items-center justify-between">
         <p className="text-[11px] font-medium uppercase tracking-[2px] text-tlw-warm-gray">
           Suggested nudges
+          {!loading && !error && items.length > 0 && (
+            <span className="ml-2 rounded-full bg-tlw-navy-rich/10 px-2 py-[1px] text-[11px] font-semibold text-tlw-navy-rich">
+              {items.length}
+            </span>
+          )}
         </p>
         <Link href="/nudges" className="text-[12px] font-medium text-tlw-signal-orange hover:underline">
           Review all →
@@ -89,23 +114,31 @@ export function SuggestedNudgesPanel({ timeZone }: { timeZone: string }) {
       ) : (
         <div className="max-h-[28rem] space-y-2 overflow-y-auto pr-1">
           {items.map((s) => (
-            <Link
+            <div
               key={s.id}
-              href={`/nudges?focus=${s.id}`}
-              className="group block rounded-tlw-xl border border-tlw-warm-gray/15 bg-tlw-surface p-3.5 transition-all duration-tlw-base hover:-translate-y-0.5 hover:border-tlw-warm-gray/30 hover:shadow-md"
+              className="group flex items-center justify-between gap-3 rounded-tlw-xl border border-tlw-warm-gray/15 bg-tlw-surface p-3.5 transition-all duration-tlw-base hover:-translate-y-0.5 hover:border-tlw-warm-gray/30 hover:shadow-md"
             >
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate text-[14px] font-medium text-tlw-navy-deep">{s.client_name}</p>
-                  <p className="mt-0.5 truncate text-[12px] text-tlw-warm-gray">
-                    {apptLabel(s.last_appointment)}
-                  </p>
-                </div>
-                <span className="shrink-0 rounded-full bg-tlw-navy-rich/10 px-2.5 py-0.5 text-[11px] font-medium text-tlw-navy-rich">
+              <Link href={`/nudges?focus=${s.id}`} className="min-w-0 flex-1">
+                <p className="truncate text-[14px] font-medium text-tlw-navy-deep">{s.client_name}</p>
+                <p className="mt-0.5 truncate text-[12px] text-tlw-warm-gray">
+                  {apptLabel(s.last_appointment)}
+                </p>
+              </Link>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <span className="rounded-full bg-tlw-navy-rich/10 px-2.5 py-0.5 text-[11px] font-medium text-tlw-navy-rich">
                   {TYPE_LABEL[s.type] || s.type}
                 </span>
+                <button
+                  onClick={() => skip(s.id)}
+                  disabled={skipping === s.id}
+                  title="Skip this suggestion"
+                  aria-label="Skip this suggestion"
+                  className="rounded-md px-1.5 py-0.5 text-[14px] leading-none text-tlw-warm-gray transition-colors hover:bg-tlw-warm-gray/15 hover:text-tlw-espresso disabled:opacity-40"
+                >
+                  ✕
+                </button>
               </div>
-            </Link>
+            </div>
           ))}
         </div>
       )}
