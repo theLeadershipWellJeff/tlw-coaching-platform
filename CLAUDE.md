@@ -492,6 +492,49 @@ can confirm it worked. **Phase B consumes this** — `framework` nudges match
 surfaceable leaves and draft from their live content (see the nudging section). Needs
 `024_garden.sql` + the `VAULT_*` env vars; the vault repo must be reachable by the PAT.
 
+### External booking capture → Next Appointment (`appointments` extended; migration 025)
+Jeff sometimes hands an overwhelmed client his **Calendly** or **HubSpot** link to book
+the next session later. Both tools already write the booking to his **Google Calendar**
+(client as a guest) — the same calendar the native "Schedule next session" modal writes
+to. So **Google Calendar is the single source of truth**: we capture external bookings by
+**watching the calendar**, not by wiring two provider webhooks. (No direct Calendly/HubSpot
+integration — deferred; rationale in the handoff. Reschedules/cancellations propagate for
+free as the event moves/disappears.)
+
+**Schema.** Extends `appointments` (not a parallel table): `source`
+(native|calendly|hubspot|external — best-effort/cosmetic, never gates matching),
+`attendee_email` (match key), `title`, `raw_event` (jsonb audit), plus
+`coaches.calendar_sync_token`/`calendar_synced_at` (the incremental cursor). `client_id`
+is now **nullable** — an external booking we captured but couldn't tie to a client sits as
+a `client_id`-null row (the review queue). Idempotency = a unique index on
+`(coach_id, google_event_id)`. Status gains `ignored` (coach-dismissed unmatched booking;
+terminal, never resurfaced).
+
+**Sync (`lib/booking-sync.ts#syncExternalBookings`).** Pulls the calendar **delta**
+(`lib/calendar.ts#listCalendarDelta` — incremental `events.list` with the stored
+`syncToken`; `410 Gone` → full resync + fresh token; `showDeleted: true` so cancellations
+surface), classifies each changed event (`matchEventToClient`: non-coach guest email →
+fuzzy name → title, reusing the transcript matcher), detects the source
+(`detectBookingSource`, cosmetic), and **upserts** into `appointments` keyed by
+`(coach_id, google_event_id)`. Gap-fill semantics: never overwrites a native row's
+`source`/an already-resolved `client_id` with null, and an `ignored` row stays ignored.
+A timed event with a non-coach guest that doesn't resolve to a client → **unmatched row**
+(nothing silently dropped). All-day events and guest-less events are skipped. Cancellations
+update the known row by id (a delete has no time, so it can't be upserted into the
+NOT-NULL `scheduled_at`). The existing per-appointment reconcile
+(`syncAppointmentFromCalendar`) then tracks moves/cancels of these rows like any other.
+
+**Runs two ways:** hourly **`GET /api/cron/calendar-sync`** (`CRON_SECRET` Bearer, every
+coach with a refresh token) and on demand **`POST /api/bookings/sync`** (the dashboard
+panel's "Sync now" button, current coach). "Next Appointment" stays one source-agnostic
+query (`GET /api/clients/[id]/appointments`, future `scheduled` rows) so native, Calendly,
+and HubSpot bookings all surface the same way. **Unmatched review queue:** `GET
+/api/bookings/unmatched` + `PATCH /api/bookings/[id]` (assign to a client → it becomes
+their Next Appointment; or `action:'dismiss'` → `ignored`), surfaced on the dashboard
+**Unmatched bookings** panel (`UnmatchedBookingsPanel`). Uses the already-granted
+`calendar.readonly`/`events` scopes — **no new env, no re-consent.** Needs
+`025_external_booking_capture.sql` applied + `CRON_SECRET` set.
+
 ### Branded email send + communications log (`email_signatures`, `communications`)
 The client workspace **Compose Email** button (`ClientDetail` → `EmailModal`) is a
 raw compose → **review → send** flow: To (prefilled client email), editable Cc
@@ -629,7 +672,11 @@ cosmetic, all time math still uses `clients.timezone`) · 022 nudges (`nudges` t
 + `coaches.nudge_settings` jsonb — the between-session nudging system; additive,
 NULL settings = code defaults) · 023 frameworks (`frameworks` table — the derived
 index over the vault repo; **superseded by 024**) · 024 garden (`garden_notes` +
-`garden_edges` — the node+edge garden index; **drops the empty `frameworks` table**).
+`garden_edges` — the node+edge garden index; **drops the empty `frameworks` table**) ·
+025 external booking capture (extends `appointments` with `source`/`attendee_email`/
+`title`/`raw_event`, makes `client_id` nullable, adds the `(coach_id, google_event_id)`
+unique index, and `coaches.calendar_sync_token`/`calendar_synced_at` — the Calendly/
+HubSpot → Next Appointment calendar-watch pipeline; additive).
 
 **Tenant scoping (015).** `coach_clients` (coach_id, client_id, role) is the
 ownership link. Client access is enforced **server-side** by the session coach,
@@ -654,7 +701,10 @@ nullable), and `022_nudges.sql` (the `nudges` table + `coaches.nudge_settings`
 jsonb — additive; **apply before the Nudge Queue is used**), and `024_garden.sql`
 (the `garden_notes` + `garden_edges` index over the vault repo; **drops the empty
 `frameworks` table from 023** and is what vault sync now uses — apply before vault
-sync is used; if 023 was already applied, 024 cleans it up). ⚠️ **015 must be run BEFORE
+sync is used; if 023 was already applied, 024 cleans it up), and
+`025_external_booking_capture.sql` (extends `appointments` + `coaches` for the
+Calendly/HubSpot calendar-watch capture — additive; **apply before the calendar-sync
+cron / Unmatched bookings panel are used**). ⚠️ **015 must be run BEFORE
 the tenant-scoping code is deployed to `main`** — until the table exists and is
 backfilled, the roster would filter to zero clients. Read the backfill comment in
 015 first (it assumes all current coach logins are the same person). **016 must be
@@ -678,6 +728,14 @@ and back in** to grant calendar-write + populate the refresh token with it;
   (migration 017, forward-compatible with reminders + inbound reply-capture).
   Needs migration 017 applied and the real logo PNG dropped at
   `public/logo-email.png`. Templates/AI compose deferred to Phase 2/3.
+- **External booking capture → Next Appointment (migration 025)** — Calendly/HubSpot
+  bookings (which both write to the coach's Google Calendar) are captured by an hourly
+  calendar-watch cron (`/api/cron/calendar-sync` + on-demand `/api/bookings/sync`),
+  upserted into `appointments` keyed by the Google event id, and surfaced as the
+  client's Next Appointment alongside native bookings — no per-provider webhook. Bookings
+  that can't be matched to a client land in the dashboard **Unmatched bookings** review
+  panel to assign or dismiss. Uses the already-granted calendar scopes; needs `025`
+  applied + `CRON_SECRET`.
 - **Scheduling next sessions + reminders** — workspace Sessions card books the
   next session (Google Calendar event + client guest), confirmation email at
   booking, and a 24h-before nudge via hourly Vercel Cron (`appointments` +

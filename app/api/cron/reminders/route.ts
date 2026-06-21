@@ -61,6 +61,7 @@ export async function GET(req: NextRequest) {
     .from('appointments')
     .select('id, coach_id, client_id, scheduled_at')
     .eq('status', 'scheduled')
+    .not('client_id', 'is', null) // skip unmatched external bookings (no client to remind)
     .gte('scheduled_at', new Date(now).toISOString())
     .lte('scheduled_at', windowEnd)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -68,7 +69,7 @@ export async function GET(req: NextRequest) {
 
   // Batch-load the coaches and clients the sessions need.
   const coachIds = Array.from(new Set(due.map((a) => a.coach_id).filter(Boolean) as string[]))
-  const clientIds = Array.from(new Set(due.map((a) => a.client_id)))
+  const clientIds = Array.from(new Set(due.map((a) => a.client_id).filter((id): id is string => !!id)))
   const [{ data: coaches }, { data: clients }] = await Promise.all([
     supabase.from('coaches').select('*').in('id', coachIds),
     supabase.from('clients').select('id, name, email, timezone').in('id', clientIds),

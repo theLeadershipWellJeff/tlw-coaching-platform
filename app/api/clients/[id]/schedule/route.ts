@@ -60,6 +60,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         duration_minutes: duration,
         google_event_id: eventId,
         status: 'scheduled',
+        source: 'native',
       })
       .select('*')
       .single()

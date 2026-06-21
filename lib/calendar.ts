@@ -391,3 +391,145 @@ export async function listClientMatchedEvents(
     return { eventId, clientId, start, durationMinutes }
   })
 }
+
+// ── External booking capture (Calendly / HubSpot) ──────────────────────────────
+// We don't integrate either provider directly — both already write the booking to
+// the coach's Google Calendar (client as guest), so we capture bookings by watching
+// the calendar incrementally. One events.list with a stored syncToken returns only
+// the delta (new/changed/cancelled) since last run.
+
+export interface CalendarDelta {
+  /** Raw event resources in the delta. Cancelled/deleted events come through with
+   *  status === 'cancelled' (we pass showDeleted: true). */
+  events: any[]
+  /** The cursor to store for next time; null if Google didn't return one. */
+  nextSyncToken: string | null
+  /** true = a stale token was dropped and we did a fresh full read. */
+  fullResync: boolean
+}
+
+/**
+ * Incremental calendar read. With a stored `syncToken` Google returns only what
+ * changed since last sync; without one (or on a 410 Gone — an expired token) we do
+ * a full read from `timeMin` and capture a fresh token. Pages through to the last
+ * page, where Google returns `nextSyncToken`. `singleEvents: true` expands any
+ * recurring series; `showDeleted: true` so cancellations surface.
+ */
+export async function listCalendarDelta(coach: Coach, syncToken: string | null): Promise<CalendarDelta> {
+  if (!coach.google_refresh_token) return { events: [], nextSyncToken: syncToken, fullResync: false }
+
+  const auth = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET)
+  auth.setCredentials({ refresh_token: coach.google_refresh_token })
+  const calendar = google.calendar({ version: 'v3', auth })
+
+  // Full read floor — a couple of days back so a session just moved earlier is still
+  // seen. Only used when there's no token (initial / post-410); a syncToken can't be
+  // combined with timeMin, so the token's window is fixed from this first read.
+  const timeMin = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString()
+
+  async function pull(token: string | null, fullResync: boolean): Promise<CalendarDelta> {
+    const events: any[] = []
+    let pageToken: string | undefined
+    let nextSyncToken: string | null = null
+    do {
+      const res = await calendar.events.list({
+        calendarId: 'primary',
+        singleEvents: true,
+        showDeleted: true,
+        maxResults: 250,
+        ...(token ? { syncToken: token } : { timeMin, orderBy: 'startTime' }),
+        ...(pageToken ? { pageToken } : {}),
+      })
+      events.push(...(res.data.items || []))
+      pageToken = res.data.nextPageToken || undefined
+      nextSyncToken = res.data.nextSyncToken || nextSyncToken
+    } while (pageToken)
+    return { events, nextSyncToken, fullResync }
+  }
+
+  try {
+    return await pull(syncToken, false)
+  } catch (e: any) {
+    const status = Number(e?.code) || Number(e?.response?.status)
+    if (syncToken && status === 410) {
+      // Stale token — Google wants a full resync. Drop it and read fresh.
+      try {
+        return await pull(null, true)
+      } catch (e2) {
+        console.error('Calendar full resync failed:', e2)
+        return { events: [], nextSyncToken: null, fullResync: true }
+      }
+    }
+    console.error('Calendar delta list failed:', e)
+    return { events: [], nextSyncToken: syncToken, fullResync: false }
+  }
+}
+
+export interface EventClientMatch {
+  clientId: string | null
+  via: 'attendee_email' | 'attendee_name' | 'event_title' | 'none'
+  /** The non-coach guest's email (the match key), if the event has one. */
+  guestEmail: string | null
+  guestName: string | null
+}
+
+/**
+ * Tie one calendar event to a roster client the same way the transcript matcher
+ * does: the non-coach guest's email (exact roster match) first, then a fuzzy name
+ * match on the guest's display name, then the event title. Returns the guest email/
+ * name even when unmatched, so callers can route a genuine booking we couldn't
+ * resolve into the review queue (instead of silently dropping it).
+ */
+export function matchEventToClient(
+  coach: Coach,
+  event: any,
+  clients: RosterClientWithEmail[]
+): EventClientMatch {
+  const mine = coachEmails(coach)
+  const guest = (event.attendees || []).find(
+    (a: any) => a.email && !mine.includes(a.email.toLowerCase()) && a.responseStatus !== 'declined' && !a.resource
+  )
+  const guestEmail: string | null = guest?.email || null
+  const guestName: string | null = guest?.displayName || null
+
+  if (guestEmail) {
+    const email = guestEmail.toLowerCase()
+    const byEmail = clients.find((c) => c.email && c.email.toLowerCase() === email)
+    if (byEmail) return { clientId: byEmail.id, via: 'attendee_email', guestEmail, guestName }
+  }
+
+  const roster: RosterClient[] = clients.map((c) => ({ id: c.id, name: c.name }))
+  for (const [name, via] of [
+    [guestName, 'attendee_name' as const],
+    [event.summary as string | undefined, 'event_title' as const],
+  ] as const) {
+    if (!name) continue
+    const m = matchClient(name, roster)
+    if (m.status === 'matched' && m.clientId) return { clientId: m.clientId, via, guestEmail, guestName }
+  }
+
+  return { clientId: null, via: 'none', guestEmail, guestName }
+}
+
+/**
+ * Best-effort, cosmetic guess at where a booking came from, by sniffing the event's
+ * text for the provider's fingerprint. Never gates matching — defaults to
+ * 'external' when undetermined. (Native bookings are identified by an existing
+ * source='native' row, not by this.)
+ */
+export function detectBookingSource(event: any): 'calendly' | 'hubspot' | 'external' {
+  const hay = [
+    event.description,
+    event.location,
+    event.source?.url,
+    event.creator?.email,
+    event.organizer?.email,
+    ...(event.conferenceData?.entryPoints || []).map((p: any) => p?.uri),
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+  if (hay.includes('calendly')) return 'calendly'
+  if (hay.includes('hubspot') || hay.includes('meetings.hubspot')) return 'hubspot'
+  return 'external'
+}

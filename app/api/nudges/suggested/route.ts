@@ -41,7 +41,7 @@ export async function GET() {
       for (const c of clients || []) nameMap.set(c.id, c.name)
       // Rows are newest-first → the first seen per client is their last appointment.
       for (const a of appts || []) {
-        if (!lastApptMap.has(a.client_id)) lastApptMap.set(a.client_id, a.scheduled_at)
+        if (a.client_id && !lastApptMap.has(a.client_id)) lastApptMap.set(a.client_id, a.scheduled_at)
       }
     }
 
