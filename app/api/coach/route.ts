@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { getSessionCoach } from '@/lib/coach'
 import { isValidTimeZone } from '@/lib/datetime'
 import { normalizeAvailability, normalizeReminderSettings } from '@/lib/scheduling'
+import { normalizeNudgeSettings } from '@/lib/nudges/settings'
 
 export const runtime = 'nodejs'
 
@@ -31,6 +32,7 @@ export async function GET() {
       // Always hand the UI a complete, valid shape (defaults when unset).
       availability: normalizeAvailability(coach.availability),
       reminder_settings: normalizeReminderSettings(coach.reminder_settings),
+      nudge_settings: normalizeNudgeSettings(coach.nudge_settings),
     },
   })
 }
@@ -62,6 +64,7 @@ export async function PATCH(req: NextRequest) {
     library_labels?: Record<string, string>
     availability?: ReturnType<typeof normalizeAvailability>
     reminder_settings?: ReturnType<typeof normalizeReminderSettings>
+    nudge_settings?: ReturnType<typeof normalizeNudgeSettings>
   } = {}
 
   if ('supervisorEmail' in body) {
@@ -106,6 +109,15 @@ export async function PATCH(req: NextRequest) {
   }
   if ('reminderSettings' in body) {
     update.reminder_settings = normalizeReminderSettings(body.reminderSettings)
+  }
+
+  // Vault settings (the editable part of nudge_settings) — merge onto the current
+  // shape so we never drop the spacing/re-engagement fields.
+  if ('vaultFolderPath' in body || 'frameworkTag' in body) {
+    const next = normalizeNudgeSettings(coach.nudge_settings)
+    if ('vaultFolderPath' in body) next.vault_folder_path = String(body.vaultFolderPath ?? '')
+    if ('frameworkTag' in body) next.framework_tag = String(body.frameworkTag ?? '')
+    update.nudge_settings = normalizeNudgeSettings(next)
   }
 
   if (Object.keys(update).length === 0) {

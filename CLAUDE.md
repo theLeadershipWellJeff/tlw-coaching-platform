@@ -426,6 +426,39 @@ Bearer) sends every coach-approved nudge whose `scheduled_for` has passed (`stat
 ='scheduled'`), via `sendNudge` — so a spacing-blocked nudge stays scheduled and
 retries; only the coach ever moves a nudge to `scheduled`.
 
+### Vault connection → framework index (`frameworks`; migration 023) — Phase A-parallel
+The coach's mind garden (the **`TheLeadershipWell-Vault`** GitHub repo) is the
+canonical source for frameworks. The deployed app **only reads** it (a single
+app-level fine-grained PAT, `contents: read`) and builds a **derived index** — the
+`frameworks` table holds **pointers + the 1-hop wikilink graph only, never note
+content**. Authoring is collaborative (Claude Code + Obsidian write to the repo);
+Obsidian Git pushes the coach's edits up. Spec: handoff §5–§6.
+
+**Read (`lib/vault/`):** `client.ts` is read-only GitHub REST via `fetch` (no octokit)
+— `getTree` (one recursive call → paths + per-file SHAs + root tree SHA), `getBlob`,
+and `getContentByPath` (the **live** read used at Phase-B draft time). `parse.ts`
+(gray-matter) reads frontmatter (`slug/name/aliases/trigger_signals/when_to_use` + the
+nudge tag) and extracts `[[wikilinks]]` (plain / `|alias` / `#heading` forms).
+`sync.ts#syncFrameworks` orchestrates: tree → **.md files under `vault_folder_path`**
+(scope #1) → skip unchanged files by `blob_sha`, else fetch+parse and keep only notes
+with the **`framework: true`** tag (scope #2) → resolve link titles to `linked_slugs`
+among the tagged set (unknown titles kept raw) → upsert on `(coach_id, slug)` and
+**prune** rows whose note is gone/untagged. Content is never stored.
+
+**Config** lives in `coaches.nudge_settings` (`vault_folder_path`, `framework_tag`,
+defaults in `lib/nudges/settings.ts`); the repo identity + token are env
+(`VAULT_GITHUB_TOKEN`, `VAULT_REPO`, `VAULT_BRANCH`). Read/written via `GET`/`PATCH
+/api/coach` (`vaultFolderPath`/`frameworkTag`).
+
+**Sync** runs two ways: manual **`POST /api/vault/sync`** (the Account → **Vault**
+panel's "Sync vault" button, returns indexed/ignored/removed counts) and the hourly
+**`GET /api/cron/vault-sync`** (`CRON_SECRET` Bearer; re-indexes every coach with a
+folder set — near-free when nothing changed thanks to the blob-SHA skip). The panel
+also lists the indexed frameworks (`GET /api/vault/frameworks`) so the coach can
+confirm tagging worked. **No nudge behavior consumes this yet** — Phase B wires
+`frameworks.aliases` into nudge extraction. Needs `023_frameworks.sql` + the
+`VAULT_*` env vars; the vault repo must be reachable by the PAT.
+
 ### Branded email send + communications log (`email_signatures`, `communications`)
 The client workspace **Compose Email** button (`ClientDetail` → `EmailModal`) is a
 raw compose → **review → send** flow: To (prefilled client email), editable Cc
@@ -508,10 +541,13 @@ Google OAuth (`GOOGLE_CLIENT_ID/SECRET`), `NEXTAUTH_URL/SECRET`,
 `ANTHROPIC_API_KEY`, Coach Accountable (`COACH_ACCOUNTABLE_API_ID/_API_KEY`),
 Supabase (`NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_API_SECRET_KEY`),
 `JEFF_FROM_EMAIL`/`JEFF_CC_EMAIL`, Zoom (`ZOOM_ACCOUNT_ID/CLIENT_ID/CLIENT_SECRET`),
-`INGEST_SECRET`, `CRON_SECRET` (Bearer token for the hourly reminder cron —
-`/api/cron/reminders`; set the same value in Vercel), `DEFAULT_COACH_EMAIL`
-(= `jeff@jeffkholmes.com`),
-`DEFAULT_COACH_NAME`. Optional: `SCORING_MODEL`, `GOALS_MODEL`, `NUDGE_MODEL`,
+`INGEST_SECRET`, `CRON_SECRET` (Bearer token for the hourly crons —
+`/api/cron/reminders`, `/api/cron/nudges`, `/api/cron/vault-sync`; set the same
+value in Vercel), `DEFAULT_COACH_EMAIL` (= `jeff@jeffkholmes.com`),
+`DEFAULT_COACH_NAME`. Vault (framework nudges): `VAULT_GITHUB_TOKEN` (read-only
+fine-grained PAT on the vault repo), optional `VAULT_REPO` (default
+`theLeadershipWellJeff/TheLeadershipWell-Vault`), `VAULT_BRANCH` (default `main`).
+Optional: `SCORING_MODEL`, `GOALS_MODEL`, `NUDGE_MODEL`,
 `AUTO_SCORE`, `DEFAULT_TIMEZONE`, `PLAUD_DRIVE_FOLDER` (default `Plaud-Transcripts`).
 See `.env.example`.
 
@@ -558,7 +594,8 @@ jsonb — per-coach weekly bookable hours and configurable reminders; NULL = def
 the coach picked, e.g. "Austin", shown back instead of the zone's canonical city;
 cosmetic, all time math still uses `clients.timezone`) · 022 nudges (`nudges` table
 + `coaches.nudge_settings` jsonb — the between-session nudging system; additive,
-NULL settings = code defaults).
+NULL settings = code defaults) · 023 frameworks (`frameworks` table — the derived
+index over the vault repo; additive).
 
 **Tenant scoping (015).** `coach_clients` (coach_id, client_id, role) is the
 ownership link. Client access is enforced **server-side** by the session coach,
@@ -580,7 +617,9 @@ the projection uses the scheduled calendar-event length.
 columns the scheduler/settings read — safe additive change, defaults until set),
 and `021_client_timezone_label.sql` (adds `clients.timezone_label` — additive,
 nullable), and `022_nudges.sql` (the `nudges` table + `coaches.nudge_settings`
-jsonb — additive; **apply before the Nudge Queue is used**). ⚠️ **015 must be run BEFORE
+jsonb — additive; **apply before the Nudge Queue is used**), and `023_frameworks.sql`
+(the `frameworks` index over the vault repo — additive; **apply before vault sync
+is used**). ⚠️ **015 must be run BEFORE
 the tenant-scoping code is deployed to `main`** — until the table exists and is
 backfilled, the roster would filter to zero clients. Read the backfill comment in
 015 first (it assumes all current coach logins are the same person). **016 must be
