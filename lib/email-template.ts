@@ -53,16 +53,15 @@ export function buildClientEmailHTML(
 
   <div style="height:1px;margin:20px 44px;background:linear-gradient(to right,transparent,rgba(139,134,128,.4),transparent);"></div>
 
-  <!-- COACHING PLAN -->
+  <!-- EXPLORING -->
   <div style="padding:20px 44px;">
-    <div style="font-size:9px;letter-spacing:4px;text-transform:uppercase;color:#8B8680;font-weight:700;margin-bottom:6px;">Your Coaching Plan</div>
-    <div style="font-size:12px;color:#8B8680;margin-bottom:16px;">The areas we&rsquo;re working on together this season</div>
+    <div style="font-size:9px;letter-spacing:4px;text-transform:uppercase;color:#8B8680;font-weight:700;margin-bottom:16px;">What We Have Been Exploring</div>
     <table width="100%" cellpadding="0" cellspacing="0">
-      ${c.coachingPlan.map(item => `
-      <tr><td style="padding:13px 0;border-bottom:1px solid #e5e0d8;vertical-align:top;">
+      ${c.exploring.map((item, i) => `
+      <tr><td style="padding:14px 0;border-bottom:1px solid #e5e0d8;vertical-align:top;">
         <table width="100%"><tr>
-          <td width="40" style="vertical-align:top;padding-right:14px;padding-top:2px;">
-            <div style="width:32px;height:32px;border-radius:50%;background:#0C1940;text-align:center;line-height:32px;font-size:15px;">${esc(item.emoji)}</div>
+          <td width="34" style="padding-right:14px;vertical-align:top;">
+            <div style="width:26px;height:26px;border-radius:50%;background:#0C1940;text-align:center;line-height:26px;font-family:Georgia,serif;font-size:13px;color:#F2F2F0;">${i + 1}</div>
           </td>
           <td>
             <div style="font-weight:600;font-size:14px;color:#111226;margin-bottom:3px;">${esc(item.title)}</div>
@@ -74,15 +73,16 @@ export function buildClientEmailHTML(
   </div>
   <div style="height:1px;margin:0 44px;background:#e5e0d8;"></div>
 
-  <!-- EXPLORING -->
+  <!-- COACHING PLAN -->
   <div style="padding:20px 44px;">
-    <div style="font-size:9px;letter-spacing:4px;text-transform:uppercase;color:#8B8680;font-weight:700;margin-bottom:16px;">What We Have Been Exploring</div>
+    <div style="font-size:9px;letter-spacing:4px;text-transform:uppercase;color:#8B8680;font-weight:700;margin-bottom:6px;">Your Coaching Plan</div>
+    <div style="font-size:12px;color:#8B8680;margin-bottom:16px;">The areas we&rsquo;re working on together this season</div>
     <table width="100%" cellpadding="0" cellspacing="0">
-      ${c.exploring.map((item, i) => `
-      <tr><td style="padding:14px 0;border-bottom:1px solid #e5e0d8;vertical-align:top;">
+      ${c.coachingPlan.map(item => `
+      <tr><td style="padding:13px 0;border-bottom:1px solid #e5e0d8;vertical-align:top;">
         <table width="100%"><tr>
-          <td width="34" style="padding-right:14px;vertical-align:top;">
-            <div style="width:26px;height:26px;border-radius:50%;background:#0C1940;text-align:center;line-height:26px;font-family:Georgia,serif;font-size:13px;color:#F2F2F0;">${i + 1}</div>
+          <td width="40" style="vertical-align:top;padding-right:14px;padding-top:2px;">
+            <div style="width:32px;height:32px;border-radius:50%;background:#0C1940;text-align:center;line-height:32px;font-size:15px;">${esc(item.emoji)}</div>
           </td>
           <td>
             <div style="font-weight:600;font-size:14px;color:#111226;margin-bottom:3px;">${esc(item.title)}</div>
