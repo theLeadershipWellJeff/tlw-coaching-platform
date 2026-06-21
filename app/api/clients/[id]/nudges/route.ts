@@ -33,6 +33,7 @@ const CreateSchema = z.object({
   draft_subject: z.string().max(300).optional(),
   draft_body: z.string().max(8000).optional(),
   trigger_excerpt: z.string().max(2000).optional(),
+  framework_slug: z.string().max(200).optional(),
 })
 
 // Manually create a nudge for a client (origin = 'manual'). The coach picks the
@@ -54,6 +55,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         origin: 'manual',
         trigger_excerpt: body.trigger_excerpt?.trim() || null,
         rationale: null,
+        framework_slug: body.type === 'framework' ? body.framework_slug?.trim() || null : null,
         draft_subject: body.draft_subject?.trim() || null,
         draft_body: body.draft_body?.trim() || null,
         status: 'draft',

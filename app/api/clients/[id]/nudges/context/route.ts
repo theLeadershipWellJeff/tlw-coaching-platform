@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { toErrorResponse } from '@/lib/api-handler'
 import { requireClientCoach } from '@/lib/client-access'
 import { extractCaptures } from '@/lib/notes/extract'
+import { loadSurfaceableLeaves } from '@/lib/nudges/garden'
 
 // Strip note HTML to plain text (block tags → newlines), matching the capture
 // pipeline so INSIGHT: lines read the same as in the editor.
@@ -17,14 +18,15 @@ function htmlToText(html: string): string {
 }
 
 // Picker options for the manual "Create Nudge" modal: the client's still-open
-// actions (to anchor an action check-in) and recent captured insights (to
-// re-surface). Coach-scoped; key-info is never touched.
+// actions (to anchor an action check-in), recent captured insights (to
+// re-surface), and the coach's surfaceable garden frameworks (to re-surface).
+// Coach-scoped; key-info is never touched.
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const supabase = getSupabaseAdmin()
-    await requireClientCoach(supabase, params.id)
+    const coach = await requireClientCoach(supabase, params.id)
 
-    const [{ data: actions }, { data: notes }] = await Promise.all([
+    const [{ data: actions }, { data: notes }, leaves] = await Promise.all([
       supabase
         .from('actions')
         .select('description')
@@ -39,6 +41,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
         .order('session_date', { ascending: false })
         .order('created_at', { ascending: false })
         .limit(5),
+      loadSurfaceableLeaves(supabase, coach.id),
     ])
 
     const openActions = Array.from(
@@ -52,7 +55,9 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       )
     ).slice(0, 12)
 
-    return NextResponse.json({ openActions, recentInsights })
+    const frameworks = leaves.map((l) => ({ id: l.id, title: l.title, summary: l.summary }))
+
+    return NextResponse.json({ openActions, recentInsights, frameworks })
   } catch (e) {
     return toErrorResponse(e)
   }

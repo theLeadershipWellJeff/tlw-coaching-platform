@@ -49,10 +49,12 @@ export async function applyDedupAndCap(
     (c) => !liveTypes.has(c.type) && !sentTypesForSession.has(c.type)
   )
 
-  // Cap: keep at most one of each type, prioritizing an action check-in (the most
-  // actionable touch) then an insight, up to the per-window maximum.
+  // Cap: keep at most one of each type, in priority order — an action check-in
+  // (most actionable), then a framework re-surfacing, then an insight — up to the
+  // per-window maximum (so a relevant framework bumps the insight nudge).
   const ordered = [
     ...survivors.filter((c) => c.type === 'action_checkin').slice(0, 1),
+    ...survivors.filter((c) => c.type === 'framework').slice(0, 1),
     ...survivors.filter((c) => c.type === 'insight').slice(0, 1),
   ]
   return ordered.slice(0, MAX_NUDGES_PER_WINDOW)

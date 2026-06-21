@@ -389,20 +389,33 @@ A nudge is a short, warm, client-facing message the system **drafts** after a
 session and the coach **reviews before it sends** (nothing auto-sends in Phase A).
 Built as an extension of existing rails — Gmail send, the `communications` log
 (`type='reminder'`), the server-appended signature, and the scoring pipeline as
-the trigger. Spec: `TLW_Nudging_System_Build_Handoff_v1`. **Phase A only covers
-`action_checkin` + `insight`** types; `framework`/`reengagement` (and the vault
-index) are reserved for later phases.
+the trigger. Spec: `TLW_Nudging_System_Build_Handoff_v1`. **Phases A + B cover
+`action_checkin`, `insight`, and `framework`** types; `reengagement` is reserved for
+a later phase.
 
 **Pipeline** (`lib/nudges/`): `generate.ts#generateNudgesForClient` is the
 orchestrator — loads context (coaching goals, recent notes, **still-open** actions,
-the source transcript; **never `clients.key_info`** — the key-info wall is enforced
-by the column list, §3.1), then `extract.ts` (Claude → candidate list) →
-`dedup.ts#applyDedupAndCap` (dedup vs. live/sent nudges; **cap = 1 action + 1
-insight per window**, `settings.ts#MAX_NUDGES_PER_WINDOW`) → `draft.ts` (Claude →
-subject+body in the coach voice) → insert as `status='draft'`. Both Claude calls go
-through `llm.ts` (model = `NUDGE_MODEL` or `claude-sonnet-4-6`, retired-id guard
-like the engine). Bounded timing only: `scheduled_for` defaults to the **midpoint**
-between now and the next booked appointment, else null (coach sets it).
+the source transcript, **plus the coach's surfaceable garden leaves**; **never
+`clients.key_info`** — the key-info wall is enforced by the column list, §3.1), then
+`extract.ts` (Claude → candidate list) → `dedup.ts#applyDedupAndCap` (dedup vs.
+live/sent nudges; **cap = 2 per window**, priority **action > framework > insight**,
+`settings.ts#MAX_NUDGES_PER_WINDOW`) → `draft.ts` (Claude → subject+body in the coach
+voice) → insert as `status='draft'`. Both Claude calls go through `llm.ts` (model =
+`NUDGE_MODEL` or `claude-sonnet-4-6`, retired-id guard like the engine). Bounded
+timing only: `scheduled_for` defaults to the **midpoint** between now and the next
+booked appointment, else null (coach sets it).
+
+**Framework nudges (Phase B, `garden.ts`).** A framework candidate is proposed when
+the session **named** a surfaceable leaf or its **themes match** (the model returns
+`framework_basis` named/theme → origin `mentioned`/`suggested`); only
+`nudge_eligible` leaves are ever offered, and a candidate must reference a real leaf
+id (`framework_slug`). At draft time `loadFrameworkContext` pulls the leaf's **live**
+content from GitHub (`vault/client#getContentByPath`) + summary + its **surfaceable**
+1-hop neighbours (the gate is re-applied to neighbours so a non-eligible note can't
+leak); `draft.ts` re-voices it into a short reminder (never a note dump). On demand:
+the manual `CreateNudgeModal` framework tile lists surfaceable leaves
+(`/nudges/context` → `frameworks`), AI-drafts via `/nudges/draft-one`
+(`{type:'framework', framework_slug}`), and persists `nudges.framework_slug`.
 
 **Triggered** after scoring — `store.ts#runAndStoreReport` calls it best-effort
 (never breaks scoring; skipped on a rescore), and on demand via `POST
@@ -467,9 +480,9 @@ panel's "Sync vault" button + the Nudges page button; returns `indexed`/`surface
 surfaceable, 8 edges)") and the hourly **`GET /api/cron/vault-sync`** (`CRON_SECRET`
 Bearer; re-indexes every coach with a folder set). The Account panel lists the indexed
 leaves with type/themes/eligibility + out-edges (`GET /api/vault/garden`) so the coach
-can confirm it worked. **No nudge behavior consumes this yet** — Phase B wires the
-garden into nudge extraction. Needs `024_garden.sql` + the `VAULT_*` env vars; the
-vault repo must be reachable by the PAT.
+can confirm it worked. **Phase B consumes this** — `framework` nudges match
+surfaceable leaves and draft from their live content (see the nudging section). Needs
+`024_garden.sql` + the `VAULT_*` env vars; the vault repo must be reachable by the PAT.
 
 ### Branded email send + communications log (`email_signatures`, `communications`)
 The client workspace **Compose Email** button (`ClientDetail` → `EmailModal`) is a
