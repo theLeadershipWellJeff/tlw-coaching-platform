@@ -384,6 +384,48 @@ submit (stores `items` = `[{q,a}]`, status → submitted). The workspace
 `AgendaCard` (`/api/clients/[id]/agenda`, latest request) shows the client's
 answers (or "awaiting their response").
 
+### Between-session nudges (`nudges`; migration 022) — Phase A
+A nudge is a short, warm, client-facing message the system **drafts** after a
+session and the coach **reviews before it sends** (nothing auto-sends in Phase A).
+Built as an extension of existing rails — Gmail send, the `communications` log
+(`type='reminder'`), the server-appended signature, and the scoring pipeline as
+the trigger. Spec: `TLW_Nudging_System_Build_Handoff_v1`. **Phase A only covers
+`action_checkin` + `insight`** types; `framework`/`reengagement` (and the vault
+index) are reserved for later phases.
+
+**Pipeline** (`lib/nudges/`): `generate.ts#generateNudgesForClient` is the
+orchestrator — loads context (coaching goals, recent notes, **still-open** actions,
+the source transcript; **never `clients.key_info`** — the key-info wall is enforced
+by the column list, §3.1), then `extract.ts` (Claude → candidate list) →
+`dedup.ts#applyDedupAndCap` (dedup vs. live/sent nudges; **cap = 1 action + 1
+insight per window**, `settings.ts#MAX_NUDGES_PER_WINDOW`) → `draft.ts` (Claude →
+subject+body in the coach voice) → insert as `status='draft'`. Both Claude calls go
+through `llm.ts` (model = `NUDGE_MODEL` or `claude-sonnet-4-6`, retired-id guard
+like the engine). Bounded timing only: `scheduled_for` defaults to the **midpoint**
+between now and the next booked appointment, else null (coach sets it).
+
+**Triggered** after scoring — `store.ts#runAndStoreReport` calls it best-effort
+(never breaks scoring; skipped on a rescore), and on demand via `POST
+/api/clients/[id]/nudges/generate` (the workspace card's "Draft nudges" button).
+
+**Review + send.** Two surfaces: the cross-client **Nudge Queue** screen
+(`/nudges`, `GET /api/nudges` coach-scoped, grouped Needs review / Scheduled) and
+the per-client workspace **`NudgesCard`** (`GET /api/clients/[id]/nudges`). Both use
+the shared `NudgeItem` (edit subject/body/time; **Send now / Schedule / Snooze /
+Skip**). `PATCH /api/nudges/[nudgeId]` applies edits + the action (coach-scoped to
+the nudge's `coach_id`). `send.ts#sendNudge` is the one send path: enforces the
+**spacing rule** (§3.4 — refuses if the client got any outbound communication
+within `nudge_settings.nudge_spacing_days`, default 4), appends the signature
+server-side, sends via the coach's Gmail (`sendCoachHtmlEmail`, unattended-capable),
+logs to `communications`, and sets the nudge `sent` + `communication_id` (shows up
+in the Recent Communication card). Settings defaults are in `settings.ts`
+(dependency-free, mirrors `lib/scheduling.ts`); `coaches.nudge_settings` NULL = defaults.
+
+**Dispatch cron.** `GET /api/cron/nudges` (hourly in `vercel.json`, `CRON_SECRET`
+Bearer) sends every coach-approved nudge whose `scheduled_for` has passed (`status
+='scheduled'`), via `sendNudge` — so a spacing-blocked nudge stays scheduled and
+retries; only the coach ever moves a nudge to `scheduled`.
+
 ### Branded email send + communications log (`email_signatures`, `communications`)
 The client workspace **Compose Email** button (`ClientDetail` → `EmailModal`) is a
 raw compose → **review → send** flow: To (prefilled client email), editable Cc
@@ -469,9 +511,9 @@ Supabase (`NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_API_SECRET_KEY`),
 `INGEST_SECRET`, `CRON_SECRET` (Bearer token for the hourly reminder cron —
 `/api/cron/reminders`; set the same value in Vercel), `DEFAULT_COACH_EMAIL`
 (= `jeff@jeffkholmes.com`),
-`DEFAULT_COACH_NAME`. Optional: `SCORING_MODEL`, `GOALS_MODEL`, `AUTO_SCORE`,
-`DEFAULT_TIMEZONE`, `PLAUD_DRIVE_FOLDER` (default `Plaud-Transcripts`). See
-`.env.example`.
+`DEFAULT_COACH_NAME`. Optional: `SCORING_MODEL`, `GOALS_MODEL`, `NUDGE_MODEL`,
+`AUTO_SCORE`, `DEFAULT_TIMEZONE`, `PLAUD_DRIVE_FOLDER` (default `Plaud-Transcripts`).
+See `.env.example`.
 
 ## Operational notes
 
@@ -514,7 +556,9 @@ nodes) · 020 scheduling settings (`coaches.availability` + `coaches.reminder_se
 jsonb — per-coach weekly bookable hours and configurable reminders; NULL = defaults) ·
 021 client timezone label (`clients.timezone_label` — the friendly major-city name
 the coach picked, e.g. "Austin", shown back instead of the zone's canonical city;
-cosmetic, all time math still uses `clients.timezone`).
+cosmetic, all time math still uses `clients.timezone`) · 022 nudges (`nudges` table
++ `coaches.nudge_settings` jsonb — the between-session nudging system; additive,
+NULL settings = code defaults).
 
 **Tenant scoping (015).** `coach_clients` (coach_id, client_id, role) is the
 ownership link. Client access is enforced **server-side** by the session coach,
@@ -535,7 +579,8 @@ the projection uses the scheduled calendar-event length.
 `019_library_labels.sql`, `020_scheduling_settings.sql` (adds the two jsonb
 columns the scheduler/settings read — safe additive change, defaults until set),
 and `021_client_timezone_label.sql` (adds `clients.timezone_label` — additive,
-nullable). ⚠️ **015 must be run BEFORE
+nullable), and `022_nudges.sql` (the `nudges` table + `coaches.nudge_settings`
+jsonb — additive; **apply before the Nudge Queue is used**). ⚠️ **015 must be run BEFORE
 the tenant-scoping code is deployed to `main`** — until the table exists and is
 backfilled, the roster would filter to zero clients. Read the backfill comment in
 015 first (it assumes all current coach logins are the same person). **016 must be

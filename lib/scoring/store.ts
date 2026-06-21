@@ -12,6 +12,7 @@ import { parseTranscript } from '@/lib/transcripts/parse'
 import { sendScorecardEmail } from '@/lib/scorecard-email'
 import { todayInTimeZone } from '@/lib/datetime'
 import { DEFAULT_TIMEZONE } from '@/lib/coach'
+import { generateNudgesForClient } from '@/lib/nudges/generate'
 
 export async function runAndStoreReport(
   supabase: SupabaseClient<Database>,
@@ -82,6 +83,22 @@ export async function runAndStoreReport(
     .select('*')
     .single()
   if (error) throw new Error(`Supabase (session_reports upsert): ${error.message}`)
+
+  // Draft between-session nudges from this session (Phase A). Best-effort and
+  // never auto-sent — drafts land in the coach's Nudge Queue for review. A failure
+  // here must never fail scoring. Skipped on a rescore (opts.sendEmail === false)
+  // so re-running the engine doesn't re-propose nudges. Needs a matched client.
+  if (sendEmail && transcript.client_id && transcript.coach_id) {
+    try {
+      await generateNudgesForClient(supabase, {
+        clientId: transcript.client_id,
+        coachId: transcript.coach_id,
+        sourceSessionId: transcript.id,
+      })
+    } catch (e: any) {
+      console.error('Nudge generation failed:', e?.message || e)
+    }
+  }
 
   // Email the coach their scorecard (roadmap: emailed scorecard). Best-effort —
   // a send failure must never fail scoring. Disable with EMAIL_SCORECARD=false,

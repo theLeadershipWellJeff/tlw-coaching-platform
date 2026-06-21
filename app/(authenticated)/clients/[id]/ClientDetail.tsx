@@ -8,6 +8,7 @@ import { ScheduleCard } from './ScheduleCard'
 import { TranscriptsCard, NotesCard } from './SummaryCards'
 import { GoalsCard } from './GoalsCard'
 import { ActionsCard } from './ActionsCard'
+import { NudgesCard } from './NudgesCard'
 import { AgreementsCard } from './AgreementsCard'
 import { IssueAgreementModal } from './IssueAgreementModal'
 import { AgendaCard } from './AgendaCard'
@@ -133,6 +134,8 @@ export function ClientDetail({ clientId }: { clientId: string }) {
       <GoalsCard client={client} onUpdated={setClient} />
 
       <ActionsCard clientId={clientId} />
+
+      <NudgesCard clientId={clientId} />
 
       <CommunicationCard clientId={clientId} reloadKey={commReload} />
 

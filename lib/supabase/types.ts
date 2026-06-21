@@ -204,6 +204,9 @@ export type Coach = {
     confirmation: boolean
     reminders: { hoursBefore: number; enabled: boolean }[]
   } | null
+  // Nudging settings (migration 022). null = use the built-in defaults. Canonical
+  // shape + defaults live in lib/nudges/settings.ts.
+  nudge_settings: NudgeSettings | null
   created_at: Timestamp
   updated_at: Timestamp
 }
@@ -223,6 +226,37 @@ export type Appointment = {
   duration_minutes: number
   google_event_id: string | null
   status: string // scheduled | cancelled | completed
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
+export type NudgeSettings = {
+  // Don't send a nudge if the client got any nudge/communication within this many
+  // days (the spacing rule).
+  nudge_spacing_days: number
+  // Re-engagement (Phase A.5): first touch after N days with no booked session,
+  // and the max number of re-engagement touches before stopping.
+  reengagement_first_after_days: number
+  reengagement_max_touches: number
+}
+
+export type Nudge = {
+  id: string
+  coach_id: string
+  client_id: string
+  source_session_id: string | null
+  type: string // action_checkin | insight | framework | reengagement
+  origin: string // mentioned | suggested | auto | manual
+  trigger_excerpt: string | null
+  rationale: string | null
+  framework_slug: string | null
+  linked_resource_slug: string | null
+  draft_subject: string | null
+  draft_body: string | null
+  status: string // draft | approved | scheduled | sent | skipped | snoozed
+  scheduled_for: Timestamp | null
+  sent_at: Timestamp | null
+  communication_id: string | null
   created_at: Timestamp
   updated_at: Timestamp
 }
@@ -429,6 +463,12 @@ export type Database = {
         Row: AppointmentReminder
         Insert: Insertable<AppointmentReminder>
         Update: Updatable<AppointmentReminder>
+        Relationships: []
+      }
+      nudges: {
+        Row: Nudge
+        Insert: Insertable<Nudge>
+        Update: Updatable<Nudge>
         Relationships: []
       }
     }
