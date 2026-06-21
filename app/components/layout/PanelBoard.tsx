@@ -19,21 +19,24 @@ interface PanelBoardProps {
   defaultLayout: string[][]
 }
 
-type Layout = string[][]
+// The persisted board: the visible layout plus the ids the coach has removed
+// (hidden). Removed ids stay hidden across reloads and code changes.
+type Board = { layout: string[][]; removed: string[] }
 type DropTarget = { col: number; beforeId: string | null }
 
 /**
- * A drag-to-arrange board. Panels live in one or two columns; the coach can
- * reorder them and move them between columns in "arrange" mode, and the layout
- * persists per page in localStorage (same pattern as the sidebar-collapsed
- * state). Unknown saved ids are dropped and newly-introduced panels are added
- * back in at their default position, so the saved layout survives code changes.
+ * A drag-to-arrange board. Panels live in one or two columns; in "arrange" mode the
+ * coach can reorder them, move them between columns, and add/remove them (a removed
+ * panel drops into a "Hidden" tray it can be re-added from). The arrangement
+ * persists per page in localStorage. Unknown saved ids are dropped and
+ * newly-introduced panels appear in their default position, so a saved layout
+ * survives code changes; an intentionally-removed panel stays hidden.
  */
 export function PanelBoard({ storageKey, panels, columns = 1, defaultLayout }: PanelBoardProps) {
   const defaultRef = useRef(defaultLayout)
   const idsKey = panels.map((p) => p.id).join('|')
 
-  const [layout, setLayout] = useState<Layout>(() => reconcile(null, panels, defaultRef.current, columns))
+  const [board, setBoard] = useState<Board>(() => reconcile(null, panels, defaultRef.current, columns))
   const [hydrated, setHydrated] = useState(false)
   const [arranging, setArranging] = useState(false)
   const [dragId, setDragId] = useState<string | null>(null)
@@ -41,23 +44,23 @@ export function PanelBoard({ storageKey, panels, columns = 1, defaultLayout }: P
 
   // Read the saved arrangement once, on the client, to avoid hydration drift.
   useEffect(() => {
-    let saved: Layout | null = null
+    let saved: Board | null = null
     try {
       const raw = localStorage.getItem(storageKey)
-      if (raw) saved = JSON.parse(raw)
+      if (raw) saved = normalizeSaved(JSON.parse(raw))
     } catch {
       /* ignore malformed state */
     }
-    setLayout(reconcile(saved, panels, defaultRef.current, columns))
+    setBoard(reconcile(saved, panels, defaultRef.current, columns))
     setHydrated(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey])
 
-  // When the set of available panels changes (e.g. needs-review appears), fold
-  // the change into the user's current order rather than resetting it.
+  // When the set of available panels changes (e.g. a new panel ships), fold the
+  // change into the coach's current order rather than resetting it.
   useEffect(() => {
     if (!hydrated) return
-    setLayout((prev) => reconcile(prev, panels, defaultRef.current, columns))
+    setBoard((prev) => reconcile(prev, panels, defaultRef.current, columns))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idsKey, columns])
 
@@ -65,39 +68,59 @@ export function PanelBoard({ storageKey, panels, columns = 1, defaultLayout }: P
   useEffect(() => {
     if (!hydrated) return
     try {
-      localStorage.setItem(storageKey, JSON.stringify(layout))
+      localStorage.setItem(storageKey, JSON.stringify(board))
     } catch {
       /* ignore quota / disabled storage */
     }
-  }, [layout, hydrated, storageKey])
+  }, [board, hydrated, storageKey])
 
   const byId = useMemo(() => new Map(panels.map((p) => [p.id, p])), [panels])
 
   function applyDrop() {
     if (!dragId || !drop) return
-    setLayout((prev) => {
-      const next: Layout = prev.map((c) => c.filter((id) => id !== dragId))
-      const arr = next[drop.col] || (next[drop.col] = [])
+    setBoard((prev) => {
+      const layout: string[][] = prev.layout.map((c) => c.filter((id) => id !== dragId))
+      const arr = layout[drop.col] || (layout[drop.col] = [])
       if (drop.beforeId == null) arr.push(dragId)
       else {
         const i = arr.indexOf(drop.beforeId)
         if (i === -1) arr.push(dragId)
         else arr.splice(i, 0, dragId)
       }
-      return next
+      return { layout, removed: prev.removed }
     })
     setDragId(null)
     setDrop(null)
   }
 
+  function removePanel(id: string) {
+    setBoard((prev) => ({
+      layout: prev.layout.map((c) => c.filter((pid) => pid !== id)),
+      removed: prev.removed.includes(id) ? prev.removed : [...prev.removed, id],
+    }))
+  }
+
+  function addPanel(id: string) {
+    setBoard((prev) => {
+      const defCol = defaultColumnOf(id, defaultRef.current, columns)
+      const layout = prev.layout.map((c, ci) => (ci === defCol ? [...c, id] : c))
+      // Guard: ensure the target column exists.
+      while (layout.length < columns) layout.push([])
+      if (!layout[defCol].includes(id)) layout[defCol].push(id)
+      return { layout, removed: prev.removed.filter((rid) => rid !== id) }
+    })
+  }
+
   function reset() {
-    setLayout(reconcile(null, panels, defaultRef.current, columns))
+    setBoard(reconcile(null, panels, defaultRef.current, columns))
   }
 
   const gridClass =
     columns === 2
       ? 'grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start'
       : 'grid grid-cols-1 gap-6'
+
+  const removedPanels = board.removed.map((id) => byId.get(id)).filter((p): p is Panel => !!p)
 
   return (
     <div>
@@ -121,7 +144,7 @@ export function PanelBoard({ storageKey, panels, columns = 1, defaultLayout }: P
               ? 'border-tlw-signal-orange bg-tlw-signal-orange/10 text-tlw-signal-orange'
               : 'border-tlw-warm-gray/30 text-tlw-espresso hover:border-tlw-warm-gray/50'
           }`}
-          title="Rearrange the panels on this page"
+          title="Rearrange, add, or remove the panels on this page"
         >
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="3" />
@@ -132,7 +155,7 @@ export function PanelBoard({ storageKey, panels, columns = 1, defaultLayout }: P
       </div>
 
       <div className={gridClass}>
-        {layout.map((colIds, ci) => (
+        {board.layout.map((colIds, ci) => (
           <div
             key={ci}
             className="space-y-6"
@@ -184,16 +207,25 @@ export function PanelBoard({ storageKey, panels, columns = 1, defaultLayout }: P
                     }`}
                   >
                     {arranging && (
-                      <div className="flex cursor-grab items-center gap-2 rounded-t-tlw-2xl bg-tlw-warm-gray/10 px-3 py-2 text-[11px] font-medium uppercase tracking-[1.5px] text-tlw-warm-gray active:cursor-grabbing">
-                        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                          <circle cx="9" cy="6" r="1.4" />
-                          <circle cx="15" cy="6" r="1.4" />
-                          <circle cx="9" cy="12" r="1.4" />
-                          <circle cx="15" cy="12" r="1.4" />
-                          <circle cx="9" cy="18" r="1.4" />
-                          <circle cx="15" cy="18" r="1.4" />
-                        </svg>
-                        {panel.label}
+                      <div className="flex items-center justify-between gap-2 rounded-t-tlw-2xl bg-tlw-warm-gray/10 px-3 py-2">
+                        <div className="flex cursor-grab items-center gap-2 text-[11px] font-medium uppercase tracking-[1.5px] text-tlw-warm-gray active:cursor-grabbing">
+                          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                            <circle cx="9" cy="6" r="1.4" />
+                            <circle cx="15" cy="6" r="1.4" />
+                            <circle cx="9" cy="12" r="1.4" />
+                            <circle cx="15" cy="12" r="1.4" />
+                            <circle cx="9" cy="18" r="1.4" />
+                            <circle cx="15" cy="18" r="1.4" />
+                          </svg>
+                          {panel.label}
+                        </div>
+                        <button
+                          onClick={() => removePanel(id)}
+                          className="rounded-md px-1.5 py-0.5 text-[11px] font-medium text-tlw-warm-gray transition-colors hover:bg-tlw-warm-gray/15 hover:text-tlw-espresso"
+                          title={`Remove ${panel.label}`}
+                        >
+                          Remove
+                        </button>
                       </div>
                     )}
                     <div className={arranging ? 'pointer-events-none select-none p-3' : ''}>{panel.node}</div>
@@ -226,37 +258,80 @@ export function PanelBoard({ storageKey, panels, columns = 1, defaultLayout }: P
           </div>
         ))}
       </div>
+
+      {/* Hidden-panel tray: add removed panels back. Only in arrange mode. */}
+      {arranging && removedPanels.length > 0 && (
+        <div className="mt-6 rounded-tlw-2xl border border-dashed border-tlw-warm-gray/30 bg-tlw-warm-gray/[0.04] p-4">
+          <p className="mb-3 text-[11px] font-medium uppercase tracking-[1.5px] text-tlw-warm-gray">
+            Hidden panels
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {removedPanels.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => addPanel(p.id)}
+                className="flex items-center gap-1.5 rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-1.5 text-[12px] font-medium text-tlw-espresso transition-colors hover:border-tlw-signal-orange hover:text-tlw-signal-orange"
+              >
+                <span className="text-[14px] leading-none">+</span>
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
-/** Rebuild a layout from a (possibly stale) source, keeping only known panel
- *  ids and folding any not-yet-placed panels into their default column. */
-function reconcile(source: Layout | null, panels: Panel[], def: Layout, columns: number): Layout {
+/** Coerce a saved value (old `string[][]` or new `Board`) into a Board, or null. */
+function normalizeSaved(parsed: unknown): Board | null {
+  if (Array.isArray(parsed)) return { layout: parsed as string[][], removed: [] }
+  if (parsed && typeof parsed === 'object' && Array.isArray((parsed as Board).layout)) {
+    const b = parsed as Board
+    return { layout: b.layout, removed: Array.isArray(b.removed) ? b.removed : [] }
+  }
+  return null
+}
+
+function defaultColumnOf(id: string, def: string[][], columns: number): number {
+  for (let ci = 0; ci < def.length; ci++) {
+    if (def[ci].includes(id)) return Math.min(ci, columns - 1)
+  }
+  return 0
+}
+
+/** Rebuild a board from a (possibly stale) source, keeping only known panel ids:
+ *  placed ids keep their order, intentionally-removed ids stay hidden, and any
+ *  not-yet-seen panel is folded into its default column. */
+function reconcile(source: Board | null, panels: Panel[], def: string[][], columns: number): Board {
   const ids = panels.map((p) => p.id)
   const idSet = new Set(ids)
-  const out: Layout = Array.from({ length: columns }, () => [])
-  const placed = new Set<string>()
+  const removed = (source?.removed || []).filter((id) => idSet.has(id))
+  const removedSet = new Set(removed)
 
-  const base = source && source.length ? source : def
+  const base = source?.layout?.length ? source.layout : def
+  const out: string[][] = Array.from({ length: columns }, () => [])
+  const placed = new Set<string>()
+  const seen = new Set<string>()
+
   base.forEach((colIds, ci) => {
     const target = Math.min(ci, columns - 1)
     colIds.forEach((id) => {
-      if (idSet.has(id) && !placed.has(id)) {
+      seen.add(id)
+      if (idSet.has(id) && !placed.has(id) && !removedSet.has(id)) {
         out[target].push(id)
         placed.add(id)
       }
     })
   })
 
-  const defCol = new Map<string, number>()
-  def.forEach((colIds, ci) => colIds.forEach((id) => defCol.set(id, Math.min(ci, columns - 1))))
+  // New panels (never seen, not removed) → fold into their default column.
   ids.forEach((id) => {
-    if (!placed.has(id)) {
-      out[defCol.get(id) ?? 0].push(id)
+    if (!placed.has(id) && !removedSet.has(id) && !seen.has(id)) {
+      out[defaultColumnOf(id, def, columns)].push(id)
       placed.add(id)
     }
   })
 
-  return out
+  return { layout: out, removed }
 }
