@@ -30,6 +30,17 @@ function CardHost({ card, size }: { card: DashboardCard; size: CardSize }) {
   return <>{card.render({ size, data })}</>
 }
 
+/** Nearest scrollable ancestor (the app shell scrolls a <main>, not the window). */
+function findScrollParent(el: HTMLElement | null): HTMLElement | null {
+  let node = el?.parentElement || null
+  while (node) {
+    const oy = getComputedStyle(node).overflowY
+    if ((oy === 'auto' || oy === 'scroll') && node.scrollHeight > node.clientHeight) return node
+    node = node.parentElement
+  }
+  return null
+}
+
 function AddCardMenu({ options, onAdd }: { options: CardMeta[]; onAdd: (id: string) => void }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -81,6 +92,8 @@ export function DashboardSurface() {
   const [arranging, setArranging] = useState(false)
   const [dragId, setDragId] = useState<string | null>(null)
   const [dropBeforeId, setDropBeforeId] = useState<string | null>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const dragYRef = useRef(0)
 
   useEffect(() => {
     let active = true
@@ -93,6 +106,41 @@ export function DashboardSurface() {
       active = false
     }
   }, [])
+
+  // Edge auto-scroll while dragging: when the pointer nears the top/bottom of the
+  // scroll container, scroll it so a card can be dropped beyond the current view.
+  useEffect(() => {
+    if (!dragId) return
+    const container = findScrollParent(rootRef.current)
+    const EDGE = 90 // px from an edge that triggers scrolling
+    const MAX = 22 // max px/frame, scaled by how deep into the edge zone
+    let raf = 0
+
+    const onWinDragOver = (e: DragEvent) => {
+      dragYRef.current = e.clientY
+    }
+    window.addEventListener('dragover', onWinDragOver)
+
+    const tick = () => {
+      const y = dragYRef.current
+      const top = container ? container.getBoundingClientRect().top : 0
+      const bottom = container ? container.getBoundingClientRect().bottom : window.innerHeight
+      let dy = 0
+      if (y < top + EDGE) dy = -Math.ceil(MAX * Math.min(1, (top + EDGE - y) / EDGE))
+      else if (y > bottom - EDGE) dy = Math.ceil(MAX * Math.min(1, (y - (bottom - EDGE)) / EDGE))
+      if (dy !== 0) {
+        if (container) container.scrollTop += dy
+        else window.scrollBy(0, dy)
+      }
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+
+    return () => {
+      window.removeEventListener('dragover', onWinDragOver)
+      cancelAnimationFrame(raf)
+    }
+  }, [dragId])
 
   // Optimistic update + persist. The server normalizes and echoes the stored
   // result; we re-sync to it so client and server never drift.
@@ -173,7 +221,7 @@ export function DashboardSurface() {
   const addable = availableToAdd(blocks.map((b) => b.blockId))
 
   return (
-    <div>
+    <div ref={rootRef}>
       <div className="mb-4 flex items-center justify-end gap-2">
         {ordered.length > 1 && (
           <button
