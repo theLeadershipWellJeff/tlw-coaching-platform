@@ -11,6 +11,7 @@ import { projectedRevenueCard } from './cards/ProjectedRevenueCard'
 import { annualRevenueCard } from './cards/AnnualRevenueCard'
 import { emailsSentCard } from './cards/EmailsSentCard'
 import { calendarHeatmapCard } from './cards/CalendarHeatmapCard'
+import { nudgesCard } from './cards/NudgesCard'
 
 export const DASHBOARD_CARDS: Record<string, DashboardCard<any>> = {
   'past-revenue': pastRevenueCard,
@@ -18,6 +19,7 @@ export const DASHBOARD_CARDS: Record<string, DashboardCard<any>> = {
   'annual-revenue': annualRevenueCard,
   'emails-sent': emailsSentCard,
   calendar: calendarHeatmapCard,
+  nudges: nudgesCard,
 }
 
 export function getDashboardCard(id: string): DashboardCard<any> | undefined {

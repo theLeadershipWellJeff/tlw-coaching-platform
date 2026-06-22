@@ -48,7 +48,13 @@ export const CARD_META: Record<string, CardMeta> = {
     supportedSizes: ['compact', 'standard', 'expanded'],
     defaultSize: 'standard',
   },
-  // Phase 5: nudges.
+  nudges: {
+    id: 'nudges',
+    title: 'Nudges',
+    surfaces: ['dashboard'],
+    supportedSizes: ['compact', 'standard', 'expanded'],
+    defaultSize: 'standard',
+  },
 }
 
 /** Cards eligible for the dashboard surface (all of them, today). */
