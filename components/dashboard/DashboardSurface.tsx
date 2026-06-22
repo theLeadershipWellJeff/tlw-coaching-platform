@@ -4,21 +4,27 @@
  *
  * Loads the coach's stored layout, renders the placed cards into a grid, and
  * lets the coach add, remove, resize, and (in Arrange mode) drag to reorder
- * cards. Every mutation persists to `/api/dashboard/layout` (last-write-wins) so
- * the dashboard survives reloads.
+ * cards. Reordering is iOS-style: as a dragged card moves over a slot the other
+ * cards live-reflow out of the way (a FLIP slide), and the dragged card drops
+ * into the opened space — it never replaces/swaps the card under it. Every
+ * mutation persists to `/api/dashboard/layout` (last-write-wins).
  *
  * Each placed card is hosted once (CardHost), so its data hook runs a single
  * time per instance — resizing changes the `size` prop without remounting, and
  * therefore never refetches (brief §3.2 / §5).
  */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { availableToAdd } from '@/lib/dashboard/cards'
 import type { CardMeta, CardPlacement, CardSize, DashboardCard } from '@/lib/dashboard/types'
 import { DASHBOARD_CARDS, getDashboardCard } from './registry'
 import { CardFrame } from './CardFrame'
 
+// Run layout effects on the client only (avoids the SSR useLayoutEffect warning).
+const useIsoLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect
+
 // compact = 1 col · standard = 2 col · expanded = full row, on a 4-col desktop
-// grid. Literal classes so Tailwind keeps them.
+// grid. Literal classes so Tailwind keeps them. A card may pin its width via
+// CardMeta.fixedSpan (list cards that change height, not width, across sizes).
 const SPAN: Record<CardSize, string> = {
   compact: 'lg:col-span-1',
   standard: 'lg:col-span-2',
@@ -39,6 +45,18 @@ function findScrollParent(el: HTMLElement | null): HTMLElement | null {
     node = node.parentElement
   }
   return null
+}
+
+/** Move the dragged card into the target's slot, shifting the rest (no swap). */
+function liveMove(cur: CardPlacement[], dragId: string, targetId: string): CardPlacement[] {
+  const ordered = [...cur].sort((a, b) => a.order - b.order)
+  const from = ordered.findIndex((b) => b.blockId === dragId)
+  const to = ordered.findIndex((b) => b.blockId === targetId)
+  if (from === -1 || to === -1 || from === to) return cur
+  const next = [...ordered]
+  const [moved] = next.splice(from, 1)
+  next.splice(to, 0, moved)
+  return next.map((b, i) => ({ ...b, order: i }))
 }
 
 function AddCardMenu({ options, onAdd }: { options: CardMeta[]; onAdd: (id: string) => void }) {
@@ -91,9 +109,14 @@ export function DashboardSurface() {
   const [error, setError] = useState(false)
   const [arranging, setArranging] = useState(false)
   const [dragId, setDragId] = useState<string | null>(null)
-  const [dropBeforeId, setDropBeforeId] = useState<string | null>(null)
+
   const rootRef = useRef<HTMLDivElement>(null)
   const dragYRef = useRef(0)
+  // Latest blocks (for the dragEnd persist) + FLIP bookkeeping.
+  const blocksRef = useRef(blocks)
+  blocksRef.current = blocks
+  const elRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const prevRects = useRef<Record<string, DOMRect>>({})
 
   useEffect(() => {
     let active = true
@@ -106,6 +129,41 @@ export function DashboardSurface() {
       active = false
     }
   }, [])
+
+  // FLIP: after the order changes during a drag, slide each card from its old
+  // box to its new one so the reflow animates (iOS-style nudge). The dragged card
+  // is held by the cursor, so it isn't animated.
+  useIsoLayoutEffect(() => {
+    const prev = prevRects.current
+    if (!prev || Object.keys(prev).length === 0) return
+    for (const id in elRefs.current) {
+      if (id === dragId) continue
+      const el = elRefs.current[id]
+      const before = prev[id]
+      if (!el || !before) continue
+      const now = el.getBoundingClientRect()
+      const dx = before.left - now.left
+      const dy = before.top - now.top
+      if (dx === 0 && dy === 0) continue
+      el.style.transition = 'none'
+      el.style.transform = `translate(${dx}px, ${dy}px)`
+      void el.offsetWidth // force reflow so the next frame animates
+      requestAnimationFrame(() => {
+        el.style.transition = 'transform 180ms ease'
+        el.style.transform = ''
+      })
+    }
+    prevRects.current = {}
+  }, [blocks, dragId])
+
+  function captureRects() {
+    const m: Record<string, DOMRect> = {}
+    for (const id in elRefs.current) {
+      const el = elRefs.current[id]
+      if (el) m[id] = el.getBoundingClientRect()
+    }
+    prevRects.current = m
+  }
 
   // Edge auto-scroll while dragging: when the pointer nears the top/bottom of the
   // scroll container, scroll it so a card can be dropped beyond the current view.
@@ -194,29 +252,6 @@ export function DashboardSurface() {
     [persist]
   )
 
-  // Drag-to-reorder (Arrange mode). order = array position, so reordering is
-  // independent of each card's column span.
-  const applyReorder = useCallback(() => {
-    if (!dragId) return
-    setBlocks((cur) => {
-      const ordered = [...cur].sort((a, b) => a.order - b.order)
-      const dragged = ordered.find((b) => b.blockId === dragId)
-      if (!dragged) return cur
-      const without = ordered.filter((b) => b.blockId !== dragId)
-      let at = without.length
-      if (dropBeforeId) {
-        const i = without.findIndex((b) => b.blockId === dropBeforeId)
-        if (i !== -1) at = i
-      }
-      without.splice(at, 0, dragged)
-      const next = without.map((b, i) => ({ ...b, order: i }))
-      persist(next)
-      return next
-    })
-    setDragId(null)
-    setDropBeforeId(null)
-  }, [dragId, dropBeforeId, persist])
-
   const ordered = [...blocks].sort((a, b) => a.order - b.order)
   const addable = availableToAdd(blocks.map((b) => b.blockId))
 
@@ -228,7 +263,6 @@ export function DashboardSurface() {
             onClick={() => {
               setArranging((a) => !a)
               setDragId(null)
-              setDropBeforeId(null)
             }}
             title="Drag cards to reorder"
             className={`flex items-center gap-1.5 rounded-tlw-lg border px-3 py-1.5 text-[13px] font-medium transition-colors ${
@@ -244,7 +278,9 @@ export function DashboardSurface() {
       </div>
 
       {arranging && (
-        <p className="mb-3 text-[12px] text-tlw-warm-gray">Drag cards to reorder. Resize with S/M/L. Press Done when finished.</p>
+        <p className="mb-3 text-[12px] text-tlw-warm-gray">
+          Drag a card into a new spot — the others slide out of the way. Resize with S/M/L. Press Done when finished.
+        </p>
       )}
 
       {loading ? (
@@ -270,30 +306,27 @@ export function DashboardSurface() {
             return (
               <div
                 key={b.blockId}
+                ref={(el) => {
+                  elRefs.current[b.blockId] = el
+                }}
                 className={`${card.fixedSpan ?? SPAN[b.size]} ${arranging ? 'cursor-move' : ''} ${
                   dragId === b.blockId ? 'opacity-40' : ''
-                } ${
-                  dropBeforeId === b.blockId ? 'rounded-tlw-2xl ring-2 ring-tlw-navy-rich' : ''
                 }`}
                 draggable={arranging}
                 onDragStart={() => arranging && setDragId(b.blockId)}
                 onDragEnd={() => {
+                  if (dragId) persist(blocksRef.current)
                   setDragId(null)
-                  setDropBeforeId(null)
                 }}
                 onDragOver={(e) => {
                   if (!dragId || dragId === b.blockId) return
                   e.preventDefault()
-                  const rect = e.currentTarget.getBoundingClientRect()
-                  const after = e.clientX > rect.left + rect.width / 2
-                  const idx = ordered.findIndex((o) => o.blockId === b.blockId)
-                  const beforeId = after ? ordered[idx + 1]?.blockId ?? null : b.blockId
-                  setDropBeforeId(beforeId)
+                  captureRects()
+                  setBlocks((cur) => liveMove(cur, dragId, b.blockId))
                 }}
                 onDrop={(e) => {
                   if (!dragId) return
                   e.preventDefault()
-                  applyReorder()
                 }}
               >
                 <CardFrame
