@@ -392,6 +392,62 @@ export async function listClientMatchedEvents(
   })
 }
 
+/** A timed calendar event, kept light for the dashboard heat-map (booked load). */
+export interface CalendarEventLite {
+  id: string
+  title: string
+  start: string | null // ISO datetime
+  durationMinutes: number
+}
+
+/**
+ * List the coach's timed calendar events in a window (for the dashboard
+ * Calendar heat-map's booked-hours/day aggregation). All-day events carry no
+ * booked time, so they're skipped. The window is at most ~5–6 weeks, so the
+ * single 250-event page is ample (no pagination needed).
+ */
+export async function listCalendarEvents(
+  coach: Coach,
+  timeMin: Date,
+  timeMax: Date
+): Promise<CalendarEventLite[]> {
+  if (!coach.google_refresh_token) return []
+
+  const auth = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET)
+  auth.setCredentials({ refresh_token: coach.google_refresh_token })
+  const calendar = google.calendar({ version: 'v3', auth })
+
+  let items: any[] = []
+  try {
+    const res = await calendar.events.list({
+      calendarId: 'primary',
+      timeMin: timeMin.toISOString(),
+      timeMax: timeMax.toISOString(),
+      singleEvents: true,
+      orderBy: 'startTime',
+      maxResults: 250,
+    })
+    items = res.data.items || []
+  } catch (e) {
+    console.error('Calendar heat-map lookup failed:', e)
+    return []
+  }
+
+  const out: CalendarEventLite[] = []
+  for (const event of items) {
+    const start: string | null = event.start?.dateTime || null // skip all-day (date only)
+    if (!start) continue
+    const startMs = new Date(start).getTime()
+    const endMs = event.end?.dateTime ? new Date(event.end.dateTime).getTime() : NaN
+    const durationMinutes =
+      Number.isFinite(startMs) && Number.isFinite(endMs) && endMs > startMs
+        ? Math.round((endMs - startMs) / 60000)
+        : 60
+    out.push({ id: event.id || '', title: event.summary || '(no title)', start, durationMinutes })
+  }
+  return out
+}
+
 // ── External booking capture (Calendly / HubSpot) ──────────────────────────────
 // We don't integrate either provider directly — both already write the booking to
 // the coach's Google Calendar (client as guest), so we capture bookings by watching
