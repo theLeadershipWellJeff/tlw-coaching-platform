@@ -29,6 +29,9 @@ export interface CardMeta {
   surfaces: DashboardSurfaceId[]
   supportedSizes: CardSize[]
   defaultSize: CardSize
+  // true = the card's body renders its own header (e.g. a wrapped legacy panel),
+  // so the CardFrame suppresses its title to avoid a double header.
+  selfHeader?: boolean
 }
 
 export interface CardRenderArgs<TData> {

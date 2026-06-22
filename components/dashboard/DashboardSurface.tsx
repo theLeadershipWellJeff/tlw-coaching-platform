@@ -3,8 +3,9 @@
  * DashboardSurface — the run-time arrangement layer for the coach's dashboard.
  *
  * Loads the coach's stored layout, renders the placed cards into a grid, and
- * lets the coach add / remove / resize cards. Every mutation persists to
- * `/api/dashboard/layout` (last-write-wins) so the dashboard survives reloads.
+ * lets the coach add, remove, resize, and (in Arrange mode) drag to reorder
+ * cards. Every mutation persists to `/api/dashboard/layout` (last-write-wins) so
+ * the dashboard survives reloads.
  *
  * Each placed card is hosted once (CardHost), so its data hook runs a single
  * time per instance — resizing changes the `size` prop without remounting, and
@@ -53,7 +54,7 @@ function AddCardMenu({ options, onAdd }: { options: CardMeta[]; onAdd: (id: stri
         {none ? 'All cards added' : '+ Add card'}
       </button>
       {open && !none && (
-        <div className="absolute right-0 z-10 mt-1 w-56 overflow-hidden rounded-tlw-xl border border-tlw-warm-gray/20 bg-tlw-surface py-1 shadow-lg">
+        <div className="absolute right-0 z-10 mt-1 max-h-80 w-56 overflow-y-auto rounded-tlw-xl border border-tlw-warm-gray/20 bg-tlw-surface py-1 shadow-lg">
           {options.map((o) => (
             <button
               key={o.id}
@@ -77,6 +78,9 @@ export function DashboardSurface() {
   const [blocks, setBlocks] = useState<CardPlacement[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
+  const [arranging, setArranging] = useState(false)
+  const [dragId, setDragId] = useState<string | null>(null)
+  const [dropBeforeId, setDropBeforeId] = useState<string | null>(null)
 
   useEffect(() => {
     let active = true
@@ -142,14 +146,58 @@ export function DashboardSurface() {
     [persist]
   )
 
+  // Drag-to-reorder (Arrange mode). order = array position, so reordering is
+  // independent of each card's column span.
+  const applyReorder = useCallback(() => {
+    if (!dragId) return
+    setBlocks((cur) => {
+      const ordered = [...cur].sort((a, b) => a.order - b.order)
+      const dragged = ordered.find((b) => b.blockId === dragId)
+      if (!dragged) return cur
+      const without = ordered.filter((b) => b.blockId !== dragId)
+      let at = without.length
+      if (dropBeforeId) {
+        const i = without.findIndex((b) => b.blockId === dropBeforeId)
+        if (i !== -1) at = i
+      }
+      without.splice(at, 0, dragged)
+      const next = without.map((b, i) => ({ ...b, order: i }))
+      persist(next)
+      return next
+    })
+    setDragId(null)
+    setDropBeforeId(null)
+  }, [dragId, dropBeforeId, persist])
+
   const ordered = [...blocks].sort((a, b) => a.order - b.order)
   const addable = availableToAdd(blocks.map((b) => b.blockId))
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-end">
+      <div className="mb-4 flex items-center justify-end gap-2">
+        {ordered.length > 1 && (
+          <button
+            onClick={() => {
+              setArranging((a) => !a)
+              setDragId(null)
+              setDropBeforeId(null)
+            }}
+            title="Drag cards to reorder"
+            className={`flex items-center gap-1.5 rounded-tlw-lg border px-3 py-1.5 text-[13px] font-medium transition-colors ${
+              arranging
+                ? 'border-tlw-navy-rich bg-tlw-navy-rich/10 text-tlw-navy-rich'
+                : 'border-tlw-warm-gray/30 text-tlw-espresso hover:bg-tlw-canvas'
+            }`}
+          >
+            {arranging ? 'Done' : 'Arrange'}
+          </button>
+        )}
         <AddCardMenu options={addable} onAdd={addCard} />
       </div>
+
+      {arranging && (
+        <p className="mb-3 text-[12px] text-tlw-warm-gray">Drag cards to reorder. Resize with S/M/L. Press Done when finished.</p>
+      )}
 
       {loading ? (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
@@ -163,7 +211,7 @@ export function DashboardSurface() {
         <div className="flex min-h-[180px] flex-col items-center justify-center rounded-tlw-2xl border border-dashed border-tlw-warm-gray/25 bg-tlw-surface/60 px-6 text-center">
           <p className="text-[14px] font-medium text-tlw-navy-deep">Your dashboard is empty</p>
           <p className="mt-1 max-w-sm text-[13px] text-tlw-warm-gray">
-            Add cards to build your cockpit — revenue, calendar, emails, and more. Use “Add card” above.
+            Add cards to build your cockpit — clients, upcoming sessions, revenue, calendar, and more. Use “Add card” above.
           </p>
         </div>
       ) : (
@@ -172,14 +220,43 @@ export function DashboardSurface() {
             const card = getDashboardCard(b.blockId)
             if (!card) return null // unknown/unregistered card — skip gracefully
             return (
-              <div key={b.blockId} className={SPAN[b.size]}>
+              <div
+                key={b.blockId}
+                className={`${SPAN[b.size]} ${arranging ? 'cursor-move' : ''} ${
+                  dragId === b.blockId ? 'opacity-40' : ''
+                } ${
+                  dropBeforeId === b.blockId ? 'rounded-tlw-2xl ring-2 ring-tlw-navy-rich' : ''
+                }`}
+                draggable={arranging}
+                onDragStart={() => arranging && setDragId(b.blockId)}
+                onDragEnd={() => {
+                  setDragId(null)
+                  setDropBeforeId(null)
+                }}
+                onDragOver={(e) => {
+                  if (!dragId || dragId === b.blockId) return
+                  e.preventDefault()
+                  const rect = e.currentTarget.getBoundingClientRect()
+                  const after = e.clientX > rect.left + rect.width / 2
+                  const idx = ordered.findIndex((o) => o.blockId === b.blockId)
+                  const beforeId = after ? ordered[idx + 1]?.blockId ?? null : b.blockId
+                  setDropBeforeId(beforeId)
+                }}
+                onDrop={(e) => {
+                  if (!dragId) return
+                  e.preventDefault()
+                  applyReorder()
+                }}
+              >
                 <CardFrame
                   title={card.title}
                   icon={card.icon}
+                  selfHeader={card.selfHeader}
                   size={b.size}
                   supportedSizes={card.supportedSizes}
                   onResize={(s) => resizeCard(b.blockId, s)}
                   onRemove={() => removeCard(b.blockId)}
+                  arranging={arranging}
                 >
                   <CardHost card={card} size={b.size} />
                 </CardFrame>

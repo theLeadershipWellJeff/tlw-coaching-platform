@@ -55,6 +55,47 @@ export const CARD_META: Record<string, CardMeta> = {
     supportedSizes: ['compact', 'standard', 'expanded'],
     defaultSize: 'standard',
   },
+  // Wrapped legacy panels — they render their own header, so selfHeader=true.
+  roster: {
+    id: 'roster',
+    title: 'Clients',
+    surfaces: ['dashboard'],
+    supportedSizes: ['standard', 'expanded'],
+    defaultSize: 'standard',
+    selfHeader: true,
+  },
+  'up-next': {
+    id: 'up-next',
+    title: 'Up next',
+    surfaces: ['dashboard'],
+    supportedSizes: ['standard', 'expanded'],
+    defaultSize: 'standard',
+    selfHeader: true,
+  },
+  scorecard: {
+    id: 'scorecard',
+    title: 'Coach scorecard',
+    surfaces: ['dashboard'],
+    supportedSizes: ['standard', 'expanded'],
+    defaultSize: 'standard',
+    selfHeader: true,
+  },
+  'unmatched-bookings': {
+    id: 'unmatched-bookings',
+    title: 'Unmatched bookings',
+    surfaces: ['dashboard'],
+    supportedSizes: ['standard', 'expanded'],
+    defaultSize: 'standard',
+    selfHeader: true,
+  },
+  'suggested-nudges': {
+    id: 'suggested-nudges',
+    title: 'Suggested nudges',
+    surfaces: ['dashboard'],
+    supportedSizes: ['standard', 'expanded'],
+    defaultSize: 'standard',
+    selfHeader: true,
+  },
 }
 
 /** Cards eligible for the dashboard surface (all of them, today). */
