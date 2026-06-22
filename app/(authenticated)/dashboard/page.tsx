@@ -2,6 +2,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
 import { PageHeader } from '@/app/components/layout/PageHeader'
 import { DashboardSurface } from '@/components/dashboard/DashboardSurface'
+import { DashboardBoard } from './DashboardBoard'
 
 function greeting(): string {
   const h = new Date().getHours()
