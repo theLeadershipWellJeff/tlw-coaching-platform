@@ -1,6 +1,7 @@
 'use client'
 import Link from 'next/link'
 import type { Client } from '@/lib/supabase/types'
+import type { CardSize } from '@/lib/dashboard/types'
 import { ymdInTimeZone } from '@/lib/datetime'
 
 export interface UpcomingSession {
@@ -81,6 +82,7 @@ export function UpNextPanel({
   onRefresh,
   onSkip,
   timeZone,
+  size = 'expanded',
 }: {
   sessions: UpcomingSession[]
   clients: Client[]
@@ -89,6 +91,7 @@ export function UpNextPanel({
   onRefresh: () => void
   onSkip: (id: string) => void
   timeZone: string
+  size?: CardSize
 }) {
   const byEmail = new Map<string, string>()
   const byName = new Map<string, string>()
@@ -129,6 +132,63 @@ export function UpNextPanel({
           Prep a session manually
         </Link>
       </section>
+    )
+  }
+
+  // Small + medium: a compact, scrollable list (small ≈ next 2, medium ≈ next 5);
+  // large keeps the rich hero + grouped view below.
+  if (size === 'compact' || size === 'standard') {
+    const listMax = size === 'compact' ? 'max-h-[9rem]' : 'max-h-[22rem]'
+    return (
+      <div>
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-[11px] font-medium uppercase tracking-[2px] text-tlw-warm-gray">Up next</p>
+          <button
+            onClick={onRefresh}
+            className="text-[12px] font-medium text-tlw-warm-gray transition-colors hover:text-tlw-espresso"
+          >
+            Refresh
+          </button>
+        </div>
+        <div className={`space-y-2 overflow-y-auto pr-1 ${listMax}`}>
+          {sessions.map((s) => {
+            const clientId = resolveClientId(s, byEmail, byName)
+            return (
+              <div key={s.id} className="rounded-tlw-xl border border-tlw-warm-gray/15 bg-tlw-surface p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-[13px] font-medium text-tlw-navy-deep">{s.clientName}</p>
+                    <p className="mt-0.5 truncate text-[12px] text-tlw-warm-gray">
+                      {dayLabel(s.start, timeZone)} · {timeLabel(s.start, timeZone)} · {s.duration} min
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => onSkip(s.id)}
+                    title="Skip"
+                    aria-label={`Skip ${s.clientName}`}
+                    className="shrink-0 rounded-md px-1.5 py-0.5 text-[13px] leading-none text-tlw-warm-gray transition-colors hover:bg-tlw-warm-gray/15 hover:text-tlw-espresso"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="mt-2 flex items-center gap-3">
+                  <Link href={prepHref(s)} className="text-[12px] font-medium text-tlw-signal-orange hover:underline">
+                    Generate prep →
+                  </Link>
+                  {clientId && (
+                    <Link
+                      href={`/clients/${clientId}`}
+                      className="text-[12px] font-medium text-tlw-warm-gray transition-colors hover:text-tlw-espresso"
+                    >
+                      Workspace
+                    </Link>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
     )
   }
 

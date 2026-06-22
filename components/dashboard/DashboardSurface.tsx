@@ -270,7 +270,7 @@ export function DashboardSurface() {
             return (
               <div
                 key={b.blockId}
-                className={`${SPAN[b.size]} ${arranging ? 'cursor-move' : ''} ${
+                className={`${card.fixedSpan ?? SPAN[b.size]} ${arranging ? 'cursor-move' : ''} ${
                   dragId === b.blockId ? 'opacity-40' : ''
                 } ${
                   dropBeforeId === b.blockId ? 'rounded-tlw-2xl ring-2 ring-tlw-navy-rich' : ''

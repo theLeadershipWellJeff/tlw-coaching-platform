@@ -2,6 +2,15 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import type { Client } from '@/lib/supabase/types'
+import type { CardSize } from '@/lib/dashboard/types'
+
+// List-scroll height by card size: small shows ~4 clients, medium more, large is
+// the original tall panel. The list scrolls in every size.
+const LIST_MAX: Record<CardSize, string> = {
+  compact: 'max-h-[14rem]',
+  standard: 'max-h-[20rem]',
+  expanded: 'max-h-[28rem]',
+}
 
 /**
  * The client roster, surfaced as a homepage column (it used to live only on its
@@ -12,10 +21,12 @@ export function RosterPanel({
   clients,
   loading,
   error,
+  size = 'expanded',
 }: {
   clients: Client[]
   loading: boolean
   error: string
+  size?: CardSize
 }) {
   const [filter, setFilter] = useState('')
 
@@ -70,7 +81,7 @@ export function RosterPanel({
           )}
         </div>
       ) : (
-        <div className="max-h-[28rem] space-y-2 overflow-y-auto pr-1">
+        <div className={`${LIST_MAX[size]} space-y-2 overflow-y-auto pr-1`}>
           {visible.map((c) => (
             <Link
               key={c.id}
