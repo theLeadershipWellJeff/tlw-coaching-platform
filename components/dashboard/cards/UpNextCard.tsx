@@ -10,11 +10,11 @@ import { CARD_META } from '@/lib/dashboard/cards'
 import { useClients } from '@/lib/dashboard/useClients'
 import { useCoachTimezone } from '@/lib/dashboard/useCoachTimezone'
 import { UpNextPanel, type UpcomingSession } from '@/app/(authenticated)/dashboard/UpNextPanel'
-import type { DashboardCard } from '@/lib/dashboard/types'
+import type { CardSize, DashboardCard } from '@/lib/dashboard/types'
 
 const SKIPPED_KEY = 'tlw-dashboard-skipped'
 
-function UpNextBody() {
+function UpNextBody({ size }: { size: CardSize }) {
   const { clients } = useClients()
   const timeZone = useCoachTimezone()
   const [sessions, setSessions] = useState<UpcomingSession[]>([])
@@ -93,6 +93,7 @@ function UpNextBody() {
       onRefresh={load}
       onSkip={skip}
       timeZone={timeZone}
+      size={size}
     />
   )
 }
@@ -100,5 +101,5 @@ function UpNextBody() {
 export const upNextCard: DashboardCard<null> = {
   ...CARD_META['up-next'],
   useData: () => null,
-  render: () => <UpNextBody />,
+  render: ({ size }) => <UpNextBody size={size} />,
 }
