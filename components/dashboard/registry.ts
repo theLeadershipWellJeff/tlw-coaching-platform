@@ -9,11 +9,13 @@ import type { DashboardCard } from '@/lib/dashboard/types'
 import { pastRevenueCard } from './cards/PastRevenueCard'
 import { projectedRevenueCard } from './cards/ProjectedRevenueCard'
 import { annualRevenueCard } from './cards/AnnualRevenueCard'
+import { emailsSentCard } from './cards/EmailsSentCard'
 
 export const DASHBOARD_CARDS: Record<string, DashboardCard<any>> = {
   'past-revenue': pastRevenueCard,
   'projected-revenue': projectedRevenueCard,
   'annual-revenue': annualRevenueCard,
+  'emails-sent': emailsSentCard,
 }
 
 export function getDashboardCard(id: string): DashboardCard<any> | undefined {
