@@ -55,31 +55,49 @@ export async function GET() {
   const thisMonday = addDays(today, -backToMonday)
   const nextMonday = addDays(thisMonday, 7)
   const lastMonday = addDays(thisMonday, -7)
+  // Week before last — for the Past Revenue card's ▲/▼ comparison. Same math,
+  // one window earlier (no new revenue calculation).
+  const priorMonday = addDays(lastMonday, -7)
 
-  // Per-client fee + email lookup.
+  // Per-client fee + name/email lookup.
   const { data: clientRows } = await supabase.from('clients').select('id, name, email, session_fee')
   const feeById = new Map<string, number>()
+  const nameById = new Map<string, string>()
   const roster: RosterClientWithEmail[] = []
   for (const c of clientRows || []) {
     feeById.set(c.id, typeof c.session_fee === 'number' ? c.session_fee : 0)
+    nameById.set(c.id, c.name)
     roster.push({ id: c.id, name: c.name, email: c.email })
   }
 
-  // --- Past week (realized) from logged notes, by actual logged length ---
+  // --- Past two weeks (realized) from logged notes, by actual logged length ---
+  // Pull both weeks in one query, then split by week for the total + comparison.
   const { data: notes } = await supabase
     .from('notes')
     .select('id, client_id, session_date, duration_minutes')
-    .gte('session_date', ymdStr(lastMonday))
+    .gte('session_date', ymdStr(priorMonday))
     .lt('session_date', ymdStr(thisMonday))
 
+  const lastMondayStr = ymdStr(lastMonday)
   let pastTotal = 0
   let pastHours = 0
+  let pastSessions = 0
+  let priorTotal = 0
+  // Per-session breakdown for the expanded card (client · billed amount), last
+  // week only, newest first.
+  const pastLines: { client: string; minutes: number; amount: number }[] = []
   for (const n of notes || []) {
     const minutes = typeof n.duration_minutes === 'number' ? n.duration_minutes : 60
-    pastHours += billedHours(minutes)
-    pastTotal += sessionRevenue(feeById.get(n.client_id), minutes)
+    const amount = sessionRevenue(feeById.get(n.client_id), minutes)
+    if (n.session_date && n.session_date >= lastMondayStr) {
+      pastHours += billedHours(minutes)
+      pastTotal += amount
+      pastSessions++
+      pastLines.push({ client: nameById.get(n.client_id) || '—', minutes, amount })
+    } else {
+      priorTotal += amount
+    }
   }
-  const pastSessions = (notes || []).length
 
   // --- This week (projected) from the calendar, by scheduled length ---
   let projectedTotal = 0
@@ -103,6 +121,8 @@ export async function GET() {
     timezone: tz,
     calendarConnected: !!coach?.google_refresh_token,
     past: { weekStart: ymdStr(lastMonday), sessions: pastSessions, hours: pastHours, total: pastTotal },
+    prior: { weekStart: ymdStr(priorMonday), total: priorTotal },
+    pastSessions: pastLines,
     projected: { weekStart: ymdStr(thisMonday), sessions: projectedSessions, hours: projectedHours, total: projectedTotal },
   })
 }

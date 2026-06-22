@@ -13,6 +13,7 @@
 
 import type { SessionReportJson } from '@/lib/scoring/types'
 import type { PrepContent } from '@/lib/email-template'
+import type { CardPlacement } from '@/lib/dashboard/types'
 
 type Timestamp = string // ISO 8601
 type DateString = string // YYYY-MM-DD
@@ -338,6 +339,16 @@ export type Communication = {
   sent_at: Timestamp
 }
 
+// Per-coach customizable dashboard layout (migration 026). One row per coach per
+// surface; `blocks` is the placed-card list (lib/dashboard validates it on r/w).
+export type DashboardLayout = {
+  id: string
+  coach_id: string
+  surface: string // 'dashboard'
+  blocks: CardPlacement[]
+  updated_at: Timestamp
+}
+
 export type PrepSheet = {
   id: string
   coach_id: string | null
@@ -526,6 +537,12 @@ export type Database = {
         Row: GardenEdge
         Insert: Insertable<GardenEdge>
         Update: Updatable<GardenEdge>
+        Relationships: []
+      }
+      dashboard_layouts: {
+        Row: DashboardLayout
+        Insert: Insertable<DashboardLayout>
+        Update: Updatable<DashboardLayout>
         Relationships: []
       }
     }
