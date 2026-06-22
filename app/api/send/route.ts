@@ -11,6 +11,7 @@ import { persistActionLinks } from '@/lib/actions'
 import { findClientByEmailOrName } from '@/lib/client-lookup'
 import { getBaseUrl } from '@/lib/url'
 import { headerSafe, encodeHeaderValue } from '@/lib/email-mime'
+import { logCommunication, htmlToPreview } from '@/lib/communications'
 
 function makeRawEmail(to: string, cc: string, subject: string, body: string, isHTML: boolean) {
   const contentType = isHTML ? 'text/html' : 'text/plain'
@@ -134,6 +135,28 @@ export async function POST(req: NextRequest) {
     requestBody: { raw: prepRaw },
   })
   results.push({ type: 'prep', id: prepResult.data.id })
+
+  // Log the prep sheet to the communications table so it appears in the
+  // Recent Communication card. Best-effort — never block the response.
+  if (matchedClientId && matchedCoachId) {
+    try {
+      const supabase = getSupabaseAdmin()
+      await logCommunication(supabase, {
+        coach_id: matchedCoachId,
+        client_id: matchedClientId,
+        type: 'prep_sheet',
+        direction: 'outbound',
+        subject: 'Your Session Preparation - theLeadershipWell',
+        preview: htmlToPreview(html),
+        body_html: html,
+        status: 'sent',
+        gmail_message_id: prepResult.data.id ?? null,
+        sent_at: new Date().toISOString(),
+      })
+    } catch (e) {
+      console.error('[send] communications log failed', e)
+    }
+  }
 
   return NextResponse.json({ success: true, results })
 }
