@@ -791,6 +791,33 @@ and back in** to grant calendar-write + populate the refresh token with it;
   wound-repair/diagnosis, not psychological depth or emotional exploration.
 
 ### Open — keep these tracked (also GitHub issues)
+- **SMS delivery for nudges and reminders (roadmap).** Allow the coach to send
+  nudges and appointment reminders via text message in addition to (or instead of)
+  email. Planned approach: integrate Twilio (or similar — Twilio has a free trial
+  and a simple REST API) as the SMS transport. `clients` would gain a
+  `phone` field (E.164 format) set via the edit-client modal. The send path in
+  `lib/nudges/send.ts` and `lib/appointments.ts#sendAppointmentReminder` would
+  check a per-nudge/per-reminder delivery preference (`email | sms | both`) and
+  route accordingly; the `communications` log already has a `type`/`direction`
+  structure that accommodates a new `type='sms'`. The NudgeItem review UI
+  (`NudgesCard`, Nudge Queue) would surface a channel toggle so the coach can
+  choose before sending. Public action-completion links (action checkboxes) still
+  work over SMS since they're plain URLs. Requires: Twilio account +
+  `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` env vars; a
+  `clients.phone` column (new migration); and an SMS send helper
+  (`lib/sms.ts#sendSms`) mirroring the `lib/gmail.ts` pattern.
+- **Background prep-sheet generation (roadmap).** Currently the session prep
+  page blocks for ~45 s while fetching notes + calling Claude. Planned: a global
+  `PrepContext` in the auth layout starts the fetch and immediately redirects the
+  coach to the dashboard; a pulsing header toast ("Preparing [client]'s prep
+  sheet…") persists while the coach does other work in the browser; when the
+  fetch resolves a `PrepModal` slides up over the current view with the full
+  editable sheet + Send button (same Editable fields, Regenerate, back links).
+  The old `/session/[id]` page stays for direct links. Files: new `PrepContext`
+  provider + `PrepToast` in the auth layout, new `PrepModal` component,
+  `UpNextPanel` generate buttons become context triggers instead of `<Link>`s.
+  Optional upgrade: add a `prep_jobs` Supabase table + Vercel background function
+  so the job survives closing the tab entirely.
 - **Worksheets (client fill-in) — to be built (#38).** Worksheet-kind Library folders
   exist (with a "still being built" banner) but currently behave like note
   templates. Planned: a builder with blanks + checkboxes, assign-to-client, a
