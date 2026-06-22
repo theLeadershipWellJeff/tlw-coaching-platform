@@ -20,7 +20,21 @@ export const CARD_META: Record<string, CardMeta> = {
     supportedSizes: ['compact', 'standard', 'expanded'],
     defaultSize: 'standard',
   },
-  // Phase 2+: projected-revenue, annual-revenue, emails-sent, calendar, nudges.
+  'projected-revenue': {
+    id: 'projected-revenue',
+    title: 'Projected revenue',
+    surfaces: ['dashboard'],
+    supportedSizes: ['compact', 'standard', 'expanded'],
+    defaultSize: 'standard',
+  },
+  'annual-revenue': {
+    id: 'annual-revenue',
+    title: 'Annual revenue',
+    surfaces: ['dashboard'],
+    supportedSizes: ['compact', 'standard', 'expanded'],
+    defaultSize: 'standard',
+  },
+  // Phase 3+: emails-sent, calendar, nudges.
 }
 
 /** Cards eligible for the dashboard surface (all of them, today). */

@@ -16,12 +16,27 @@ export interface RevenueWeek {
   total: number
 }
 
+export interface MonthRevenue {
+  month: number // 1..12
+  actual: number
+  projected: number
+}
+
+export interface AnnualRevenue {
+  year: number
+  actualsYtd: number
+  projectedRemainder: number
+  total: number
+  monthly: MonthRevenue[]
+}
+
 export interface RevenuePayload {
   calendarConnected: boolean
   past: RevenueWeek
   prior: { weekStart: string; total: number }
   pastSessions: { client: string; minutes: number; amount: number }[]
   projected: RevenueWeek
+  annual: AnnualRevenue
 }
 
 export interface RevenueData {
