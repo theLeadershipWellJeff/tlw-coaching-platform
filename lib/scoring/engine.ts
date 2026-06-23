@@ -237,9 +237,14 @@ Return EXACTLY this JSON shape (v0.5):
   "attribution": { "method": "role-mapped", "source": "plaud-diarization", "confidence": "high", "likely_swap_flag": false },
   "competencies": [
     { "id": 1, "name": "Demonstrates ethical practice", "domain": "Foundation", "score": 3.0, "band": "Proficient", "evidence": "one line tied to a moment", "subcompetency_refs": ["1.01"], "gates_triggered": [] },
+    { "id": 2, "name": "Embodies a coaching mindset", "domain": "Foundation", "score": 3.0, "band": "Proficient", "evidence": "...", "subcompetency_refs": ["2.04"], "gates_triggered": [] },
+    { "id": 3, "name": "Establishes and maintains agreements", "domain": "Co-creating the relationship", "score": 3.0, "band": "Proficient", "evidence": "...", "subcompetency_refs": ["3.06"], "gates_triggered": [] },
+    { "id": 4, "name": "Cultivates trust and safety", "domain": "Co-creating the relationship", "score": 3.0, "band": "Proficient", "evidence": "...", "subcompetency_refs": ["4.04"], "gates_triggered": [] },
+    { "id": 5, "name": "Maintains presence", "domain": "Co-creating the relationship", "score": 3.0, "band": "Proficient", "evidence": "...", "subcompetency_refs": ["5.01"], "gates_triggered": [] },
     { "id": 6, "name": "Listens actively", "domain": "Communicating effectively", "score": 3.5, "band": "Proficient", "evidence": "...", "subcompetency_refs": ["6.02", "6.06"], "gates_triggered": [],
-      "dimensions": { "emotional": { "score": 3.0 }, "cognitive_structural": { "score": 4.0, "evidence": "cross-session callback (6.06); client's own metaphors (6.01)" } } }
-    // ... all 8 in id order; include dimensions only on C6. Put "gate_1"/"gate_2"/"gate_3" in gates_triggered on C1/C3/C6 when they fire.
+      "dimensions": { "emotional": { "score": 3.0 }, "cognitive_structural": { "score": 4.0, "evidence": "cross-session callback (6.06); client's own metaphors (6.01)" } } },
+    { "id": 7, "name": "Evokes awareness", "domain": "Communicating effectively", "score": 3.0, "band": "Proficient", "evidence": "...", "subcompetency_refs": ["7.03"], "gates_triggered": [] },
+    { "id": 8, "name": "Facilitates client growth", "domain": "Cultivating learning and growth", "score": 3.0, "band": "Proficient", "evidence": "...", "subcompetency_refs": ["8.01"], "gates_triggered": [] }
   ],
   "metrics": {
     "coach_talk_time_pct": 0,
@@ -610,7 +615,7 @@ export async function scoreTranscript(
   const message = await client.messages.create(
     {
       model: MODEL,
-      max_tokens: 4000,
+      max_tokens: 6000,
       system: SYSTEM,
       messages: [{ role: 'user', content: buildPrompt(transcript, ctx) }],
     },
