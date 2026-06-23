@@ -325,7 +325,16 @@ export function SessionReportView({ id }: { id: string }) {
             title="Re-run the engine against the current rubric"
             className="rounded-tlw-md border border-tlw-warm-gray/30 px-3 py-1.5 text-[12px] font-medium text-tlw-espresso transition-opacity duration-tlw-base hover:opacity-80 disabled:opacity-40"
           >
-            {rescoring ? 'rescoring…' : 'rescore'}
+            {rescoring ? (
+              <span className="flex items-center gap-1.5">
+                <span className="inline-flex gap-0.5">
+                  <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: '300ms' }} />
+                </span>
+                rescoring
+              </span>
+            ) : 'rescore'}
           </button>
           {rescoreMsg && (
             <p
@@ -562,7 +571,16 @@ export function SessionReportView({ id }: { id: string }) {
               disabled={emailing || (emailRecipient === 'other' && !emailOther.trim())}
               className="rounded-tlw-md bg-tlw-navy-rich px-3 py-1.5 text-[12px] font-medium text-tlw-cream transition-opacity duration-tlw-base hover:opacity-90 disabled:opacity-40"
             >
-              {emailing ? 'sending…' : 'send report'}
+              {emailing ? (
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-flex gap-0.5">
+                    <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </span>
+                  sending
+                </span>
+              ) : 'send report'}
             </button>
           </div>
           {emailMsg && (

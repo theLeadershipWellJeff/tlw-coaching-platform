@@ -542,16 +542,20 @@ export function matchEventToClient(
   clients: RosterClientWithEmail[]
 ): EventClientMatch {
   const mine = coachEmails(coach)
-  const guest = (event.attendees || []).find(
+  const allGuests = (event.attendees || []).filter(
     (a: any) => a.email && !mine.includes(a.email.toLowerCase()) && a.responseStatus !== 'declined' && !a.resource
   )
+  // Use the first non-coach attendee as the canonical guest (for guestEmail/guestName reporting)
+  const guest = allGuests[0] ?? null
   const guestEmail: string | null = guest?.email || null
   const guestName: string | null = guest?.displayName || null
 
-  if (guestEmail) {
-    const email = guestEmail.toLowerCase()
+  // Scan ALL attendees for a roster email match (not just the first one — the client
+  // may not have accepted but their assistant did, putting them later in the list).
+  for (const a of allGuests) {
+    const email = a.email.toLowerCase()
     const byEmail = clients.find((c) => c.email && c.email.toLowerCase() === email)
-    if (byEmail) return { clientId: byEmail.id, via: 'attendee_email', guestEmail, guestName }
+    if (byEmail) return { clientId: byEmail.id, via: 'attendee_email', guestEmail: a.email, guestName: a.displayName || null }
   }
 
   const roster: RosterClient[] = clients.map((c) => ({ id: c.id, name: c.name }))
