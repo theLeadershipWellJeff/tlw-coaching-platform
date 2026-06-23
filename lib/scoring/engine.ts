@@ -197,10 +197,12 @@ EMOTION MOVE CLASSIFICATION (classify each coach emotion move into exactly ONE o
   - Coping inquiry: coach asks how the client is managing/dealing with the emotion. REDIRECTS away from the feeling — does NOT count as a feeling exploration AND does NOT count as a flagged-emotion event.
   - Feeling exploration: coach stays with the emotion and asks into its origin, meaning, function, or cost. Counts as a qualifying exploration AND a flagged-emotion event.
 
-C6 DIMENSIONAL SCORING (v0.5 B3 — score Competency 6 on TWO dimensions, return both):
-  EMOTIONAL dimension (6.04): feeling-reflection / coping-inquiry / feeling-exploration logic. Gate 3 caps THIS dimension at band 3 (score 3.0) when feeling_explorations = 0.
-  COGNITIVE/STRUCTURAL dimension (6.01, 6.02, 6.03, 6.05, 6.06): scored independently regardless of Gate 3. Reflecting content accurately, catching patterns, using the client's OWN metaphors and examples back to them, surfacing cross-session themes — all strong active-listening moves that score on their merits.
-  Return both dimension scores in competency 6's "dimensions" field. The engine computes final C6 as the average of the two (after any cap). Include evidence for the cognitive/structural dimension.
+C6 DIMENSIONAL SCORING (v0.5.1 — TWO raw sub-scores required; engine enforces gate and composite):
+  You MUST return BOTH sub-scores in competency 6's "dimensions" field. Do NOT apply Gate 3 yourself to the top-level C6 score — report the raw sub-scores and the engine computes the composite deterministically.
+  EMOTIONAL dimension (6.04): feeling-reflection / coping-inquiry / feeling-exploration logic. Score this dimension on its own merits — do NOT cap it yourself for Gate 3; the engine caps it.
+  COGNITIVE/STRUCTURAL dimension (6.01, 6.02, 6.03, 6.05, 6.06): scored independently. Reflecting content accurately, catching patterns, using the client's OWN metaphors and examples back to them, surfacing cross-session themes. NOT gated by Gate 3. Strong cognitive/structural listening CAN raise the final C6 composite even when feeling_explorations = 0.
+  Top-level C6 "score": your best estimate of the raw composite before any gate. The engine will override this with the deterministic composite formula (which favors cognitive_structural when it is the stronger dimension). You do not need to match the composite precisely — focus on accurate sub-scores.
+  Include evidence for the cognitive/structural dimension. The dimensions field is REQUIRED for C6.
 
 CONSULTANT MOVE vs. EVOCATIVE REFRAME (the who-synthesises test):
   - Evocative reframe: coach offers a frame or observation and the CLIENT performs the final synthesis. Counts toward C7, NOT as a consultant move.
@@ -221,8 +223,8 @@ COACHING / COUNSELING BOUNDARY (§9 C1.06): crossed ONLY when the coach attempts
 
 GATE RULES (hard ceilings — enforced in code; report each gate boolean and list the gate id on the affected competency):
   - Gate 1 → C1 capped at band 2: ONLY when NO agreement on file AND no verbal consent to record (agreement_on_file false AND verbal_consent_to_record false). NOTE: when agreement_on_file is true and recording_authorized is false, the ENGINE handles this case — set verbal_consent_to_record from what you hear and let the engine decide.
-  - Gate 2 → C3 capped at band 2: no client-named insight at close AND no standing engagement. If standing engagement present, Gate 2 does NOT trigger.
-  - Gate 3 → C6 EMOTIONAL DIMENSION capped at band 3 (score 3.0): zero qualifying feeling explorations. The cognitive/structural dimension is NOT capped. Return both dimension scores; the engine averages them for the final C6 score.
+  - Gate 2 → C3 capped at band 2: no client-named insight at close AND no standing engagement. If standing engagement present, Gate 2 does NOT trigger. NOTE (v0.5.1 Patch 2): a client-generated recap or summary at close satisfies the close for C3 band 4 — explicit coach-named closure is a band-5 signal only, not a band-4 requirement.
+  - Gate 3 → C6 EMOTIONAL DIMENSION capped at band 3 (score 3.0): zero qualifying feeling explorations. The cognitive/structural dimension is NOT capped. IMPORTANT: do NOT apply this cap to the top-level C6 score or to the emotional sub-score yourself — report raw sub-scores in "dimensions" and let the engine enforce Gate 3 and compute the composite. The composite formula (cognitive-favoring weighted blend with emotional floor) can lift the final C6 above 3.0 when cognitive/structural listening is strong.
 
 SET session.standing_engagement to true when the transcript shows an ongoing engagement (prior sessions referenced, session number > 1, continuing relationship), otherwise false.
 
@@ -485,9 +487,13 @@ export function enforceRules(raw: any, ctx: ScoringContext): SessionReportJson {
     if (def.id === 1 && gate1 && score > 2) { score = 2; gates.push('gate_1') }
     if (def.id === 3 && gate2 && score > 2) { score = 2; gates.push('gate_2') }
 
-    // v0.5 B3: Gate 3 caps C6 EMOTIONAL DIMENSION only (not all of C6).
-    // The model returns c.dimensions.{emotional.score, cognitive_structural.score}.
-    // Final C6 = average of the two dimension scores (emotional after any cap).
+    // v0.5.1 Patch 1: Gate 3 caps C6 EMOTIONAL DIMENSION only — never the composite.
+    // Model must return dimensions.{emotional.score, cognitive_structural.score} as
+    // raw sub-scores (no gate applied by the model). Engine caps emotional and computes:
+    //   composite = max(emotionalCapped, 0.4 × emotionalCapped + 0.6 × cogRaw)
+    // This ensures a strong cognitive/structural dimension materially lifts the
+    // composite above the gated emotional floor without floating it up artificially
+    // when both dimensions are weak.
     if (def.id === 6) {
       const rawDims = c.dimensions
       if (rawDims && rawDims.emotional?.score != null && rawDims.cognitive_structural?.score != null) {
@@ -505,9 +511,13 @@ export function enforceRules(raw: any, ctx: ScoringContext): SessionReportJson {
             evidence: rawDims.cognitive_structural?.evidence || undefined,
           },
         }
-        score = Math.round(((emotionalCapped + cogRaw) / 2) * 10) / 10
+        // Composite: weighted blend (cognitive favored) with emotional as floor.
+        const weighted = Math.round((0.4 * emotionalCapped + 0.6 * cogRaw) * 10) / 10
+        score = Math.round(Math.max(emotionalCapped, weighted) * 10) / 10
       } else if (gate3 && score > 3) {
-        // Fallback: model didn't return dimensions — apply old whole-C6 cap.
+        // Fallback: model didn't return dimensions — cap the whole score.
+        // This should not happen with a well-formed v0.5.1 response; log it.
+        console.warn('C6 dimensions missing in engine response — falling back to whole-score gate cap.')
         score = 3
         gates.push('gate_3')
       }

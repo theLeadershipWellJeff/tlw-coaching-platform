@@ -112,9 +112,9 @@ export const COMPETENCY_BANDS: Record<number, Partial<Record<Band, string>>> = {
     Proficient:
       'Client has an agenda; coach receives it cleanly and works it. A clear, self-evident agenda received well is a legitimate 3.',
     Strong:
-      'Coach helps refine the agenda when refinement adds value — asks around the items, sharpens outcomes, tests completeness. If the agenda already has clear outcomes and needs no refinement, clean receipt is itself band 4, not a capped 3. Coach also tracks the agreement when the client shifts it mid-session.',
+      'Coach helps refine the agenda when refinement adds value — asks around the items, sharpens outcomes, tests completeness. If the agenda already has clear outcomes and needs no refinement, clean receipt is itself band 4, not a capped 3. Coach tracks the agreement when the client shifts it mid-session. A client-generated recap/close satisfies the close at band 4 — explicit coach consolidation or coach-named closure of the loop is NOT required at band 4 and is a band-5 signal only.',
     Masterful:
-      'Client manages agenda and focus largely themselves; coach nearly invisible (Invisibility Standard). Close includes consolidated insight and forward movement (ICF 3.06, 3.08, 3.09).',
+      'Client manages agenda and focus largely themselves; coach nearly invisible (Invisibility Standard). Explicit coach-named closure of the agreement loop, where it serves the client, appears here (ICF 3.06, 3.08, 3.09).',
   },
   // 4 — Cultivates trust and safety. Single-instance standard for band 4.
   4: {
