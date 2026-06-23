@@ -14,6 +14,12 @@ import { todayInTimeZone } from '@/lib/datetime'
 import { DEFAULT_TIMEZONE } from '@/lib/coach'
 import { generateNudgesForClient } from '@/lib/nudges/generate'
 
+function initialsFromName(name: string): string {
+  const parts = name.trim().split(/\s+/)
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+}
+
 export async function runAndStoreReport(
   supabase: SupabaseClient<Database>,
   transcript: Transcript,
@@ -32,19 +38,24 @@ export async function runAndStoreReport(
   // client_id) falls back to false → the engine looks for verbal consent instead.
   let agreementOnFile = false
   let recordingAuthorized: boolean | null = null
+  let clientName: string | null = null
   if (transcript.client_id) {
     const { data: client } = await supabase
       .from('clients')
-      .select('agreement_on_file, recording_authorized')
+      .select('agreement_on_file, recording_authorized, name')
       .eq('id', transcript.client_id)
       .maybeSingle()
     agreementOnFile = !!client?.agreement_on_file
     recordingAuthorized = client?.recording_authorized ?? null
+    clientName = client?.name ?? null
   }
+
+  const rawInitials = transcript.client_initials || parsed.clientInitials
+  const clientInitials = rawInitials || (clientName ? initialsFromName(clientName) : '—')
 
   const ctx: ScoringContext = {
     coachName: coach.name,
-    clientInitials: transcript.client_initials || parsed.clientInitials || '—',
+    clientInitials,
     sessionType: parsed.sessionType,
     sessionNumber: parsed.sessionNumber,
     engagementTotal: parsed.engagementTotal,
