@@ -1,6 +1,6 @@
 /**
  * The fixed rubric scaffolding from the Session Report Spec (baseline v0.3,
- * band definitions locked in v0.4):
+ * band definitions updated in v0.5 — see spec/theLeadershipWell_Session_Report_Spec_v0.5.md):
  * the eight ICF 2025 Core Competencies (§6.2), the four domains, the 5-point
  * band scale (§6.1), and the helpers that map a numeric score to a band and a
  * semantic color family (§4 band chip colors).
@@ -84,20 +84,25 @@ export const COMPETENCY_BANDS: Record<number, Partial<Record<Band, string>>> = {
     Masterful:
       'Ethics woven into the coaching relationship itself — proactive, transparent, client-empowering. The client experiences the ethical stance as care, not compliance.',
   },
-  // 2 — Embodies a coaching mindset.
+  // 2 — Embodies a coaching mindset. v0.5 B2: signaling a role shift earns
+  // mindset credit off the floor (2.04 bias-awareness, ethics 3.7 disclosure).
+  // Signaling is necessary but not sufficient — mindset content governs the ceiling.
   2: {
     Emerging:
-      'Coach-centered; curiosity absent; client’s choices not respected.',
+      "Coach-centered; curiosity absent; client's choices not respected.",
     Developing:
       'Approaching client-centeredness; frequent unsignaled consultant moves; framework-filling is the dominant mode.',
     Proficient:
-      'Generally client-centered; names role shifts when they occur; curiosity present but process-curiosity underdeveloped. Consultant moves may occur without full signaling or permission.',
+      'Generally client-centered. Signals role shifts when they occur (earns the floor). Curiosity present but process-curiosity (2.09) underdeveloped; bias toward action/frameworks (2.04) live. May supply centerpiece insight rather than evoking it.',
     Strong:
-      'Consultant moves are signaled, permissioned, brief, and returned to the client. Coach shows awareness of bias toward frameworks and content. Nurtures the client’s own curiosity rather than filling space with frameworks.',
+      "Role shifts signaled, permissioned, brief, returned. Coach shows awareness of bias toward frameworks/content and actively nurtures the client's own curiosity rather than filling space. Consulting is the exception, not the back half.",
     Masterful:
-      'Deep mastery of 2.01/2.04/2.05/2.09. Coach holds not-knowing with the client. Curiosity is contagious. Framework offers feel like the client’s own discovery. Consultant moves are rare, surgical, and indistinguishable from evocation.',
+      "Deep mastery of 2.01, 2.04, 2.05, 2.09. Holds not-knowing with the client. Curiosity is contagious. Offers feel like the client's own discovery; consultant moves rare, surgical, indistinguishable from evocation.",
   },
-  // 3 — Establishes and maintains agreements. Gate 2: no named insight at close
+  // 3 — Establishes and maintains agreements. v0.5 B4: band logic rewritten —
+  // a client who arrives with a clear agenda should not be penalized. "Partnering"
+  // means helping the client get to an agenda; if they already have one, clean
+  // receipt is itself strong practice. Gate 2 unchanged: no named insight at close
   // AND no standing engagement → band 2.
   3: {
     Emerging:
@@ -105,11 +110,11 @@ export const COMPETENCY_BANDS: Record<number, Partial<Record<Band, string>>> = {
     Developing:
       'Session focus emerges without coach invitation; no named insight at close; no standing engagement agreement (Gate 2).',
     Proficient:
-      'Session focus emerges organically; client’s agenda received by the coach. Standing engagement agreement present.',
+      'Client has an agenda; coach receives it cleanly and works it. A clear, self-evident agenda received well is a legitimate 3.',
     Strong:
-      'Coach explicitly invites the client’s agenda and receives it (ICF 3.06). Client names at least one insight at close.',
+      'Coach helps refine the agenda when refinement adds value — asks around the items, sharpens outcomes, tests completeness. If the agenda already has clear outcomes and needs no refinement, clean receipt is itself band 4, not a capped 3. Coach also tracks the agreement when the client shifts it mid-session.',
     Masterful:
-      'Coach reflects the agenda back and partners on its completeness or priority before proceeding. Close includes consolidated insight and forward movement (ICF 3.06, 3.08, 3.09).',
+      'Client manages agenda and focus largely themselves; coach nearly invisible (Invisibility Standard). Close includes consolidated insight and forward movement (ICF 3.06, 3.08, 3.09).',
   },
   // 4 — Cultivates trust and safety. Single-instance standard for band 4.
   4: {
@@ -120,7 +125,7 @@ export const COMPETENCY_BANDS: Record<number, Partial<Record<Band, string>>> = {
     Proficient:
       'Client feels safe to share; coach demonstrates consistent respect and empathy (ICF 4.04, 4.05).',
     Strong:
-      'Client shares freely and candidly, including emotionally raw content. Coach adapts to the client’s style and identity. One clear qualifying trust-deepening move present (single-instance standard; ICF 4.01, 4.02, 4.05, 4.06).',
+      "Client shares freely and candidly, including emotionally raw content. Coach adapts to the client's style and identity. One clear qualifying trust-deepening move present (single-instance standard; ICF 4.01, 4.02, 4.05, 4.06).",
     Masterful:
       'Client experiences the relationship itself as generative. Coach vulnerability and transparency deepen trust actively (ICF 4.06).',
   },
@@ -129,27 +134,32 @@ export const COMPETENCY_BANDS: Record<number, Partial<Record<Band, string>>> = {
     Emerging:
       'Coach distracted, agenda-driven, or disengaged.',
     Developing:
-      'Partial presence; coach moves away from the client’s energy toward own plan.',
+      "Partial presence; coach moves away from the client's energy toward own plan.",
     Proficient:
       'Coach is focused and tracks the conversation; picks up threads; responds to content (ICF 5.01, 5.02).',
     Strong:
       'Coach is attuned — present to what is emerging beneath the content (emotion, energy, the unsaid). Creates space for silence. One clear qualifying attunement move present (single-instance standard; ICF 5.03, 5.06, 5.07).',
     Masterful:
-      'Coach’s presence is generative. The client slows down and goes deeper because of the quality of attention in the room (ICF 5.03–5.07).',
+      "Coach's presence is generative. The client slows down and goes deeper because of the quality of attention in the room (ICF 5.03–5.07).",
   },
-  // 6 — Listens actively. Attunement Standard; Exploration Gate (Gate 3); single
-  // instance for band 4.
+  // 6 — Listens actively. v0.5 B3: scored on two dimensions (combined for final
+  // score). Attunement Standard; single instance for band 4.
+  // EMOTIONAL dimension (6.04): governed by feeling-reflection/exploration logic.
+  //   Gate 3 caps THIS dimension only at band 3 on zero feeling explorations.
+  // COGNITIVE/STRUCTURAL dimension (6.01–6.03, 6.05–6.06): scored independently.
+  //   Reflecting accurately, catching patterns, cross-session callbacks, using
+  //   the client's own metaphors — score on their merits regardless of Gate 3.
   6: {
     Emerging:
       'Coach not tracking client; interrupting or redirecting without basis.',
     Developing:
       'Surface listening; coach reflects content but misses subtext.',
     Proficient:
-      'Coach reflects and summarizes content accurately. Emotion named or mirrored at least twice. Stays focused on what the client is saying (reflection present; no exploration; ICF 6.02, 6.04).',
+      'Coach reflects and summarizes content accurately. Emotion named or mirrored at least twice. Stays focused on what the client is saying (ICF 6.02, 6.04). Scored on two dimensions: emotional (6.04) and cognitive/structural (6.01–6.03, 6.05–6.06).',
     Strong:
-      'Coach is attuned to what is beneath the content — emotion, energy, the unsaid. At least one qualifying feeling exploration present. One clear qualifying attunement move present (single-instance standard; ICF 6.03, 6.04, 6.05).',
+      "Emotional dimension (6.04): attuned to what is beneath the content — emotion, energy, the unsaid. At least one qualifying feeling exploration present (Gate 3 caps this dimension at band 3 if absent). Cognitive/structural dimension (6.01, 6.02, 6.05, 6.06): reflects patterns, uses client\'s own metaphors, surfaces cross-session themes. One clear qualifying attunement move present (single-instance standard; ICF 6.03, 6.04, 6.05).",
     Masterful:
-      'Coach hears what the client cannot yet say. Reflects patterns across the session and engagement. Emotion exploration is deep, sustained, and transformative (ICF 6.03–6.06).',
+      'Coach hears what the client cannot yet say. Reflects patterns across the session and engagement. Emotion exploration is deep, sustained, and transformative. Cross-session pattern recognition and metaphor use are second nature (ICF 6.03–6.06).',
   },
   // 7 — Evokes awareness. Band 5 = one clear identity/system/process-level
   // insight, deeply generative and client-owned.
@@ -161,11 +171,15 @@ export const COMPETENCY_BANDS: Record<number, Partial<Record<Band, string>>> = {
     Proficient:
       'Coach uses powerful questions; client generates awareness at process level. Coach may use reframes or metaphors (ICF 7.03, 7.04, 7.10).',
     Strong:
-      'Coach evokes awareness at system or identity level. Questions go beyond the situation to the client’s patterns, values, or worldview. One clear qualifying insight present (single-instance standard; ICF 7.02, 7.03, 7.08).',
+      "Coach evokes awareness at system or identity level. Questions go beyond the situation to the client's patterns, values, or worldview. One clear qualifying insight present (single-instance standard; ICF 7.02, 7.03, 7.08).",
     Masterful:
       'Any one clear instance of identity-, system-, or process-level insight that is deeply generative and fully client-owned. Coach nearly invisible (ICF 7.02, 7.08, 7.11).',
   },
   // 8 — Facilitates client growth. Authorship Hinge between bands 3 and 4.
+  // v0.5 B5: offer vs. recommendation distinction. An offer that crystallizes the
+  // client's own insight into concrete form — held without attachment (7.11),
+  // client free to reshape — meets the band-4 authorship hinge. A recommendation
+  // the coach is invested in does not.
   8: {
     Emerging:
       'No closing or integration; session ends without learning consolidated.',
@@ -174,14 +188,14 @@ export const COMPETENCY_BANDS: Record<number, Partial<Record<Band, string>>> = {
     Proficient:
       'Coach consolidates learning at close; client names an insight. Actions may be coach-suggested (ICF 8.01, 8.06, 8.09).',
     Strong:
-      'Client generates their own insight and at least one self-authored action or commitment. Coach partners on accountability (authorship hinge met; ICF 8.02, 8.03).',
+      "Client generates their own insight and at least one self-authored action or commitment. An offer that crystallizes the client\'s own insight into concrete form — held without attachment (7.11), client free to reshape — also meets this standard. Coach partners on accountability (authorship hinge met; ICF 7.11, 8.02, 8.03).",
     Masterful:
       'Client integrates insight into their worldview and self-generates a growth plan. Coach nearly invisible in the growth design (ICF 8.01, 8.02, 8.07).',
   },
 }
 
 /**
- * theLeadershipWell named IP principles (spec v0.4 §8) — cross-competency
+ * theLeadershipWell named IP principles (spec v0.5 §8) — cross-competency
  * standards that appear in scoring rationale. Folded into the engine prompt.
  */
 export const CROSS_COMPETENCY_PRINCIPLES: { name: string; text: string }[] = [
@@ -191,15 +205,19 @@ export const CROSS_COMPETENCY_PRINCIPLES: { name: string; text: string }[] = [
   },
   {
     name: 'The Exploration Gate',
-    text: 'Zero feeling explorations caps Competency 6 at band 3 regardless of emotion-flag count. Named in the scoring output when triggered.',
+    text: 'v0.5: Zero feeling explorations caps the EMOTIONAL DIMENSION of Competency 6 at band 3 — not all of C6. The cognitive/structural dimension (6.01–6.03, 6.05–6.06) scores independently. feeling_explorations remains visible as a sub-metric. Named in the scoring output when triggered.',
   },
   {
     name: 'The Authorship Hinge',
-    text: 'For Competency 8, client-generated vs. coach-packaged actions is the hinge between bands 3 and 4.',
+    text: 'For Competency 8, client-generated vs. coach-packaged actions is the hinge between bands 3 and 4. v0.5 B5: an offer that crystallizes the client\'s own insight — held without attachment (7.11), freely rephraseable — meets the hinge. A recommendation the coach is invested in does not.',
   },
   {
     name: 'The Consultant Pull Signature',
-    text: 'When the coach perceives ~60% questions but the engine reads statements exceeding questions, that measurable gap is the signature of consultant pull under emotional or intellectual engagement (Competency 2, metric 4).',
+    text: 'v0.5 A4: consultant move count > 3 is a coach-facing advisory flag ("pattern to watch"), not a score-down on C2. The mode read lands on C7 and the overall via Q:S (redefined as questions:consultative-telling). When the coach perceives ~60% questions but the engine reads Q:S < 1:1, that gap is the signature of consultant pull under engagement.',
+  },
+  {
+    name: 'The Co-thinking / Consulting Boundary',
+    text: 'v0.5 A2: co-thinking builds on the client\'s own material, offered tentatively for the client to react to, WITHOUT attachment to adoption (7.11). It is excluded from consultant-move count and Q:S denominator. When attachment is present or signaling/invitation is absent, classify as consulting. Co-thinking must not become a laundering label for advice — when in doubt, default to consulting.',
   },
 ]
 

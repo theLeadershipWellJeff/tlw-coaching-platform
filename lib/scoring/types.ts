@@ -1,24 +1,62 @@
 /**
  * Types for the coaching evaluation engine output.
  *
- * Mirrors the JSON data model in spec/theLeadershipWell_Session_Report_Spec_v0.4.md
- * (§14). The engine returns a `SessionReportJson`; the report UI renders directly
- * from it, which is what keeps scoring decoupled from presentation.
+ * Mirrors the JSON data model in spec/theLeadershipWell_Session_Report_Spec_v0.5.md
+ * (§12, superseding v0.4 §14). The engine returns a `SessionReportJson`; the
+ * report UI renders directly from it, which is what keeps scoring decoupled from
+ * presentation.
  */
 
 export type Flag = 'red' | 'amber' | 'green'
 export type Band = 'Emerging' | 'Developing' | 'Proficient' | 'Strong' | 'Masterful'
 export type MetricSource = 'parsed' | 'estimated' | 'unavailable'
 
+// v0.5 A1: speaker-attribution confidence and method
+export interface Attribution {
+  method: 'role-mapped' | 'diarization-order' | 'unknown'
+  source: 'plaud-diarization' | 'zoom-vtt' | 'manual' | 'unknown'
+  confidence: 'high' | 'medium' | 'low'
+  likely_swap_flag: boolean
+}
+
+// v0.5 A2: four-bucket utterance taxonomy (Q:S denominator = consultative_telling only)
+export interface UtteranceTaxonomy {
+  questions: number | null
+  evocative_reflections: number | null
+  co_thinking: number | null
+  consultative_telling: number | null
+  process_logistics: number | null
+}
+
+// v0.5 A3: fail-loud recording consent flag (agreement on file but recording_authorized = false)
+export interface RecordingConsentFlag {
+  agreement_on_file: boolean
+  recording_authorized: boolean | null
+  status: 'confirmed' | 'needs_confirmation' | 'declined'
+}
+
+// v0.5 B3: C6 dimensional split — emotional (6.04) + cognitive/structural (6.01–6.03, 6.05–6.06)
+export interface C6Dimensions {
+  emotional: {
+    score: number
+    gate?: string // set when Gate 3 caps this dimension
+  }
+  cognitive_structural: {
+    score: number
+    evidence?: string
+  }
+}
+
 export interface CompetencyScore {
   id: number
   name: string
   domain: string
-  score: number // 1..5
+  score: number // 1..5, one decimal allowed (v0.5 B1)
   band: Band
   evidence: string // one-line, evidence-linked (spec §6.3)
   subcompetency_refs: string[] // e.g. ["6.04", "6.02"]
   gates_triggered?: string[] // gate ids that capped this competency, e.g. ["gate_3"]
+  dimensions?: C6Dimensions // C6 only (v0.5 B3 dimensional split)
 }
 
 export interface ConsultantMove {
@@ -33,8 +71,10 @@ export interface ConsultantMove {
 
 export interface ConsultantMoves {
   count: number
-  count_flag: Flag
+  count_flag: Flag // amber when >3 (v0.5 A4: advisory flag only, not a score cap)
   execution_flag: Flag
+  caps_c2: false // v0.5 A4: consultant move count no longer scores C2 down
+  note: string   // e.g. "pattern to watch — count no longer scores C2 down"
   moves: ConsultantMove[]
 }
 
@@ -45,11 +85,13 @@ export interface Metrics {
   flagged_emotion_flag: Flag | null
   feeling_explorations: number | null
   feeling_explorations_flag: Flag | null
-  question_to_statement: string | null // e.g. "1:1.8"
+  question_to_statement: string | null // e.g. "1:1.1" — v0.5: questions:consultative-telling only
   question_to_statement_flag: Flag | null
   reflective_pauses: number | null
   role_shifts_flagged: number | null
   consultant_moves: ConsultantMoves | null
+  utterance_taxonomy: UtteranceTaxonomy | null // v0.5 A2 four-bucket taxonomy
+  attribution?: Attribution // v0.5 A1 speaker-attribution confidence
   source: MetricSource
 }
 
@@ -85,15 +127,21 @@ export interface SessionMeta {
   // declined, null = legacy/unknown). Recording consent on file requires an
   // agreement AND not an explicit decline.
   recording_authorized?: boolean | null
+  // v0.5 A3: set when agreement is on file but recording_authorized = false —
+  // requires human confirmation before Gate 1 cap is applied.
+  recording_consent_flag?: RecordingConsentFlag
 }
 
 /** The three hard-ceiling gates (spec §10). */
 export interface GatesTriggered {
   // C1 capped at band 2 only when there is NO signed agreement on file AND no
   // verbal consent to record was obtained at session open (spec v0.4 §9 C1).
+  // v0.5 A3: does NOT fire when agreement is on file but recording_authorized=false
+  // (that case emits recording_consent_flag and requires human confirmation instead).
   gate_1: boolean
   gate_2: boolean // no named insight at close AND no standing engagement → C3 capped at band 2
-  gate_3: boolean // zero feeling explorations → C6 capped at band 3
+  // v0.5 B3: Gate 3 now caps C6's emotional dimension only (not all of C6).
+  gate_3: boolean // zero feeling explorations → C6 emotional dimension capped at band 3
 }
 
 export interface SessionReportJson {

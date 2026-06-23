@@ -1,20 +1,27 @@
 /**
- * The coaching evaluation engine.
+ * The coaching evaluation engine — spec v0.5.
  *
- * Sends a speaker-separated transcript to Claude with the consolidated Session
- * Report Spec v0.4 encoded as instructions, gets back the §14 JSON, then
- * enforces the mechanical rules deterministically in code so they can't drift:
- * the metric threshold flags, the consultant-move math and >3 mode-drift flag,
- * the three hard-ceiling gates (§10), and the equal-weighted overall average.
+ * Sends a speaker-separated transcript to Claude with the Session Report Spec
+ * v0.5 encoded as instructions, gets back the §12 JSON, then enforces the
+ * mechanical rules deterministically in code so they can't drift.
  *
- * Gate enforcement: the engine recomputes Gate 3 (zero feeling explorations →
- * C6 ≤ 3) from the metric arithmetically and Gate 1 (no signed agreement on file
- * AND no verbal consent to record → C1 ≤ 2) from agreement_on_file (platform) +
- * verbal_consent_to_record (model), and applies the model-judged Gate 2 (no named
- * insight at close AND no standing engagement → C3 ≤ 2) as a code ceiling off the
- * boolean the model returns. The finer judgment calls (single-instance band-4 standards,
- * evocative-reframe vs. consultant-move classification, the three-way emotion
- * classification) are instructed in the prompt — they need reading, not math.
+ * v0.5 changes from v0.4:
+ *   A1: Speaker-attribution integrity step — role-map by session structure, not
+ *       diarization order; fail-loud on low confidence; likely-swap flag.
+ *   A2: Four-bucket utterance taxonomy (question / evocative-reflection /
+ *       co-thinking / consultative-telling / process-logistics). Q:S redefined
+ *       as questions:consultative-telling — evocative reflections, co-thinking,
+ *       and logistics are excluded from the denominator.
+ *   A3: Fail-loud when agreement on file but recording_authorized=false — emits
+ *       recording_consent_flag and withholds Gate 1 cap until confirmed. Gate 1
+ *       itself is unchanged and working as designed.
+ *   A4: Consultant-move count >3 is now an amber advisory flag, not a red cap on
+ *       C2. caps_c2 is always false. Mode read lands on C7/overall via Q:S.
+ *   B1: Decimal scores (one place) allowed as within-band position; band word is
+ *       the unit of meaning for Phase 2 comparison.
+ *   B3: Gate 3 (zero feeling explorations) now caps C6's EMOTIONAL DIMENSION
+ *       only. The cognitive/structural dimension scores independently. Final C6 =
+ *       average of the two capped dimensions. feeling_explorations stays visible.
  */
 import Anthropic from '@anthropic-ai/sdk'
 import {
@@ -27,11 +34,15 @@ import {
   worstFlag,
 } from './rubric'
 import type {
+  Attribution,
+  C6Dimensions,
   CompetencyScore,
   ConsultantMove,
   Flag,
   Metrics,
+  RecordingConsentFlag,
   SessionReportJson,
+  UtteranceTaxonomy,
 } from './types'
 
 // Default scoring model. The previous default (claude-sonnet-4-20250514) is
@@ -119,7 +130,7 @@ function buildPrompt(transcript: string, ctx: ScoringContext): string {
     (p) => `  - ${p.name}: ${p.text}`
   ).join('\n')
 
-  return `Score this coaching session.
+  return `Score this coaching session against theLeadershipWell's Session Report Spec v0.5.
 
 SESSION CONTEXT
   coach: ${ctx.coachName}
@@ -130,71 +141,112 @@ SESSION CONTEXT
   agreement_on_file: ${ctx.agreementOnFile} (platform-set: a signed coaching agreement exists for this client)
   recording_authorized: ${ctx.recordingAuthorized === null || ctx.recordingAuthorized === undefined ? 'unknown' : ctx.recordingAuthorized} (platform-set: the client's signed recording/AI decision — false means they declined)
 
-THE 5-POINT BAND SCALE
+THE 5-POINT BAND SCALE (v0.5 B1: scores may carry ONE decimal as within-band position — the band word is the unit of meaning, not the decimal)
   1 Emerging — below competent practice
   2 Developing — approaching competent practice
   3 Proficient — competent practice (~PCC range)
   4 Strong — consistently skilled; attunement visible
   5 Masterful — mastery (~MCC range)
+  Decimal examples: 3.4 = proficient, 3.8 = high-proficient reaching toward strong, 4.5 = strong-high
 
-THE EIGHT COMPETENCIES (score each 1-5, with a one-line evidence note and sub-competency refs like "6.04"):
+THE EIGHT COMPETENCIES (score each 1.0–5.0 with one decimal, plus a one-line evidence note and sub-competency refs like "6.04"):
 ${competencyList}
 
-PER-COMPETENCY BAND DEFINITIONS (theLeadershipWell v0.4 — these OVERRIDE the general scale; score the band whose definition the evidence matches):
+PER-COMPETENCY BAND DEFINITIONS (theLeadershipWell v0.5 — these OVERRIDE the general scale; score the band whose definition the evidence matches):
 ${buildRubricBlock()}
 
 CROSS-COMPETENCY PRINCIPLES (theLeadershipWell IP — apply across all eight):
 ${principles}
 
-theLEADERSHIPWELL STANDARDS (apply these refinements on top of ICF):
-  - Coach talk-time should be <= 40% of words. Above 40% is a red flag.
-  - Flagged emotion (>= 2 per session): coach moves that tune into client emotion — naming a feeling observed, asking a feeling question, reflecting an energy shift, or mirroring the coach's own felt response ONLY when handed back to the client. See EMOTION MOVE CLASSIFICATION below.
-  - Feeling exploration (>= 1 per session): staying WITH a feeling and asking into its origin, meaning, function, or cost. An exploration also counts as a flagged-emotion event. ZERO explorations triggers Gate 3 (see GATE RULES).
-  - Questions should outnumber statements; parity (1:1) or statements-lead is a red flag.
-  - Consultant/teaching/framework moves are welcome ONLY when signaled, permissioned, brief, and floor-returned. For each such move, mark the four criteria true/false. More than 3 moves in a session signals drift from coaching mode.
-  - Attunement Standard (Competencies 5, 6, 8): focus earns a 3; reaching a 4 REQUIRES attunement — visible responsiveness to what is emerging beneath the content (emotion, energy, the unsaid), not just steady attention.
-  - SINGLE-INSTANCE STANDARD: for Competencies 4, 5, 6, and 7, ONE clear qualifying band-4 move (a trust-deepening move / attunement move / feeling exploration / system- or identity-level insight respectively) is sufficient to reach band 4. For Competency 7, one clear identity/system/process-level insight that is deeply generative and client-owned reaches band 5. Do not require a pattern where one clear instance exists.
+STEP 1 — SPEAKER ATTRIBUTION (v0.5 A1 — do this BEFORE computing any metrics):
+  Transcripts from Plaud use numbered diarization (Speaker 1, Speaker 2, …) — NOT role-mapped. Do NOT assume the lower-numbered speaker is the coach.
+  Role-map using session-structure signals:
+    - The COACH is the speaker who opens and closes with the evaluation/agenda frame (WIN loop: "what went well," "what would you improve," "what's your action," "what's your insight").
+    - The COACH is the speaker who manages logistics (scheduling the next session, "let me save this," tech housekeeping).
+    - The coach normally holds the frame while talking LESS. If a single speaker holds both the open/close coaching frame AND the majority of talk-time, raise likely_swap_flag = true.
+  NESTED COACHING: if the client spends part of the session coaching a third party (e.g. coaching their own report), those utterances stay attributed to the CLIENT — do not reassign them to the coach because they sound like coaching.
+  If role-mapping confidence is low (you cannot reliably determine who is coach and who is client), set attribution.confidence = "low". The engine will not trust metrics from a low-confidence attribution — fail loud, do not guess.
+  Record: attribution.method ("role-mapped" or "diarization-order"), attribution.source ("plaud-diarization" or "zoom-vtt"), attribution.confidence ("high"/"medium"/"low"), attribution.likely_swap_flag (boolean).
 
-EMOTION MOVE CLASSIFICATION (classify each coach emotion move into exactly ONE of three types — getting this wrong is the most common scoring error):
-  - Feeling reflection: coach names/mirrors/reflects the client's emotion ("I'm hearing frustration", "you sound angry"). Counts as a flagged-emotion event. Does NOT count as a feeling exploration.
-  - Coping inquiry: coach asks how the client is managing or dealing with the emotion ("how are you coping with that?", "how do you deal with the frustration?"). This REDIRECTS away from the emotion — it does NOT count as a feeling exploration AND does NOT count as a flagged-emotion event.
-  - Feeling exploration: coach stays with the emotion and asks into its origin, meaning, function, or cost ("what does that frustration feel like?", "where does that come from?", "what is it costing you?"). Counts as a qualifying exploration AND as a flagged-emotion event. Required for C6 band 4+.
+STEP 2 — UTTERANCE TAXONOMY (v0.5 A2 — classify every coach utterance into exactly ONE of five buckets by FUNCTION, not grammatical form):
+  1. Question — interrogative that evokes client thinking (C7). Counts in Q:S numerator.
+  2. Evocative reflection / observation — reflects, summarizes, reframes, or shares an observation to create insight (6.02, 7.10, 7.11). Credits C6/C7. EXCLUDED from Q:S denominator and consultant-move count.
+  3. Co-thinking — builds on the client's own material, offered tentatively, WITHOUT ATTACHMENT to adoption (7.11). EXCLUDED from consultant-move count. Flagged for coach visibility.
+  4. Consultative / telling — advice, framework, or answer the coach supplies and is invested in. THIS IS THE Q:S DENOMINATOR. Input to consultant-move count.
+  5. Process / logistics — scheduling, housekeeping, tech. Neutral; excluded everywhere.
+  Q:S REDEFINED (v0.5): question_to_statement = questions : consultative_telling. Evocative reflections, co-thinking, and process utterances are OUT of the denominator. "1:1.1" means 1 question per 1.1 consultative statements.
+  CO-THINKING vs. CONSULTING boundary — ICF 7.11 "without attachment":
+    - Built on the client's own prior material? → toward co-thinking
+    - Offered tentatively, client explicitly invited to react/reshape/reject? → toward co-thinking
+    - Coach signaled it ("I'm going to think alongside you here")? → toward co-thinking
+    - Coach ATTACHED to the client adopting it? → CONSULTING regardless of framing
+    When in doubt, default to consulting (conservative read) and flag.
+  Record utterance counts in metrics.utterance_taxonomy: {questions, evocative_reflections, co_thinking, consultative_telling, process_logistics}.
+
+theLEADERSHIPWELL STANDARDS (apply these on top of ICF):
+  - Coach talk-time should be <= 40% of words. Above 40% is a red flag.
+  - Flagged emotion (>= 2 per session): coach moves that tune into client emotion. See EMOTION MOVE CLASSIFICATION.
+  - Feeling exploration (>= 1 per session): staying WITH a feeling and asking into its origin, meaning, function, or cost. ZERO explorations triggers Gate 3 on C6's EMOTIONAL DIMENSION (see GATE RULES and C6 DIMENSIONAL SCORING).
+  - Q:S: questions:consultative-telling — parity (1:1) or statements-lead is red.
+  - Consultant/teaching/framework moves: welcome when signaled, permissioned, brief, and floor-returned. For each, mark the four criteria true/false. Count > 3 is a coach-facing advisory flag ("pattern to watch") — it does NOT cap C2. v0.5 A4.
+  - Attunement Standard (Competencies 5, 6, 8): focus earns a 3; reaching a 4 REQUIRES attunement — visible responsiveness to what is emerging beneath the content.
+  - SINGLE-INSTANCE STANDARD: for C4, C5, C6, C7, ONE clear qualifying band-4 move is sufficient to reach band 4.
+
+EMOTION MOVE CLASSIFICATION (classify each coach emotion move into exactly ONE of three types — misclassification is the most common scoring error):
+  - Feeling reflection: coach names/mirrors/reflects the client's emotion. Counts as a flagged-emotion event. Does NOT count as a feeling exploration.
+  - Coping inquiry: coach asks how the client is managing/dealing with the emotion. REDIRECTS away from the feeling — does NOT count as a feeling exploration AND does NOT count as a flagged-emotion event.
+  - Feeling exploration: coach stays with the emotion and asks into its origin, meaning, function, or cost. Counts as a qualifying exploration AND a flagged-emotion event.
+
+C6 DIMENSIONAL SCORING (v0.5 B3 — score Competency 6 on TWO dimensions, return both):
+  EMOTIONAL dimension (6.04): feeling-reflection / coping-inquiry / feeling-exploration logic. Gate 3 caps THIS dimension at band 3 (score 3.0) when feeling_explorations = 0.
+  COGNITIVE/STRUCTURAL dimension (6.01, 6.02, 6.03, 6.05, 6.06): scored independently regardless of Gate 3. Reflecting content accurately, catching patterns, using the client's OWN metaphors and examples back to them, surfacing cross-session themes — all strong active-listening moves that score on their merits.
+  Return both dimension scores in competency 6's "dimensions" field. The engine computes final C6 as the average of the two (after any cap). Include evidence for the cognitive/structural dimension.
 
 CONSULTANT MOVE vs. EVOCATIVE REFRAME (the who-synthesises test):
-  - Evocative reframe: coach offers a frame, label, or observation and the CLIENT performs the final synthesis (insight is client-owned). Counts toward evocation (Competency 7), NOT as a consultant move.
-  - Consultant move: coach delivers advice, a framework, or a directive conclusion without the client doing the final synthesis — regardless of relational warmth or a positive outcome. Direct advice with no signaling/permission is an unsignaled consultant move (scores 1-2/4, flags red).
+  - Evocative reframe: coach offers a frame or observation and the CLIENT performs the final synthesis. Counts toward C7, NOT as a consultant move.
+  - Consultant move: coach delivers advice, framework, or conclusion without the client synthesising. Direct advice with no signaling = unsignaled consultant move.
+  - Co-thinking (see taxonomy): not a consultant move when "without attachment" holds.
 
-AI / RECORDING DISCLOSURE — TWO-TIER STANDARD (spec v0.4 §9 C1; drives Gate 1):
-  - Tier 1 — agreement on file: if agreement_on_file is true AND recording_authorized is not false (see SESSION CONTEXT), the disclosure obligation is FULLY satisfied by the signed coaching agreement. Do NOT evaluate session-level disclosure at all, and do NOT penalize its absence. Set verbal_consent_to_record to false (it is not needed) and Gate 1 does not trigger. (If recording_authorized is false, the client declined in the agreement — treat as Tier 2 below.)
-  - Tier 2 — no agreement on file: scan the first ~5 minutes for any explicit client consent to RECORD the session. ANY affirmative client response to a recording request passes — the coach does NOT need to describe the AI evaluation function, scoring process, or storage. Set verbal_consent_to_record true if such consent is present, otherwise false.
-  - You are NOT required to find a description of the AI scoring function anywhere. The signed agreement carries those obligations; their absence at the session level is an administrative gap, not a disclosure failure or a score penalty.
+C8 OFFER vs. RECOMMENDATION (v0.5 B5 — the "without attachment" test):
+  - Recommendation: coach authors the forward action, hands it over, client receives. Coach is invested in adoption. Caps at band 3 (does not meet authorship hinge).
+  - Offer of the client's own insight: the client has already touched the action/insight; the coach crystallizes it into concrete form and hands it BACK for the client to accept, reject, or reshape. Coach is NOT attached. Authorship stays with the client. Meets the band-4 hinge (8.02, 8.03).
 
-COACHING / COUNSELING BOUNDARY (spec v0.4 §9 C1.06): the boundary is crossed ONLY when the coach attempts to repair psychological wounds. The following are coaching, NOT a boundary violation — do not flag or down-score them: psychological analysis of third parties as context; exploring the client's emotional patterns, triggers, or responses; emotional-wellbeing management and regulation strategies; relational-dynamics work where the client is the focal point of change; extended exploration of the client's internal experience, beliefs, or identity. Flag a boundary crossing ONLY on clear evidence of: diagnosing a psychological condition (in the client or a third party), therapeutic intervention aimed at resolving trauma / repairing wounds, or a sustained therapeutic frame (repeated trauma processing, grief-therapy techniques) rather than a coaching frame. When in doubt, do NOT flag.
+AI / RECORDING DISCLOSURE — TWO-TIER STANDARD (spec §9 C1; drives Gate 1):
+  - Tier 1 — agreement on file: if agreement_on_file is true AND recording_authorized is not false, the disclosure obligation is FULLY satisfied. Do NOT evaluate session-level disclosure. Set verbal_consent_to_record to false. Gate 1 does NOT trigger.
+    EXCEPTION (v0.5 A3): if agreement_on_file is true AND recording_authorized is false, this may be a data-capture error. Still set verbal_consent_to_record based on what you hear. The ENGINE will handle the Gate 1 decision — do not apply it yourself.
+  - Tier 2 — no agreement on file: scan the first ~5 minutes for explicit client consent to RECORD. ANY affirmative response passes. Set verbal_consent_to_record true if present, otherwise false.
+  - You are NOT required to find AI scoring disclosure anywhere. The signed agreement carries those obligations.
 
-GATE RULES (hard ceilings — a competency cannot exceed the ceiling once its gate triggers). Report each gate's boolean in "gates_triggered" and list the gate id on the affected competency's "gates_triggered":
-  - Gate 1 → Competency 1 capped at band 2: triggers ONLY when there is NO agreement on file AND no verbal consent to record was obtained at session open (i.e. agreement_on_file is false AND verbal_consent_to_record is false). The engine recomputes this from agreement_on_file + verbal_consent_to_record — report verbal_consent_to_record accurately and it will resolve the gate. Conversely, recording consent (via agreement or verbal) is the C1 band-4 marker; it need not be repeated mid-session.
-  - Gate 2 → Competency 3 capped at band 2: NO client-named insight at close AND NO standing engagement agreement. If this is a standing/ongoing engagement (set session.standing_engagement true) and the client names a self-generated insight at close, Gate 2 does NOT trigger (band 3 floor).
-  - Gate 3 → Competency 6 capped at band 3: ZERO qualifying feeling explorations (the engine also recomputes this from the metric).
+COACHING / COUNSELING BOUNDARY (§9 C1.06): crossed ONLY when the coach attempts to repair psychological wounds. NOT a violation: psychological analysis of third parties as context; exploring the client's emotional patterns/triggers; emotional-wellbeing regulation; relational dynamics where the client is the focal point; extended exploration of the client's internal experience. Flag ONLY on: diagnosing a psychological condition, therapeutic intervention aimed at resolving trauma, or a sustained therapeutic frame. When in doubt, do NOT flag.
 
-SET session.standing_engagement to true when the transcript shows an ongoing engagement (prior sessions referenced, session number > 1, a continuing relationship), otherwise false.
+GATE RULES (hard ceilings — enforced in code; report each gate boolean and list the gate id on the affected competency):
+  - Gate 1 → C1 capped at band 2: ONLY when NO agreement on file AND no verbal consent to record (agreement_on_file false AND verbal_consent_to_record false). NOTE: when agreement_on_file is true and recording_authorized is false, the ENGINE handles this case — set verbal_consent_to_record from what you hear and let the engine decide.
+  - Gate 2 → C3 capped at band 2: no client-named insight at close AND no standing engagement. If standing engagement present, Gate 2 does NOT trigger.
+  - Gate 3 → C6 EMOTIONAL DIMENSION capped at band 3 (score 3.0): zero qualifying feeling explorations. The cognitive/structural dimension is NOT capped. Return both dimension scores; the engine averages them for the final C6 score.
+
+SET session.standing_engagement to true when the transcript shows an ongoing engagement (prior sessions referenced, session number > 1, continuing relationship), otherwise false.
 
 TRANSCRIPT REQUIREMENT
-  You need a speaker-separated verbatim transcript to compute the conversation metrics. If the transcript below is NOT speaker-separated (you cannot tell who said what), set every metric field to null and set metrics.source to "unavailable" — do NOT estimate metrics from a summary. Otherwise set metrics.source to "parsed".
+  You need a speaker-separated verbatim transcript to compute metrics. If NOT speaker-separated, set every metric field to null and set metrics.source to "unavailable". Otherwise set metrics.source to "parsed".
 
-Return EXACTLY this JSON shape:
+Return EXACTLY this JSON shape (v0.5):
 {
   "session": { "coach": "${ctx.coachName}", "client_initials": "${ctx.clientInitials}", "type": "${ctx.sessionType || ''}", "session_number": ${ctx.sessionNumber ?? 'null'}, "engagement_total": ${ctx.engagementTotal ?? 'null'}, "date": "${ctx.sessionDate}", "standing_engagement": false },
   "overall_score": 0.0,
   "band": "Proficient",
+  "attribution": { "method": "role-mapped", "source": "plaud-diarization", "confidence": "high", "likely_swap_flag": false },
   "competencies": [
-    { "id": 1, "name": "Demonstrates ethical practice", "domain": "Foundation", "score": 3, "band": "Proficient", "evidence": "one line tied to a moment", "subcompetency_refs": ["1.01"], "gates_triggered": [] }
-    // ... all 8, in id order. Put "gate_1"/"gate_2"/"gate_3" in gates_triggered on C1/C3/C6 respectively when the gate fires.
+    { "id": 1, "name": "Demonstrates ethical practice", "domain": "Foundation", "score": 3.0, "band": "Proficient", "evidence": "one line tied to a moment", "subcompetency_refs": ["1.01"], "gates_triggered": [] },
+    { "id": 6, "name": "Listens actively", "domain": "Communicating effectively", "score": 3.5, "band": "Proficient", "evidence": "...", "subcompetency_refs": ["6.02", "6.06"], "gates_triggered": [],
+      "dimensions": { "emotional": { "score": 3.0 }, "cognitive_structural": { "score": 4.0, "evidence": "cross-session callback (6.06); client's own metaphors (6.01)" } } }
+    // ... all 8 in id order; include dimensions only on C6. Put "gate_1"/"gate_2"/"gate_3" in gates_triggered on C1/C3/C6 when they fire.
   ],
   "metrics": {
     "coach_talk_time_pct": 0,
     "flagged_emotion_count": 0,
     "feeling_explorations": 0,
     "question_to_statement": "1:1",
+    "utterance_taxonomy": { "questions": 0, "evocative_reflections": 0, "co_thinking": 0, "consultative_telling": 0, "process_logistics": 0 },
     "reflective_pauses": 0,
     "role_shifts_flagged": 0,
     "consultant_moves": {
@@ -215,10 +267,12 @@ TRANSCRIPT:
 ${transcript}`
 }
 
+// v0.5 B1: decimal scores (one place) allowed as within-band position.
+// Still clamped to [1, 5]; the band word remains the unit of meaning.
 function clampScore(n: unknown): number {
   const v = typeof n === 'number' ? n : Number(n)
   if (!Number.isFinite(v)) return 3
-  return Math.min(5, Math.max(1, Math.round(v)))
+  return Math.round(Math.min(5, Math.max(1, v)) * 10) / 10
 }
 
 /** Talk-time: red above 40% (spec §7 metric 1). */
@@ -279,6 +333,8 @@ function enforceMetrics(raw: any): Metrics {
       reflective_pauses: null,
       role_shifts_flagged: null,
       consultant_moves: null,
+      utterance_taxonomy: null,
+      attribution: undefined,
       source: 'unavailable',
     }
   }
@@ -288,7 +344,7 @@ function enforceMetrics(raw: any): Metrics {
   const explorations = raw?.feeling_explorations == null ? null : Number(raw.feeling_explorations)
 
   // Consultant moves: derive each move's score from its four criteria, derive
-  // status from score, and apply the >3 mode-drift flag (spec §17 rule 2).
+  // status from score. v0.5 A4: count >3 is amber advisory flag — no score cap.
   const rawMoves: any[] = Array.isArray(raw?.consultant_moves?.moves)
     ? raw.consultant_moves.moves
     : []
@@ -310,7 +366,34 @@ function enforceMetrics(raw: any): Metrics {
   })
   const count = moves.length
   const executionFlag = worstFlag(moves.map((m) => m.status))
-  const countFlag: Flag = count > 3 ? 'red' : 'green'
+  // v0.5 A4: amber (not red) for >3 — this is a coach development signal, not a cap.
+  const countFlag: Flag = count > 3 ? 'amber' : 'green'
+
+  // v0.5 A2: four-bucket utterance taxonomy
+  const rawTaxonomy = raw?.utterance_taxonomy
+  const utteranceTaxonomy: UtteranceTaxonomy | null = rawTaxonomy
+    ? {
+        questions: rawTaxonomy.questions == null ? null : Number(rawTaxonomy.questions),
+        evocative_reflections:
+          rawTaxonomy.evocative_reflections == null ? null : Number(rawTaxonomy.evocative_reflections),
+        co_thinking: rawTaxonomy.co_thinking == null ? null : Number(rawTaxonomy.co_thinking),
+        consultative_telling:
+          rawTaxonomy.consultative_telling == null ? null : Number(rawTaxonomy.consultative_telling),
+        process_logistics:
+          rawTaxonomy.process_logistics == null ? null : Number(rawTaxonomy.process_logistics),
+      }
+    : null
+
+  // v0.5 A1: speaker attribution confidence
+  const rawAttrib = raw?.attribution
+  const attribution: Attribution | undefined = rawAttrib
+    ? {
+        method: rawAttrib.method ?? 'unknown',
+        source: rawAttrib.source ?? 'unknown',
+        confidence: rawAttrib.confidence ?? 'low',
+        likely_swap_flag: !!rawAttrib.likely_swap_flag,
+      }
+    : undefined
 
   return {
     coach_talk_time_pct: talk,
@@ -323,7 +406,16 @@ function enforceMetrics(raw: any): Metrics {
     question_to_statement_flag: questionStatementFlag(raw?.question_to_statement),
     reflective_pauses: raw?.reflective_pauses == null ? null : Number(raw.reflective_pauses),
     role_shifts_flagged: raw?.role_shifts_flagged == null ? null : Number(raw.role_shifts_flagged),
-    consultant_moves: { count, count_flag: countFlag, execution_flag: executionFlag, moves },
+    consultant_moves: {
+      count,
+      count_flag: countFlag,
+      execution_flag: executionFlag,
+      caps_c2: false,
+      note: count > 3 ? 'pattern to watch — count no longer scores C2 down' : '',
+      moves,
+    },
+    utterance_taxonomy: utteranceTaxonomy,
+    attribution,
     source,
   }
 }
@@ -359,30 +451,63 @@ export function enforceRules(raw: any, ctx: ScoringContext): SessionReportJson {
   // open passes. The gate caps C1 only when BOTH are absent. Recomputed here from
   // agreement_on_file (platform) + verbal_consent_to_record (model) — authoritative
   // over the model's own gate_1 boolean. agreement_gap is the administrative
-  // follow-up flag: no signed agreement on file (independent of verbal consent —
-  // a verbal-only session is still missing the controlling document). It carries
-  // no score penalty beyond Gate 1.
+  // follow-up flag: no signed agreement on file (independent of verbal consent).
   const agreementOnFile = !!ctx.agreementOnFile
   const recordingAuthorized = ctx.recordingAuthorized ?? null
   const verbalConsent = !!raw?.verbal_consent_to_record
-  // Recording consent is "on file" when a signed agreement exists and the client
-  // did not explicitly decline recording (recording_authorized !== false). An
-  // explicit decline falls back to the verbal-consent check like a no-agreement
-  // session would. Gate 1 caps C1 only when consent is on neither path.
+  // v0.5 A3: when an agreement IS on file but recording_authorized = false, this
+  // may be a data-capture error (catastrophic: −2 bands on C1). Emit a fail-loud
+  // flag and withhold Gate 1 cap until a human confirms it is a genuine decline.
+  // Gate 1 itself is working as designed — only the silent application of a
+  // high-cost default is the defect.
   const recordingConsentOnFile = agreementOnFile && recordingAuthorized !== false
-  const gate1 = !recordingConsentOnFile && !verbalConsent
+  const recordingConsentNeedsConfirmation = agreementOnFile && recordingAuthorized === false
+  // Gate 1 fires only when: not in the needs-confirmation state AND consent is
+  // on neither path (no agreement OR explicit decline + no verbal consent).
+  const gate1 = !recordingConsentNeedsConfirmation && !recordingConsentOnFile && !verbalConsent
   const agreementGap = !agreementOnFile
   const gate2 = !!g.gate_2 && !standingEngagement
+  // v0.5 B3: gate3 drives C6 EMOTIONAL dimension cap only (not all of C6).
   const gate3 = explorations === 0 // null (unavailable metrics) → false
 
   const competencies: CompetencyScore[] = COMPETENCIES.map((def) => {
     const c = byId.get(def.id) || {}
     let score = clampScore(c.score)
     const gates: string[] = []
-    // Gate 1 → C1 ≤ 2; Gate 2 → C3 ≤ 2; Gate 3 → C6 ≤ 3.
+    let dimensions: C6Dimensions | undefined
+
+    // Gate 1 → C1 ≤ 2; Gate 2 → C3 ≤ 2.
     if (def.id === 1 && gate1 && score > 2) { score = 2; gates.push('gate_1') }
     if (def.id === 3 && gate2 && score > 2) { score = 2; gates.push('gate_2') }
-    if (def.id === 6 && gate3 && score > 3) { score = 3; gates.push('gate_3') }
+
+    // v0.5 B3: Gate 3 caps C6 EMOTIONAL DIMENSION only (not all of C6).
+    // The model returns c.dimensions.{emotional.score, cognitive_structural.score}.
+    // Final C6 = average of the two dimension scores (emotional after any cap).
+    if (def.id === 6) {
+      const rawDims = c.dimensions
+      if (rawDims && rawDims.emotional?.score != null && rawDims.cognitive_structural?.score != null) {
+        const emotionalRaw = clampScore(rawDims.emotional.score)
+        const cogRaw = clampScore(rawDims.cognitive_structural.score)
+        const emotionalCapped = gate3 ? Math.min(emotionalRaw, 3) : emotionalRaw
+        if (gate3 && emotionalRaw > 3) gates.push('gate_3')
+        dimensions = {
+          emotional: {
+            score: emotionalCapped,
+            gate: gate3 && emotionalRaw > 3 ? 'feeling-exploration cap applied to this dimension only' : undefined,
+          },
+          cognitive_structural: {
+            score: cogRaw,
+            evidence: rawDims.cognitive_structural?.evidence || undefined,
+          },
+        }
+        score = Math.round(((emotionalCapped + cogRaw) / 2) * 10) / 10
+      } else if (gate3 && score > 3) {
+        // Fallback: model didn't return dimensions — apply old whole-C6 cap.
+        score = 3
+        gates.push('gate_3')
+      }
+    }
+
     return {
       id: def.id,
       name: def.name,
@@ -394,12 +519,22 @@ export function enforceRules(raw: any, ctx: ScoringContext): SessionReportJson {
         ? c.subcompetency_refs.map(String)
         : [],
       gates_triggered: gates,
+      dimensions,
     }
   })
 
   // Equal-weighted overall average, rounded to one decimal (spec §6.4).
   const overall =
     Math.round((competencies.reduce((s, c) => s + c.score, 0) / competencies.length) * 10) / 10
+
+  // v0.5 A3: build the recording consent flag when human confirmation is needed.
+  const recordingConsentFlag: RecordingConsentFlag | undefined = recordingConsentNeedsConfirmation
+    ? {
+        agreement_on_file: agreementOnFile,
+        recording_authorized: recordingAuthorized,
+        status: 'needs_confirmation',
+      }
+    : undefined
 
   return {
     session: {
@@ -413,6 +548,7 @@ export function enforceRules(raw: any, ctx: ScoringContext): SessionReportJson {
       agreement_on_file: agreementOnFile,
       agreement_gap: agreementGap,
       recording_authorized: recordingAuthorized,
+      recording_consent_flag: recordingConsentFlag,
     },
     overall_score: overall,
     band: bandForScore(overall),
