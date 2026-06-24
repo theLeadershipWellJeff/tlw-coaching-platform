@@ -67,7 +67,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       id: n.id,
       nudge_type: n.type,
       subject: n.draft_subject,
-      sent_at: n.sent_at,
+      sent_at: n.sent_at ?? '',
     }))
 
     const reports: HistoryItem[] = (reportsRes.data || []).map((r) => ({

@@ -1,44 +1,38 @@
 'use client'
 /**
- * DashboardSurface — the run-time arrangement layer for the coach's dashboard.
+ * WorkspaceSurface — the run-time arrangement layer for the client workspace.
  *
- * Loads the coach's stored layout, renders the placed cards into a grid, and
- * lets the coach add, remove, resize, and (in Arrange mode) drag to reorder
- * cards. Reordering is iOS-style: as a dragged card moves over a slot the other
- * cards live-reflow out of the way (a FLIP slide), and the dragged card drops
- * into the opened space — it never replaces/swaps the card under it. Every
- * mutation persists to `/api/dashboard/layout` (last-write-wins).
+ * Behaviour is identical to DashboardSurface: add / remove / resize cards,
+ * and iOS-style live-reorder drag with FLIP animation and edge auto-scroll.
+ * Both surfaces share one implementation via the `useArrangeEngine` hook
+ * (lib/dashboard/useArrangeEngine.ts) — the 180ms timing knob and all drag
+ * behaviour live in exactly one place.
  *
- * Drag/FLIP/auto-scroll is implemented in the shared `useArrangeEngine` hook
- * (lib/dashboard/useArrangeEngine.ts) — WorkspaceSurface uses the same hook so
- * there is exactly one implementation of this behaviour.
- *
- * Each placed card is hosted once (CardHost), so its data hook runs a single
- * time per instance — resizing changes the `size` prop without remounting, and
- * therefore never refetches (brief §3.2 / §5).
+ * THE HARD RULE: layout is coach-global. clientId never enters the layout read
+ * or write path. The API uses `WHERE coach_id = :me AND surface = 'client_workspace'`
+ * only. Per-client data flows through WorkspaceContext, not the layout.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { availableToAdd } from '@/lib/dashboard/cards'
+import { WORKSPACE_BLOCK_META, workspaceBlocksAvailableToAdd } from '@/lib/dashboard/workspaceBlocks'
+import type { WorkspaceBlockMeta } from '@/lib/dashboard/workspaceBlocks'
 import { useArrangeEngine } from '@/lib/dashboard/useArrangeEngine'
-import type { CardMeta, CardPlacement, CardSize, DashboardCard } from '@/lib/dashboard/types'
-import { DASHBOARD_CARDS, getDashboardCard } from './registry'
-import { CardFrame } from './CardFrame'
+import type { CardPlacement, CardSize } from '@/lib/dashboard/types'
+import { getWorkspaceBlock } from './WorkspaceRegistry'
+import { CardFrame } from '@/components/dashboard/CardFrame'
 
-// compact = 1 col · standard = 2 col · expanded = full row, on a 4-col desktop
-// grid. Literal classes so Tailwind keeps them. A card may pin its width via
-// CardMeta.fixedSpan (list cards that change height, not width, across sizes).
 const SPAN: Record<CardSize, string> = {
   compact: 'lg:col-span-1',
   standard: 'lg:col-span-2',
   expanded: 'lg:col-span-4',
 }
 
-function CardHost({ card, size }: { card: DashboardCard; size: CardSize }) {
-  const data = card.useData()
-  return <>{card.render({ size, data })}</>
-}
-
-function AddCardMenu({ options, onAdd }: { options: CardMeta[]; onAdd: (id: string) => void }) {
+function AddCardMenu({
+  options,
+  onAdd,
+}: {
+  options: WorkspaceBlockMeta[]
+  onAdd: (id: string) => void
+}) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -82,7 +76,7 @@ function AddCardMenu({ options, onAdd }: { options: CardMeta[]; onAdd: (id: stri
   )
 }
 
-export function DashboardSurface() {
+export function WorkspaceSurface() {
   const [blocks, setBlocks] = useState<CardPlacement[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
@@ -92,7 +86,7 @@ export function DashboardSurface() {
 
   useEffect(() => {
     let active = true
-    fetch('/api/dashboard/layout')
+    fetch('/api/workspace/layout')
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((d) => active && setBlocks(d.blocks || []))
       .catch(() => active && setError(true))
@@ -104,16 +98,14 @@ export function DashboardSurface() {
 
   const persist = useCallback((next: CardPlacement[]) => {
     setBlocks(next)
-    fetch('/api/dashboard/layout', {
+    fetch('/api/workspace/layout', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ blocks: next }),
     })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => d?.blocks && setBlocks(d.blocks))
-      .catch(() => {
-        /* last-write-wins; a dropped save retries on the next mutation */
-      })
+      .catch(() => {})
   }, [])
 
   const { dragId, elRefs, getDragHandlers, clearDrag } = useArrangeEngine({
@@ -126,7 +118,7 @@ export function DashboardSurface() {
 
   const addCard = useCallback(
     (id: string) => {
-      const meta = DASHBOARD_CARDS[id]
+      const meta = WORKSPACE_BLOCK_META[id]
       if (!meta) return
       setBlocks((cur) => {
         if (cur.some((b) => b.blockId === id)) return cur
@@ -161,7 +153,7 @@ export function DashboardSurface() {
   )
 
   const ordered = [...blocks].sort((a, b) => a.order - b.order)
-  const addable = availableToAdd(blocks.map((b) => b.blockId))
+  const addable = workspaceBlocksAvailableToAdd(blocks.map((b) => b.blockId))
 
   return (
     <div ref={rootRef}>
@@ -194,45 +186,47 @@ export function DashboardSurface() {
       {loading ? (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
           <div className="h-40 animate-pulse rounded-tlw-2xl bg-tlw-surface/70 lg:col-span-2" />
+          <div className="h-40 animate-pulse rounded-tlw-2xl bg-tlw-surface/70 lg:col-span-2" />
         </div>
       ) : error ? (
         <div className="rounded-tlw-2xl border border-tlw-warm-gray/20 bg-tlw-surface p-6 text-center text-[13px] text-tlw-espresso">
-          Couldn&apos;t load your dashboard.
+          Couldn&apos;t load workspace layout.
         </div>
       ) : ordered.length === 0 ? (
         <div className="flex min-h-[180px] flex-col items-center justify-center rounded-tlw-2xl border border-dashed border-tlw-warm-gray/25 bg-tlw-surface/60 px-6 text-center">
-          <p className="text-[14px] font-medium text-tlw-navy-deep">Your dashboard is empty</p>
+          <p className="text-[14px] font-medium text-tlw-navy-deep">Workspace is empty</p>
           <p className="mt-1 max-w-sm text-[13px] text-tlw-warm-gray">
-            Add cards to build your cockpit — clients, upcoming sessions, revenue, calendar, and more. Use &ldquo;Add card&rdquo; above.
+            Use &ldquo;Add card&rdquo; above to restore panels — sessions, goals, actions, and more.
           </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
           {ordered.map((b) => {
-            const card = getDashboardCard(b.blockId)
-            if (!card) return null
+            const BlockComponent = getWorkspaceBlock(b.blockId)
+            const meta = WORKSPACE_BLOCK_META[b.blockId]
+            if (!BlockComponent || !meta) return null
             return (
               <div
                 key={b.blockId}
                 ref={(el) => {
                   elRefs.current[b.blockId] = el
                 }}
-                className={`${card.fixedSpan ?? SPAN[b.size]} ${arranging ? 'cursor-move' : ''} ${
+                className={`${SPAN[b.size]} ${arranging ? 'cursor-move' : ''} ${
                   dragId === b.blockId ? 'opacity-40' : ''
                 }`}
                 {...getDragHandlers(b.blockId)}
               >
                 <CardFrame
-                  title={card.title}
-                  icon={card.icon}
-                  selfHeader={card.selfHeader}
+                  title={meta.title}
+                  icon={meta.icon}
+                  selfHeader={meta.selfHeader}
                   size={b.size}
-                  supportedSizes={card.supportedSizes}
+                  supportedSizes={meta.supportedSizes}
                   onResize={(s) => resizeCard(b.blockId, s)}
                   onRemove={() => removeCard(b.blockId)}
                   arranging={arranging}
                 >
-                  <CardHost card={card} size={b.size} />
+                  <BlockComponent size={b.size} />
                 </CardFrame>
               </div>
             )
