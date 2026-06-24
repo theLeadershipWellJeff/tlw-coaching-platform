@@ -13,7 +13,7 @@ import { AgreementsCard } from './AgreementsCard'
 import { IssueAgreementModal } from './IssueAgreementModal'
 import { AgendaCard } from './AgendaCard'
 import { EmailModal } from './EmailModal'
-import { CommunicationCard } from './CommunicationCard'
+import { ClientHistoryCard } from './ClientHistoryCard'
 import { ImportTranscriptsModal } from './ImportTranscriptsModal'
 
 export function ClientDetail({ clientId }: { clientId: string }) {
@@ -137,7 +137,7 @@ export function ClientDetail({ clientId }: { clientId: string }) {
 
       <NudgesCard clientId={clientId} clientName={client.name} />
 
-      <CommunicationCard clientId={clientId} reloadKey={commReload} />
+      <ClientHistoryCard clientId={clientId} reloadKey={commReload} />
 
       <AgendaCard clientId={clientId} />
 
