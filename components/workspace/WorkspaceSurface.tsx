@@ -2,25 +2,24 @@
 /**
  * WorkspaceSurface — the run-time arrangement layer for the client workspace.
  *
- * Phase 1: add / remove / resize cards, static layout (no drag yet).
- * Phase 2: hoist the dashboard's drag/FLIP/auto-scroll into a shared hook and
- *          wire it here so both surfaces share one implementation.
+ * Behaviour is identical to DashboardSurface: add / remove / resize cards,
+ * and iOS-style live-reorder drag with FLIP animation and edge auto-scroll.
+ * Both surfaces share one implementation via the `useArrangeEngine` hook
+ * (lib/dashboard/useArrangeEngine.ts) — the 180ms timing knob and all drag
+ * behaviour live in exactly one place.
  *
  * THE HARD RULE: layout is coach-global. clientId never enters the layout read
- * or write path. The workspace layout API uses `WHERE coach_id = :me AND
- * surface = 'client_workspace'` — nothing else. Per-client data flows through
- * WorkspaceContext (consumed by each block component), not the layout.
+ * or write path. The API uses `WHERE coach_id = :me AND surface = 'client_workspace'`
+ * only. Per-client data flows through WorkspaceContext, not the layout.
  */
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { WORKSPACE_BLOCK_META, workspaceBlocksAvailableToAdd } from '@/lib/dashboard/workspaceBlocks'
 import type { WorkspaceBlockMeta } from '@/lib/dashboard/workspaceBlocks'
+import { useArrangeEngine } from '@/lib/dashboard/useArrangeEngine'
 import type { CardPlacement, CardSize } from '@/lib/dashboard/types'
 import { getWorkspaceBlock } from './WorkspaceRegistry'
 import { CardFrame } from '@/components/dashboard/CardFrame'
 
-const useIsoLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect
-
-// compact = 1 col · standard = 2 col · expanded = full row on a 4-col grid.
 const SPAN: Record<CardSize, string> = {
   compact: 'lg:col-span-1',
   standard: 'lg:col-span-2',
@@ -77,42 +76,13 @@ function AddCardMenu({
   )
 }
 
-/** Move the dragged card into the target's slot, shifting the rest (no swap). */
-function liveMove(cur: CardPlacement[], dragId: string, targetId: string): CardPlacement[] {
-  const ordered = [...cur].sort((a, b) => a.order - b.order)
-  const from = ordered.findIndex((b) => b.blockId === dragId)
-  const to = ordered.findIndex((b) => b.blockId === targetId)
-  if (from === -1 || to === -1 || from === to) return cur
-  const next = [...ordered]
-  const [moved] = next.splice(from, 1)
-  next.splice(to, 0, moved)
-  return next.map((b, i) => ({ ...b, order: i }))
-}
-
-/** Nearest scrollable ancestor (the app shell scrolls <main>, not the window). */
-function findScrollParent(el: HTMLElement | null): HTMLElement | null {
-  let node = el?.parentElement || null
-  while (node) {
-    const oy = getComputedStyle(node).overflowY
-    if ((oy === 'auto' || oy === 'scroll') && node.scrollHeight > node.clientHeight) return node
-    node = node.parentElement
-  }
-  return null
-}
-
 export function WorkspaceSurface() {
   const [blocks, setBlocks] = useState<CardPlacement[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [arranging, setArranging] = useState(false)
-  const [dragId, setDragId] = useState<string | null>(null)
 
   const rootRef = useRef<HTMLDivElement>(null)
-  const dragYRef = useRef(0)
-  const blocksRef = useRef(blocks)
-  blocksRef.current = blocks
-  const elRefs = useRef<Record<string, HTMLDivElement | null>>({})
-  const prevRects = useRef<Record<string, DOMRect>>({})
 
   useEffect(() => {
     let active = true
@@ -126,75 +96,6 @@ export function WorkspaceSurface() {
     }
   }, [])
 
-  // FLIP: after the order changes during a drag, slide each card from its old
-  // position to its new one. The dragged card is held by the cursor so it isn't
-  // animated. Mirrors the dashboard's 180ms ease timing exactly.
-  useIsoLayoutEffect(() => {
-    const prev = prevRects.current
-    if (!prev || Object.keys(prev).length === 0) return
-    for (const id in elRefs.current) {
-      if (id === dragId) continue
-      const el = elRefs.current[id]
-      const before = prev[id]
-      if (!el || !before) continue
-      const now = el.getBoundingClientRect()
-      const dx = before.left - now.left
-      const dy = before.top - now.top
-      if (dx === 0 && dy === 0) continue
-      el.style.transition = 'none'
-      el.style.transform = `translate(${dx}px, ${dy}px)`
-      void el.offsetWidth
-      requestAnimationFrame(() => {
-        el.style.transition = 'transform 180ms ease'
-        el.style.transform = ''
-      })
-    }
-    prevRects.current = {}
-  }, [blocks, dragId])
-
-  function captureRects() {
-    const m: Record<string, DOMRect> = {}
-    for (const id in elRefs.current) {
-      const el = elRefs.current[id]
-      if (el) m[id] = el.getBoundingClientRect()
-    }
-    prevRects.current = m
-  }
-
-  // Edge auto-scroll while dragging.
-  useEffect(() => {
-    if (!dragId) return
-    const container = findScrollParent(rootRef.current)
-    const EDGE = 90
-    const MAX = 22
-    let raf = 0
-
-    const onWinDragOver = (e: DragEvent) => {
-      dragYRef.current = e.clientY
-    }
-    window.addEventListener('dragover', onWinDragOver)
-
-    const tick = () => {
-      const y = dragYRef.current
-      const top = container ? container.getBoundingClientRect().top : 0
-      const bottom = container ? container.getBoundingClientRect().bottom : window.innerHeight
-      let dy = 0
-      if (y < top + EDGE) dy = -Math.ceil(MAX * Math.min(1, (top + EDGE - y) / EDGE))
-      else if (y > bottom - EDGE) dy = Math.ceil(MAX * Math.min(1, (y - (bottom - EDGE)) / EDGE))
-      if (dy !== 0) {
-        if (container) container.scrollTop += dy
-        else window.scrollBy(0, dy)
-      }
-      raf = requestAnimationFrame(tick)
-    }
-    raf = requestAnimationFrame(tick)
-
-    return () => {
-      window.removeEventListener('dragover', onWinDragOver)
-      cancelAnimationFrame(raf)
-    }
-  }, [dragId])
-
   const persist = useCallback((next: CardPlacement[]) => {
     setBlocks(next)
     fetch('/api/workspace/layout', {
@@ -206,6 +107,14 @@ export function WorkspaceSurface() {
       .then((d) => d?.blocks && setBlocks(d.blocks))
       .catch(() => {})
   }, [])
+
+  const { dragId, elRefs, getDragHandlers, clearDrag } = useArrangeEngine({
+    blocks,
+    setBlocks,
+    persist,
+    enabled: arranging,
+    rootRef,
+  })
 
   const addCard = useCallback(
     (id: string) => {
@@ -253,7 +162,7 @@ export function WorkspaceSurface() {
           <button
             onClick={() => {
               setArranging((a) => !a)
-              setDragId(null)
+              clearDrag()
             }}
             title="Drag cards to reorder"
             className={`flex items-center gap-1.5 rounded-tlw-lg border px-3 py-1.5 text-[13px] font-medium transition-colors ${
@@ -305,22 +214,7 @@ export function WorkspaceSurface() {
                 className={`${SPAN[b.size]} ${arranging ? 'cursor-move' : ''} ${
                   dragId === b.blockId ? 'opacity-40' : ''
                 }`}
-                draggable={arranging}
-                onDragStart={() => arranging && setDragId(b.blockId)}
-                onDragEnd={() => {
-                  if (dragId) persist(blocksRef.current)
-                  setDragId(null)
-                }}
-                onDragOver={(e) => {
-                  if (!dragId || dragId === b.blockId) return
-                  e.preventDefault()
-                  captureRects()
-                  setBlocks((cur) => liveMove(cur, dragId, b.blockId))
-                }}
-                onDrop={(e) => {
-                  if (!dragId) return
-                  e.preventDefault()
-                }}
+                {...getDragHandlers(b.blockId)}
               >
                 <CardFrame
                   title={meta.title}
