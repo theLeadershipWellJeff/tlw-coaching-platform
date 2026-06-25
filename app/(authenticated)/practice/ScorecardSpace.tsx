@@ -182,6 +182,107 @@ function CompetencyDetail({
   )
 }
 
+function ScoreTrendCard({ reports }: { reports: ReportRow[] }) {
+  const points = [...reports]
+    .filter((r) => r.overall_score != null && r.session_date != null)
+    .sort((a, b) => (a.session_date! < b.session_date! ? -1 : 1))
+
+  if (points.length < 2) {
+    return (
+      <p className="text-[13px] text-tlw-warm-gray">
+        {points.length === 0
+          ? 'No scored sessions yet.'
+          : 'Score trend builds once a second session is scored.'}
+      </p>
+    )
+  }
+
+  const W = 480
+  const H = 120
+  const PAD = { top: 12, right: 16, bottom: 24, left: 28 }
+  const scores = points.map((r) => r.overall_score!)
+  const minS = Math.max(0, Math.floor(Math.min(...scores)) - 0.5)
+  const maxS = Math.min(5, Math.ceil(Math.max(...scores)) + 0.5)
+  const range = maxS - minS || 1
+
+  const xOf = (i: number) => PAD.left + (i / (points.length - 1)) * (W - PAD.left - PAD.right)
+  const yOf = (s: number) => PAD.top + (1 - (s - minS) / range) * (H - PAD.top - PAD.bottom)
+
+  const polyline = points.map((r, i) => `${xOf(i)},${yOf(r.overall_score!)}`).join(' ')
+
+  const yTicks = [1, 2, 3, 4, 5].filter((t) => t >= minS && t <= maxS)
+
+  return (
+    <div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ overflow: 'visible' }}>
+        {/* gridlines */}
+        {yTicks.map((t) => (
+          <g key={t}>
+            <line
+              x1={PAD.left} y1={yOf(t)} x2={W - PAD.right} y2={yOf(t)}
+              stroke="var(--color-divider)" strokeWidth="0.5"
+            />
+            <text
+              x={PAD.left - 4} y={yOf(t)} textAnchor="end" dominantBaseline="middle"
+              fontSize="9" fill="var(--color-muted)"
+            >
+              {t}
+            </text>
+          </g>
+        ))}
+
+        {/* area fill */}
+        <polygon
+          points={[
+            ...points.map((r, i) => `${xOf(i)},${yOf(r.overall_score!)}`),
+            `${xOf(points.length - 1)},${H - PAD.bottom}`,
+            `${xOf(0)},${H - PAD.bottom}`,
+          ].join(' ')}
+          fill="var(--color-signal-orange)"
+          opacity="0.08"
+        />
+
+        {/* line */}
+        <polyline
+          points={polyline}
+          fill="none"
+          stroke="var(--color-signal-orange)"
+          strokeWidth="1.5"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+
+        {/* data points */}
+        {points.map((r, i) => (
+          <g key={r.id}>
+            <title>{`${r.client_name || r.client_initials || '—'} · ${fmtDate(r.session_date)} · ${r.overall_score!.toFixed(1)}`}</title>
+            <circle cx={xOf(i)} cy={yOf(r.overall_score!)} r="3.5" fill="var(--color-signal-orange)" />
+          </g>
+        ))}
+
+        {/* x-axis labels: first, last, and any inflection points (spaced ≥60px apart) */}
+        {points.map((r, i) => {
+          const x = xOf(i)
+          const isFirst = i === 0
+          const isLast = i === points.length - 1
+          if (!isFirst && !isLast) return null
+          return (
+            <text
+              key={r.id + '-label'}
+              x={x} y={H - PAD.bottom + 10}
+              textAnchor={isFirst ? 'start' : 'end'}
+              fontSize="9" fill="var(--color-muted)"
+            >
+              {fmtDate(r.session_date)}
+            </text>
+          )
+        })}
+      </svg>
+      <p className="mt-1 text-[10px] text-tlw-warm-gray">overall score per session · 1 emerging → 5 masterful</p>
+    </div>
+  )
+}
+
 export function ScorecardSpace() {
   const [summary, setSummary] = useState<ScorecardSummary | null>(null)
   const [reports, setReports] = useState<ReportRow[]>([])
@@ -195,6 +296,8 @@ export function ScorecardSpace() {
   const [picked, setPicked] = useState<Record<string, string>>({})
   const [deletePending, setDeletePending] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [reportDeletePending, setReportDeletePending] = useState<string | null>(null)
+  const [reportDeleting, setReportDeleting] = useState<string | null>(null)
   const [openPreview, setOpenPreview] = useState<string | null>(null)
   const [previewCache, setPreviewCache] = useState<
     Record<string, { loading?: boolean; text?: string; truncated?: boolean; speakerSeparated?: boolean; error?: string }>
@@ -269,6 +372,19 @@ export function ScorecardSpace() {
       }
     } finally {
       setDeleting(null)
+    }
+  }
+
+  async function deleteReport(reportId: string) {
+    setReportDeleting(reportId)
+    try {
+      const res = await fetch(`/api/reports/${reportId}`, { method: 'DELETE' })
+      if (res.ok) {
+        setReportDeletePending(null)
+        await load()
+      }
+    } finally {
+      setReportDeleting(null)
     }
   }
 
@@ -552,6 +668,16 @@ export function ScorecardSpace() {
       ),
     },
     {
+      id: 'score-trend',
+      label: 'Score trend',
+      node: (
+        <section>
+          <h2 className="mb-3 text-[15px] font-medium text-tlw-navy-deep">Score trend</h2>
+          <ScoreTrendCard reports={reports} />
+        </section>
+      ),
+    },
+    {
       id: 'sessions',
       label: 'Sessions',
       node: (
@@ -567,34 +693,66 @@ export function ScorecardSpace() {
         ) : (
           <div className="space-y-2">
             {reports.map((r) => (
-              <Link
+              <div
                 key={r.id}
-                href={`/practice/${r.id}`}
-                className="flex items-center justify-between gap-4 rounded-tlw-lg p-4 transition-colors duration-tlw-base hover:opacity-90"
+                className="flex items-center gap-2 rounded-tlw-lg transition-colors duration-tlw-base"
                 style={{ backgroundColor: 'var(--color-surface)' }}
               >
-                <div className="min-w-0">
-                  <p className="text-[14px] font-medium text-tlw-navy-deep">
-                    {r.client_name || r.client_initials || '—'}
-                    {r.session_number != null && (
-                      <span className="ml-2 text-[12px] font-normal text-tlw-warm-gray">
-                        session {r.session_number}
-                        {r.engagement_total != null ? ` of ${r.engagement_total}` : ''}
-                      </span>
+                <Link
+                  href={`/practice/${r.id}`}
+                  className="flex min-w-0 flex-1 items-center justify-between gap-4 p-4 hover:opacity-90"
+                >
+                  <div className="min-w-0">
+                    <p className="text-[14px] font-medium text-tlw-navy-deep">
+                      {r.client_name || r.client_initials || '—'}
+                      {r.session_number != null && (
+                        <span className="ml-2 text-[12px] font-normal text-tlw-warm-gray">
+                          session {r.session_number}
+                          {r.engagement_total != null ? ` of ${r.engagement_total}` : ''}
+                        </span>
+                      )}
+                    </p>
+                    <p className="mt-0.5 text-[12px] text-tlw-warm-gray">
+                      {fmtDate(r.session_date)}
+                      {r.session_type ? ` · ${r.session_type}` : ''}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-3">
+                    {r.coach_overall != null && (
+                      <span className="text-[11px] text-tlw-warm-gray">self {r.coach_overall.toFixed(1)}</span>
                     )}
-                  </p>
-                  <p className="mt-0.5 text-[12px] text-tlw-warm-gray">
-                    {fmtDate(r.session_date)}
-                    {r.session_type ? ` · ${r.session_type}` : ''}
-                  </p>
-                </div>
-                <div className="flex shrink-0 items-center gap-3">
-                  {r.coach_overall != null && (
-                    <span className="text-[11px] text-tlw-warm-gray">self {r.coach_overall.toFixed(1)}</span>
+                    {r.band && <BandChip band={r.band as any} score={r.overall_score ?? undefined} />}
+                  </div>
+                </Link>
+                <div className="flex shrink-0 items-center gap-1 pr-3">
+                  {reportDeletePending === r.id ? (
+                    <>
+                      <button
+                        onClick={() => deleteReport(r.id)}
+                        disabled={reportDeleting === r.id}
+                        className="rounded-tlw-md border border-red-300 px-2.5 py-1.5 text-[11px] font-medium text-red-600 transition-opacity duration-tlw-base hover:opacity-80 disabled:opacity-40"
+                      >
+                        {reportDeleting === r.id ? 'deleting…' : 'confirm delete'}
+                      </button>
+                      <button
+                        onClick={() => setReportDeletePending(null)}
+                        disabled={reportDeleting === r.id}
+                        className="rounded-tlw-md px-2 py-1.5 text-[11px] text-tlw-warm-gray transition-opacity duration-tlw-base hover:opacity-80"
+                      >
+                        cancel
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => setReportDeletePending(r.id)}
+                      className="rounded-tlw-md border border-tlw-warm-gray/25 px-2.5 py-1.5 text-[11px] text-red-500 transition-opacity duration-tlw-base hover:opacity-80"
+                      title="Delete this scoring"
+                    >
+                      delete
+                    </button>
                   )}
-                  {r.band && <BandChip band={r.band as any} score={r.overall_score ?? undefined} />}
                 </div>
-              </Link>
+              </div>
             ))}
           </div>
         )}
@@ -608,7 +766,7 @@ export function ScorecardSpace() {
       storageKey={STORAGE_KEY}
       panels={panels}
       columns={1}
-      defaultLayout={[['add-transcript', 'revenue', 'headline', 'needs-review', 'competencies', 'sessions']]}
+      defaultLayout={[['add-transcript', 'revenue', 'headline', 'score-trend', 'needs-review', 'competencies', 'sessions']]}
     />
   )
 }
