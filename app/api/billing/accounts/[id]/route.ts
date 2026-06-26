@@ -57,7 +57,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
   const body = await req.json().catch(() => ({}))
   const allowed = ['name', 'billing_email', 'stripe_customer_id'] as const
-  const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
+  const updates: Partial<{ name: string; billing_email: string; stripe_customer_id: string; updated_at: string }> = { updated_at: new Date().toISOString() }
   for (const key of allowed) {
     if (key in body) updates[key] = body[key]
   }

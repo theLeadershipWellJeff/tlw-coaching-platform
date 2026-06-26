@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
   if (!engagementId || !periodStart || !periodEnd)
     return NextResponse.json({ error: 'engagementId, periodStart, and periodEnd are required' }, { status: 400 })
 
-  const { data: engagement, error: engErr } = await supabase
+  const { data: rawEngagement, error: engErr } = await supabase
     .from('engagements')
     .select('*, coachees ( client_id )')
     .eq('id', engagementId)
@@ -34,7 +34,8 @@ export async function GET(req: NextRequest) {
     .maybeSingle()
 
   if (engErr) return NextResponse.json({ error: engErr.message }, { status: 500 })
-  if (!engagement) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (!rawEngagement) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  const engagement = rawEngagement as any
   if (engagement.billing_owner === 'CA')
     return NextResponse.json({ error: 'CA-owned engagements are not billable through this system' }, { status: 400 })
   if (engagement.billing_mode !== 'arrears')

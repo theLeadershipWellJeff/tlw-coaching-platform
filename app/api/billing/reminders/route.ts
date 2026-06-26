@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
     .from('invoice_reminders')
     .select('*, invoices!inner ( coach_id )')
     .eq('invoices.coach_id', coach.id)
-    .eq('status', status)
+    .eq('status', status as any)
     .order('send_at', { ascending: true })
 
   if (withinDays > 0) {

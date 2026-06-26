@@ -52,7 +52,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
   const { data, error } = await supabase
     .from('invoices')
-    .update(updates)
+    .update(updates as any)
     .eq('id', params.id)
     .eq('coach_id', coach.id)
     .select()
