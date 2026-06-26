@@ -94,7 +94,7 @@ const destinations: NavDestination[] = [
   { href: '/nudges', label: 'Nudges', icon: icons.nudges },
   { href: '/groups', label: 'Groups', icon: icons.groups },
   { href: '/library', label: 'Library', icon: icons.library },
-  { href: '#', label: 'Business Center', icon: icons.business, disabled: true, badge: 'Soon' },
+  { href: '/business-center', label: 'Business Center', icon: icons.business },
 ]
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
