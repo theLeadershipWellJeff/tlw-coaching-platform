@@ -23,6 +23,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { constructWebhookEvent } from '@/lib/billing/stripe'
+import { cancelReminders } from '@/lib/billing/reminders'
 import type Stripe from 'stripe'
 
 // Stripe sends raw body; disable body parsing.
@@ -67,6 +68,8 @@ export async function POST(req: NextRequest) {
             })
             .eq('id', tlwId)
             .in('status', ['sent', 'overdue', 'failed'])
+          // Cancel any pending reminders now that it's paid.
+          await cancelReminders(supabase, tlwId)
         }
         break
       }
@@ -118,6 +121,7 @@ export async function POST(req: NextRequest) {
             })
             .eq('id', tlwId)
             .in('status', ['sent', 'overdue', 'failed'])
+          await cancelReminders(supabase, tlwId)
         }
         break
       }
