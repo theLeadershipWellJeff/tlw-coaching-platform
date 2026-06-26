@@ -14,6 +14,15 @@
 import type { SessionReportJson } from '@/lib/scoring/types'
 import type { PrepContent } from '@/lib/email-template'
 import type { CardPlacement } from '@/lib/dashboard/types'
+import type {
+  BillingAccount,
+  Coachee,
+  Engagement,
+  BillableSession,
+  Invoice,
+  InvoiceLine,
+  InvoiceReminder,
+} from '@/lib/billing/types'
 
 type Timestamp = string // ISO 8601
 type DateString = string // YYYY-MM-DD
@@ -543,6 +552,48 @@ export type Database = {
         Row: DashboardLayout
         Insert: Insertable<DashboardLayout>
         Update: Updatable<DashboardLayout>
+        Relationships: []
+      }
+      billing_accounts: {
+        Row: BillingAccount
+        Insert: Insertable<BillingAccount>
+        Update: Updatable<BillingAccount>
+        Relationships: []
+      }
+      coachees: {
+        Row: Coachee
+        Insert: Insertable<Coachee>
+        Update: Updatable<Coachee>
+        Relationships: []
+      }
+      engagements: {
+        Row: Engagement
+        Insert: Insertable<Engagement>
+        Update: Updatable<Engagement>
+        Relationships: []
+      }
+      billable_sessions: {
+        Row: BillableSession
+        Insert: Insertable<BillableSession>
+        Update: Updatable<BillableSession>
+        Relationships: []
+      }
+      invoices: {
+        Row: Invoice
+        Insert: Insertable<Invoice>
+        Update: Updatable<Invoice>
+        Relationships: []
+      }
+      invoice_lines: {
+        Row: InvoiceLine
+        Insert: Insertable<InvoiceLine>
+        Update: Updatable<InvoiceLine>
+        Relationships: []
+      }
+      invoice_reminders: {
+        Row: InvoiceReminder
+        Insert: Insertable<InvoiceReminder>
+        Update: Updatable<InvoiceReminder>
         Relationships: []
       }
     }
