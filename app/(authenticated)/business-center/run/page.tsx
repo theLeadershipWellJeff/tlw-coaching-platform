@@ -46,8 +46,13 @@ type DraftInvoice = {
   status: string
   subtotal: number
   total: number
+  stripe_invoice_id: string | null
+  stripe_payment_intent_id: string | null
+  stripe_error: string | null
   approved_by: string | null
   approved_at: string | null
+  sent_at: string | null
+  paid_at: string | null
   billing_accounts: { id: string; name: string; type: string; billing_email: string }
   invoice_lines: InvoiceLine[]
 }
@@ -139,20 +144,56 @@ function LineRow({
   )
 }
 
+const STATUS_CHIP: Record<string, string> = {
+  draft: 'bg-tlw-canvas text-tlw-warm-gray',
+  approved: 'bg-green-50 text-green-700',
+  sent: 'bg-blue-50 text-blue-700',
+  paid: 'bg-emerald-50 text-emerald-700',
+  failed: 'bg-red-50 text-red-600',
+  overdue: 'bg-amber-50 text-amber-700',
+  void: 'bg-tlw-canvas text-tlw-warm-gray line-through',
+}
+
+function StatusChip({ status }: { status: string }) {
+  return (
+    <span className={`rounded-full px-2.5 py-0.5 text-[12px] font-medium capitalize ${STATUS_CHIP[status] ?? 'bg-tlw-canvas text-tlw-warm-gray'}`}>
+      {status === 'approved' ? '✓ Approved' : status}
+    </span>
+  )
+}
+
 function InvoiceCard({
   invoice,
   onApproved,
+  onSent,
   onLineUpdated,
   onLineDeleted,
 }: {
   invoice: DraftInvoice
   onApproved: (id: string) => void
+  onSent: (id: string, updates: Partial<DraftInvoice>) => void
   onLineUpdated: (invoiceId: string, line: InvoiceLine) => void
   onLineDeleted: (invoiceId: string, lineId: string) => void
 }) {
   const [approving, setApproving] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [sendError, setSendError] = useState<string | null>(invoice.stripe_error ?? null)
+
   const isDraft = invoice.status === 'draft'
   const isApproved = invoice.status === 'approved'
+  const isSent = invoice.status === 'sent'
+  const isPaid = invoice.status === 'paid'
+  const isFailed = invoice.status === 'failed'
+
+  const borderClass = isPaid
+    ? 'border-emerald-200'
+    : isFailed || sendError
+    ? 'border-red-200'
+    : isApproved
+    ? 'border-green-200'
+    : isSent
+    ? 'border-blue-200'
+    : 'border-tlw-warm-gray/15'
 
   async function approve() {
     setApproving(true)
@@ -161,8 +202,28 @@ function InvoiceCard({
     setApproving(false)
   }
 
+  async function send() {
+    setSending(true)
+    setSendError(null)
+    const res = await fetch(`/api/billing/invoices/${invoice.id}/send`, { method: 'POST' })
+    const d = await res.json()
+    if (res.ok && d.ok) {
+      onSent(invoice.id, {
+        status: 'sent',
+        stripe_invoice_id: d.stripeId ?? null,
+        sent_at: new Date().toISOString(),
+        stripe_error: null,
+      })
+    } else {
+      const err = d.error ?? 'Unknown error sending invoice'
+      setSendError(err)
+      onSent(invoice.id, { stripe_error: err })
+    }
+    setSending(false)
+  }
+
   return (
-    <div className={`rounded-tlw-2xl border bg-tlw-surface ${isApproved ? 'border-green-200' : 'border-tlw-warm-gray/15'}`}>
+    <div className={`rounded-tlw-2xl border bg-tlw-surface ${borderClass}`}>
       {/* Header */}
       <div className="flex items-center justify-between gap-4 border-b border-tlw-warm-gray/10 px-4 py-3">
         <div>
@@ -170,11 +231,8 @@ function InvoiceCard({
           <p className="text-[12px] text-tlw-warm-gray">{invoice.billing_accounts.billing_email}</p>
         </div>
         <div className="flex items-center gap-2">
-          {isApproved ? (
-            <span className="rounded-full bg-green-50 px-2.5 py-0.5 text-[12px] font-medium text-green-700">
-              ✓ Approved
-            </span>
-          ) : isDraft ? (
+          <StatusChip status={invoice.status} />
+          {isDraft && (
             <button
               onClick={approve}
               disabled={approving}
@@ -182,13 +240,36 @@ function InvoiceCard({
             >
               {approving ? 'Approving…' : 'Approve'}
             </button>
-          ) : (
-            <span className="rounded-full bg-tlw-canvas px-2.5 py-0.5 text-[12px] capitalize text-tlw-warm-gray">
-              {invoice.status}
-            </span>
+          )}
+          {isApproved && (
+            <button
+              onClick={send}
+              disabled={sending}
+              className="rounded-tlw-lg bg-tlw-signal-orange px-3 py-1.5 text-[13px] font-medium text-white transition-colors hover:opacity-90 disabled:opacity-50"
+            >
+              {sending ? 'Sending…' : 'Send via Stripe'}
+            </button>
+          )}
+          {isFailed && (
+            <button
+              onClick={send}
+              disabled={sending}
+              className="rounded-tlw-lg border border-red-300 bg-red-50 px-3 py-1.5 text-[13px] font-medium text-red-700 transition-colors hover:bg-red-100 disabled:opacity-50"
+            >
+              {sending ? 'Retrying…' : 'Retry send'}
+            </button>
           )}
         </div>
       </div>
+
+      {/* Stripe error banner */}
+      {(sendError || invoice.stripe_error) && (
+        <div className="border-b border-red-100 bg-red-50 px-4 py-2.5">
+          <p className="text-[12px] text-red-700">
+            <strong>Stripe error:</strong> {sendError ?? invoice.stripe_error}
+          </p>
+        </div>
+      )}
 
       {/* Lines */}
       <div className="divide-y divide-tlw-warm-gray/8">
@@ -210,11 +291,26 @@ function InvoiceCard({
         <span className="text-[15px] font-bold text-tlw-navy-deep">{money(invoice.total)}</span>
       </div>
 
-      {isApproved && invoice.approved_by && (
-        <p className="border-t border-tlw-warm-gray/10 px-4 py-2 text-[11px] text-tlw-warm-gray">
-          Approved by {invoice.approved_by} · {new Date(invoice.approved_at!).toLocaleString()}
-        </p>
-      )}
+      {/* Audit trail */}
+      <div className="border-t border-tlw-warm-gray/10 px-4 py-2 space-y-0.5">
+        {invoice.approved_by && (
+          <p className="text-[11px] text-tlw-warm-gray">
+            Approved by {invoice.approved_by}
+            {invoice.approved_at ? ` · ${new Date(invoice.approved_at).toLocaleString()}` : ''}
+          </p>
+        )}
+        {invoice.sent_at && (
+          <p className="text-[11px] text-tlw-warm-gray">
+            Sent {new Date(invoice.sent_at).toLocaleString()}
+            {invoice.stripe_invoice_id ? ` · Stripe ${invoice.stripe_invoice_id}` : ''}
+          </p>
+        )}
+        {invoice.paid_at && (
+          <p className="text-[11px] font-medium text-emerald-600">
+            Paid {new Date(invoice.paid_at).toLocaleString()}
+          </p>
+        )}
+      </div>
     </div>
   )
 }
@@ -230,12 +326,13 @@ export default function BillingRunPage() {
   const [invoices, setInvoices] = useState<DraftInvoice[]>([])
   const [loadingInvoices, setLoadingInvoices] = useState(true)
   const [approvingAll, setApprovingAll] = useState(false)
+  const [sendingAll, setSendingAll] = useState(false)
 
   const loadInvoices = useCallback(async (start: string, end: string) => {
     setLoadingInvoices(true)
     try {
       const res = await fetch(
-        `/api/billing/invoices?status=draft,approved&periodStart=${start}&periodEnd=${end}`,
+        `/api/billing/invoices?status=draft,approved,sent,paid,failed&periodStart=${start}&periodEnd=${end}`,
       )
       if (!res.ok) throw new Error()
       const d = await res.json()
@@ -298,6 +395,32 @@ export default function BillingRunPage() {
     setApprovingAll(false)
   }
 
+  async function sendAll() {
+    const approvedIds = invoices.filter((i) => i.status === 'approved').map((i) => i.id)
+    if (approvedIds.length === 0) return
+    setSendingAll(true)
+    // Send sequentially to avoid overwhelming Stripe rate limits.
+    for (const id of approvedIds) {
+      const res = await fetch(`/api/billing/invoices/${id}/send`, { method: 'POST' })
+      const d = await res.json()
+      if (res.ok && d.ok) {
+        setInvoices((cur) =>
+          cur.map((inv) =>
+            inv.id === id
+              ? { ...inv, status: 'sent', stripe_invoice_id: d.stripeId ?? null, sent_at: new Date().toISOString(), stripe_error: null }
+              : inv,
+          ),
+        )
+      } else {
+        const err = d.error ?? 'Unknown error'
+        setInvoices((cur) =>
+          cur.map((inv) => (inv.id === id ? { ...inv, stripe_error: err } : inv)),
+        )
+      }
+    }
+    setSendingAll(false)
+  }
+
   function handleApproved(invoiceId: string) {
     setInvoices((cur) =>
       cur.map((inv) =>
@@ -305,6 +428,12 @@ export default function BillingRunPage() {
           ? { ...inv, status: 'approved', approved_by: 'you', approved_at: new Date().toISOString() }
           : inv,
       ),
+    )
+  }
+
+  function handleSent(invoiceId: string, updates: Partial<DraftInvoice>) {
+    setInvoices((cur) =>
+      cur.map((inv) => (inv.id === invoiceId ? { ...inv, ...updates } : inv)),
     )
   }
 
@@ -331,8 +460,12 @@ export default function BillingRunPage() {
   }
 
   const draftCount = invoices.filter((i) => i.status === 'draft').length
+  const approvedCount = invoices.filter((i) => i.status === 'approved').length
   const draftTotal = invoices
     .filter((i) => i.status === 'draft')
+    .reduce((s, i) => s + i.total, 0)
+  const approvedTotal = invoices
+    .filter((i) => i.status === 'approved')
     .reduce((s, i) => s + i.total, 0)
   const grandTotal = invoices.reduce((s, i) => s + i.total, 0)
 
@@ -394,25 +527,39 @@ export default function BillingRunPage() {
         )}
       </div>
 
-      {/* Summary + approve-all */}
+      {/* Summary + batch actions */}
       {invoices.length > 0 && (
-        <div className="mb-4 flex items-center justify-between gap-4 rounded-tlw-xl border border-tlw-warm-gray/10 bg-tlw-canvas px-4 py-3">
-          <div className="flex items-center gap-4 text-[13px]">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-tlw-xl border border-tlw-warm-gray/10 bg-tlw-canvas px-4 py-3">
+          <div className="flex flex-wrap items-center gap-4 text-[13px]">
             <span className="font-semibold text-tlw-navy-deep">{invoices.length} invoice{invoices.length > 1 ? 's' : ''}</span>
-            <span className="text-tlw-warm-gray">
-              {money(grandTotal)} total
-              {draftCount > 0 && ` · ${money(draftTotal)} pending approval`}
-            </span>
+            <span className="text-tlw-warm-gray">{money(grandTotal)} total</span>
+            {draftCount > 0 && (
+              <span className="text-tlw-warm-gray">{money(draftTotal)} pending approval</span>
+            )}
+            {approvedCount > 0 && (
+              <span className="text-green-700">{money(approvedTotal)} ready to send</span>
+            )}
           </div>
-          {draftCount > 0 && (
-            <button
-              onClick={approveAll}
-              disabled={approvingAll}
-              className="rounded-tlw-lg border border-tlw-navy-deep/40 px-3 py-1.5 text-[13px] font-medium text-tlw-navy-deep transition-colors hover:bg-tlw-navy-deep/5 disabled:opacity-50"
-            >
-              {approvingAll ? 'Approving…' : `Approve all (${draftCount})`}
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {draftCount > 0 && (
+              <button
+                onClick={approveAll}
+                disabled={approvingAll}
+                className="rounded-tlw-lg border border-tlw-navy-deep/40 px-3 py-1.5 text-[13px] font-medium text-tlw-navy-deep transition-colors hover:bg-tlw-navy-deep/5 disabled:opacity-50"
+              >
+                {approvingAll ? 'Approving…' : `Approve all (${draftCount})`}
+              </button>
+            )}
+            {approvedCount > 0 && (
+              <button
+                onClick={sendAll}
+                disabled={sendingAll}
+                className="rounded-tlw-lg bg-tlw-signal-orange px-3 py-1.5 text-[13px] font-medium text-white transition-colors hover:opacity-90 disabled:opacity-50"
+              >
+                {sendingAll ? 'Sending…' : `Send all approved (${approvedCount})`}
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -436,6 +583,7 @@ export default function BillingRunPage() {
               key={inv.id}
               invoice={inv}
               onApproved={handleApproved}
+              onSent={handleSent}
               onLineUpdated={handleLineUpdated}
               onLineDeleted={handleLineDeleted}
             />
