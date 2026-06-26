@@ -15,6 +15,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { getSessionCoach } from '@/lib/coach'
 import { sendInvoice } from '@/lib/billing/send'
+import { scheduleReminder } from '@/lib/billing/reminders'
 
 export const runtime = 'nodejs'
 
@@ -46,6 +47,8 @@ export async function POST(_req: NextRequest, { params }: Params) {
     if (!result.ok) {
       return NextResponse.json({ ok: false, error: result.error }, { status: 402 })
     }
+    // Schedule a 14-day follow-up reminder (best-effort, never blocks the response).
+    scheduleReminder(supabase, params.id).catch(() => {})
     return NextResponse.json({ ok: true, stripeId: result.stripeId })
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })

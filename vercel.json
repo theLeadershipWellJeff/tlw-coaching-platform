@@ -15,6 +15,10 @@
     {
       "path": "/api/cron/calendar-sync",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/billing-reminders",
+      "schedule": "0 * * * *"
     }
   ]
 }
