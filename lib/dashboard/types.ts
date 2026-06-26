@@ -14,8 +14,8 @@ import type { ReactNode } from 'react'
 
 export type CardSize = 'compact' | 'standard' | 'expanded'
 
-/** The only surface in this build. Kept as a union so cards stay surface-aware. */
-export type DashboardSurfaceId = 'dashboard'
+/** All card surfaces in the app. */
+export type DashboardSurfaceId = 'dashboard' | 'business-center'
 
 /**
  * Server-safe card metadata — everything the registry/validator need to know

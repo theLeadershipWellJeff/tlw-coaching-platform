@@ -5,10 +5,37 @@ import type { BillingAccountType } from '@/lib/billing/types'
 
 export const runtime = 'nodejs'
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const supabase = getSupabaseAdmin()
   const coach = await getSessionCoach(supabase)
   if (!coach) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const withSummary = req.nextUrl.searchParams.get('withSummary') === '1'
+
+  if (withSummary) {
+    // Return accounts with coachee + active-engagement counts for the cards view.
+    const { data, error } = await supabase
+      .from('billing_accounts')
+      .select(`
+        id, name, type,
+        coachees ( id ),
+        engagements ( id, status )
+      `)
+      .eq('coach_id', coach.id)
+      .order('name', { ascending: true })
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    const accounts = (data ?? []).map((acct: any) => ({
+      id: acct.id,
+      name: acct.name,
+      type: acct.type,
+      coacheeCount: (acct.coachees ?? []).length,
+      activeEngagements: (acct.engagements ?? []).filter((e: any) => e.status === 'active').length,
+    }))
+
+    return NextResponse.json({ accounts })
+  }
 
   const { data, error } = await supabase
     .from('billing_accounts')
