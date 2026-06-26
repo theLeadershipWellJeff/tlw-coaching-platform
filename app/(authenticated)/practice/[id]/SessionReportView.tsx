@@ -2,9 +2,122 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { COMPETENCIES, DOMAINS } from '@/lib/scoring/rubric'
-import type { SessionReport } from '@/lib/supabase/types'
+import type { GrowthAreaAssessment, GrowthAreaBand, SessionReport } from '@/lib/supabase/types'
 import type { Band, Metrics } from '@/lib/scoring/types'
 import { BandChip, BandPill, MetricCard, Section, flagColor } from '../ui'
+
+// ── Growth area assessment cards ─────────────────────────────────────────────
+
+type AssessmentWithArea = GrowthAreaAssessment & {
+  coach_growth_areas: { title: string; band_scale: GrowthAreaBand[]; status: string } | null
+}
+
+function GrowthBandBar({ bands, activeBand }: { bands: GrowthAreaBand[]; activeBand: number }) {
+  return (
+    <div className="mt-2 flex items-center gap-1">
+      {bands.map((b) => (
+        <div
+          key={b.band}
+          className="flex-1 rounded-full"
+          style={{
+            height: 6,
+            backgroundColor:
+              b.band === activeBand ? 'var(--color-info)' : `var(--color-info)20`,
+          }}
+          title={`Band ${b.band}: ${b.description}`}
+        />
+      ))}
+      <span className="ml-2 text-[11px] font-semibold" style={{ color: 'var(--color-info)' }}>
+        {activeBand}/5
+      </span>
+    </div>
+  )
+}
+
+function DevelopmentFocusCards({ reportId }: { reportId: string }) {
+  const [assessments, setAssessments] = useState<AssessmentWithArea[] | null>(null)
+
+  useEffect(() => {
+    fetch(`/api/reports/${reportId}/growth-assessments`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setAssessments(d?.assessments ?? []))
+      .catch(() => setAssessments([]))
+  }, [reportId])
+
+  // Only render when there are observed or not-observed assessments.
+  if (!assessments || assessments.length === 0) return null
+
+  return (
+    <div className="mt-6">
+      <p className="mb-3 text-[11px] font-semibold uppercase tracking-[2px] text-tlw-warm-gray">
+        Your development focus
+      </p>
+      <div className="space-y-3">
+        {assessments.map((a) => {
+          const title = a.coach_growth_areas?.title ?? 'Growth area'
+          const bands = a.coach_growth_areas?.band_scale ?? []
+          return (
+            <div
+              key={a.id}
+              className="rounded-tlw-xl border border-tlw-warm-gray/15 p-5"
+              style={{ backgroundColor: 'var(--color-surface)' }}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-[14px] font-medium text-tlw-navy-deep">{title}</p>
+                {a.observed ? (
+                  <span
+                    className="shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-medium"
+                    style={{ backgroundColor: 'var(--color-info)14', color: 'var(--color-info)' }}
+                  >
+                    observed
+                  </span>
+                ) : (
+                  <span
+                    className="shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-medium"
+                    style={{ backgroundColor: 'var(--color-muted)20', color: 'var(--color-muted)' }}
+                  >
+                    not observed
+                  </span>
+                )}
+              </div>
+
+              {a.observed && a.band != null && bands.length === 5 && (
+                <GrowthBandBar bands={bands} activeBand={a.band} />
+              )}
+              {a.observed && a.band != null && bands.length === 5 && (
+                <p className="mt-1.5 text-[12px] text-tlw-warm-gray">
+                  {bands.find((b) => b.band === a.band)?.description}
+                </p>
+              )}
+
+              {a.observed && a.evidence.length > 0 && (
+                <div className="mt-3 space-y-1.5">
+                  {a.evidence.map((ev, i) => (
+                    <div key={i} className="flex items-start gap-2">
+                      <span className="mt-[2px] shrink-0 text-[10px] text-tlw-signal-orange">›</span>
+                      <p className="text-[12px] leading-relaxed text-tlw-espresso">
+                        {ev.timestamp && (
+                          <span className="mr-1.5 font-medium text-tlw-warm-gray">{ev.timestamp}</span>
+                        )}
+                        {ev.quote_or_paraphrase}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {a.observed && a.developmental_note && (
+                <p className="mt-3 text-[12px] leading-relaxed" style={{ color: 'var(--color-info)' }}>
+                  {a.developmental_note}
+                </p>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
 
 /** Human labels for the spec §10 gate ceilings, shown on a capped competency. */
 const GATE_LABELS: Record<string, string> = {
@@ -346,6 +459,9 @@ export function SessionReportView({ id }: { id: string }) {
           )}
         </div>
       </div>
+
+      {/* Growth area development focus — at the very top, before self-score */}
+      <DevelopmentFocusCards reportId={id} />
 
       {/* Self-score — directly under the title (spec §13) */}
       <div className="mt-5">
