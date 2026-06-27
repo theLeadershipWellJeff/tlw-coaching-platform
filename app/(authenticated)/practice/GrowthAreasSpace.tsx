@@ -133,7 +133,7 @@ export function GrowthAreasSpace() {
 
   if (loading) {
     return (
-      <div className="pt-8" style={{ borderTop: '0.5px solid var(--color-divider)' }}>
+      <div>
         <p className="text-[13px] text-tlw-warm-gray">Loading growth areas…</p>
       </div>
     )
@@ -143,7 +143,7 @@ export function GrowthAreasSpace() {
   if (editingId !== null) {
     const area = editingId === 'new' ? undefined : areas.find((a) => a.id === editingId)
     return (
-      <div className="pt-8" style={{ borderTop: '0.5px solid var(--color-divider)' }}>
+      <div>
         <div className="mb-6 flex items-center justify-between">
           <h2 className="text-[15px] font-medium text-tlw-navy-deep">
             {editingId === 'new' ? 'New growth area' : 'Edit growth area'}
@@ -161,7 +161,7 @@ export function GrowthAreasSpace() {
   }
 
   return (
-    <div className="pt-8" style={{ borderTop: '0.5px solid var(--color-divider)' }}>
+    <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h2 className="text-[15px] font-medium text-tlw-navy-deep">Growth Areas</h2>

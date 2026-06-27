@@ -1,6 +1,5 @@
 import { PageHeader } from '@/app/components/layout/PageHeader'
 import { ScorecardSpace } from './ScorecardSpace'
-import { GrowthAreasSpace } from './GrowthAreasSpace'
 
 export default function PracticePage() {
   return (
@@ -10,7 +9,6 @@ export default function PracticePage() {
         subtitle="Your coaching craft, scored session by session against the ICF competencies and theLeadershipWell standards."
       />
       <ScorecardSpace />
-      <GrowthAreasSpace />
     </>
   )
 }
