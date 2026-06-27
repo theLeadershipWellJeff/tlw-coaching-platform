@@ -9,12 +9,23 @@ export async function GET(req: NextRequest) {
     const supabase = getSupabaseAdmin()
     const coach = await requireCoach(supabase)
 
-    const status = new URL(req.url).searchParams.get('status')
+    const params = new URL(req.url).searchParams
+    const status = params.get('status')
+    // By default only return coaching clients. Pass ?type=coach for team coaches,
+    // or ?type=all to include both (e.g. search, transcript matching).
+    const typeParam = params.get('type')
     const ids = await accessibleClientIds(supabase, coach.id)
     if (ids.length === 0) return NextResponse.json({ clients: [] })
 
     let query = supabase.from('clients').select('*').in('id', ids).order('name', { ascending: true })
     if (status) query = query.eq('status', status)
+    if (typeParam === 'all') {
+      // no filter — return everyone
+    } else if (typeParam === 'coach') {
+      query = query.eq('client_type', 'coach')
+    } else {
+      query = query.eq('client_type', 'client')
+    }
 
     const { data, error } = await query
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })

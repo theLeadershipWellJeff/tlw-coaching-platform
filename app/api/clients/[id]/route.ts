@@ -30,7 +30,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     await requireClientCoach(supabase, params.id)
 
     const body = await req.json().catch(() => ({}))
-  const allowed = ['name', 'email', 'title', 'company', 'status', 'phone', 'timezone', 'timezone_label', 'address', 'ca_client_id', 'tags', 'bio', 'coaching_goals', 'key_info', 'coaching_map', 'session_fee'] as const
+  const allowed = ['name', 'email', 'title', 'company', 'status', 'phone', 'timezone', 'timezone_label', 'address', 'ca_client_id', 'tags', 'bio', 'coaching_goals', 'key_info', 'coaching_map', 'session_fee', 'client_type'] as const
   const patch: Database['public']['Tables']['clients']['Update'] = {}
   for (const key of allowed) {
     if (key in body) patch[key] = body[key]
