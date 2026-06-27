@@ -65,13 +65,14 @@ export async function createAndSendStripeInvoice(opts: {
   const stripe = getStripe()
 
   // Create invoice items for each line.
+  // Stripe does not allow both `amount` and `quantity` — amount is the total
+  // for the line in cents; quantity is implicit when amount is set directly.
   for (const line of opts.lines) {
     await stripe.invoiceItems.create({
       customer: opts.customerId,
-      amount: Math.round(line.amount * 100), // cents
+      amount: Math.round(line.amount * 100), // cents, total for this line
       currency: opts.currency,
       description: line.description,
-      quantity: line.quantity,
     })
   }
 
