@@ -123,6 +123,7 @@ export const CARD_META: Record<string, CardMeta> = {
   'bc-accounts': {
     id: 'bc-accounts',
     title: 'Accounts',
+    titleHref: '/business-center/accounts',
     surfaces: ['business-center'],
     supportedSizes: ['compact', 'standard', 'expanded'],
     defaultSize: 'standard',

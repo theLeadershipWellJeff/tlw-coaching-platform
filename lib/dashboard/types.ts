@@ -32,6 +32,8 @@ export interface CardMeta {
   // true = the card's body renders its own header (e.g. a wrapped legacy panel),
   // so the CardFrame suppresses its title to avoid a double header.
   selfHeader?: boolean
+  // If set, the card title in the frame becomes a link to this path.
+  titleHref?: string
   // Pin a card to a fixed grid width (a Tailwind col-span class) regardless of
   // size, for list cards that change height (not width) across sizes and should
   // never spread to a full row.

@@ -168,6 +168,7 @@ export function BusinessCenterSurface() {
               >
                 <CardFrame
                   title={card.title}
+                  titleHref={card.titleHref}
                   icon={card.icon}
                   selfHeader={card.selfHeader}
                   size={b.size}

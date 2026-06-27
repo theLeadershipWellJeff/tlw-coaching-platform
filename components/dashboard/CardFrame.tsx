@@ -5,6 +5,7 @@
  * handle. Self-headed cards (wrapped legacy panels) pass `selfHeader` so the
  * frame suppresses its title and the panel's own header shows instead.
  */
+import Link from 'next/link'
 import type { ReactNode } from 'react'
 import type { CardSize } from '@/lib/dashboard/types'
 
@@ -59,6 +60,7 @@ function GripIcon() {
 
 export function CardFrame({
   title,
+  titleHref,
   icon,
   selfHeader = false,
   size,
@@ -69,6 +71,7 @@ export function CardFrame({
   children,
 }: {
   title: string
+  titleHref?: string
   icon?: string
   selfHeader?: boolean
   size: CardSize
@@ -88,10 +91,19 @@ export function CardFrame({
             </span>
           )}
           {!selfHeader && (
-            <p className="min-w-0 truncate text-[11px] font-medium uppercase tracking-[2px] text-tlw-warm-gray">
-              {icon ? `${icon} ` : ''}
-              {title}
-            </p>
+            titleHref ? (
+              <Link
+                href={titleHref}
+                className="min-w-0 truncate text-[11px] font-medium uppercase tracking-[2px] text-tlw-warm-gray transition-colors hover:text-tlw-navy-deep"
+              >
+                {icon ? `${icon} ` : ''}{title} →
+              </Link>
+            ) : (
+              <p className="min-w-0 truncate text-[11px] font-medium uppercase tracking-[2px] text-tlw-warm-gray">
+                {icon ? `${icon} ` : ''}
+                {title}
+              </p>
+            )
           )}
         </div>
         <div className="flex shrink-0 items-center gap-1.5">

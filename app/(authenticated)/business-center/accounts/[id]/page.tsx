@@ -894,12 +894,14 @@ export default function AccountDetailPage() {
           <section>
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-[13px] font-semibold uppercase tracking-wider text-tlw-warm-gray">Coachees</h2>
-              <button
-                onClick={() => setShowAddCoachee(true)}
-                className="rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-1 text-[12px] font-medium text-tlw-espresso transition-colors hover:bg-tlw-canvas"
-              >
-                + Add coachee
-              </button>
+              {account.type === 'enterprise' && (
+                <button
+                  onClick={() => setShowAddCoachee(true)}
+                  className="rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-1 text-[12px] font-medium text-tlw-espresso transition-colors hover:bg-tlw-canvas"
+                >
+                  + Add coachee
+                </button>
+              )}
             </div>
             {account.coachees.length === 0 ? (
               <div className="rounded-tlw-2xl border border-dashed border-tlw-warm-gray/25 bg-tlw-surface/60 px-6 py-6 text-center">

@@ -6,6 +6,7 @@ import { PageHeader } from '@/app/components/layout/PageHeader'
 import type { BillingAccount } from '@/lib/billing/types'
 
 type Client = { id: string; name: string; email: string | null }
+type Coach = { id: string; name: string; email: string; role: string }
 
 type AccountSummary = {
   id: string
@@ -336,6 +337,7 @@ function ClosedAccountRow({ acct, onReopen }: { acct: AccountSummary; onReopen: 
 export default function AccountsPage() {
   const [activeAccounts, setActiveAccounts] = useState<AccountSummary[]>([])
   const [closedAccounts, setClosedAccounts] = useState<AccountSummary[]>([])
+  const [coaches, setCoaches] = useState<Coach[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
@@ -345,14 +347,16 @@ export default function AccountsPage() {
   async function loadAccounts() {
     setLoading(true)
     try {
-      const [activeRes, closedRes] = await Promise.all([
+      const [activeRes, closedRes, coachesRes] = await Promise.all([
         fetch('/api/billing/accounts?withSummary=1&status=active'),
         fetch('/api/billing/accounts?withSummary=1&status=closed'),
+        fetch('/api/coaches'),
       ])
       if (!activeRes.ok || !closedRes.ok) throw new Error()
-      const [activeData, closedData] = await Promise.all([activeRes.json(), closedRes.json()])
+      const [activeData, closedData, coachesData] = await Promise.all([activeRes.json(), closedRes.json(), coachesRes.ok ? coachesRes.json() : { coaches: [] }])
       setActiveAccounts(activeData.accounts ?? [])
       setClosedAccounts(closedData.accounts ?? [])
+      setCoaches(coachesData.coaches ?? [])
     } catch {
       setError(true)
     } finally {
@@ -433,12 +437,36 @@ export default function AccountsPage() {
             </section>
           )}
 
-          {/* Solo section */}
+          {/* Active Clients (solo) section */}
           {soloAccounts.length > 0 && (
             <section>
-              <h2 className="mb-3 text-[13px] font-semibold uppercase tracking-wider text-tlw-warm-gray">Solo</h2>
+              <h2 className="mb-3 text-[13px] font-semibold uppercase tracking-wider text-tlw-warm-gray">Active Clients</h2>
               <div className="divide-y divide-tlw-warm-gray/10 rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface">
                 {soloAccounts.map((acct) => <AccountRow key={acct.id} acct={acct} />)}
+              </div>
+            </section>
+          )}
+
+          {/* Coaches section */}
+          {coaches.length > 0 && (
+            <section>
+              <h2 className="mb-3 text-[13px] font-semibold uppercase tracking-wider text-tlw-warm-gray">Coaches</h2>
+              <div className="divide-y divide-tlw-warm-gray/10 rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface">
+                {coaches.map((coach) => (
+                  <Link
+                    key={coach.id}
+                    href="/business-center/coaches"
+                    className="flex items-center justify-between gap-4 px-5 py-4 transition-colors hover:bg-tlw-canvas"
+                  >
+                    <div>
+                      <p className="text-[14px] font-medium text-tlw-navy-deep">{coach.name}</p>
+                      <p className="text-[12px] text-tlw-warm-gray">{coach.email}</p>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-tlw-canvas px-2 py-0.5 text-[11px] font-medium capitalize text-tlw-warm-gray">
+                      {coach.role === 'supervisor' ? 'Supervisor' : 'Coach'}
+                    </span>
+                  </Link>
+                ))}
               </div>
             </section>
           )}
