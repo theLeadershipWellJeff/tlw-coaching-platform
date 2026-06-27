@@ -31,6 +31,7 @@ export type RunResult = {
   skipped: number     // accounts skipped (already invoiced for period)
   empty: number       // accounts with nothing due
   invoiceIds: string[]
+  debug?: string[]    // human-readable explanation of what was found / skipped
 }
 
 type EngagementRow = {
@@ -162,7 +163,7 @@ export async function assembleRun(
 
   if (engErr) throw new Error(`assembleRun: failed to load engagements — ${engErr.message}`)
   if (!engagements || engagements.length === 0) {
-    return { created: 0, skipped: 0, empty: 0, invoiceIds: [] }
+    return { created: 0, skipped: 0, empty: 0, invoiceIds: [], debug: ['No active TLW-owned engagements found for this coach. Create engagements with billing_owner=TLW and status=active on the Accounts page.'] }
   }
 
   // 2. Group engagements by billing account.
@@ -177,6 +178,7 @@ export async function assembleRun(
   let skipped = 0
   let empty = 0
   const invoiceIds: string[] = []
+  const debug: string[] = [`Found ${engagements.length} active TLW-owned engagement(s) across ${new Set((engagements as EngagementRow[]).map(e => e.billing_account_id)).size} account(s).`]
 
   // 3. Process each account.
   for (const [accountId, acctEngagements] of Array.from(byAccount)) {
@@ -203,7 +205,10 @@ export async function assembleRun(
       const clientId = coachee?.client_id
 
       if (eng.billing_mode === 'arrears') {
-        if (!clientId || !eng.rate_hourly) continue
+        if (!clientId || !eng.rate_hourly) {
+          debug.push(`  Arrears engagement ${eng.id} skipped: ${!clientId ? 'no client_id on coachee' : 'no rate_hourly set'}.`)
+          continue
+        }
 
         const sessions = await deriveBillableSessions(
           supabase,
@@ -220,7 +225,10 @@ export async function assembleRun(
           periodEnd,
         )
 
-        if (sessions.length === 0) continue
+        if (sessions.length === 0) {
+          debug.push(`  Arrears engagement for ${clientName}: 0 notes with session_date in [${periodStart}, ${periodEnd}] and duration_minutes > 0. Check that notes have the correct session_date.`)
+          continue
+        }
 
         const lineTotal = round2(sessions.reduce((s, sess) => s + sess.amount, 0))
         lines.push({
@@ -234,7 +242,10 @@ export async function assembleRun(
         })
 
       } else if (eng.billing_mode === 'subscription') {
-        if (!eng.monthly_amount) continue
+        if (!eng.monthly_amount) {
+          debug.push(`  Subscription engagement ${eng.id} skipped: no monthly_amount set.`)
+          continue
+        }
 
         // Dedup: skip if this account already has a non-void invoice for this period.
         const alreadyInvoiced = await hasPeriodInvoice(supabase, coachId, accountId, periodStart, periodEnd)
@@ -259,7 +270,10 @@ export async function assembleRun(
         })
 
       } else if (eng.billing_mode === 'per_engagement') {
-        if (!eng.installment_schedule || eng.installment_schedule.length === 0) continue
+        if (!eng.installment_schedule || eng.installment_schedule.length === 0) {
+          debug.push(`  Per-engagement ${eng.id} skipped: no installment_schedule.`)
+          continue
+        }
 
         const existingCount = await countExistingInstallmentLines(supabase, coachId, eng.coachee_id)
         const totalInstallments = eng.installment_count ?? eng.installment_schedule.length
@@ -356,5 +370,5 @@ export async function assembleRun(
     invoiceIds.push(invoice.id)
   }
 
-  return { created, skipped, empty, invoiceIds }
+  return { created, skipped, empty, invoiceIds, debug }
 }
