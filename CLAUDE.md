@@ -642,7 +642,45 @@ fine-grained PAT on the vault repo), optional `VAULT_REPO` (default
 `theLeadershipWellJeff/TheLeadershipWell-Vault`), `VAULT_BRANCH` (default `main`).
 Optional: `SCORING_MODEL`, `GOALS_MODEL`, `NUDGE_MODEL`,
 `AUTO_SCORE`, `DEFAULT_TIMEZONE`, `PLAUD_DRIVE_FOLDER` (default `Plaud-Transcripts`).
+Stripe (billing): `STRIPE_SECRET_KEY` (from Stripe Dashboard → Developers → API keys;
+use the test key `sk_test_…` in dev, live key `sk_live_…` in production),
+`STRIPE_WEBHOOK_SECRET` (from Stripe Dashboard → Developers → Webhooks → signing
+secret for the `POST /api/billing/webhooks/stripe` endpoint).
 See `.env.example`.
+
+## Stripe integration
+
+All Stripe interaction is in `lib/billing/stripe.ts` (singleton + helpers) and
+`lib/billing/send.ts` (the one send path). Key facts:
+
+- **All billing modes use hosted invoices.** Stripe emails the client a link to a
+  hosted payment page where they enter their card, can save it for future payments,
+  and can enable auto-pay. No payment method needs to be on file upfront. The
+  off-session PaymentIntent path (which required a saved card) was removed — that
+  was the source of the "no payment method on file" error.
+- **Required env vars:** `STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET`. If either
+  is missing, `getStripe()` throws at send time, surfaced as a Stripe error on the
+  invoice card.
+- **Webhook endpoint:** `POST /api/billing/webhooks/stripe` — handles
+  `invoice.paid` (marks invoice `paid` in Supabase). Must be registered in the
+  Stripe Dashboard pointing at `https://theleadershipwell.online/api/billing/webhooks/stripe`.
+- **Customer creation:** `getOrCreateStripeCustomer` creates one Stripe customer
+  per `billing_accounts` row on first send; persists `stripe_customer_id` back to
+  the row so subsequent sends reuse it.
+- **Days until due:** hosted invoices are set to `days_until_due: 30`.
+
+### Stripe go-live checklist
+1. Add `STRIPE_SECRET_KEY` (live) and `STRIPE_WEBHOOK_SECRET` to Vercel env vars.
+2. In Stripe Dashboard → Developers → Webhooks, add endpoint:
+   `https://theleadershipwell.online/api/billing/webhooks/stripe`
+   Events to listen for: `invoice.paid`, `invoice.payment_failed`.
+3. Copy the webhook signing secret → `STRIPE_WEBHOOK_SECRET` in Vercel.
+4. Deploy (merge to `main`) — Vercel picks up the new env vars on next deploy.
+5. Test with a real billing account: assemble a run → approve → send. The client
+   should receive a Stripe-hosted invoice email. Check the Stripe Dashboard →
+   Payments to confirm it appears.
+6. To verify the webhook is firing: Stripe Dashboard → Developers → Webhooks →
+   select the endpoint → Recent deliveries.
 
 ## Operational notes
 
