@@ -1018,3 +1018,99 @@ and 2–3 suggested ways to use it. The tour hits these same popovers in sequenc
 5. Frameworks card + PDF pop-up (garden leaf → PDF link)
 6. Document upload in chat
 7. Onboarding tour + per-card ⓘ popovers
+
+#### Groups (Major Build — architecture TBD)
+
+A dedicated `/groups` section (sidebar item already stubbed as ComingSoon) for
+managing cohorts, mastermind groups, team engagements, or any multi-person
+coaching context. Architecture to be designed in a follow-on session; what
+follows is the product intent.
+
+**Core concepts.**
+- A **group** is a named, coach-owned container with a `status` of `active` or
+  `past` (archived). Active groups appear at the top of the Groups list; past
+  groups are collapsible below.
+- **Members** may be existing `clients` (linked by `client_id`) or **non-client
+  participants** (e.g. a team sponsor, an HR administrator, or an observer) stored
+  separately — they have an email address and a display name but no individual
+  coaching relationship. Both kinds are first-class group members.
+- **Roles within a group:** `member` (standard participant), `admin` (group
+  administrator — can receive all group communications, see aggregate summaries, and
+  co-manage the group's settings), and `coach` (Jeff, always present as owner).
+  A non-client can hold the `admin` role; a client can hold either `member` or
+  `admin`. Roles are per-group (the same person can be a member in one group and
+  an admin in another).
+
+**Groups workspace (`/groups/[id]`).**
+- **Group overview card** — name, description, start/end dates, status, member
+  count. Edit in place. Archive → moves to past groups.
+- **Members card** — roster of all members with role badges. Add a member (search
+  existing clients or enter a new name + email for a non-client participant). Remove
+  or change role. Clicking a client member navigates to their individual workspace.
+- **Sessions card** — group sessions (shared appointments). Schedule a group
+  session (creates a single Google Calendar event with all members as guests).
+  Upcoming and past group sessions listed with attendance notes.
+- **Notes card** — shared session notes for the group (same `notes` table, keyed
+  to `group_id` instead of `client_id`, or a parallel `group_notes` table — TBD).
+  Coach writes notes during or after group sessions; these are group-scoped and
+  never appear in an individual client's workspace unless explicitly linked.
+- **Actions card** — group-level commitments and follow-ups, similar to the
+  individual `ActionsCard`. Actions can be assigned to the whole group or to a
+  named member.
+- **Communications card** — log of all group emails and nudges sent (same
+  `communications` table, with a `group_id` FK). "View all" expander.
+
+**Notifications & reminders.**
+- **Group email compose** — send a message to all members (or a subset filtered by
+  role) in one action. Uses the existing Gmail send path; logs one `communications`
+  row per recipient. Cc the coach by default.
+- **Group nudges** — same review-before-send pattern as individual nudges, but
+  targeted to the group. Draft via Claude with group context (shared notes,
+  group goals). Coach reviews and sends. Spacing rule applies per-recipient (a
+  member who recently received an individual nudge is flagged).
+- **Group reminders** — appointment reminders for group sessions fire via the
+  existing cron, one email per member, using their individual email addresses.
+- **Announcement blast** — a one-off message to the full group (or role subset)
+  with no scheduling logic. Plain compose → review → send. Useful for logistics,
+  resource shares, or between-session prompts.
+
+**Group goals & frameworks.**
+- A group can carry its own **group goals** (separate from any individual client's
+  goals) — shared outcomes the cohort is working toward.
+- Frameworks from the vault garden can be associated with a group and will appear
+  in group communications and (eventually) a group-facing portal view.
+
+**Past groups (archive).**
+- Archiving a group sets `status = 'past'` and freezes it — no new sessions,
+  notes, or communications. All historical data remains readable.
+- Past groups appear in a collapsible section on the Groups list page, sortable
+  by end date.
+
+**Data model sketch (to be finalized in architecture session).**
+- `groups` — `id`, `coach_id`, `name`, `description`, `status` (active|past),
+  `start_date`, `end_date`, `goals` (jsonb), `created_at`.
+- `group_members` — `group_id`, `member_type` (client|external), `client_id`
+  (nullable FK → clients), `external_name`, `external_email`, `role`
+  (member|admin), `joined_at`.
+- `group_notes` — `group_id`, `coach_id`, `title`, `content` (HTML), `created_at`
+  (or reuse `notes` with a nullable `group_id`; TBD).
+- `group_actions` — `group_id`, `description`, `assigned_to` (member or whole
+  group), `status`, `due_date`.
+- `communications` already has extensible `type`/`direction` — add `group_id`
+  nullable FK (migration additive).
+- `appointments` already supports group sessions if `client_id` is nullable;
+  a `group_id` FK would tie a session to the group.
+
+**Build order (suggested phases):**
+1. Schema + migrations (groups, group_members, group_notes, group_actions; extend
+   communications + appointments with `group_id`)
+2. Groups list page — active/past toggle, create group modal
+3. Group workspace — overview, members card (client + non-client), roles
+4. Group sessions — schedule, upcoming/past list, calendar event with all guests
+5. Group notes + actions
+6. Communications — group email compose, log card
+7. Group nudges + reminders (extend nudge pipeline with group context)
+8. Group goals + framework associations
+9. Announcement blast UI
+10. (Future) Group-facing portal view — members access shared materials, session
+    notes, and group goals through the client portal auth layer
