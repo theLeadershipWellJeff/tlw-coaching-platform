@@ -184,15 +184,28 @@ export default function InvoiceDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [editLine, setEditLine] = useState<InvoiceLine | null>(null)
+  const [message, setMessage] = useState('')
+  const [savingMessage, setSavingMessage] = useState(false)
 
   useEffect(() => {
     if (!id) return
     fetch(`/api/billing/invoices/${id}`)
       .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((d) => setInvoice(d.invoice))
+      .then((d) => { setInvoice(d.invoice); setMessage((d.invoice as any).client_message ?? '') })
       .catch(() => setError(true))
       .finally(() => setLoading(false))
   }, [id])
+
+  async function saveMessage() {
+    if (!invoice) return
+    setSavingMessage(true)
+    await fetch(`/api/billing/invoices/${invoice.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client_message: message.trim() || null }),
+    })
+    setSavingMessage(false)
+  }
 
   function addLine(line: InvoiceLine) {
     setInvoice((inv) => inv ? { ...inv, lines: [...inv.lines, line], total: inv.total + line.amount } : inv)
@@ -247,6 +260,36 @@ export default function InvoiceDetailPage() {
 
       {invoice && (
         <div className="space-y-6">
+          {/* Client message */}
+          <section className="rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface px-5 py-4">
+            <p className="mb-2 text-[13px] font-semibold text-tlw-navy-deep">Message to client</p>
+            <p className="mb-2 text-[11px] text-tlw-warm-gray">This appears at the top of the invoice when the client views it.</p>
+            {invoice.status === 'draft' ? (
+              <div className="space-y-2">
+                <textarea
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  rows={3}
+                  placeholder="e.g. Thank you for your continued partnership. Please find the details below."
+                  className="w-full rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-canvas px-3 py-2 text-[13px] text-tlw-espresso outline-none focus:border-tlw-signal-orange"
+                />
+                <div className="flex justify-end">
+                  <button
+                    onClick={saveMessage}
+                    disabled={savingMessage}
+                    className="rounded-tlw-lg bg-tlw-navy-deep px-3 py-1.5 text-[12px] font-medium text-white disabled:opacity-50"
+                  >
+                    {savingMessage ? 'Saving…' : 'Save message'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-[13px] text-tlw-espresso">
+                {(invoice as any).client_message ?? <span className="italic text-tlw-warm-gray/50">No message added.</span>}
+              </p>
+            )}
+          </section>
+
           {/* Line items */}
           <section className="rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface">
             <div className="border-b border-tlw-warm-gray/10 px-5 py-3">

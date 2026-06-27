@@ -307,8 +307,20 @@ function AddClientModal({
 
   // Step 1: client info
   const [form, setForm] = useState({ name: '', email: '', title: '', company: '', status: 'active' })
+  const [enterpriseAccountId, setEnterpriseAccountId] = useState<string>('')
+  const [enterpriseAccounts, setEnterpriseAccounts] = useState<{ id: string; name: string }[]>([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    fetch('/api/billing/accounts?withSummary=1&status=active')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const enterprise = (d?.accounts ?? []).filter((a: any) => a.type === 'enterprise')
+        setEnterpriseAccounts(enterprise)
+      })
+      .catch(() => {})
+  }, [])
 
   // Step 2: engagement
   const [mode, setMode] = useState<'arrears' | 'subscription' | 'per_engagement'>('arrears')
@@ -335,8 +347,21 @@ function AddClientModal({
       if (!clientRes.ok) throw new Error(clientData.error || 'Failed to create client')
       const newClient = clientData.client
 
-      // 2. Auto-create a solo billing account + coachee link (best-effort; requires email)
-      if (form.email.trim()) {
+      // 2. Link to billing account: enterprise (if selected) or auto-create solo (if email)
+      if (enterpriseAccountId) {
+        // Add as a coachee under the selected enterprise account
+        const coacheeRes = await fetch(`/api/billing/accounts/${enterpriseAccountId}/coachees`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ client_id: newClient.id }),
+        })
+        if (coacheeRes.ok) {
+          const coacheeData = await coacheeRes.json()
+          setBillingAccountId(enterpriseAccountId)
+          setCoacheeId(coacheeData.coachee?.id ?? null)
+        }
+      } else if (form.email.trim()) {
+        // Auto-create a solo billing account
         const acctRes = await fetch(`/api/clients/${newClient.id}/billing`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -399,7 +424,9 @@ function AddClientModal({
             </h2>
             {hasAccount ? (
               <p className="mt-0.5 text-[12px] text-tlw-warm-gray">
-                A billing account was created automatically. Set up how you bill them — you can change this anytime on their account page.
+                {enterpriseAccountId
+                  ? `Added as a coachee under ${enterpriseAccounts.find((a) => a.id === enterpriseAccountId)?.name ?? 'the enterprise account'}. Set up their engagement below.`
+                  : 'A billing account was created automatically. Set up how you bill them — you can change this anytime on their account page.'}
               </p>
             ) : (
               <p className="mt-0.5 text-[12px] text-amber-600">
@@ -538,6 +565,28 @@ function AddClientModal({
           <select className={field} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
             {STATUSES.map((s) => <option key={s} value={s} className="capitalize">{s}</option>)}
           </select>
+          {enterpriseAccounts.length > 0 && (
+            <div>
+              <label className="mb-1 block text-[11px] font-medium uppercase tracking-wider text-tlw-warm-gray">
+                Bill to enterprise account <span className="normal-case font-normal">(optional)</span>
+              </label>
+              <select
+                className={field}
+                value={enterpriseAccountId}
+                onChange={(e) => setEnterpriseAccountId(e.target.value)}
+              >
+                <option value="">Create individual billing account</option>
+                {enterpriseAccounts.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </select>
+              {enterpriseAccountId && (
+                <p className="mt-1 text-[11px] text-tlw-warm-gray">
+                  This client will be added as a coachee under the selected enterprise account.
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {error && <p className="px-6 text-[13px] text-tlw-signal-orange">{error}</p>}

@@ -56,7 +56,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (!account) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const body = await req.json().catch(() => ({}))
-  const allowed = ['name', 'billing_email', 'stripe_customer_id', 'status', 'closed_at'] as const
+  const allowed = ['name', 'billing_email', 'billing_cc', 'stripe_customer_id', 'status', 'closed_at'] as const
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
   for (const key of allowed) {
     if (key in body) updates[key] = body[key]
