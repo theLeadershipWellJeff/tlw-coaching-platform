@@ -1,8 +1,52 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Client } from '@/lib/supabase/types'
 import { EditClientModal } from './EditClientModal'
 import { UpcomingSessions } from './UpcomingSessions'
+
+type SessionEntry = {
+  engagementId: string
+  sessionCount: number
+  sessionsUsed: number
+  billingMode: string
+}
+
+function SessionsProgress({ clientId }: { clientId: string }) {
+  const [sessions, setSessions] = useState<SessionEntry[] | null>(null)
+
+  useEffect(() => {
+    fetch(`/api/clients/${clientId}/billing/sessions`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setSessions(d.sessions ?? []))
+      .catch(() => {})
+  }, [clientId])
+
+  if (!sessions || sessions.length === 0) return null
+
+  return (
+    <div className="mt-3 space-y-1.5">
+      {sessions.map((s) => {
+        const pct = Math.min(100, s.sessionCount > 0 ? Math.round((s.sessionsUsed / s.sessionCount) * 100) : 0)
+        return (
+          <div key={s.engagementId}>
+            <div className="mb-0.5 flex items-center justify-between">
+              <span className="text-[11px] text-tlw-warm-gray">
+                Sessions: {s.sessionsUsed} / {s.sessionCount}
+              </span>
+              <span className="text-[11px] text-tlw-warm-gray">{pct}%</span>
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-tlw-warm-gray/20">
+              <div
+                className="h-full rounded-full bg-tlw-navy-deep transition-all"
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
 
 export function NameCard({
   client,
@@ -35,6 +79,7 @@ export function NameCard({
           )}
 
           <UpcomingSessions clientId={client.id} reloadKey={apptReload} compact timeZone={coachTimezone} />
+          <SessionsProgress clientId={client.id} />
         </div>
 
         <div className="flex shrink-0 items-center gap-3">

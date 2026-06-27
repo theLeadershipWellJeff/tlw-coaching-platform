@@ -29,6 +29,13 @@ type BillingData =
   | { linked: false; accounts: BillingAccount[] }
   | { linked: true; coacheeId: string; account: BillingAccount; engagements: Engagement[] }
 
+type SessionEntry = {
+  engagementId: string
+  sessionCount: number
+  sessionsUsed: number
+  billingMode: string
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function money(n: number) {
@@ -46,6 +53,45 @@ function engSummary(e: Engagement): string {
   if (e.billing_mode === 'subscription' && e.monthly_amount) return `${money(e.monthly_amount)}/mo`
   if (e.billing_mode === 'per_engagement' && e.engagement_total) return `${money(e.engagement_total)} total`
   return MODE_LABEL[e.billing_mode] ?? e.billing_mode
+}
+
+// ── Sessions progress bar ─────────────────────────────────────────────────────
+
+function SessionsProgressBar({ clientId }: { clientId: string }) {
+  const [sessions, setSessions] = useState<SessionEntry[] | null>(null)
+
+  useEffect(() => {
+    fetch(`/api/clients/${clientId}/billing/sessions`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setSessions(d.sessions ?? []))
+      .catch(() => {})
+  }, [clientId])
+
+  if (!sessions || sessions.length === 0) return null
+
+  return (
+    <div className="mt-2 space-y-1.5">
+      {sessions.map((s) => {
+        const pct = Math.min(100, s.sessionCount > 0 ? Math.round((s.sessionsUsed / s.sessionCount) * 100) : 0)
+        return (
+          <div key={s.engagementId}>
+            <div className="mb-0.5 flex items-center justify-between">
+              <span className="text-[11px] text-tlw-warm-gray">
+                Sessions: {s.sessionsUsed} / {s.sessionCount}
+              </span>
+              <span className="text-[11px] text-tlw-warm-gray">{pct}%</span>
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-tlw-warm-gray/20">
+              <div
+                className="h-full rounded-full bg-tlw-navy-deep transition-all"
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
 }
 
 // ── Compact ───────────────────────────────────────────────────────────────────
@@ -202,11 +248,6 @@ function CreateAccountModal({
                 </label>
               ))}
             </div>
-            <p className="mt-1 text-[11px] text-tlw-warm-gray">
-              {type === 'solo'
-                ? 'One coachee; invoice goes to the individual.'
-                : 'Multiple coachees; invoice goes to the company billing contact.'}
-            </p>
           </div>
           <div>
             <label className="mb-1 block text-[12px] font-medium text-tlw-espresso">Billing email</label>
@@ -320,7 +361,12 @@ function BillingFull({ clientId }: { clientId: string }) {
       {/* Account row */}
       <div className="flex items-start justify-between gap-3 px-4 py-3">
         <div>
-          <p className="text-[13px] font-semibold text-tlw-navy-deep">{account.name}</p>
+          <Link
+            href={`/business-center/accounts/${account.id}`}
+            className="text-[13px] font-semibold text-tlw-navy-deep hover:underline"
+          >
+            {account.name}
+          </Link>
           <p className="text-[12px] text-tlw-warm-gray">{account.billing_email}</p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -365,6 +411,7 @@ function BillingFull({ clientId }: { clientId: string }) {
           {activeEngs.length === 0 && (
             <p className="text-[12px] text-amber-600">All engagements are paused — assembler will skip this client.</p>
           )}
+          <SessionsProgressBar clientId={clientId} />
         </div>
       )}
     </div>

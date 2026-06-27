@@ -1,10 +1,21 @@
 'use client'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { PageHeader } from '@/app/components/layout/PageHeader'
 import type { BillingAccount } from '@/lib/billing/types'
 
 type Client = { id: string; name: string; email: string | null }
+
+type AccountSummary = {
+  id: string
+  name: string
+  type: string
+  billing_email: string
+  status: string
+  coacheeCount: number
+  activeEngagements: number
+}
 
 // ── Create Account Modal ──────────────────────────────────────────────────────
 
@@ -36,7 +47,6 @@ function CreateAccountModal({ onCreated, onClose }: {
   }
 
   function selectSoloClient(id: string) {
-    // For solo accounts: auto-fill name and email from client
     const client = clients.find((c) => c.id === id)
     setSelectedClientIds([id])
     if (client) {
@@ -51,7 +61,6 @@ function CreateAccountModal({ onCreated, onClose }: {
     setSaving(true)
     setError('')
 
-    // 1. Create the account.
     const res = await fetch('/api/billing/accounts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -61,7 +70,6 @@ function CreateAccountModal({ onCreated, onClose }: {
     if (!res.ok) { setError(d.error ?? 'Failed to create account'); setSaving(false); return }
     const account: BillingAccount = d.account
 
-    // 2. Link selected clients as coachees.
     for (const clientId of selectedClientIds) {
       await fetch(`/api/billing/accounts/${account.id}/coachees`, {
         method: 'POST',
@@ -73,8 +81,6 @@ function CreateAccountModal({ onCreated, onClose }: {
     onCreated(account)
   }
 
-  const unlinkedClients = clients // show all — server filters duplicates
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-md rounded-tlw-2xl bg-white shadow-xl">
@@ -84,7 +90,6 @@ function CreateAccountModal({ onCreated, onClose }: {
         </div>
         <form onSubmit={submit} className="max-h-[80vh] overflow-y-auto">
           <div className="space-y-4 px-6 py-5">
-            {/* Type */}
             <div>
               <label className="mb-1 block text-[12px] font-medium text-tlw-espresso">Type</label>
               <div className="flex gap-3">
@@ -103,12 +108,8 @@ function CreateAccountModal({ onCreated, onClose }: {
                   </button>
                 ))}
               </div>
-              <p className="mt-1 text-[11px] text-tlw-warm-gray">
-                {type === 'solo' ? 'One coachee — the payer and coachee are the same.' : 'Multiple coachees under one sponsoring organization.'}
-              </p>
             </div>
 
-            {/* Client picker */}
             <div>
               <label className="mb-1 block text-[12px] font-medium text-tlw-espresso">
                 {type === 'solo' ? 'Client' : 'Clients'}
@@ -123,16 +124,16 @@ function CreateAccountModal({ onCreated, onClose }: {
                   onChange={(e) => e.target.value ? selectSoloClient(e.target.value) : setSelectedClientIds([])}
                 >
                   <option value="">Select a client (auto-fills name & email)…</option>
-                  {unlinkedClients.map((c) => (
+                  {clients.map((c) => (
                     <option key={c.id} value={c.id}>{c.name}{c.email ? ` · ${c.email}` : ''}</option>
                   ))}
                 </select>
               ) : (
                 <div className="max-h-40 overflow-y-auto rounded-tlw-lg border border-tlw-warm-gray/30 bg-tlw-canvas">
-                  {unlinkedClients.length === 0 ? (
+                  {clients.length === 0 ? (
                     <p className="px-3 py-2 text-[13px] text-tlw-warm-gray">No clients on your roster yet.</p>
                   ) : (
-                    unlinkedClients.map((c) => (
+                    clients.map((c) => (
                       <label key={c.id} className="flex cursor-pointer items-center gap-2.5 px-3 py-2 hover:bg-tlw-warm-gray/5">
                         <input
                           type="checkbox"
@@ -149,7 +150,6 @@ function CreateAccountModal({ onCreated, onClose }: {
               )}
             </div>
 
-            {/* Name */}
             <div>
               <label className="mb-1 block text-[12px] font-medium text-tlw-espresso">Account name</label>
               <input
@@ -162,7 +162,6 @@ function CreateAccountModal({ onCreated, onClose }: {
               />
             </div>
 
-            {/* Billing email */}
             <div>
               <label className="mb-1 block text-[12px] font-medium text-tlw-espresso">Billing email</label>
               <input
@@ -173,9 +172,6 @@ function CreateAccountModal({ onCreated, onClose }: {
                 onChange={(e) => setEmail(e.target.value)}
                 required
               />
-              {type === 'enterprise' && (
-                <p className="mt-1 text-[11px] text-tlw-warm-gray">This is the company billing contact — invoices go here, not to individual coachees.</p>
-              )}
             </div>
 
             {error && <p className="text-[12px] text-red-600">{error}</p>}
@@ -229,7 +225,7 @@ function SetupAllModal({ onDone, onClose }: { onDone: () => void; onClose: () =>
         <div className="border-b border-tlw-warm-gray/15 px-6 py-4">
           <h2 className="text-[15px] font-semibold text-tlw-navy-deep">Set up billing for all clients</h2>
           <p className="mt-0.5 text-[12px] text-tlw-warm-gray">
-            Creates a solo billing account for every client who doesn&apos;t have one yet. Uses each client&apos;s email as the billing contact. Safe to run more than once.
+            Creates a solo billing account for every client who doesn&apos;t have one yet. Safe to run more than once.
           </p>
         </div>
         <div className="px-6 py-5">
@@ -257,10 +253,7 @@ function SetupAllModal({ onDone, onClose }: { onDone: () => void; onClose: () =>
                   <p className="text-[13px] text-tlw-warm-gray">— {result.skipped} already had an account</p>
                 )}
                 {result.noEmail > 0 && (
-                  <p className="text-[13px] text-amber-700">⚠ {result.noEmail} skipped — no email on file (add their email on the client page and re-run)</p>
-                )}
-                {result.created === 0 && result.skipped > 0 && result.noEmail === 0 && (
-                  <p className="text-[13px] text-tlw-warm-gray">All clients already have billing accounts.</p>
+                  <p className="text-[13px] text-amber-700">⚠ {result.noEmail} skipped — no email on file</p>
                 )}
               </div>
               <div className="flex justify-end">
@@ -276,25 +269,101 @@ function SetupAllModal({ onDone, onClose }: { onDone: () => void; onClose: () =>
   )
 }
 
+// ── Account row ───────────────────────────────────────────────────────────────
+
+function AccountRow({ acct }: { acct: AccountSummary }) {
+  return (
+    <Link
+      href={`/business-center/accounts/${acct.id}`}
+      className="flex items-center justify-between gap-4 px-5 py-4 transition-colors hover:bg-tlw-canvas"
+    >
+      <div>
+        <p className="text-[14px] font-medium text-tlw-navy-deep">{acct.name}</p>
+        <p className="text-[12px] text-tlw-warm-gray">{acct.billing_email}</p>
+      </div>
+      <div className="flex items-center gap-3">
+        <span className="text-[12px] text-tlw-warm-gray">
+          {acct.coacheeCount} coachee{acct.coacheeCount !== 1 ? 's' : ''}
+        </span>
+        {acct.activeEngagements > 0 && (
+          <span className="text-[12px] text-tlw-warm-gray">
+            {acct.activeEngagements} engagement{acct.activeEngagements > 1 ? 's' : ''}
+          </span>
+        )}
+        <span className="shrink-0 rounded-full bg-tlw-canvas px-2 py-0.5 text-[11px] font-medium capitalize text-tlw-warm-gray">
+          {acct.type}
+        </span>
+      </div>
+    </Link>
+  )
+}
+
+// ── Closed account row ────────────────────────────────────────────────────────
+
+function ClosedAccountRow({ acct, onReopen }: { acct: AccountSummary; onReopen: () => void }) {
+  const [reopening, setReopening] = useState(false)
+
+  async function reopen() {
+    setReopening(true)
+    await fetch(`/api/billing/accounts/${acct.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'active', closed_at: null }),
+    })
+    setReopening(false)
+    onReopen()
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-4 px-5 py-3">
+      <div>
+        <p className="text-[13px] font-medium text-tlw-warm-gray">{acct.name}</p>
+        <p className="text-[12px] text-tlw-warm-gray/70">{acct.billing_email}</p>
+      </div>
+      <button
+        onClick={reopen}
+        disabled={reopening}
+        className="rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-1 text-[12px] font-medium text-tlw-espresso transition-colors hover:bg-tlw-canvas disabled:opacity-50"
+      >
+        {reopening ? 'Reopening…' : 'Reopen'}
+      </button>
+    </div>
+  )
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function AccountsPage() {
-  const [accounts, setAccounts] = useState<BillingAccount[]>([])
+  const [activeAccounts, setActiveAccounts] = useState<AccountSummary[]>([])
+  const [closedAccounts, setClosedAccounts] = useState<AccountSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [showSetupAll, setShowSetupAll] = useState(false)
+  const [closedOpen, setClosedOpen] = useState(false)
 
-  function loadAccounts() {
+  async function loadAccounts() {
     setLoading(true)
-    fetch('/api/billing/accounts?withSummary=1')
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((d) => setAccounts(d.accounts ?? []))
-      .catch(() => setError(true))
-      .finally(() => setLoading(false))
+    try {
+      const [activeRes, closedRes] = await Promise.all([
+        fetch('/api/billing/accounts?withSummary=1&status=active'),
+        fetch('/api/billing/accounts?withSummary=1&status=closed'),
+      ])
+      if (!activeRes.ok || !closedRes.ok) throw new Error()
+      const [activeData, closedData] = await Promise.all([activeRes.json(), closedRes.json()])
+      setActiveAccounts(activeData.accounts ?? [])
+      setClosedAccounts(closedData.accounts ?? [])
+    } catch {
+      setError(true)
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { loadAccounts() }, [])
+
+  const enterpriseAccounts = activeAccounts.filter((a) => a.type === 'enterprise')
+  const soloAccounts = activeAccounts.filter((a) => a.type === 'solo')
 
   return (
     <>
@@ -328,7 +397,7 @@ export default function AccountsPage() {
       {loading && <div className="h-24 animate-pulse rounded-tlw-2xl bg-tlw-surface/70" />}
       {error && <p className="text-[13px] text-tlw-warm-gray">Couldn&apos;t load accounts.</p>}
 
-      {!loading && !error && accounts.length === 0 && (
+      {!loading && !error && activeAccounts.length === 0 && closedAccounts.length === 0 && (
         <div className="rounded-tlw-2xl border border-dashed border-tlw-warm-gray/25 bg-tlw-surface/60 px-6 py-12 text-center">
           <p className="text-[14px] font-medium text-tlw-navy-deep">No billing accounts yet</p>
           <p className="mt-1 text-[13px] text-tlw-warm-gray">
@@ -351,36 +420,54 @@ export default function AccountsPage() {
         </div>
       )}
 
-      {!loading && !error && accounts.length > 0 && (
-        <div className="divide-y divide-tlw-warm-gray/10 rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface">
-          {accounts.map((acct: any) => (
-            <Link
-              key={acct.id}
-              href={`/business-center/accounts/${acct.id}`}
-              className="flex items-center justify-between gap-4 px-5 py-4 transition-colors hover:bg-tlw-canvas"
-            >
-              <div>
-                <p className="text-[14px] font-medium text-tlw-navy-deep">{acct.name}</p>
-                <p className="text-[12px] text-tlw-warm-gray">{acct.billing_email}</p>
+      {!loading && !error && (
+        <div className="space-y-8">
+
+          {/* Enterprise section */}
+          {enterpriseAccounts.length > 0 && (
+            <section>
+              <h2 className="mb-3 text-[13px] font-semibold uppercase tracking-wider text-tlw-warm-gray">Enterprise</h2>
+              <div className="divide-y divide-tlw-warm-gray/10 rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface">
+                {enterpriseAccounts.map((acct) => <AccountRow key={acct.id} acct={acct} />)}
               </div>
-              <div className="flex items-center gap-3">
-                {acct.activeEngagements > 0 && (
-                  <span className="text-[12px] text-tlw-warm-gray">
-                    {acct.activeEngagements} engagement{acct.activeEngagements > 1 ? 's' : ''}
-                  </span>
-                )}
-                <span className="shrink-0 rounded-full bg-tlw-canvas px-2 py-0.5 text-[11px] font-medium capitalize text-tlw-warm-gray">
-                  {acct.type}
-                </span>
+            </section>
+          )}
+
+          {/* Solo section */}
+          {soloAccounts.length > 0 && (
+            <section>
+              <h2 className="mb-3 text-[13px] font-semibold uppercase tracking-wider text-tlw-warm-gray">Solo</h2>
+              <div className="divide-y divide-tlw-warm-gray/10 rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface">
+                {soloAccounts.map((acct) => <AccountRow key={acct.id} acct={acct} />)}
               </div>
-            </Link>
-          ))}
+            </section>
+          )}
+
+          {/* Closed section */}
+          {closedAccounts.length > 0 && (
+            <section>
+              <button
+                onClick={() => setClosedOpen((o) => !o)}
+                className="mb-3 flex items-center gap-2 text-[13px] font-semibold uppercase tracking-wider text-tlw-warm-gray hover:text-tlw-espresso"
+              >
+                <span>Closed ({closedAccounts.length})</span>
+                <span className="text-[11px] normal-case font-normal">{closedOpen ? '▲ hide' : '▼ show'}</span>
+              </button>
+              {closedOpen && (
+                <div className="divide-y divide-tlw-warm-gray/10 rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface/60">
+                  {closedAccounts.map((acct) => (
+                    <ClosedAccountRow key={acct.id} acct={acct} onReopen={loadAccounts} />
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
         </div>
       )}
 
       {showCreate && (
         <CreateAccountModal
-          onCreated={(acct) => { setAccounts((cur) => [acct as any, ...cur]); setShowCreate(false) }}
+          onCreated={() => { loadAccounts(); setShowCreate(false) }}
           onClose={() => setShowCreate(false)}
         />
       )}

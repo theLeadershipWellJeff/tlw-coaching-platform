@@ -57,6 +57,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     installment_count?: number
     installment_schedule?: InstallmentScheduleEntry[]
     description_template?: string
+    session_count?: number
   }
 
   if (!body.coachee_id) return NextResponse.json({ error: 'coachee_id is required' }, { status: 400 })
@@ -97,7 +98,8 @@ export async function POST(req: NextRequest, { params }: Params) {
       installment_count: body.installment_count ?? null,
       installment_schedule: body.installment_schedule ?? null,
       description_template: body.description_template ?? null,
-    })
+      session_count: body.session_count ?? null,
+    } as any)
     .select()
     .single()
 
