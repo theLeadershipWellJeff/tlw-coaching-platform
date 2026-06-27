@@ -259,41 +259,204 @@ function AddClientModal({
   onClose: () => void
   onCreated: (c: Client) => void
 }) {
-  const [form, setForm] = useState({
-    name: '',
-    email: '',
-    title: '',
-    company: '',
-    status: 'active',
-  })
+  const [step, setStep] = useState<'client' | 'engagement'>('client')
+  const [createdClient, setCreatedClient] = useState<{ id: string; name: string; email: string } | null>(null)
+  const [billingAccountId, setBillingAccountId] = useState<string | null>(null)
+  const [coacheeId, setCoacheeId] = useState<string | null>(null)
+
+  // Step 1: client info
+  const [form, setForm] = useState({ name: '', email: '', title: '', company: '', status: 'active' })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  async function submit(e: React.FormEvent) {
+  // Step 2: engagement
+  const [mode, setMode] = useState<'arrears' | 'subscription' | 'per_engagement'>('arrears')
+  const [rateHourly, setRateHourly] = useState('')
+  const [monthlyAmount, setMonthlyAmount] = useState('')
+  const [billingDay, setBillingDay] = useState('1')
+  const [engTotal, setEngTotal] = useState('')
+  const [savingEng, setSavingEng] = useState(false)
+  const [engError, setEngError] = useState('')
+
+  async function submitClient(e: React.FormEvent) {
     e.preventDefault()
-    if (!form.name.trim()) {
-      setError('Name is required')
-      return
-    }
+    if (!form.name.trim()) { setError('Name is required'); return }
     setSaving(true)
     setError('')
     try {
-      const res = await fetch('/api/clients', {
+      // 1. Create client
+      const clientRes = await fetch('/api/clients', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Failed to create')
-      onCreated(data.client)
+      const clientData = await clientRes.json()
+      if (!clientRes.ok) throw new Error(clientData.error || 'Failed to create client')
+      const newClient = clientData.client
+
+      // 2. Auto-create a solo billing account + coachee link (best-effort; requires email)
+      if (form.email.trim()) {
+        const acctRes = await fetch(`/api/clients/${newClient.id}/billing`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'create-account', name: form.name.trim(), type: 'solo', billing_email: form.email.trim() }),
+        })
+        if (acctRes.ok) {
+          const acctData = await acctRes.json()
+          setBillingAccountId(acctData.account?.id ?? null)
+          setCoacheeId(acctData.coacheeId ?? null)
+        }
+      }
+
+      setCreatedClient({ id: newClient.id, name: newClient.name, email: newClient.email ?? '' })
+      onCreated(newClient)
+      setStep('engagement')
     } catch (e: any) {
       setError(e.message)
-      setSaving(false)
     }
+    setSaving(false)
   }
 
-  const field =
-    'w-full rounded-tlw-lg border border-tlw-warm-gray/25 bg-tlw-surface px-3 py-2 text-[13px] text-tlw-espresso outline-none transition-colors focus:border-tlw-signal-orange'
+  async function submitEngagement(e: React.FormEvent) {
+    e.preventDefault()
+    if (!coacheeId || !billingAccountId || !createdClient) return
+    setSavingEng(true)
+    setEngError('')
+
+    const body: Record<string, unknown> = { coachee_id: coacheeId, billing_mode: mode, billing_owner: 'TLW' }
+    if (mode === 'arrears') body.rate_hourly = parseFloat(rateHourly)
+    else if (mode === 'subscription') { body.monthly_amount = parseFloat(monthlyAmount); body.billing_day = parseInt(billingDay, 10) }
+    else body.engagement_total = parseFloat(engTotal)
+
+    const res = await fetch(`/api/billing/accounts/${billingAccountId}/engagements`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) {
+      const d = await res.json()
+      setEngError(d.error ?? 'Failed to create engagement')
+      setSavingEng(false)
+      return
+    }
+    onClose()
+  }
+
+  const field = 'w-full rounded-tlw-lg border border-tlw-warm-gray/25 bg-tlw-surface px-3 py-2 text-[13px] text-tlw-espresso outline-none transition-colors focus:border-tlw-signal-orange'
+
+  if (step === 'engagement') {
+    const hasAccount = !!coacheeId && !!billingAccountId
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-tlw-navy-deep/40 p-4">
+        <div className="w-full max-w-md rounded-tlw-2xl bg-tlw-surface shadow-2xl">
+          <div className="border-b border-tlw-warm-gray/15 px-6 py-4">
+            <div className="mb-1 flex items-center gap-2">
+              <span className="text-[11px] font-medium uppercase tracking-wider text-tlw-warm-gray">Step 2 of 2</span>
+            </div>
+            <h2 className="text-[16px] font-semibold text-tlw-navy-deep">
+              Set up billing for {createdClient?.name}
+            </h2>
+            {hasAccount ? (
+              <p className="mt-0.5 text-[12px] text-tlw-warm-gray">
+                A billing account was created automatically. Set up how you bill them — you can change this anytime on their account page.
+              </p>
+            ) : (
+              <p className="mt-0.5 text-[12px] text-amber-600">
+                No email was provided, so no billing account was auto-created. You can set this up later on their client page.
+              </p>
+            )}
+          </div>
+
+          {hasAccount ? (
+            <form onSubmit={submitEngagement} className="space-y-4 px-6 py-5">
+              {/* Billing mode */}
+              <div>
+                <label className="mb-1 block text-[12px] font-medium text-tlw-espresso">How do you bill them?</label>
+                <div className="flex flex-col gap-2">
+                  {([
+                    ['arrears', 'Hourly (billed from session notes)'],
+                    ['subscription', 'Flat monthly retainer'],
+                    ['per_engagement', 'Fixed total (installments)'],
+                  ] as const).map(([m, label]) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setMode(m)}
+                      className={`rounded-tlw-lg border px-3 py-2 text-left text-[13px] transition-colors ${
+                        mode === m
+                          ? 'border-tlw-navy-deep bg-tlw-navy-deep/5 font-medium text-tlw-navy-deep'
+                          : 'border-tlw-warm-gray/30 text-tlw-espresso hover:bg-tlw-canvas'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {mode === 'arrears' && (
+                <div>
+                  <label className="mb-1 block text-[12px] font-medium text-tlw-espresso">Hourly rate (USD)</label>
+                  <input
+                    type="number" min="0" step="0.01" required autoFocus
+                    placeholder="e.g. 500"
+                    value={rateHourly}
+                    onChange={(e) => setRateHourly(e.target.value)}
+                    className={field}
+                  />
+                  <p className="mt-1 text-[11px] text-tlw-warm-gray">Billed in half-hour increments, 1-hour minimum.</p>
+                </div>
+              )}
+
+              {mode === 'subscription' && (
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <label className="mb-1 block text-[12px] font-medium text-tlw-espresso">Monthly amount (USD)</label>
+                    <input type="number" min="0" step="0.01" required placeholder="e.g. 1500" value={monthlyAmount} onChange={(e) => setMonthlyAmount(e.target.value)} className={field} />
+                  </div>
+                  <div className="w-28">
+                    <label className="mb-1 block text-[12px] font-medium text-tlw-espresso">Billing day</label>
+                    <input type="number" min="1" max="28" value={billingDay} onChange={(e) => setBillingDay(e.target.value)} className={field} />
+                  </div>
+                </div>
+              )}
+
+              {mode === 'per_engagement' && (
+                <div>
+                  <label className="mb-1 block text-[12px] font-medium text-tlw-espresso">Engagement total (USD)</label>
+                  <input type="number" min="0" step="0.01" required placeholder="e.g. 6000" value={engTotal} onChange={(e) => setEngTotal(e.target.value)} className={field} />
+                  <p className="mt-1 text-[11px] text-tlw-warm-gray">You can set installment dates on their account page.</p>
+                </div>
+              )}
+
+              {engError && <p className="text-[12px] text-red-600">{engError}</p>}
+
+              <div className="flex justify-end gap-2 pt-1">
+                <button type="button" onClick={onClose} className="px-4 py-2 text-[13px] text-tlw-warm-gray hover:text-tlw-espresso">
+                  Skip for now
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingEng}
+                  className="rounded-tlw-lg bg-tlw-navy-rich px-4 py-2 text-[13px] font-medium text-tlw-cream transition-colors hover:bg-tlw-navy-rich/85 disabled:opacity-60"
+                >
+                  {savingEng ? 'Saving…' : 'Set up engagement'}
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div className="px-6 py-5">
+              <div className="flex justify-end">
+                <button onClick={onClose} className="rounded-tlw-lg bg-tlw-navy-rich px-4 py-2 text-[13px] font-medium text-tlw-cream">
+                  Done
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div
@@ -302,12 +465,18 @@ function AddClientModal({
     >
       <form
         onClick={(e) => e.stopPropagation()}
-        onSubmit={submit}
-        className="w-full max-w-md space-y-4 rounded-tlw-2xl bg-tlw-surface p-6 shadow-2xl"
+        onSubmit={submitClient}
+        className="w-full max-w-md rounded-tlw-2xl bg-tlw-surface shadow-2xl"
       >
-        <h2 className="text-lg font-medium text-tlw-navy-deep">Add client</h2>
+        <div className="border-b border-tlw-warm-gray/15 px-6 py-4">
+          <div className="mb-1">
+            <span className="text-[11px] font-medium uppercase tracking-wider text-tlw-warm-gray">Step 1 of 2</span>
+          </div>
+          <h2 className="text-[16px] font-semibold text-tlw-navy-deep">Add client</h2>
+          <p className="mt-0.5 text-[12px] text-tlw-warm-gray">After saving you&apos;ll set up billing. Add an email to enable billing.</p>
+        </div>
 
-        <div className="space-y-3">
+        <div className="space-y-3 px-6 py-5">
           <input
             autoFocus
             className={field}
@@ -317,53 +486,27 @@ function AddClientModal({
           />
           <input
             className={field}
-            placeholder="Email"
+            placeholder="Email (required for billing)"
             value={form.email}
             onChange={(e) => setForm({ ...form, email: e.target.value })}
           />
           <div className="flex gap-3">
-            <input
-              className={field}
-              placeholder="Title"
-              value={form.title}
-              onChange={(e) => setForm({ ...form, title: e.target.value })}
-            />
-            <input
-              className={field}
-              placeholder="Company"
-              value={form.company}
-              onChange={(e) => setForm({ ...form, company: e.target.value })}
-            />
+            <input className={field} placeholder="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+            <input className={field} placeholder="Company" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} />
           </div>
-          <select
-            className={field}
-            value={form.status}
-            onChange={(e) => setForm({ ...form, status: e.target.value })}
-          >
-            {STATUSES.map((s) => (
-              <option key={s} value={s} className="capitalize">
-                {s}
-              </option>
-            ))}
+          <select className={field} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+            {STATUSES.map((s) => <option key={s} value={s} className="capitalize">{s}</option>)}
           </select>
         </div>
 
-        {error && <p className="text-[13px] text-tlw-signal-orange">{error}</p>}
+        {error && <p className="px-6 text-[13px] text-tlw-signal-orange">{error}</p>}
 
-        <div className="flex justify-end gap-2 pt-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-tlw-lg px-4 py-2 text-[13px] font-medium text-tlw-warm-gray hover:text-tlw-espresso"
-          >
+        <div className="flex justify-end gap-2 border-t border-tlw-warm-gray/10 px-6 py-4">
+          <button type="button" onClick={onClose} className="rounded-tlw-lg px-4 py-2 text-[13px] font-medium text-tlw-warm-gray hover:text-tlw-espresso">
             Cancel
           </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="rounded-tlw-lg bg-tlw-navy-rich px-4 py-2 text-[13px] font-medium text-tlw-cream transition-colors hover:bg-tlw-navy-rich/85 disabled:opacity-60"
-          >
-            {saving ? 'Saving…' : 'Add client'}
+          <button type="submit" disabled={saving} className="rounded-tlw-lg bg-tlw-navy-rich px-4 py-2 text-[13px] font-medium text-tlw-cream transition-colors hover:bg-tlw-navy-rich/85 disabled:opacity-60">
+            {saving ? 'Saving…' : 'Next: set up billing →'}
           </button>
         </div>
       </form>
