@@ -71,10 +71,12 @@ function AddCoacheeModal({ accountId, existingClientIds, onAdded, onClose }: {
 }) {
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
-  const [clientId, setClientId] = useState('')
+  const [selected, setSelected] = useState<Set<string>>(new Set())
   const [saving, setSaving] = useState(false)
+  const [progress, setProgress] = useState('')
+  const [reassignIds, setReassignIds] = useState<Set<string>>(new Set())
   const [error, setError] = useState('')
-  const [needsReassign, setNeedsReassign] = useState(false)
+  const [filter, setFilter] = useState('')
 
   useEffect(() => {
     fetch('/api/clients')
@@ -85,77 +87,142 @@ function AddCoacheeModal({ accountId, existingClientIds, onAdded, onClose }: {
   }, [])
 
   const available = clients.filter((c) => !existingClientIds.includes(c.id))
+  const visible = filter
+    ? available.filter((c) => c.name.toLowerCase().includes(filter.toLowerCase()) || (c.email ?? '').toLowerCase().includes(filter.toLowerCase()))
+    : available
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!clientId) return
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+    setReassignIds((prev) => { const next = new Set(prev); next.delete(id); return next })
+    setError('')
+  }
+
+  async function submit() {
+    if (selected.size === 0) return
     setSaving(true)
     setError('')
-    setNeedsReassign(false)
 
-    const res = await fetch(`/api/billing/accounts/${accountId}/coachees`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ client_id: clientId, reassign: needsReassign }),
-    })
-    const d = await res.json()
-    if (res.status === 409 && d.canReassign) {
-      setNeedsReassign(true)
-      setSaving(false)
-      return
+    const ids = Array.from(selected)
+    for (let i = 0; i < ids.length; i++) {
+      const clientId = ids[i]
+      const name = clients.find((c) => c.id === clientId)?.name ?? clientId
+      setProgress(`Adding ${name} (${i + 1} of ${ids.length})…`)
+
+      const res = await fetch(`/api/billing/accounts/${accountId}/coachees`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client_id: clientId, reassign: reassignIds.has(clientId) }),
+      })
+      const d = await res.json()
+
+      if (res.status === 409 && d.canReassign) {
+        // Flag this client as needing reassign confirmation and stop
+        setReassignIds((prev) => new Set(Array.from(prev).concat(clientId)))
+        setError(`${name} is already billed through another account. Check the box below their name to confirm moving them here, then add again.`)
+        setSaving(false)
+        setProgress('')
+        return
+      }
+      if (!res.ok) { setError(d.error ?? 'Failed'); setSaving(false); setProgress(''); return }
+      onAdded(d.coachee)
     }
-    if (!res.ok) { setError(d.error ?? 'Failed'); setSaving(false); return }
-    onAdded(d.coachee)
+
+    setSaving(false)
+    setProgress('')
+    onClose()
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-sm rounded-tlw-2xl bg-white shadow-xl">
+      <div className="w-full max-w-md rounded-tlw-2xl bg-white shadow-xl">
         <div className="border-b border-tlw-warm-gray/15 px-6 py-4">
-          <h2 className="text-[15px] font-semibold text-tlw-navy-deep">Add coachee</h2>
-          <p className="mt-0.5 text-[12px] text-tlw-warm-gray">Link a client from your roster to this billing account.</p>
+          <h2 className="text-[15px] font-semibold text-tlw-navy-deep">Add coachees</h2>
+          <p className="mt-0.5 text-[12px] text-tlw-warm-gray">Select one or more clients to link to this account.</p>
         </div>
-        <form onSubmit={submit} className="space-y-4 px-6 py-5">
+
+        <div className="px-6 pt-4">
+          <input
+            type="text"
+            placeholder="Search clients…"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            className="w-full rounded-tlw-lg border border-tlw-warm-gray/30 bg-tlw-canvas px-3 py-2 text-[13px] text-tlw-espresso focus:outline-none focus:ring-1 focus:ring-tlw-navy-deep/30"
+          />
+        </div>
+
+        <div className="max-h-72 overflow-y-auto px-6 py-3">
           {loading ? (
-            <div className="h-10 animate-pulse rounded-tlw-lg bg-tlw-canvas" />
+            <div className="space-y-2">
+              {[0, 1, 2].map((i) => <div key={i} className="h-9 animate-pulse rounded-tlw-lg bg-tlw-canvas" />)}
+            </div>
           ) : available.length === 0 ? (
-            <p className="text-[13px] text-tlw-warm-gray">All clients are already linked to this account, or your roster is empty.</p>
+            <p className="py-4 text-center text-[13px] text-tlw-warm-gray">All clients are already on this account.</p>
+          ) : visible.length === 0 ? (
+            <p className="py-4 text-center text-[13px] text-tlw-warm-gray">No matches.</p>
           ) : (
-            <div>
-              <label className="mb-1 block text-[12px] font-medium text-tlw-espresso">Client</label>
-              <select
-                className="w-full rounded-tlw-lg border border-tlw-warm-gray/30 bg-tlw-canvas px-3 py-2 text-[13px] text-tlw-espresso focus:outline-none focus:ring-1 focus:ring-tlw-navy-deep/30"
-                value={clientId}
-                onChange={(e) => { setClientId(e.target.value); setNeedsReassign(false); setError('') }}
-                required
-              >
-                <option value="">Select a client…</option>
-                {available.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}{c.email ? ` · ${c.email}` : ''}</option>
-                ))}
-              </select>
+            <div className="space-y-1">
+              {visible.map((c) => {
+                const isSelected = selected.has(c.id)
+                const needsConfirm = reassignIds.has(c.id)
+                return (
+                  <div key={c.id}>
+                    <label className={`flex cursor-pointer items-center gap-3 rounded-tlw-lg px-3 py-2 transition-colors ${isSelected ? 'bg-tlw-navy-deep/5' : 'hover:bg-tlw-canvas'}`}>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggle(c.id)}
+                        className="h-4 w-4 rounded border-tlw-warm-gray/40 text-tlw-navy-deep accent-tlw-navy-deep"
+                      />
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-medium text-tlw-espresso">{c.name}</p>
+                        {c.email && <p className="text-[11px] text-tlw-warm-gray">{c.email}</p>}
+                      </div>
+                    </label>
+                    {needsConfirm && isSelected && (
+                      <label className="ml-10 flex cursor-pointer items-center gap-2 pb-1 text-[12px] text-amber-700">
+                        <input
+                          type="checkbox"
+                          checked={true}
+                          readOnly
+                          className="h-3.5 w-3.5 accent-amber-600"
+                        />
+                        Will be moved from their current account — confirmed
+                      </label>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           )}
-          {needsReassign && (
-            <div className="rounded-tlw-lg border border-amber-200 bg-amber-50 px-4 py-3">
-              <p className="text-[12px] text-amber-800 font-medium">This client is already billed through another account.</p>
-              <p className="mt-1 text-[12px] text-amber-700">Moving them here will reassign their billing to this account. Click &ldquo;Add coachee&rdquo; again to confirm.</p>
-            </div>
-          )}
-          {error && <p className="text-[12px] text-red-600">{error}</p>}
-          <div className="flex items-center justify-end gap-2 pt-1">
+        </div>
+
+        {error && (
+          <div className="mx-6 rounded-tlw-lg border border-amber-200 bg-amber-50 px-4 py-3">
+            <p className="text-[12px] text-amber-800">{error}</p>
+          </div>
+        )}
+
+        <div className="flex items-center justify-between gap-2 border-t border-tlw-warm-gray/10 px-6 py-4">
+          <span className="text-[12px] text-tlw-warm-gray">
+            {selected.size > 0 ? `${selected.size} selected` : 'None selected'}
+          </span>
+          <div className="flex items-center gap-2">
             <button type="button" onClick={onClose} className="px-3 py-1.5 text-[13px] text-tlw-warm-gray hover:text-tlw-espresso">
               Cancel
             </button>
             <button
-              type="submit"
-              disabled={saving || !clientId || available.length === 0}
-              className={`rounded-tlw-lg px-4 py-1.5 text-[13px] font-medium text-white disabled:opacity-50 ${needsReassign ? 'bg-amber-600' : 'bg-tlw-navy-deep'}`}
+              onClick={submit}
+              disabled={saving || selected.size === 0}
+              className="rounded-tlw-lg bg-tlw-navy-deep px-4 py-1.5 text-[13px] font-medium text-white disabled:opacity-50"
             >
-              {saving ? 'Adding…' : needsReassign ? 'Confirm & move' : 'Add coachee'}
+              {saving ? (progress || 'Adding…') : `Add ${selected.size > 0 ? selected.size : ''} coachee${selected.size !== 1 ? 's' : ''}`}
             </button>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   )
