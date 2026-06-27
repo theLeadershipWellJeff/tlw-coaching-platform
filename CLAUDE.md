@@ -28,6 +28,23 @@ Plus a **client workspace** (per-client hub) and **roster**.
 - Always run `npx tsc --noEmit` and `npm run build` before committing. There is
   no automated test suite; verify pure logic with throwaway node scripts.
 
+## Database migrations — always provide copy/paste SQL
+
+**Every schema change must be delivered as a ready-to-run SQL block** that Jeff
+can paste directly into the Supabase SQL editor. Never assume a migration has
+been applied — always ask Jeff to confirm before writing code that depends on new
+columns or tables. When providing a migration:
+
+1. Number it sequentially (`032_...`, `033_...`, etc.) and add it to the
+   `supabase/migrations/` folder as a `.sql` file.
+2. Print the full SQL in a fenced code block in the chat so it can be
+   copy/pasted without opening a file.
+3. Note in the "Migrations applied" section of this file once Jeff confirms it
+   is applied.
+4. All new tables must include `ALTER TABLE … ENABLE ROW LEVEL SECURITY;`
+   (no policies needed — service-role key bypasses RLS, consistent with the
+   rest of the app).
+
 ## Architecture
 
 - `app/(authenticated)/*` — signed-in app shell: `dashboard`, `clients`,

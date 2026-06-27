@@ -47,6 +47,7 @@ type InvoiceLine = {
   unit_amount: number
   amount: number
   source: string
+  coachees?: { id: string; clients: { id: string; name: string } | null } | null
 }
 
 type DraftInvoice = {
@@ -281,18 +282,66 @@ function InvoiceCard({
       )}
 
       {/* Lines */}
-      <div className="divide-y divide-tlw-warm-gray/8">
-        {invoice.invoice_lines.map((line) => (
-          <LineRow
-            key={line.id}
-            line={line}
-            invoiceId={invoice.id}
-            editable={isDraft}
-            onUpdated={(updated) => onLineUpdated(invoice.id, updated)}
-            onDeleted={(lineId) => onLineDeleted(invoice.id, lineId)}
-          />
-        ))}
-      </div>
+      {invoice.billing_accounts.type === 'enterprise' ? (
+        (() => {
+          // Group lines by coachee_id
+          const groups = new Map<string, { name: string; lines: InvoiceLine[] }>()
+          const ungrouped: InvoiceLine[] = []
+          for (const line of invoice.invoice_lines) {
+            if (line.coachee_id && line.coachees?.clients?.name) {
+              const key = line.coachee_id
+              if (!groups.has(key)) groups.set(key, { name: line.coachees.clients.name, lines: [] })
+              groups.get(key)!.lines.push(line)
+            } else {
+              ungrouped.push(line)
+            }
+          }
+          return (
+            <div className="divide-y divide-tlw-warm-gray/8">
+              {Array.from(groups.values()).map((group) => (
+                <div key={group.name}>
+                  <p className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-tlw-warm-gray">
+                    {group.name}
+                  </p>
+                  {group.lines.map((line) => (
+                    <LineRow
+                      key={line.id}
+                      line={line}
+                      invoiceId={invoice.id}
+                      editable={isDraft}
+                      onUpdated={(updated) => onLineUpdated(invoice.id, updated)}
+                      onDeleted={(lineId) => onLineDeleted(invoice.id, lineId)}
+                    />
+                  ))}
+                </div>
+              ))}
+              {ungrouped.map((line) => (
+                <LineRow
+                  key={line.id}
+                  line={line}
+                  invoiceId={invoice.id}
+                  editable={isDraft}
+                  onUpdated={(updated) => onLineUpdated(invoice.id, updated)}
+                  onDeleted={(lineId) => onLineDeleted(invoice.id, lineId)}
+                />
+              ))}
+            </div>
+          )
+        })()
+      ) : (
+        <div className="divide-y divide-tlw-warm-gray/8">
+          {invoice.invoice_lines.map((line) => (
+            <LineRow
+              key={line.id}
+              line={line}
+              invoiceId={invoice.id}
+              editable={isDraft}
+              onUpdated={(updated) => onLineUpdated(invoice.id, updated)}
+              onDeleted={(lineId) => onLineDeleted(invoice.id, lineId)}
+            />
+          ))}
+        </div>
+      )}
 
       {/* Total */}
       <div className="flex items-center justify-between border-t border-tlw-warm-gray/10 px-4 py-3">
@@ -507,6 +556,7 @@ export default function BillingRunPage() {
   const [assembling, setAssembling] = useState(false)
   const [assembleMsg, setAssembleMsg] = useState('')
   const [assembleDebug, setAssembleDebug] = useState<string[]>([])
+  const [assembleWarnings, setAssembleWarnings] = useState<{ clientName: string; detail: string }[]>([])
   const [invoices, setInvoices] = useState<DraftInvoice[]>([])
   const [loadingInvoices, setLoadingInvoices] = useState(true)
   const [approvingAll, setApprovingAll] = useState(false)
@@ -551,6 +601,7 @@ export default function BillingRunPage() {
     setAssembling(true)
     setAssembleMsg('')
     setAssembleDebug([])
+    setAssembleWarnings([])
     try {
       const res = await fetch('/api/billing/run/assemble', {
         method: 'POST',
@@ -567,6 +618,7 @@ export default function BillingRunPage() {
         if (d.empty > 0) parts.push(`${d.empty} account${d.empty > 1 ? 's' : ''} with nothing due`)
         setAssembleMsg(parts.join(' · ') || 'No invoices assembled.')
         if (d.debug) setAssembleDebug(d.debug)
+        if (d.warnings) setAssembleWarnings(d.warnings)
         await loadInvoices(periodStart, periodEnd)
       }
     } catch {
@@ -742,6 +794,16 @@ export default function BillingRunPage() {
         </div>
         {assembleMsg && (
           <p className="mt-2 text-[12px] text-tlw-warm-gray">{assembleMsg}</p>
+        )}
+        {assembleWarnings.length > 0 && (
+          <div className="mt-3 space-y-1.5">
+            {assembleWarnings.map((w, i) => (
+              <div key={i} className="flex items-start gap-2 rounded-tlw-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                <span className="mt-0.5 text-amber-500">⚠</span>
+                <p className="text-[12px] text-amber-800">{w.detail}</p>
+              </div>
+            ))}
+          </div>
         )}
         {assembleDebug.length > 0 && (
           <details className="mt-2">

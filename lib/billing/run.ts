@@ -26,11 +26,18 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { deriveBillableSessions } from './sessions'
 import type { BillableSession, InstallmentScheduleEntry } from './types'
 
+export type RunWarning = {
+  kind: 'no_calendar_sessions' | 'subscription_no_sessions'
+  clientName: string
+  detail: string
+}
+
 export type RunResult = {
   created: number     // new draft invoices assembled
   skipped: number     // accounts skipped (already invoiced for period)
   empty: number       // accounts with nothing due
   invoiceIds: string[]
+  warnings: RunWarning[]
   debug?: string[]    // human-readable explanation of what was found / skipped
 }
 
@@ -42,6 +49,7 @@ type EngagementRow = {
   billing_mode: string
   billing_owner: string
   status: string
+  skip_billing: boolean
   rate_hourly: number | null
   monthly_amount: number | null
   billing_day: number | null
@@ -141,6 +149,31 @@ async function countExistingInstallmentLines(
   return (data ?? []).length
 }
 
+/**
+ * Count scheduled/completed appointments for a client in the period.
+ * Used to cross-check arrears billing and to warn on idle subscriptions.
+ */
+async function countCalendarSessions(
+  supabase: SupabaseClient,
+  coachId: string,
+  clientId: string,
+  periodStart: string,
+  periodEnd: string,
+): Promise<number> {
+  const start = new Date(periodStart + 'T00:00:00Z').toISOString()
+  const end = new Date(periodEnd + 'T23:59:59Z').toISOString()
+  const { count } = await supabase
+    .from('appointments')
+    .select('id', { count: 'exact', head: true })
+    .eq('coach_id', coachId)
+    .in('status', ['scheduled', 'completed'])
+    .gte('scheduled_at', start)
+    .lte('scheduled_at', end)
+    // appointments link to clients via coachees
+    .eq('client_id', clientId)
+  return count ?? 0
+}
+
 // ── Main assembler ────────────────────────────────────────────────────────────
 
 export async function assembleRun(
@@ -163,7 +196,7 @@ export async function assembleRun(
 
   if (engErr) throw new Error(`assembleRun: failed to load engagements — ${engErr.message}`)
   if (!engagements || engagements.length === 0) {
-    return { created: 0, skipped: 0, empty: 0, invoiceIds: [], debug: ['No active TLW-owned engagements found for this coach. Create engagements with billing_owner=TLW and status=active on the Accounts page.'] }
+    return { created: 0, skipped: 0, empty: 0, invoiceIds: [], warnings: [], debug: ['No active TLW-owned engagements found for this coach. Create engagements with billing_owner=TLW and status=active on the Accounts page.'] }
   }
 
   // 2. Group engagements by billing account.
@@ -178,6 +211,7 @@ export async function assembleRun(
   let skipped = 0
   let empty = 0
   const invoiceIds: string[] = []
+  const warnings: RunWarning[] = []
   const debug: string[] = [`Found ${engagements.length} active TLW-owned engagement(s) across ${new Set((engagements as EngagementRow[]).map(e => e.billing_account_id)).size} account(s).`]
 
   // 3. Process each account.
@@ -203,6 +237,11 @@ export async function assembleRun(
       const client = coachee?.clients
       const clientName = client?.name ?? 'Unknown'
       const clientId = coachee?.client_id
+
+      if (eng.skip_billing) {
+        debug.push(`  Engagement for ${clientName} skipped: skip_billing is set (lump-sum / not invoiced this period).`)
+        continue
+      }
 
       if (eng.billing_mode === 'arrears') {
         if (!clientId || !eng.rate_hourly) {
@@ -230,6 +269,20 @@ export async function assembleRun(
           continue
         }
 
+        // Cross-check note-based sessions against calendar appointments.
+        if (clientId) {
+          const calCount = await countCalendarSessions(supabase, coachId, clientId, periodStart, periodEnd)
+          if (calCount === 0) {
+            const detail = `Billing ${sessions.length} session${sessions.length > 1 ? 's' : ''} from notes for ${clientName} but no calendar appointments found in this period. Verify the session dates are correct.`
+            warnings.push({ kind: 'no_calendar_sessions', clientName, detail })
+            debug.push(`  ⚠ ${detail}`)
+          } else if (calCount !== sessions.length) {
+            const detail = `Note-based session count (${sessions.length}) doesn't match calendar appointments (${calCount}) for ${clientName}. Review before approving.`
+            warnings.push({ kind: 'no_calendar_sessions', clientName, detail })
+            debug.push(`  ⚠ ${detail}`)
+          }
+        }
+
         const lineTotal = round2(sessions.reduce((s, sess) => s + sess.amount, 0))
         lines.push({
           coacheeId: eng.coachee_id,
@@ -254,6 +307,16 @@ export async function assembleRun(
           lines.length = 0
           skipped++
           break
+        }
+
+        // Warn if no calendar sessions happened — subscription still bills, but coach should know.
+        if (clientId) {
+          const calCount = await countCalendarSessions(supabase, coachId, clientId, periodStart, periodEnd)
+          if (calCount === 0) {
+            const detail = `Subscription invoice for ${clientName} — no calendar sessions found in this period. Confirm coaching occurred before sending.`
+            warnings.push({ kind: 'subscription_no_sessions', clientName, detail })
+            debug.push(`  ⚠ ${detail}`)
+          }
         }
 
         const desc = eng.description_template
@@ -370,5 +433,5 @@ export async function assembleRun(
     invoiceIds.push(invoice.id)
   }
 
-  return { created, skipped, empty, invoiceIds, debug }
+  return { created, skipped, empty, invoiceIds, warnings, debug }
 }
