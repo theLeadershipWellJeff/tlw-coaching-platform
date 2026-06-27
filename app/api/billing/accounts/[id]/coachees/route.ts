@@ -32,15 +32,49 @@ export async function POST(req: NextRequest, { params }: Params) {
     .maybeSingle()
   if (!link) return NextResponse.json({ error: 'client not found' }, { status: 400 })
 
+  const reassign = body?.reassign === true
+
+  // Check if a coachee row already exists for this client+coach (unique constraint).
+  const { data: existing } = await supabase
+    .from('coachees')
+    .select('id, billing_account_id')
+    .eq('coach_id', coach.id)
+    .eq('client_id', client_id)
+    .maybeSingle()
+
+  if (existing) {
+    if (existing.billing_account_id === params.id) {
+      // Already on this account — fetch and return it.
+      const { data } = await supabase
+        .from('coachees')
+        .select('*, clients ( id, name, email )')
+        .eq('id', existing.id)
+        .single()
+      return NextResponse.json({ coachee: data, reassigned: false })
+    }
+    if (!reassign) {
+      return NextResponse.json({
+        error: 'client is already a coachee on another billing account',
+        canReassign: true,
+      }, { status: 409 })
+    }
+    // Move the coachee row to this account.
+    const { data, error } = await supabase
+      .from('coachees')
+      .update({ billing_account_id: params.id })
+      .eq('id', existing.id)
+      .select('*, clients ( id, name, email )')
+      .single()
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ coachee: data, reassigned: true })
+  }
+
   const { data, error } = await supabase
     .from('coachees')
     .insert({ coach_id: coach.id, client_id, billing_account_id: params.id })
     .select('*, clients ( id, name, email )')
     .single()
 
-  if (error) {
-    if (error.code === '23505') return NextResponse.json({ error: 'client already a coachee on this account' }, { status: 409 })
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ coachee: data }, { status: 201 })
 }

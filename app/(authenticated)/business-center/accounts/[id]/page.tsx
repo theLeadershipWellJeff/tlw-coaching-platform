@@ -74,34 +74,39 @@ function AddCoacheeModal({ accountId, existingClientIds, onAdded, onClose }: {
   const [clientId, setClientId] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [needsReassign, setNeedsReassign] = useState(false)
 
   useEffect(() => {
     fetch('/api/clients')
       .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((d) => {
-        const all: Client[] = d.clients ?? []
-        setClients(all.filter((c) => !existingClientIds.includes(c.id)))
-      })
+      .then((d) => setClients(d.clients ?? []))
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [existingClientIds])
+  }, [])
+
+  const available = clients.filter((c) => !existingClientIds.includes(c.id))
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     if (!clientId) return
     setSaving(true)
     setError('')
+    setNeedsReassign(false)
+
     const res = await fetch(`/api/billing/accounts/${accountId}/coachees`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ client_id: clientId }),
+      body: JSON.stringify({ client_id: clientId, reassign: needsReassign }),
     })
     const d = await res.json()
+    if (res.status === 409 && d.canReassign) {
+      setNeedsReassign(true)
+      setSaving(false)
+      return
+    }
     if (!res.ok) { setError(d.error ?? 'Failed'); setSaving(false); return }
     onAdded(d.coachee)
   }
-
-  const available = clients.filter((c) => !existingClientIds.includes(c.id))
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -121,7 +126,7 @@ function AddCoacheeModal({ accountId, existingClientIds, onAdded, onClose }: {
               <select
                 className="w-full rounded-tlw-lg border border-tlw-warm-gray/30 bg-tlw-canvas px-3 py-2 text-[13px] text-tlw-espresso focus:outline-none focus:ring-1 focus:ring-tlw-navy-deep/30"
                 value={clientId}
-                onChange={(e) => setClientId(e.target.value)}
+                onChange={(e) => { setClientId(e.target.value); setNeedsReassign(false); setError('') }}
                 required
               >
                 <option value="">Select a client…</option>
@@ -129,6 +134,12 @@ function AddCoacheeModal({ accountId, existingClientIds, onAdded, onClose }: {
                   <option key={c.id} value={c.id}>{c.name}{c.email ? ` · ${c.email}` : ''}</option>
                 ))}
               </select>
+            </div>
+          )}
+          {needsReassign && (
+            <div className="rounded-tlw-lg border border-amber-200 bg-amber-50 px-4 py-3">
+              <p className="text-[12px] text-amber-800 font-medium">This client is already billed through another account.</p>
+              <p className="mt-1 text-[12px] text-amber-700">Moving them here will reassign their billing to this account. Click &ldquo;Add coachee&rdquo; again to confirm.</p>
             </div>
           )}
           {error && <p className="text-[12px] text-red-600">{error}</p>}
@@ -139,9 +150,9 @@ function AddCoacheeModal({ accountId, existingClientIds, onAdded, onClose }: {
             <button
               type="submit"
               disabled={saving || !clientId || available.length === 0}
-              className="rounded-tlw-lg bg-tlw-navy-deep px-4 py-1.5 text-[13px] font-medium text-white disabled:opacity-50"
+              className={`rounded-tlw-lg px-4 py-1.5 text-[13px] font-medium text-white disabled:opacity-50 ${needsReassign ? 'bg-amber-600' : 'bg-tlw-navy-deep'}`}
             >
-              {saving ? 'Adding…' : 'Add coachee'}
+              {saving ? 'Adding…' : needsReassign ? 'Confirm & move' : 'Add coachee'}
             </button>
           </div>
         </form>
@@ -158,7 +169,9 @@ function AddEngagementModal({ accountId, coachees, onAdded, onClose }: {
   onAdded: (eng: Engagement) => void
   onClose: () => void
 }) {
+  const isEnterprise = coachees.length > 1
   const [coacheeId, setCoacheeId] = useState(coachees[0]?.id ?? '')
+  const [applyToAll, setApplyToAll] = useState(isEnterprise)
   const [mode, setMode] = useState<'arrears' | 'subscription' | 'per_engagement'>('arrears')
   const [owner, setOwner] = useState<'TLW' | 'CA'>('TLW')
   const [rateHourly, setRateHourly] = useState('')
@@ -184,19 +197,14 @@ function AddEngagementModal({ accountId, coachees, onAdded, onClose }: {
     })
   }
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault()
-    setSaving(true)
-    setError('')
-
+  function buildBody(cId: string): Record<string, unknown> {
     const body: Record<string, unknown> = {
-      coachee_id: coacheeId,
+      coachee_id: cId,
       billing_mode: mode,
       billing_owner: owner,
       description_template: descTemplate.trim() || null,
       session_count: sessionCount ? parseInt(sessionCount, 10) : null,
     }
-
     if (mode === 'arrears') {
       body.rate_hourly = parseFloat(rateHourly)
     } else if (mode === 'subscription') {
@@ -211,15 +219,26 @@ function AddEngagementModal({ accountId, coachees, onAdded, onClose }: {
         label: d.label,
       }))
     }
+    return body
+  }
 
-    const res = await fetch(`/api/billing/accounts/${accountId}/engagements`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-    const d = await res.json()
-    if (!res.ok) { setError(d.error ?? 'Failed'); setSaving(false); return }
-    onAdded(d.engagement)
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    setSaving(true)
+    setError('')
+
+    const targets = applyToAll ? coachees.map((c) => c.id) : [coacheeId]
+
+    for (const cId of targets) {
+      const res = await fetch(`/api/billing/accounts/${accountId}/engagements`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildBody(cId)),
+      })
+      const d = await res.json()
+      if (!res.ok) { setError(d.error ?? 'Failed'); setSaving(false); return }
+      onAdded(d.engagement)
+    }
   }
 
   return (
@@ -232,19 +251,34 @@ function AddEngagementModal({ accountId, coachees, onAdded, onClose }: {
         <form onSubmit={submit} className="max-h-[75vh] overflow-y-auto">
           <div className="space-y-4 px-6 py-5">
 
-            {coachees.length > 1 && (
-              <div>
-                <label className="mb-1 block text-[12px] font-medium text-tlw-espresso">Coachee</label>
-                <select
-                  className="w-full rounded-tlw-lg border border-tlw-warm-gray/30 bg-tlw-canvas px-3 py-2 text-[13px] text-tlw-espresso focus:outline-none focus:ring-1 focus:ring-tlw-navy-deep/30"
-                  value={coacheeId}
-                  onChange={(e) => setCoacheeId(e.target.value)}
-                  required
-                >
-                  {coachees.map((c) => (
-                    <option key={c.id} value={c.id}>{c.clients?.name ?? c.id}</option>
-                  ))}
-                </select>
+            {isEnterprise && (
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={applyToAll}
+                    onChange={(e) => setApplyToAll(e.target.checked)}
+                    className="rounded border-tlw-warm-gray/40 text-tlw-navy-deep"
+                  />
+                  <span className="text-[13px] font-medium text-tlw-espresso">Apply to all coachees</span>
+                </label>
+                {!applyToAll && (
+                  <select
+                    className="w-full rounded-tlw-lg border border-tlw-warm-gray/30 bg-tlw-canvas px-3 py-2 text-[13px] text-tlw-espresso focus:outline-none focus:ring-1 focus:ring-tlw-navy-deep/30"
+                    value={coacheeId}
+                    onChange={(e) => setCoacheeId(e.target.value)}
+                    required
+                  >
+                    {coachees.map((c) => (
+                      <option key={c.id} value={c.id}>{c.clients?.name ?? c.id}</option>
+                    ))}
+                  </select>
+                )}
+                {applyToAll && (
+                  <p className="text-[12px] text-tlw-warm-gray">
+                    Creates one engagement per coachee: {coachees.map((c) => c.clients?.name ?? '—').join(', ')}.
+                  </p>
+                )}
               </div>
             )}
 
