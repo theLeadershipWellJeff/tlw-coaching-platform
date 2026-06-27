@@ -13,6 +13,7 @@ import { sendScorecardEmail } from '@/lib/scorecard-email'
 import { todayInTimeZone } from '@/lib/datetime'
 import { DEFAULT_TIMEZONE } from '@/lib/coach'
 import { generateNudgesForClient } from '@/lib/nudges/generate'
+import { runGrowthPass } from '@/lib/growth-areas/score'
 
 function initialsFromName(name: string): string {
   const parts = name.trim().split(/\s+/)
@@ -94,6 +95,65 @@ export async function runAndStoreReport(
     .select('*')
     .single()
   if (error) throw new Error(`Supabase (session_reports upsert): ${error.message}`)
+
+  // Growth pass — separate lens on the coach's own development focuses (Phase 2).
+  // Best-effort: a failure here must never fail ICF scoring. Re-runs on every
+  // rescore so the assessments stay current against the coach's active areas.
+  // Needs a known session report id (data.id) to link the assessment rows.
+  if (transcript.coach_id) {
+    try {
+      const { data: activeAreas } = await supabase
+        .from('coach_growth_areas')
+        .select('*')
+        .eq('coach_id', transcript.coach_id)
+        .eq('status', 'active')
+
+      if (activeAreas && activeAreas.length > 0) {
+        // Fetch the coach's own session notes for this transcript's client (most
+        // recent note). Never passes client.key_info — the select omits it.
+        let coachNotes: string | undefined
+        if (transcript.client_id) {
+          const { data: latestNote } = await supabase
+            .from('notes')
+            .select('content')
+            .eq('client_id', transcript.client_id)
+            .order('session_date', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+          if (latestNote?.content) {
+            // Strip HTML tags for plain text.
+            coachNotes = latestNote.content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+          }
+        }
+
+        const results = await runGrowthPass({
+          transcriptBody: parsed.body || transcript.raw_md,
+          coachNotes,
+          areas: activeAreas,
+        })
+
+        for (const result of results) {
+          const area = activeAreas.find((a) => a.id === result.growth_area_id)
+          if (!area) continue
+          await supabase.from('growth_area_assessments').upsert(
+            {
+              growth_area_id: result.growth_area_id,
+              session_id: data.id,
+              coach_id: transcript.coach_id,
+              observed: result.observed,
+              band: result.band,
+              evidence: result.evidence,
+              developmental_note: result.developmental_note,
+              definition_version_snapshot: area.definition_version,
+            },
+            { onConflict: 'growth_area_id,session_id' }
+          )
+        }
+      }
+    } catch (e: any) {
+      console.error('Growth pass failed:', e?.message || e)
+    }
+  }
 
   // Draft between-session nudges from this session (Phase A). Best-effort and
   // never auto-sent — drafts land in the coach's Nudge Queue for review. A failure

@@ -5,6 +5,7 @@ import type { ScorecardSummary, CompetencyAverage } from '@/lib/scoring/aggregat
 import { bandDefinition, nextBand } from '@/lib/scoring/rubric'
 import { bandColor, BandChip } from './ui'
 import { AddTranscript } from './AddTranscript'
+import { GrowthAreasSpace } from './GrowthAreasSpace'
 import { PanelBoard, type Panel } from '@/app/components/layout/PanelBoard'
 
 const STORAGE_KEY = 'tlw-practice-layout'
@@ -761,12 +762,21 @@ export function ScorecardSpace() {
     },
   ]
 
+  const allPanels: Panel[] = [
+    ...panels,
+    {
+      id: 'growth-areas',
+      label: 'Growth Areas',
+      node: <GrowthAreasSpace />,
+    },
+  ]
+
   return (
     <PanelBoard
       storageKey={STORAGE_KEY}
-      panels={panels}
+      panels={allPanels}
       columns={1}
-      defaultLayout={[['add-transcript', 'revenue', 'headline', 'score-trend', 'needs-review', 'competencies', 'sessions']]}
+      defaultLayout={[['add-transcript', 'revenue', 'headline', 'score-trend', 'needs-review', 'competencies', 'sessions', 'growth-areas']]}
     />
   )
 }
