@@ -47,6 +47,7 @@ type InvoiceLine = {
   unit_amount: number
   amount: number
   source: string
+  coachees?: { id: string; clients: { id: string; name: string } | null } | null
 }
 
 type DraftInvoice = {
@@ -281,18 +282,66 @@ function InvoiceCard({
       )}
 
       {/* Lines */}
-      <div className="divide-y divide-tlw-warm-gray/8">
-        {invoice.invoice_lines.map((line) => (
-          <LineRow
-            key={line.id}
-            line={line}
-            invoiceId={invoice.id}
-            editable={isDraft}
-            onUpdated={(updated) => onLineUpdated(invoice.id, updated)}
-            onDeleted={(lineId) => onLineDeleted(invoice.id, lineId)}
-          />
-        ))}
-      </div>
+      {invoice.billing_accounts.type === 'enterprise' ? (
+        (() => {
+          // Group lines by coachee_id
+          const groups = new Map<string, { name: string; lines: InvoiceLine[] }>()
+          const ungrouped: InvoiceLine[] = []
+          for (const line of invoice.invoice_lines) {
+            if (line.coachee_id && line.coachees?.clients?.name) {
+              const key = line.coachee_id
+              if (!groups.has(key)) groups.set(key, { name: line.coachees.clients.name, lines: [] })
+              groups.get(key)!.lines.push(line)
+            } else {
+              ungrouped.push(line)
+            }
+          }
+          return (
+            <div className="divide-y divide-tlw-warm-gray/8">
+              {Array.from(groups.values()).map((group) => (
+                <div key={group.name}>
+                  <p className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-tlw-warm-gray">
+                    {group.name}
+                  </p>
+                  {group.lines.map((line) => (
+                    <LineRow
+                      key={line.id}
+                      line={line}
+                      invoiceId={invoice.id}
+                      editable={isDraft}
+                      onUpdated={(updated) => onLineUpdated(invoice.id, updated)}
+                      onDeleted={(lineId) => onLineDeleted(invoice.id, lineId)}
+                    />
+                  ))}
+                </div>
+              ))}
+              {ungrouped.map((line) => (
+                <LineRow
+                  key={line.id}
+                  line={line}
+                  invoiceId={invoice.id}
+                  editable={isDraft}
+                  onUpdated={(updated) => onLineUpdated(invoice.id, updated)}
+                  onDeleted={(lineId) => onLineDeleted(invoice.id, lineId)}
+                />
+              ))}
+            </div>
+          )
+        })()
+      ) : (
+        <div className="divide-y divide-tlw-warm-gray/8">
+          {invoice.invoice_lines.map((line) => (
+            <LineRow
+              key={line.id}
+              line={line}
+              invoiceId={invoice.id}
+              editable={isDraft}
+              onUpdated={(updated) => onLineUpdated(invoice.id, updated)}
+              onDeleted={(lineId) => onLineDeleted(invoice.id, lineId)}
+            />
+          ))}
+        </div>
+      )}
 
       {/* Total */}
       <div className="flex items-center justify-between border-t border-tlw-warm-gray/10 px-4 py-3">
