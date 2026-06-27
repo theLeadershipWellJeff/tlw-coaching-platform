@@ -5,21 +5,23 @@
  * size is dropped or coerced rather than rendered. Run on both load and save.
  */
 import { CARD_META } from './cards'
-import type { CardPlacement, CardSize } from './types'
+import type { CardPlacement, CardSize, DashboardSurfaceId } from './types'
 
 /**
  * Coerce raw stored/posted blocks into a clean, ordered placement list:
- *  - drop entries that aren't objects or reference an unknown / non-dashboard card
- *  - drop duplicates (one instance of each card per dashboard, v1)
+ *  - drop entries that aren't objects or reference an unknown card for this surface
+ *  - drop duplicates (one instance of each card per surface, v1)
  *  - fall back to the card's defaultSize if the stored size isn't supported
  *  - renumber `order` by final position
  */
-export function normalizePlacements(raw: unknown): CardPlacement[] {
+export function normalizePlacements(
+  raw: unknown,
+  surface: DashboardSurfaceId = 'dashboard',
+): CardPlacement[] {
   if (!Array.isArray(raw)) return []
   const seen = new Set<string>()
   const out: CardPlacement[] = []
 
-  // Honor any stored order before renumbering, so a reload is stable.
   const items = [...raw].sort((a, b) => {
     const ao = typeof (a as any)?.order === 'number' ? (a as any).order : 0
     const bo = typeof (b as any)?.order === 'number' ? (b as any).order : 0
@@ -30,7 +32,7 @@ export function normalizePlacements(raw: unknown): CardPlacement[] {
     if (!item || typeof item !== 'object') continue
     const blockId = String((item as any).blockId ?? '')
     const meta = CARD_META[blockId]
-    if (!meta || !meta.surfaces.includes('dashboard')) continue
+    if (!meta || !meta.surfaces.includes(surface)) continue
     if (seen.has(blockId)) continue
 
     let size = (item as any).size as CardSize

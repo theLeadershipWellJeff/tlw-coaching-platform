@@ -98,15 +98,52 @@ export const CARD_META: Record<string, CardMeta> = {
     defaultSize: 'standard',
     selfHeader: true,
   },
+  // ── Business Center cards ────────────────────────────────────────────────
+  'bc-billing-run': {
+    id: 'bc-billing-run',
+    title: 'Billing run',
+    surfaces: ['business-center'],
+    supportedSizes: ['compact', 'standard', 'expanded'],
+    defaultSize: 'standard',
+  },
+  'bc-outstanding-ar': {
+    id: 'bc-outstanding-ar',
+    title: 'Outstanding / AR',
+    surfaces: ['business-center'],
+    supportedSizes: ['compact', 'standard', 'expanded'],
+    defaultSize: 'standard',
+  },
+  'bc-recent-invoices': {
+    id: 'bc-recent-invoices',
+    title: 'Recent invoices',
+    surfaces: ['business-center'],
+    supportedSizes: ['compact', 'standard', 'expanded'],
+    defaultSize: 'standard',
+  },
+  'bc-accounts': {
+    id: 'bc-accounts',
+    title: 'Accounts',
+    surfaces: ['business-center'],
+    supportedSizes: ['compact', 'standard', 'expanded'],
+    defaultSize: 'standard',
+  },
 }
 
-/** Cards eligible for the dashboard surface (all of them, today). */
+/** Cards eligible for a given surface. */
+export function cardMetaForSurface(surface: import('./types').DashboardSurfaceId): CardMeta[] {
+  return Object.values(CARD_META).filter((m) => m.surfaces.includes(surface))
+}
+
+/** Cards eligible for the dashboard surface. */
 export function dashboardCardMeta(): CardMeta[] {
-  return Object.values(CARD_META).filter((m) => m.surfaces.includes('dashboard'))
+  return cardMetaForSurface('dashboard')
 }
 
-/** Dashboard-eligible cards not already placed — feeds the "Add card" menu. */
-export function availableToAdd(placedIds: Iterable<string>): CardMeta[] {
+/** Surface-eligible cards not already placed — feeds the "Add card" menu. */
+export function availableToAdd(
+  placedIds: Iterable<string>,
+  surface: import('./types').DashboardSurfaceId = 'dashboard',
+): CardMeta[] {
   const placed = new Set(placedIds)
-  return dashboardCardMeta().filter((m) => !placed.has(m.id))
+  return cardMetaForSurface(surface).filter((m) => !placed.has(m.id))
 }
