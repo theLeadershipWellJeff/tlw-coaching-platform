@@ -10,12 +10,20 @@ export default function BusinessCenterPage() {
         title="Business Center"
         subtitle="Billing, accounts, and invoices"
         actions={
-          <Link
-            href="/business-center/invoices"
-            className="rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-1.5 text-[13px] text-tlw-espresso transition-colors hover:bg-tlw-canvas"
-          >
-            Invoices
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/business-center/coaches"
+              className="rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-1.5 text-[13px] text-tlw-espresso transition-colors hover:bg-tlw-canvas"
+            >
+              My Team
+            </Link>
+            <Link
+              href="/business-center/invoices"
+              className="rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-1.5 text-[13px] text-tlw-espresso transition-colors hover:bg-tlw-canvas"
+            >
+              Invoices
+            </Link>
+          </div>
         }
       />
       <BusinessCenterSurface />
