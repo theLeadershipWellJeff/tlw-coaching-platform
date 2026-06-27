@@ -63,6 +63,9 @@ export type Client = {
   coaching_map: string | null
   // Flat per-session fee, in dollars. Drives the Practice revenue cards.
   session_fee: number | null
+  // Distinguishes regular coaching clients from team coaches kept here for
+  // note/transcript history (migration 030). Default 'client'.
+  client_type: 'client' | 'coach'
   // Agreement state (migration 018) — the source of truth the workspace and the
   // scoring engine's Gate 1 read. recording_authorized: true = consented,
   // false = explicit decline (compliance flag), null = unknown / no decision.
@@ -450,7 +453,7 @@ export type SessionReport = {
  * any nullable column is optional too (Postgres fills NULL). Everything else
  * is required.
  */
-type Defaulted = 'id' | 'created_at' | 'updated_at' | 'sent_at' | 'agreement_on_file'
+type Defaulted = 'id' | 'created_at' | 'updated_at' | 'sent_at' | 'agreement_on_file' | 'client_type'
 type NullableKeys<T> = { [K in keyof T]-?: null extends T[K] ? K : never }[keyof T]
 type OptionalOnInsert<T> = Defaulted | Extract<keyof T, NullableKeys<T>>
 

@@ -9,6 +9,7 @@ const STATUSES = ['active', 'prospect', 'inactive'] as const
 export function ClientsRoster() {
   const router = useRouter()
   const [clients, setClients] = useState<Client[]>([])
+  const [teamClients, setTeamClients] = useState<Client[]>([])
   const [pendingAgreements, setPendingAgreements] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -25,11 +26,18 @@ export function ClientsRoster() {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch('/api/clients')
+      const [res, teamRes] = await Promise.all([
+        fetch('/api/clients'),
+        fetch('/api/clients?type=coach'),
+      ])
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to load')
       setClients(data.clients || [])
       setPendingAgreements(data.pendingAgreements || {})
+      if (teamRes.ok) {
+        const teamData = await teamRes.json()
+        setTeamClients(teamData.clients || [])
+      }
     } catch (e: any) {
       setError(e.message)
     }
@@ -65,7 +73,7 @@ export function ClientsRoster() {
   // idempotent, so re-running only pulls in anything new.
   async function importNotesFromCA() {
     if (importingNotes) return
-    const active = clients.filter((c) => c.status === 'active')
+    const active = [...clients, ...teamClients].filter((c) => c.status === 'active')
     if (active.length === 0) {
       setNotesMsg('No active clients to import notes for.')
       return
@@ -200,41 +208,25 @@ export function ClientsRoster() {
           )}
         </div>
       ) : (
-        <div className="space-y-2">
-          {visible.map((c) => (
-            <Link
-              key={c.id}
-              href={`/clients/${c.id}`}
-              className="group block rounded-tlw-xl border border-tlw-warm-gray/15 bg-tlw-surface p-4 transition-all duration-tlw-base hover:-translate-y-0.5 hover:border-tlw-warm-gray/30 hover:shadow-md"
-            >
-              <div className="flex items-center justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="flex items-center gap-1.5 font-medium text-tlw-navy-deep">
-                    {c.name}
-                    {pendingAgreements[c.id] != null && pendingAgreements[c.id] > 7 && (
-                      <span
-                        title={`Agreement unsigned — sent ${pendingAgreements[c.id]} days ago`}
-                        className="inline-block h-2 w-2 shrink-0 rounded-full"
-                        style={{ background: '#E8650A' }}
-                      />
-                    )}
-                  </p>
-                  <p className="mt-0.5 truncate text-[12px] text-tlw-warm-gray">
-                    {[c.title, c.company].filter(Boolean).join(' · ') || c.email || '—'}
-                  </p>
-                </div>
-                <span
-                  className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-medium capitalize ${
-                    c.status === 'active'
-                      ? 'bg-tlw-navy-rich/10 text-tlw-navy-rich'
-                      : 'bg-tlw-warm-gray/15 text-tlw-warm-gray'
-                  }`}
-                >
-                  {c.status}
-                </span>
+        <div className="space-y-6">
+          <div className="space-y-2">
+            {visible.map((c) => (
+              <ClientCard key={c.id} c={c} pendingAgreements={pendingAgreements} />
+            ))}
+          </div>
+
+          {teamClients.length > 0 && (
+            <div>
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-tlw-warm-gray">
+                My Team — coaches
+              </p>
+              <div className="space-y-2">
+                {teamClients.map((c) => (
+                  <ClientCard key={c.id} c={c} pendingAgreements={{}} isTeam />
+                ))}
               </div>
-            </Link>
-          ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -249,6 +241,55 @@ export function ClientsRoster() {
         />
       )}
     </div>
+  )
+}
+
+function ClientCard({ c, pendingAgreements, isTeam = false }: {
+  c: Client
+  pendingAgreements: Record<string, number>
+  isTeam?: boolean
+}) {
+  return (
+    <Link
+      href={`/clients/${c.id}`}
+      className={`group block rounded-tlw-xl border p-4 transition-all duration-tlw-base hover:-translate-y-0.5 hover:shadow-md ${
+        isTeam
+          ? 'border-tlw-warm-gray/20 bg-tlw-canvas/60 hover:border-tlw-warm-gray/35'
+          : 'border-tlw-warm-gray/15 bg-tlw-surface hover:border-tlw-warm-gray/30'
+      }`}
+    >
+      <div className="flex items-center justify-between gap-4">
+        <div className="min-w-0">
+          <p className="flex items-center gap-1.5 font-medium text-tlw-navy-deep">
+            {c.name}
+            {isTeam && (
+              <span className="rounded-full bg-tlw-navy-deep/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-tlw-navy-deep">
+                Coach
+              </span>
+            )}
+            {!isTeam && pendingAgreements[c.id] != null && pendingAgreements[c.id] > 7 && (
+              <span
+                title={`Agreement unsigned — sent ${pendingAgreements[c.id]} days ago`}
+                className="inline-block h-2 w-2 shrink-0 rounded-full"
+                style={{ background: '#E8650A' }}
+              />
+            )}
+          </p>
+          <p className="mt-0.5 truncate text-[12px] text-tlw-warm-gray">
+            {[c.title, c.company].filter(Boolean).join(' · ') || c.email || '—'}
+          </p>
+        </div>
+        <span
+          className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-medium capitalize ${
+            c.status === 'active'
+              ? 'bg-tlw-navy-rich/10 text-tlw-navy-rich'
+              : 'bg-tlw-warm-gray/15 text-tlw-warm-gray'
+          }`}
+        >
+          {c.status}
+        </span>
+      </div>
+    </Link>
   )
 }
 

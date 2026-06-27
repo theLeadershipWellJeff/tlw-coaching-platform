@@ -60,6 +60,22 @@ export function NameCard({
   coachTimezone?: string
 }) {
   const [editing, setEditing] = useState(false)
+  const [togglingType, setTogglingType] = useState(false)
+
+  async function toggleClientType() {
+    setTogglingType(true)
+    const nextType = (client as any).client_type === 'coach' ? 'client' : 'coach'
+    const res = await fetch(`/api/clients/${client.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client_type: nextType }),
+    })
+    if (res.ok) {
+      const d = await res.json()
+      onUpdated(d.client)
+    }
+    setTogglingType(false)
+  }
 
   return (
     <div className="rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface p-6">
@@ -83,6 +99,11 @@ export function NameCard({
         </div>
 
         <div className="flex shrink-0 items-center gap-3">
+          {(client as any).client_type === 'coach' && (
+            <span className="rounded-full bg-tlw-navy-deep/10 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-tlw-navy-deep">
+              Coach
+            </span>
+          )}
           <span
             className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium capitalize ${
               client.status === 'active'
@@ -92,6 +113,14 @@ export function NameCard({
           >
             {client.status}
           </span>
+          <button
+            onClick={toggleClientType}
+            disabled={togglingType}
+            title={(client as any).client_type === 'coach' ? 'Move back to client roster' : 'Mark as team coach'}
+            className="rounded-tlw-md px-2 py-1 text-[11px] text-tlw-warm-gray transition-colors hover:bg-tlw-canvas hover:text-tlw-espresso disabled:opacity-50"
+          >
+            {togglingType ? '…' : (client as any).client_type === 'coach' ? '→ Client' : '→ Coach'}
+          </button>
           <button
             onClick={() => setEditing(true)}
             title="Edit client"
