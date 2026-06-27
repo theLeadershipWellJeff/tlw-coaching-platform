@@ -14,7 +14,9 @@ export function getStripe(): Stripe {
   if (_stripe) return _stripe
   const key = process.env.STRIPE_SECRET_KEY
   if (!key) throw new Error('STRIPE_SECRET_KEY is not set')
-  _stripe = new Stripe(key, { apiVersion: '2026-06-24.dahlia' })
+  // Pin to a known-stable API version. The 'dahlia' version (2026-06-24) silently
+  // zeroes invoice item amounts when using the `amount` field directly.
+  _stripe = new Stripe(key, { apiVersion: '2024-11-20' as any })
   return _stripe
 }
 
@@ -68,9 +70,13 @@ export async function createAndSendStripeInvoice(opts: {
   // Stripe does not allow both `amount` and `quantity` — amount is the total
   // for the line in cents; quantity is implicit when amount is set directly.
   for (const line of opts.lines) {
+    const amountCents = Math.round(line.amount * 100)
+    if (amountCents <= 0) {
+      throw new Error(`Invoice line "${line.description}" has zero or negative amount (${line.amount}). Check that invoice_lines.amount is in dollars.`)
+    }
     await stripe.invoiceItems.create({
       customer: opts.customerId,
-      amount: Math.round(line.amount * 100), // cents, total for this line
+      amount: amountCents,
       currency: opts.currency,
       description: line.description,
     })
