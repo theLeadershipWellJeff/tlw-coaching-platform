@@ -605,6 +605,48 @@ export type Database = {
         Update: Updatable<GrowthAreaAssessment>
         Relationships: []
       }
+      billing_accounts: {
+        Row: BillingAccount
+        Insert: Insertable<BillingAccount>
+        Update: Updatable<BillingAccount>
+        Relationships: []
+      }
+      coachees: {
+        Row: Coachee
+        Insert: Insertable<Coachee>
+        Update: Updatable<Coachee>
+        Relationships: []
+      }
+      engagements: {
+        Row: Engagement
+        Insert: Insertable<Engagement>
+        Update: Updatable<Engagement>
+        Relationships: []
+      }
+      billable_sessions: {
+        Row: BillableSession
+        Insert: Insertable<BillableSession>
+        Update: Updatable<BillableSession>
+        Relationships: []
+      }
+      invoices: {
+        Row: Invoice
+        Insert: Insertable<Invoice>
+        Update: Updatable<Invoice>
+        Relationships: []
+      }
+      invoice_lines: {
+        Row: InvoiceLine
+        Insert: Insertable<InvoiceLine>
+        Update: Updatable<InvoiceLine>
+        Relationships: []
+      }
+      invoice_reminders: {
+        Row: InvoiceReminder
+        Insert: Insertable<InvoiceReminder>
+        Update: Updatable<InvoiceReminder>
+        Relationships: []
+      }
     }
     Views: Record<string, never>
     Functions: Record<string, never>
