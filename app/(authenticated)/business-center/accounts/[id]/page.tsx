@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { PageHeader } from '@/app/components/layout/PageHeader'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -26,6 +26,7 @@ type Engagement = {
   engagement_total: number | null
   installment_count: number | null
   description_template: string | null
+  session_count: number | null
   coachees?: Coachee
 }
 
@@ -34,6 +35,8 @@ type Account = {
   name: string
   type: string
   billing_email: string
+  status: string
+  closed_at: string | null
   stripe_customer_id: string | null
   coachees: Coachee[]
   engagements: Engagement[]
@@ -158,12 +161,9 @@ function AddEngagementModal({ accountId, coachees, onAdded, onClose }: {
   const [coacheeId, setCoacheeId] = useState(coachees[0]?.id ?? '')
   const [mode, setMode] = useState<'arrears' | 'subscription' | 'per_engagement'>('arrears')
   const [owner, setOwner] = useState<'TLW' | 'CA'>('TLW')
-  // arrears
   const [rateHourly, setRateHourly] = useState('')
-  // subscription
   const [monthlyAmount, setMonthlyAmount] = useState('')
   const [billingDay, setBillingDay] = useState('1')
-  // per_engagement
   const [engTotal, setEngTotal] = useState('')
   const [installCount, setInstallCount] = useState('3')
   const [installDates, setInstallDates] = useState<{ date: string; amount: string; label: string }[]>([
@@ -171,6 +171,7 @@ function AddEngagementModal({ accountId, coachees, onAdded, onClose }: {
     { date: '', amount: '', label: 'Mid-point' },
     { date: '', amount: '', label: 'Final' },
   ])
+  const [sessionCount, setSessionCount] = useState('')
   const [descTemplate, setDescTemplate] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -193,6 +194,7 @@ function AddEngagementModal({ accountId, coachees, onAdded, onClose }: {
       billing_mode: mode,
       billing_owner: owner,
       description_template: descTemplate.trim() || null,
+      session_count: sessionCount ? parseInt(sessionCount, 10) : null,
     }
 
     if (mode === 'arrears') {
@@ -230,7 +232,6 @@ function AddEngagementModal({ accountId, coachees, onAdded, onClose }: {
         <form onSubmit={submit} className="max-h-[75vh] overflow-y-auto">
           <div className="space-y-4 px-6 py-5">
 
-            {/* Coachee */}
             {coachees.length > 1 && (
               <div>
                 <label className="mb-1 block text-[12px] font-medium text-tlw-espresso">Coachee</label>
@@ -247,7 +248,6 @@ function AddEngagementModal({ accountId, coachees, onAdded, onClose }: {
               </div>
             )}
 
-            {/* Billing owner */}
             <div>
               <label className="mb-1 block text-[12px] font-medium text-tlw-espresso">Billing owner</label>
               <div className="flex gap-3">
@@ -266,12 +266,8 @@ function AddEngagementModal({ accountId, coachees, onAdded, onClose }: {
                   </button>
                 ))}
               </div>
-              {owner === 'CA' && (
-                <p className="mt-1 text-[11px] text-amber-600">CA-owned engagements won&apos;t appear in billing runs &mdash; they&apos;re tracked in Coach Accountable only.</p>
-              )}
             </div>
 
-            {/* Billing mode */}
             <div>
               <label className="mb-1 block text-[12px] font-medium text-tlw-espresso">Billing mode</label>
               <div className="flex flex-col gap-2">
@@ -292,7 +288,6 @@ function AddEngagementModal({ accountId, coachees, onAdded, onClose }: {
               </div>
             </div>
 
-            {/* Mode-specific fields */}
             {mode === 'arrears' && (
               <div>
                 <label className="mb-1 block text-[12px] font-medium text-tlw-espresso">Hourly rate (USD)</label>
@@ -306,7 +301,6 @@ function AddEngagementModal({ accountId, coachees, onAdded, onClose }: {
                   onChange={(e) => setRateHourly(e.target.value)}
                   className="w-full rounded-tlw-lg border border-tlw-warm-gray/30 bg-tlw-canvas px-3 py-2 text-[13px] text-tlw-espresso focus:outline-none focus:ring-1 focus:ring-tlw-navy-deep/30"
                 />
-                <p className="mt-1 text-[11px] text-tlw-warm-gray">Billed in half-hour units with a 1-hour minimum.</p>
               </div>
             )}
 
@@ -400,7 +394,23 @@ function AddEngagementModal({ accountId, coachees, onAdded, onClose }: {
               </div>
             )}
 
-            {/* Description template (optional) */}
+            {/* Session allotment */}
+            <div>
+              <label className="mb-1 block text-[12px] font-medium text-tlw-espresso">
+                Session allotment <span className="font-normal text-tlw-warm-gray">(optional)</span>
+              </label>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                placeholder="e.g. 12"
+                value={sessionCount}
+                onChange={(e) => setSessionCount(e.target.value)}
+                className="w-full rounded-tlw-lg border border-tlw-warm-gray/30 bg-tlw-canvas px-3 py-2 text-[13px] text-tlw-espresso focus:outline-none focus:ring-1 focus:ring-tlw-navy-deep/30"
+              />
+              <p className="mt-1 text-[11px] text-tlw-warm-gray">Total sessions included in this engagement. Shows a progress bar on the client card.</p>
+            </div>
+
             <div>
               <label className="mb-1 block text-[12px] font-medium text-tlw-espresso">
                 Invoice line description <span className="font-normal text-tlw-warm-gray">(optional)</span>
@@ -412,7 +422,6 @@ function AddEngagementModal({ accountId, coachees, onAdded, onClose }: {
                 onChange={(e) => setDescTemplate(e.target.value)}
                 className="w-full rounded-tlw-lg border border-tlw-warm-gray/30 bg-tlw-canvas px-3 py-2 text-[13px] text-tlw-espresso focus:outline-none focus:ring-1 focus:ring-tlw-navy-deep/30"
               />
-              <p className="mt-1 text-[11px] text-tlw-warm-gray">Leave blank to use the auto-generated description.</p>
             </div>
 
             {error && <p className="text-[12px] text-red-600">{error}</p>}
@@ -432,6 +441,164 @@ function AddEngagementModal({ accountId, coachees, onAdded, onClose }: {
           </div>
         </form>
       </div>
+    </div>
+  )
+}
+
+// ── Engagement row (with inline edit) ─────────────────────────────────────────
+
+function EngagementRow({ eng, onUpdated }: { eng: Engagement; onUpdated: (updated: Engagement) => void }) {
+  const [editing, setEditing] = useState(false)
+  const [rateHourly, setRateHourly] = useState(String(eng.rate_hourly ?? ''))
+  const [monthlyAmount, setMonthlyAmount] = useState(String(eng.monthly_amount ?? ''))
+  const [engTotal, setEngTotal] = useState(String(eng.engagement_total ?? ''))
+  const [sessionCount, setSessionCount] = useState(String(eng.session_count ?? ''))
+  const [saving, setSaving] = useState(false)
+
+  function engagementSummary(): string {
+    if (eng.billing_mode === 'arrears') return `${money(eng.rate_hourly)}/hr`
+    if (eng.billing_mode === 'subscription') return `${money(eng.monthly_amount)}/mo`
+    if (eng.billing_mode === 'per_engagement') return `${money(eng.engagement_total)} total · ${eng.installment_count ?? 1} installment${(eng.installment_count ?? 1) > 1 ? 's' : ''}`
+    return ''
+  }
+
+  async function save() {
+    setSaving(true)
+    const body: Record<string, unknown> = {}
+    if (rateHourly !== '') body.rate_hourly = parseFloat(rateHourly)
+    if (monthlyAmount !== '') body.monthly_amount = parseFloat(monthlyAmount)
+    if (engTotal !== '') body.engagement_total = parseFloat(engTotal)
+    body.session_count = sessionCount ? parseInt(sessionCount, 10) : null
+
+    const res = await fetch(`/api/billing/engagements/${eng.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    const d = await res.json()
+    setSaving(false)
+    if (res.ok) {
+      onUpdated(d.engagement)
+      setEditing(false)
+    }
+  }
+
+  async function toggleStatus() {
+    const nextStatus = eng.status === 'active' ? 'paused' : 'active'
+    const res = await fetch(`/api/billing/engagements/${eng.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: nextStatus }),
+    })
+    if (res.ok) {
+      const d = await res.json()
+      onUpdated(d.engagement)
+    }
+  }
+
+  const coacheeName = (eng.coachees as any)?.clients?.name ?? '—'
+
+  return (
+    <div className="px-5 py-4">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-[14px] font-medium text-tlw-navy-deep">{coacheeName}</p>
+          <p className="text-[12px] text-tlw-warm-gray">
+            {MODE_LABEL[eng.billing_mode] ?? eng.billing_mode} · {engagementSummary()}
+            {eng.session_count != null && ` · ${eng.session_count} sessions`}
+          </p>
+          <p className="mt-0.5 text-[11px] text-tlw-warm-gray">
+            Owner: {eng.billing_owner}
+            {eng.billing_owner === 'CA' && ' — not included in billing runs'}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium capitalize ${STATUS_STYLES[eng.status] ?? ''}`}>
+            {eng.status}
+          </span>
+          {eng.status !== 'ended' && (
+            <button
+              onClick={toggleStatus}
+              className="text-[11px] text-tlw-warm-gray hover:text-tlw-espresso hover:underline"
+            >
+              {eng.status === 'active' ? 'Pause' : 'Resume'}
+            </button>
+          )}
+          <button
+            onClick={() => setEditing((o) => !o)}
+            className="text-[11px] font-medium text-tlw-navy-deep hover:underline"
+          >
+            {editing ? 'Cancel' : 'Edit'}
+          </button>
+        </div>
+      </div>
+
+      {editing && (
+        <div className="mt-3 space-y-3 rounded-tlw-lg border border-tlw-warm-gray/20 bg-tlw-canvas p-4">
+          {eng.billing_mode === 'arrears' && (
+            <div>
+              <label className="mb-1 block text-[11px] font-medium text-tlw-espresso">Hourly rate (USD)</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={rateHourly}
+                onChange={(e) => setRateHourly(e.target.value)}
+                className="w-full rounded-tlw-lg border border-tlw-warm-gray/30 bg-white px-3 py-1.5 text-[13px] text-tlw-espresso focus:outline-none focus:ring-1 focus:ring-tlw-navy-deep/30"
+              />
+            </div>
+          )}
+          {eng.billing_mode === 'subscription' && (
+            <div>
+              <label className="mb-1 block text-[11px] font-medium text-tlw-espresso">Monthly amount (USD)</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={monthlyAmount}
+                onChange={(e) => setMonthlyAmount(e.target.value)}
+                className="w-full rounded-tlw-lg border border-tlw-warm-gray/30 bg-white px-3 py-1.5 text-[13px] text-tlw-espresso focus:outline-none focus:ring-1 focus:ring-tlw-navy-deep/30"
+              />
+            </div>
+          )}
+          {eng.billing_mode === 'per_engagement' && (
+            <div>
+              <label className="mb-1 block text-[11px] font-medium text-tlw-espresso">Engagement total (USD)</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={engTotal}
+                onChange={(e) => setEngTotal(e.target.value)}
+                className="w-full rounded-tlw-lg border border-tlw-warm-gray/30 bg-white px-3 py-1.5 text-[13px] text-tlw-espresso focus:outline-none focus:ring-1 focus:ring-tlw-navy-deep/30"
+              />
+            </div>
+          )}
+          <div>
+            <label className="mb-1 block text-[11px] font-medium text-tlw-espresso">
+              Session allotment <span className="font-normal text-tlw-warm-gray">(optional)</span>
+            </label>
+            <input
+              type="number"
+              min="1"
+              step="1"
+              placeholder="e.g. 12"
+              value={sessionCount}
+              onChange={(e) => setSessionCount(e.target.value)}
+              className="w-full rounded-tlw-lg border border-tlw-warm-gray/30 bg-white px-3 py-1.5 text-[13px] text-tlw-espresso focus:outline-none focus:ring-1 focus:ring-tlw-navy-deep/30"
+            />
+          </div>
+          <div className="flex justify-end">
+            <button
+              onClick={save}
+              disabled={saving}
+              className="rounded-tlw-lg bg-tlw-navy-deep px-3 py-1.5 text-[12px] font-medium text-white disabled:opacity-50"
+            >
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -494,11 +661,14 @@ function AccountInvoices({ accountId }: { accountId: string }) {
 
 export default function AccountDetailPage() {
   const { id } = useParams<{ id: string }>()
+  const router = useRouter()
   const [account, setAccount] = useState<Account | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [showAddCoachee, setShowAddCoachee] = useState(false)
   const [showAddEngagement, setShowAddEngagement] = useState(false)
+  const [actioning, setActioning] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -509,31 +679,41 @@ export default function AccountDetailPage() {
       .finally(() => setLoading(false))
   }, [id])
 
-  function engagementCoacheeName(eng: Engagement): string {
-    const coachee = account?.coachees.find((c) => c.id === eng.coachee_id)
-    return coachee?.clients?.name ?? '—'
-  }
-
-  function engagementSummary(eng: Engagement): string {
-    if (eng.billing_mode === 'arrears') return `${money(eng.rate_hourly)}/hr`
-    if (eng.billing_mode === 'subscription') return `${money(eng.monthly_amount)}/mo`
-    if (eng.billing_mode === 'per_engagement') return `${money(eng.engagement_total)} total · ${eng.installment_count ?? 1} installment${(eng.installment_count ?? 1) > 1 ? 's' : ''}`
-    return ''
-  }
-
-  async function toggleEngagementStatus(eng: Engagement) {
-    const nextStatus = eng.status === 'active' ? 'paused' : 'active'
-    const res = await fetch(`/api/billing/engagements/${eng.id}`, {
+  async function closeAccount() {
+    setActioning(true)
+    await fetch(`/api/billing/accounts/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: nextStatus }),
+      body: JSON.stringify({ status: 'closed', closed_at: new Date().toISOString() }),
     })
-    if (res.ok) {
-      setAccount((cur) => cur ? {
-        ...cur,
-        engagements: cur.engagements.map((e) => e.id === eng.id ? { ...e, status: nextStatus } : e),
-      } : cur)
-    }
+    setActioning(false)
+    router.push('/business-center/accounts')
+  }
+
+  async function reopenAccount() {
+    setActioning(true)
+    const res = await fetch(`/api/billing/accounts/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'active', closed_at: null }),
+    })
+    const d = await res.json()
+    setActioning(false)
+    if (res.ok) setAccount((cur) => cur ? { ...cur, ...d.account } : cur)
+  }
+
+  async function deleteAccount() {
+    setActioning(true)
+    await fetch(`/api/billing/accounts/${id}`, { method: 'DELETE' })
+    setActioning(false)
+    router.push('/business-center/accounts')
+  }
+
+  function updateEngagement(updated: Engagement) {
+    setAccount((cur) => cur ? {
+      ...cur,
+      engagements: cur.engagements.map((e) => e.id === updated.id ? { ...e, ...updated } : e),
+    } : cur)
   }
 
   return (
@@ -557,6 +737,57 @@ export default function AccountDetailPage() {
 
       {account && (
         <div className="space-y-8">
+
+          {/* Account actions */}
+          <div className="flex items-center gap-3">
+            {account.status === 'closed' ? (
+              <button
+                onClick={reopenAccount}
+                disabled={actioning}
+                className="rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-1.5 text-[13px] font-medium text-tlw-espresso transition-colors hover:bg-tlw-canvas disabled:opacity-50"
+              >
+                {actioning ? 'Reopening…' : 'Reopen account'}
+              </button>
+            ) : (
+              <button
+                onClick={closeAccount}
+                disabled={actioning}
+                className="rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-1.5 text-[13px] font-medium text-tlw-espresso transition-colors hover:bg-tlw-canvas disabled:opacity-50"
+              >
+                {actioning ? 'Closing…' : 'Close account'}
+              </button>
+            )}
+            {!deleteConfirm ? (
+              <button
+                onClick={() => setDeleteConfirm(true)}
+                className="rounded-tlw-lg border border-red-200 px-3 py-1.5 text-[13px] font-medium text-red-600 transition-colors hover:bg-red-50"
+              >
+                Delete account
+              </button>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="text-[13px] text-red-600">Delete all data for this account?</span>
+                <button
+                  onClick={deleteAccount}
+                  disabled={actioning}
+                  className="rounded-tlw-lg bg-red-600 px-3 py-1.5 text-[13px] font-medium text-white disabled:opacity-50"
+                >
+                  {actioning ? 'Deleting…' : 'Confirm delete'}
+                </button>
+                <button
+                  onClick={() => setDeleteConfirm(false)}
+                  className="px-2 py-1.5 text-[13px] text-tlw-warm-gray hover:text-tlw-espresso"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+            {account.status === 'closed' && (
+              <span className="rounded-full bg-tlw-warm-gray/15 px-2.5 py-0.5 text-[11px] font-medium text-tlw-warm-gray">
+                Closed
+              </span>
+            )}
+          </div>
 
           {/* Coachees */}
           <section>
@@ -617,31 +848,7 @@ export default function AccountDetailPage() {
             ) : (
               <div className="divide-y divide-tlw-warm-gray/10 rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface">
                 {account.engagements.map((eng) => (
-                  <div key={eng.id} className="flex items-start justify-between gap-4 px-5 py-4">
-                    <div>
-                      <p className="text-[14px] font-medium text-tlw-navy-deep">{engagementCoacheeName(eng)}</p>
-                      <p className="text-[12px] text-tlw-warm-gray">
-                        {MODE_LABEL[eng.billing_mode] ?? eng.billing_mode} · {engagementSummary(eng)}
-                      </p>
-                      <p className="mt-0.5 text-[11px] text-tlw-warm-gray">
-                        Owner: {eng.billing_owner}
-                        {eng.billing_owner === 'CA' && ' — not included in billing runs'}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium capitalize ${STATUS_STYLES[eng.status] ?? ''}`}>
-                        {eng.status}
-                      </span>
-                      {eng.status !== 'ended' && (
-                        <button
-                          onClick={() => toggleEngagementStatus(eng)}
-                          className="text-[11px] text-tlw-warm-gray hover:text-tlw-espresso hover:underline"
-                        >
-                          {eng.status === 'active' ? 'Pause' : 'Resume'}
-                        </button>
-                      )}
-                    </div>
-                  </div>
+                  <EngagementRow key={eng.id} eng={eng} onUpdated={updateEngagement} />
                 ))}
               </div>
             )}

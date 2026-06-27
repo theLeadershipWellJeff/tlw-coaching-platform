@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
       .order('name', { ascending: true })
 
     if (statusParam !== 'all') {
-      query = query.eq('status', statusParam as any)
+      query = (query as any).eq('status', statusParam)
     }
 
     const { data, error } = await query
@@ -52,10 +52,10 @@ export async function GET(req: NextRequest) {
     .order('name', { ascending: true })
 
   if (statusParam !== 'all') {
-    query = query.eq('status', statusParam as any)
+    query = (query as any).eq('status', statusParam)
   }
 
-  const { data, error } = await query
+  const { data, error } = await (query as any)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ accounts: data })
 }
