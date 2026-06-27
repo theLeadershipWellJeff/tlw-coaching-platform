@@ -152,12 +152,17 @@ export function constructWebhookEvent(
 
 // ── Billing-mode routing ──────────────────────────────────────────────────────
 
-/** True if this billing mode should use a hosted invoice (Stripe Invoice object). */
-export function usesHostedInvoice(mode: BillingMode): boolean {
-  return mode === 'arrears' || mode === 'per_engagement'
+/**
+ * All billing modes use a hosted Stripe invoice so the client receives an email
+ * and can choose how to pay (card, bank, etc.) without requiring a saved payment
+ * method on file. Stripe's hosted payment page lets them save a card and enable
+ * auto-pay for future invoices.
+ */
+export function usesHostedInvoice(_mode: BillingMode): boolean {
+  return true
 }
 
-/** True if this billing mode should use an off-session PaymentIntent. */
-export function usesPaymentIntent(mode: BillingMode): boolean {
-  return mode === 'subscription'
+/** @deprecated — all modes now use hosted invoices. Kept for import compatibility. */
+export function usesPaymentIntent(_mode: BillingMode): boolean {
+  return false
 }

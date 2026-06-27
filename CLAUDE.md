@@ -695,7 +695,11 @@ index over the vault repo; **superseded by 024**) · 024 garden (`garden_notes` 
 unique index, and `coaches.calendar_sync_token`/`calendar_synced_at` — the Calendly/
 HubSpot → Next Appointment calendar-watch pipeline; additive) · 031 billing CC +
 invoice message (`billing_accounts.billing_cc` optional CC email; `invoices.client_message`
-free-text note shown to the client at the top of the invoice; both additive/nullable).
+free-text note shown to the client at the top of the invoice; both additive/nullable) ·
+032 billing skip + warnings (`engagements.skip_billing` boolean; `billable_sessions.appointment_id`
+FK; `billing_run_warnings` table for calendar cross-check and subscription no-sessions warnings) ·
+033 billing settings (`coaches.billing_settings` jsonb — preview_before_approve, auto_send_on_approve,
+cc_self_on_send; additive, NULL = defaults).
 
 **Tenant scoping (015).** `coach_clients` (coach_id, client_id, role) is the
 ownership link. Client access is enforced **server-side** by the session coach,
