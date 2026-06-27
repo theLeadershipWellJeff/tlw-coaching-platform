@@ -220,6 +220,9 @@ export type Coach = {
   // Nudging settings (migration 022). null = use the built-in defaults. Canonical
   // shape + defaults live in lib/nudges/settings.ts.
   nudge_settings: NudgeSettings | null
+  // Billing run preferences (migration 033). null = use the built-in defaults.
+  // Canonical shape + defaults live in lib/billing/settings.ts.
+  billing_settings: Record<string, unknown> | null
   // External booking capture (migration 025): the Google Calendar incremental-sync
   // cursor. null until the first sync; cleared + re-seeded on a 410 (stale token).
   calendar_sync_token: string | null

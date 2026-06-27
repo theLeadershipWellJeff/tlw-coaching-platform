@@ -43,7 +43,7 @@ export async function POST(_req: NextRequest, { params }: Params) {
   }
 
   try {
-    const result = await sendInvoice(supabase, coach.id, params.id)
+    const result = await sendInvoice(supabase, coach.id, params.id, coach as any)
     if (!result.ok) {
       return NextResponse.json({ ok: false, error: result.error }, { status: 402 })
     }

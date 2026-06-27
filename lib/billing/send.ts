@@ -19,10 +19,11 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import {
   getOrCreateStripeCustomer,
   createAndSendStripeInvoice,
-  createSubscriptionPaymentIntent,
   usesHostedInvoice,
 } from './stripe'
 import type { BillingMode } from './types'
+import { normalizeBillingSettings } from './settings'
+import { sendCoachHtmlEmail } from '@/lib/gmail'
 
 type SendResult =
   | { ok: true; stripeId: string }
@@ -32,6 +33,7 @@ export async function sendInvoice(
   supabase: SupabaseClient,
   coachId: string,
   invoiceId: string,
+  coach?: { email: string; name: string; google_refresh_token: string | null; billing_settings?: Record<string, unknown> | null },
 ): Promise<SendResult> {
   // 1. Load invoice with lines + account.
   const { data: invoice, error: fetchErr } = await supabase
@@ -98,81 +100,95 @@ export async function sendInvoice(
   // 4. Send via the appropriate Stripe path.
   const now = new Date().toISOString()
 
-  if (usesHostedInvoice(detectedMode)) {
-    try {
-      const stripeInv = await createAndSendStripeInvoice({
-        customerId: stripeCustomerId,
-        currency,
-        lines: lines.map((l: any) => ({
-          description: l.description,
-          amount: l.amount,
-          quantity: l.quantity,
-        })),
-        metadata: { tlw_invoice_id: invoiceId, coach_id: coachId },
+  // All modes use Stripe hosted invoice — client receives email + chooses payment method.
+  try {
+    const stripeInv = await createAndSendStripeInvoice({
+      customerId: stripeCustomerId,
+      currency,
+      lines: lines.map((l: any) => ({
+        description: l.description,
+        amount: l.amount,
+        quantity: l.quantity,
+      })),
+      metadata: { tlw_invoice_id: invoiceId, coach_id: coachId },
+    })
+
+    await supabase
+      .from('invoices')
+      .update({
+        status: 'sent',
+        stripe_invoice_id: stripeInv.id,
+        stripe_error: null,
+        sent_at: now,
+        updated_at: now,
       })
+      .eq('id', invoiceId)
 
-      await supabase
-        .from('invoices')
-        .update({
-          status: 'sent',
-          stripe_invoice_id: stripeInv.id,
-          stripe_error: null,
-          sent_at: now,
-          updated_at: now,
-        })
-        .eq('id', invoiceId)
-
-      return { ok: true, stripeId: stripeInv.id }
-    } catch (e: any) {
-      const errMsg = stripeErrorMessage(e)
-      await writeError(supabase, invoiceId, errMsg)
-      return { ok: false, error: errMsg }
-    }
-  } else {
-    // Subscription → off-session PaymentIntent.
-    try {
-      const pi = await createSubscriptionPaymentIntent({
-        customerId: stripeCustomerId,
-        amountDollars: total,
-        currency,
-        description: lines[0]?.description ?? 'Coaching subscription',
-        metadata: { tlw_invoice_id: invoiceId, coach_id: coachId },
-      })
-
-      // Map PI status to invoice status.
-      const piStatus = pi.status
-      let invoiceStatus: string = 'sent'
-      let stripeError: string | null = null
-
-      if (piStatus === 'succeeded') {
-        invoiceStatus = 'paid'
-      } else if (piStatus === 'requires_action') {
-        // SCA required — client must authenticate.
-        stripeError = 'Payment requires customer authentication (SCA). Share the Stripe payment link with the client.'
-      } else if (piStatus === 'requires_payment_method') {
-        stripeError = 'No payment method on file. Add a card in Stripe and retry.'
+    // CC the coach a copy if billing_settings.cc_self_on_send is enabled (default: true).
+    if (coach) {
+      const bs = normalizeBillingSettings(coach.billing_settings as any)
+      if (bs.cc_self_on_send) {
+        sendCoachCopy(coach, account, invoice as any, lines, stripeInv.hosted_invoice_url ?? null).catch(() => {})
       }
-
-      await supabase
-        .from('invoices')
-        .update({
-          status: invoiceStatus,
-          stripe_payment_intent_id: pi.id,
-          stripe_error: stripeError,
-          sent_at: now,
-          paid_at: piStatus === 'succeeded' ? now : null,
-          updated_at: now,
-        })
-        .eq('id', invoiceId)
-
-      if (stripeError) return { ok: false, error: stripeError }
-      return { ok: true, stripeId: pi.id }
-    } catch (e: any) {
-      const errMsg = stripeErrorMessage(e)
-      await writeError(supabase, invoiceId, errMsg)
-      return { ok: false, error: errMsg }
     }
+
+    return { ok: true, stripeId: stripeInv.id }
+  } catch (e: any) {
+    const errMsg = stripeErrorMessage(e)
+    await writeError(supabase, invoiceId, errMsg)
+    return { ok: false, error: errMsg }
   }
+}
+
+// ── Coach copy email ──────────────────────────────────────────────────────────
+
+async function sendCoachCopy(
+  coach: { email: string; name: string; google_refresh_token: string | null },
+  account: { name: string; billing_email: string },
+  invoice: { total: number; currency: string; period_start?: string | null; period_end?: string | null; client_message?: string | null },
+  lines: { description: string; amount: number }[],
+  hostedUrl: string | null,
+) {
+  function money(n: number) {
+    return n.toLocaleString('en-US', { style: 'currency', currency: invoice.currency?.toUpperCase() ?? 'USD' })
+  }
+  const lineRows = lines
+    .map((l) => `<tr><td style="padding:6px 0;color:#3B3328;">${l.description}</td><td style="padding:6px 0;text-align:right;font-weight:600;color:#1a1f5e;">${money(l.amount)}</td></tr>`)
+    .join('')
+
+  const periodLine = invoice.period_start && invoice.period_end
+    ? `<p style="margin:0 0 12px;font-size:13px;color:#8a7f78;">Period: ${invoice.period_start} → ${invoice.period_end}</p>`
+    : ''
+
+  const messageLine = invoice.client_message
+    ? `<p style="margin:0 0 16px;font-size:13px;color:#3B3328;font-style:italic;">&ldquo;${invoice.client_message}&rdquo;</p>`
+    : ''
+
+  const viewLink = hostedUrl
+    ? `<p style="margin:16px 0 0;font-size:12px;color:#8a7f78;">Stripe link: <a href="${hostedUrl}" style="color:#1a1f5e;">${hostedUrl}</a></p>`
+    : ''
+
+  const html = `
+<div style="font-family:sans-serif;max-width:540px;margin:0 auto;padding:24px;">
+  <p style="margin:0 0 4px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:#8a7f78;">COPY — Invoice sent to client</p>
+  <h2 style="margin:0 0 2px;font-size:18px;color:#1a1f5e;">${account.name}</h2>
+  <p style="margin:0 0 16px;font-size:13px;color:#8a7f78;">${account.billing_email}</p>
+  ${periodLine}${messageLine}
+  <table style="width:100%;border-collapse:collapse;border-top:1px solid #e8e2dc;">
+    ${lineRows}
+    <tr style="border-top:1px solid #e8e2dc;">
+      <td style="padding:10px 0;font-size:14px;font-weight:700;color:#1a1f5e;">Total</td>
+      <td style="padding:10px 0;text-align:right;font-size:16px;font-weight:700;color:#1a1f5e;">${money(invoice.total)}</td>
+    </tr>
+  </table>
+  ${viewLink}
+</div>`
+
+  await sendCoachHtmlEmail(coach as any, {
+    to: coach.email,
+    subject: `[Copy] Invoice sent to ${account.name} — ${money(invoice.total)}`,
+    html,
+  })
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

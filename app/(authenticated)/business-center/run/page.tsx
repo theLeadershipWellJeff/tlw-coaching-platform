@@ -56,6 +56,7 @@ type DraftInvoice = {
   status: string
   subtotal: number
   total: number
+  client_message: string | null
   stripe_invoice_id: string | null
   stripe_payment_intent_id: string | null
   stripe_error: string | null
@@ -63,8 +64,16 @@ type DraftInvoice = {
   approved_at: string | null
   sent_at: string | null
   paid_at: string | null
+  period_start: string | null
+  period_end: string | null
   billing_accounts: { id: string; name: string; type: string; billing_email: string }
   invoice_lines: InvoiceLine[]
+}
+
+type BillingSettings = {
+  preview_before_approve: boolean
+  auto_send_on_approve: boolean
+  cc_self_on_send: boolean
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -154,6 +163,83 @@ function LineRow({
   )
 }
 
+// ── Invoice preview modal ──────────────────────────────────────────────────────
+
+function InvoicePreviewModal({
+  invoice,
+  autoSend,
+  onApprove,
+  onApproveAndSend,
+  onClose,
+}: {
+  invoice: DraftInvoice
+  autoSend: boolean
+  onApprove: () => void
+  onApproveAndSend: () => void
+  onClose: () => void
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-lg rounded-tlw-2xl bg-white shadow-xl">
+        <div className="border-b border-tlw-warm-gray/15 px-6 py-4">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-tlw-warm-gray">Invoice preview — what your client will receive</p>
+          <h2 className="mt-0.5 text-[16px] font-semibold text-tlw-navy-deep">{invoice.billing_accounts.name}</h2>
+          <p className="text-[13px] text-tlw-warm-gray">{invoice.billing_accounts.billing_email}</p>
+          {invoice.period_start && invoice.period_end && (
+            <p className="mt-1 text-[12px] text-tlw-warm-gray">Period: {invoice.period_start} → {invoice.period_end}</p>
+          )}
+        </div>
+
+        <div className="max-h-[60vh] overflow-y-auto px-6 py-5">
+          {invoice.client_message && (
+            <div className="mb-4 rounded-tlw-lg border border-tlw-warm-gray/15 bg-tlw-canvas px-4 py-3">
+              <p className="text-[13px] text-tlw-espresso italic">&ldquo;{invoice.client_message}&rdquo;</p>
+            </div>
+          )}
+
+          <div className="divide-y divide-tlw-warm-gray/10 rounded-tlw-lg border border-tlw-warm-gray/15">
+            {invoice.invoice_lines.map((line) => (
+              <div key={line.id} className="flex items-start justify-between gap-3 px-4 py-3">
+                <p className="text-[13px] text-tlw-espresso">{line.description}</p>
+                <span className="shrink-0 text-[13px] font-semibold text-tlw-navy-deep">{money(line.amount)}</span>
+              </div>
+            ))}
+            <div className="flex items-center justify-between px-4 py-3">
+              <span className="text-[14px] font-bold text-tlw-navy-deep">Total due</span>
+              <span className="text-[16px] font-bold text-tlw-navy-deep">{money(invoice.total)}</span>
+            </div>
+          </div>
+
+          <p className="mt-4 text-[11px] text-tlw-warm-gray">
+            Stripe will email this invoice to the client. They can pay by card, bank transfer, or any method you&apos;ve enabled in Stripe. They can save their card and enable auto-pay for future invoices on the Stripe payment page.
+          </p>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 border-t border-tlw-warm-gray/10 px-6 py-4">
+          <button onClick={onClose} className="px-3 py-1.5 text-[13px] text-tlw-warm-gray hover:text-tlw-espresso">
+            Cancel
+          </button>
+          {autoSend ? (
+            <button
+              onClick={onApproveAndSend}
+              className="rounded-tlw-lg bg-tlw-signal-orange px-4 py-1.5 text-[13px] font-medium text-white hover:opacity-90"
+            >
+              Approve &amp; Send
+            </button>
+          ) : (
+            <button
+              onClick={onApprove}
+              className="rounded-tlw-lg bg-tlw-navy-deep px-4 py-1.5 text-[13px] font-medium text-white hover:bg-tlw-navy-rich"
+            >
+              Approve
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const STATUS_CHIP: Record<string, string> = {
   draft: 'bg-tlw-canvas text-tlw-warm-gray',
   approved: 'bg-green-50 text-green-700',
@@ -174,12 +260,14 @@ function StatusChip({ status }: { status: string }) {
 
 function InvoiceCard({
   invoice,
+  billingSettings,
   onApproved,
   onSent,
   onLineUpdated,
   onLineDeleted,
 }: {
   invoice: DraftInvoice
+  billingSettings: BillingSettings
   onApproved: (id: string) => void
   onSent: (id: string, updates: Partial<DraftInvoice>) => void
   onLineUpdated: (invoiceId: string, line: InvoiceLine) => void
@@ -188,6 +276,7 @@ function InvoiceCard({
   const [approving, setApproving] = useState(false)
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState<string | null>(invoice.stripe_error ?? null)
+  const [showPreview, setShowPreview] = useState(false)
 
   const isDraft = invoice.status === 'draft'
   const isApproved = invoice.status === 'approved'
@@ -205,11 +294,30 @@ function InvoiceCard({
     ? 'border-blue-200'
     : 'border-tlw-warm-gray/15'
 
-  async function approve() {
+  async function doApprove() {
     setApproving(true)
+    setShowPreview(false)
     const res = await fetch(`/api/billing/invoices/${invoice.id}/approve`, { method: 'POST' })
     if (res.ok) onApproved(invoice.id)
     setApproving(false)
+  }
+
+  async function doApproveAndSend() {
+    setApproving(true)
+    setShowPreview(false)
+    const approveRes = await fetch(`/api/billing/invoices/${invoice.id}/approve`, { method: 'POST' })
+    if (!approveRes.ok) { setApproving(false); return }
+    onApproved(invoice.id)
+    setApproving(false)
+    await send()
+  }
+
+  function handleApproveClick() {
+    if (billingSettings.preview_before_approve) {
+      setShowPreview(true)
+    } else {
+      doApprove()
+    }
   }
 
   async function send() {
@@ -233,6 +341,16 @@ function InvoiceCard({
   }
 
   return (
+    <>
+    {showPreview && (
+      <InvoicePreviewModal
+        invoice={invoice}
+        autoSend={billingSettings.auto_send_on_approve}
+        onApprove={doApprove}
+        onApproveAndSend={doApproveAndSend}
+        onClose={() => setShowPreview(false)}
+      />
+    )}
     <div className={`rounded-tlw-2xl border bg-tlw-surface ${borderClass}`}>
       {/* Header */}
       <div className="flex items-center justify-between gap-4 border-b border-tlw-warm-gray/10 px-4 py-3">
@@ -244,7 +362,7 @@ function InvoiceCard({
           <StatusChip status={invoice.status} />
           {isDraft && (
             <button
-              onClick={approve}
+              onClick={handleApproveClick}
               disabled={approving}
               className="rounded-tlw-lg bg-tlw-navy-deep px-3 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-tlw-navy-rich disabled:opacity-50"
             >
@@ -370,6 +488,7 @@ function InvoiceCard({
         )}
       </div>
     </div>
+    </>
   )
 }
 
@@ -563,13 +682,36 @@ export default function BillingRunPage() {
   const [sendingAll, setSendingAll] = useState(false)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [billingAccounts, setBillingAccounts] = useState<BillingAccount[]>([])
+  const [billingSettings, setBillingSettings] = useState<BillingSettings>({
+    preview_before_approve: true,
+    auto_send_on_approve: false,
+    cc_self_on_send: true,
+  })
+  const [showSettings, setShowSettings] = useState(false)
+  const [savingSettings, setSavingSettings] = useState(false)
 
   useEffect(() => {
     fetch('/api/billing/accounts')
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((d) => setBillingAccounts(d.accounts ?? []))
       .catch(() => {})
+    fetch('/api/coach')
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d) => { if (d.coach?.billing_settings) setBillingSettings(d.coach.billing_settings) })
+      .catch(() => {})
   }, [])
+
+  async function saveBillingSettings(patch: Partial<BillingSettings>) {
+    const next = { ...billingSettings, ...patch }
+    setBillingSettings(next)
+    setSavingSettings(true)
+    await fetch('/api/coach', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ billingSettings: next }),
+    }).catch(() => {})
+    setSavingSettings(false)
+  }
 
   const loadInvoices = useCallback(async (start: string, end: string) => {
     setLoadingInvoices(true)
@@ -817,6 +959,58 @@ export default function BillingRunPage() {
         )}
       </div>
 
+      {/* Billing preferences */}
+      <div className="mb-4 rounded-tlw-xl border border-tlw-warm-gray/10 bg-tlw-canvas px-4 py-3">
+        <button
+          onClick={() => setShowSettings((o) => !o)}
+          className="flex w-full items-center justify-between text-[12px] font-medium text-tlw-warm-gray hover:text-tlw-espresso"
+        >
+          <span>Billing preferences</span>
+          <span>{showSettings ? '▲' : '▼'}</span>
+        </button>
+        {showSettings && (
+          <div className="mt-3 space-y-3 border-t border-tlw-warm-gray/10 pt-3">
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                checked={billingSettings.preview_before_approve}
+                onChange={(e) => saveBillingSettings({ preview_before_approve: e.target.checked })}
+                className="mt-0.5 h-4 w-4 accent-tlw-navy-deep"
+              />
+              <div>
+                <p className="text-[13px] font-medium text-tlw-espresso">Preview invoice before approving</p>
+                <p className="text-[11px] text-tlw-warm-gray">Clicking Approve opens a preview of what the client will receive. Uncheck to approve directly.</p>
+              </div>
+            </label>
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                checked={billingSettings.auto_send_on_approve}
+                onChange={(e) => saveBillingSettings({ auto_send_on_approve: e.target.checked })}
+                className="mt-0.5 h-4 w-4 accent-tlw-navy-deep"
+              />
+              <div>
+                <p className="text-[13px] font-medium text-tlw-espresso">Auto-send on approval</p>
+                <p className="text-[11px] text-tlw-warm-gray">When previewing, the Approve button becomes &ldquo;Approve &amp; Send&rdquo; — one click approves and sends to Stripe immediately.</p>
+              </div>
+            </label>
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                checked={billingSettings.cc_self_on_send}
+                onChange={(e) => saveBillingSettings({ cc_self_on_send: e.target.checked })}
+                className="mt-0.5 h-4 w-4 accent-tlw-navy-deep"
+              />
+              <div>
+                <p className="text-[13px] font-medium text-tlw-espresso">Email me a copy when invoices are sent</p>
+                <p className="text-[11px] text-tlw-warm-gray">After Stripe sends an invoice to the client, you&apos;ll receive a copy summarizing what was sent.</p>
+              </div>
+            </label>
+            {savingSettings && <p className="text-[11px] text-tlw-warm-gray">Saving…</p>}
+          </div>
+        )}
+      </div>
+
       {/* Summary + batch actions */}
       {invoices.length > 0 && (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-tlw-xl border border-tlw-warm-gray/10 bg-tlw-canvas px-4 py-3">
@@ -872,6 +1066,7 @@ export default function BillingRunPage() {
             <InvoiceCard
               key={inv.id}
               invoice={inv}
+              billingSettings={billingSettings}
               onApproved={handleApproved}
               onSent={handleSent}
               onLineUpdated={handleLineUpdated}

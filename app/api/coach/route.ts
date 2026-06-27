@@ -4,6 +4,7 @@ import { getSessionCoach } from '@/lib/coach'
 import { isValidTimeZone } from '@/lib/datetime'
 import { normalizeAvailability, normalizeReminderSettings } from '@/lib/scheduling'
 import { normalizeNudgeSettings } from '@/lib/nudges/settings'
+import { normalizeBillingSettings } from '@/lib/billing/settings'
 
 export const runtime = 'nodejs'
 
@@ -33,6 +34,7 @@ export async function GET() {
       availability: normalizeAvailability(coach.availability),
       reminder_settings: normalizeReminderSettings(coach.reminder_settings),
       nudge_settings: normalizeNudgeSettings(coach.nudge_settings),
+      billing_settings: normalizeBillingSettings(coach.billing_settings as any),
     },
   })
 }
@@ -109,6 +111,14 @@ export async function PATCH(req: NextRequest) {
   }
   if ('reminderSettings' in body) {
     update.reminder_settings = normalizeReminderSettings(body.reminderSettings)
+  }
+
+  // Billing settings — merge onto defaults so partial updates are safe.
+  if ('billingSettings' in body) {
+    const current = normalizeBillingSettings((coach as any).billing_settings)
+    const patch = body.billingSettings as Partial<typeof current>
+    update.nudge_settings = update.nudge_settings // keep TS happy
+    ;(update as any).billing_settings = normalizeBillingSettings({ ...current, ...patch })
   }
 
   // Vault settings (the editable part of nudge_settings) — merge onto the current
