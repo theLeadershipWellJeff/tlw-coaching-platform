@@ -35,6 +35,7 @@ type Account = {
   name: string
   type: string
   billing_email: string
+  billing_cc: string | null
   status: string
   closed_at: string | null
   stripe_customer_id: string | null
@@ -770,6 +771,9 @@ export default function AccountDetailPage() {
   const [showAddEngagement, setShowAddEngagement] = useState(false)
   const [actioning, setActioning] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [editingCc, setEditingCc] = useState(false)
+  const [ccDraft, setCcDraft] = useState('')
+  const [savingCc, setSavingCc] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -808,6 +812,21 @@ export default function AccountDetailPage() {
     await fetch(`/api/billing/accounts/${id}`, { method: 'DELETE' })
     setActioning(false)
     router.push('/business-center/accounts')
+  }
+
+  async function saveCc() {
+    setSavingCc(true)
+    const res = await fetch(`/api/billing/accounts/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ billing_cc: ccDraft.trim() || null }),
+    })
+    if (res.ok) {
+      const d = await res.json()
+      setAccount((cur) => cur ? { ...cur, billing_cc: d.account?.billing_cc ?? null } : cur)
+    }
+    setSavingCc(false)
+    setEditingCc(false)
   }
 
   function updateEngagement(updated: Engagement) {
@@ -889,6 +908,48 @@ export default function AccountDetailPage() {
               </span>
             )}
           </div>
+
+          {/* Billing email + CC */}
+          <section className="rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface px-5 py-4">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-[13px]">
+                <span className="w-24 shrink-0 text-[11px] font-medium uppercase tracking-wider text-tlw-warm-gray">Bill to</span>
+                <span className="text-tlw-espresso">{account.billing_email}</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="w-24 shrink-0 pt-0.5 text-[11px] font-medium uppercase tracking-wider text-tlw-warm-gray">CC</span>
+                {editingCc ? (
+                  <div className="flex flex-1 items-center gap-2">
+                    <input
+                      type="email"
+                      value={ccDraft}
+                      onChange={(e) => setCcDraft(e.target.value)}
+                      placeholder="cc@example.com"
+                      className="flex-1 rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-canvas px-2 py-1 text-[13px] text-tlw-espresso outline-none focus:border-tlw-signal-orange"
+                      autoFocus
+                    />
+                    <button
+                      onClick={saveCc}
+                      disabled={savingCc}
+                      className="rounded-tlw-md bg-tlw-navy-deep px-3 py-1 text-[12px] font-medium text-white disabled:opacity-50"
+                    >
+                      {savingCc ? 'Saving…' : 'Save'}
+                    </button>
+                    <button onClick={() => setEditingCc(false)} className="px-2 py-1 text-[12px] text-tlw-warm-gray hover:text-tlw-espresso">
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => { setCcDraft(account.billing_cc ?? ''); setEditingCc(true) }}
+                    className="text-[13px] text-tlw-warm-gray hover:text-tlw-espresso"
+                  >
+                    {account.billing_cc ?? <span className="italic text-tlw-warm-gray/50">Add a CC email…</span>}
+                  </button>
+                )}
+              </div>
+            </div>
+          </section>
 
           {/* Coachees */}
           <section>

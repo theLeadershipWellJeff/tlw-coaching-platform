@@ -676,7 +676,9 @@ index over the vault repo; **superseded by 024**) · 024 garden (`garden_notes` 
 025 external booking capture (extends `appointments` with `source`/`attendee_email`/
 `title`/`raw_event`, makes `client_id` nullable, adds the `(coach_id, google_event_id)`
 unique index, and `coaches.calendar_sync_token`/`calendar_synced_at` — the Calendly/
-HubSpot → Next Appointment calendar-watch pipeline; additive).
+HubSpot → Next Appointment calendar-watch pipeline; additive) · 031 billing CC +
+invoice message (`billing_accounts.billing_cc` optional CC email; `invoices.client_message`
+free-text note shown to the client at the top of the invoice; both additive/nullable).
 
 **Tenant scoping (015).** `coach_clients` (coach_id, client_id, role) is the
 ownership link. Client access is enforced **server-side** by the session coach,

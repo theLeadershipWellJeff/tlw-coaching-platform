@@ -44,7 +44,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   // Only draft invoices can have lines/metadata edited; status transitions happen
   // via dedicated endpoints (/approve, /send) in later phases.
   const body = await req.json().catch(() => ({}))
-  const allowed = ['period_start', 'period_end'] as const
+  const allowed = ['period_start', 'period_end', 'client_message'] as const
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
   for (const key of allowed) {
     if (key in body) updates[key] = body[key]
