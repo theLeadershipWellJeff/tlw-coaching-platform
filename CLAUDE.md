@@ -793,6 +793,85 @@ and back in** to grant calendar-write + populate the refresh token with it;
   wound-repair/diagnosis, not psychological depth or emotional exploration.
 
 ### Open — keep these tracked (also GitHub issues)
+
+#### Billing & Business Center
+
+- **Business Center — top-level area (to build).** A dedicated `/business` section
+  in the sidebar surfacing revenue, coaching hours, invoicing, and firm-level
+  analytics in one place. The billing infrastructure (`session_fee`, `billing_accounts`,
+  `invoices`) is partially built; the Business Center consolidates it with the coaching
+  hours log (below) and communications summary.
+
+- **Billing run — enterprise client grouping.** When running a billing cycle,
+  enterprise clients (accounts with multiple associated clients) currently appear
+  flat in the list alongside individual clients. Fix: group by `billing_accounts`
+  so the enterprise account name appears as a header row with its associated clients
+  indented beneath it. Individual (non-enterprise) clients appear ungrouped as before.
+  The billing run UI (`/business` or wherever billing is surfaced) should make it
+  visually unambiguous that an enterprise is being billed at the account level, not
+  each client individually.
+
+- **Coaching hours card + ICF log (dashboard, Practice, Business Center).** A new
+  card that appears in three places — the **dashboard**, the **Practice** area, and
+  the **Business Center**. Features:
+  - Toggle between **past week / past month / past year** totals (derived from
+    `notes.duration_minutes` for completed sessions + scheduled appointment lengths
+    for upcoming hours).
+  - A **"View log"** button opens a modal/drawer listing every logged coaching
+    session (client name, date, duration) in chronological order — structured for
+    ICF credential reporting. The log is exportable (CSV at minimum).
+  - Requires no new migration if built from existing `notes.duration_minutes` +
+    `appointments`; a dedicated `coaching_hours_log` table may be worth adding
+    for clean ICF-report queries.
+
+#### Coach Workspace Enhancements
+
+- **Actions card — previous actions visible + new ones at top.** In the notes-panel
+  `CaptureGroup`, the actions list should show the **last 5 prior open actions** (from
+  the `actions` table, not just the current note) as checkable items at the bottom of
+  the list. Newly captured actions in the current note appear at the **top**. Checking
+  a prior action marks it complete via `PATCH /api/clients/[id]/actions/[actionId]`
+  (same as the workspace `ActionsCard`). "Show all" expander behavior unchanged.
+
+- **Insights card — most recent 5 insights.** In the same notes-panel capture area
+  (alongside the actions list), surface the **5 most recent INSIGHT: lines** from
+  prior notes (not just the current note), as a read-only reference list using the
+  existing ✦ icon. Helps the coach see patterns without leaving the note editor.
+
+- **Coaching map — clickable framework viewer.** Once a coaching map is selected in
+  the `CoachingMapCard` pulldown, the map name becomes a clickable link/button that
+  opens an **inline dropdown or panel** listing the components of that framework
+  (e.g. "The 6 Components" lists all six; "Who I Am Becoming" lists its parts).
+  Content is static for now (defined in `CoachingMapCard.tsx#MAPS` — add a `components`
+  array to each map entry). Eventually this will be graphical; for now a clean list
+  is sufficient. Includes a **"Send to client"** button that emails the client a
+  formatted list of that framework's components as a quick reminder (uses the existing
+  Gmail send path, `POST /api/email/send`; no note attachment).
+
+- **Dashboard — Emails Sent card clickable.** The "Emails Sent" summary card on the
+  dashboard becomes clickable and opens a modal listing all sent emails (from
+  `communications` where `type='email'`), most recent first, with subject, client
+  name, and date. Each row is clickable and navigates to that client's workspace
+  Recent Communication card (already exists), where the individual email is viewable.
+
+- **Dashboard — Nudges card clickable.** Same pattern as Emails Sent: the nudges
+  summary card opens a modal listing all sent/scheduled nudges, each row navigating
+  to the client workspace `NudgesCard`.
+
+- **Send to client — terser output.** The `/api/notes/client-email` prompt that drafts
+  the client-facing narrative should default to **bullet points and lists** wherever
+  possible (action items, insights, key takeaways). Reduce paragraph prose; favor
+  scannable structure. Update the system prompt in that route handler.
+
+- **Nudge editor — coach note field.** In the `NudgeItem` edit area (both the Nudge
+  Queue and the per-client `NudgesCard`), add a **"Coach note"** text field (maps to
+  a new `nudges.coach_note` text column, migration required). This note is **not
+  sent** to the client — it's private context the coach attaches before sending (e.g.
+  "reference the Skydive story"). Displayed in the edit panel below the body editor,
+  labeled "Private note (not sent)". Save via the existing `PATCH /api/nudges/[nudgeId]`.
+
+#### Previously Tracked Open Items
+
 - **SMS delivery for nudges and reminders (roadmap).** Allow the coach to send
   nudges and appointment reminders via text message in addition to (or instead of)
   email. Planned approach: integrate Twilio (or similar — Twilio has a free trial
@@ -844,3 +923,98 @@ and back in** to grant calendar-write + populate the refresh token with it;
   **renewal cron** to re-register before the ~7-day primary-calendar channel expiry
   (and `events.stop` the old channel). Keep the hourly poll as a safety-net backstop
   even with push on, so a missed/expired channel never silently drops bookings.
+
+#### Client-Facing Portal (Major Build — highest complexity)
+
+The client portal is a **separate authenticated area** (`app/(client)/*` or
+`app/portal/*`) distinct from the coach's app shell. Clients log in via a
+**magic-link or password flow** (not Google OAuth — clients won't have Google
+accounts on file). Every data access is **hard-scoped to the authenticated client's
+`client_id`** — they can never see another client's data. The portal is the highest-
+security surface in the app: no coach-private fields (especially `clients.key_info`)
+ever cross the boundary.
+
+**Authentication.** A separate NextAuth provider (email magic-link, or a lightweight
+`client_tokens` table with time-limited signed tokens — same pattern as agreements/
+agenda). Session carries `clientId` (not `coachId`). All portal API routes validate
+this session; no coach session is accepted. Rate-limit magic-link sends.
+
+**Portal workspace layout.** Mirror the card-grid feel of the coach workspace.
+Cards:
+- **Next appointment** — shows the upcoming session date/time (from `appointments`)
+  with a "Schedule / reschedule" link pointing to Jeff's **HubSpot booking link**
+  (configurable per coach). Read-only display of the booked slot.
+- **Coaching goals** — read-only view of `clients.coaching_goals`. Same
+  `{title, description, metrics}` structure, displayed cleanly (no edit in v1).
+- **Transcripts** — list of the client's session transcripts (date, title). Each
+  is viewable (the transcript text). Used as source material for the AI chat.
+- **Notes** — list of session notes the coach has shared/sent to this client
+  (from `communications` where `type='email'` or a new `shared_notes` flag on
+  `notes`). Viewable in-portal.
+- **Frameworks** — cards for each coaching framework discussed with this client
+  (sourced from `garden_notes` where `nudge_eligible = true` and linked to this
+  client via nudge history or coach-explicit assignment). Each card is clickable
+  and opens a **pop-up** with a brief explanation (the leaf's `summary`) and a
+  button to **open/download the associated PDF** from the Library (if one is
+  linked). The garden leaf → Library PDF link needs a new `garden_notes.pdf_resource_id`
+  nullable FK (or a separate mapping table).
+- **Recent communication** — last few emails/nudges sent to the client, read-only.
+- **Contact coach** — a simple compose form to email Jeff directly (sends via the
+  app's Gmail path, logged to `communications` with `direction='inbound'`).
+
+**AI chat (the core value).** A full-width chat interface at `/portal/[clientId]/chat`
+(or as a dominant section of the portal workspace):
+- Left sidebar: conversation history list (persisted in a new `portal_conversations`
+  table — `id`, `client_id`, `title` (auto-generated from first message), `created_at`).
+  Clicking a past conversation loads its messages.
+- Main area: a large chat box. The system context fed to Claude includes the client's
+  transcripts, shared notes, and coaching goals — scoped strictly to their data.
+  Claude never sees `key_info` or any other coach-private field.
+- **Document upload**: clients can attach a PDF or text file to a conversation turn.
+  Stored temporarily (Supabase Storage, `portal-uploads` bucket, TTL-purged) and
+  included in the Claude context for that turn only.
+- Conversations are persisted message-by-message (`portal_messages` table:
+  `conversation_id`, `role`, `content`, `created_at`). Token budgets: cap context
+  window to the last N turns + full transcript corpus (summarize older turns if
+  needed).
+
+**Quick search.** A search bar (top of portal, similar to the coach workspace search)
+that queries transcripts and notes full-text. Results appear as a list with the
+client's search term highlighted and ~2 lines of surrounding context. Clicking a
+result opens the full transcript or note. Implemented via Postgres full-text search
+(`tsvector` on `transcripts.content` + `notes.content`), scoped by `client_id`.
+Speed is the design priority — results should appear in under 1 second.
+
+**Onboarding tour.** On first login (tracked via a `portal_onboarded` boolean on
+the client record or in `localStorage` keyed by `clientId`), a **guided tour**
+walks through each card using step-by-step dialog boxes (consider `react-joyride` or
+a lightweight custom implementation). Each card also carries a persistent **ⓘ icon
+button** (top-right corner) that opens a small popover describing what the card is
+and 2–3 suggested ways to use it. The tour hits these same popovers in sequence.
+
+**Security requirements:**
+- All portal routes under a separate middleware guard (`middleware.ts` — match
+  `/portal/**`, validate `clientSession` not `coachSession`).
+- No cross-client data access — every DB query explicitly filters on the
+  authenticated `clientId`.
+- `key_info`, `coach_clients`, coach-internal fields never queried from portal routes.
+- Magic-link tokens: single-use, 24h TTL, stored hashed in `client_tokens` table.
+- Rate-limit: max 5 magic-link sends per client per hour.
+- CSRF protection on all portal POST routes (NextAuth handles this for its own
+  routes; custom routes need explicit token validation).
+- Portal API routes prefixed `/api/portal/**` — separate from `/api/clients/**`
+  (coach routes) to make the access boundary explicit and auditable.
+
+**Migrations needed:** `portal_conversations`, `portal_messages`, `client_tokens`
+(if magic-link), `garden_notes.pdf_resource_id` (framework → PDF link),
+`clients.portal_onboarded` bool, optional `clients.phone` (for SMS magic-link).
+
+**Build order (suggested phases):**
+1. Auth layer (magic-link + `client_tokens` + portal session middleware)
+2. Read-only workspace cards (goals, transcripts list, notes list, next appointment,
+   contact-coach email)
+3. AI chat (conversations + messages tables, Claude integration, transcript context)
+4. Quick search (full-text index + results UI)
+5. Frameworks card + PDF pop-up (garden leaf → PDF link)
+6. Document upload in chat
+7. Onboarding tour + per-card ⓘ popovers
