@@ -19,6 +19,15 @@ function defaultPeriod(): { start: string; end: string } {
   return { start: `${y}-${pad(m)}-01`, end: `${y}-${pad(m)}-${lastDay}` }
 }
 
+function currentMonthPeriod(): { start: string; end: string } {
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = now.getMonth() + 1
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const lastDay = new Date(y, m, 0).getDate()
+  return { start: `${y}-${pad(m)}-01`, end: `${y}-${pad(m)}-${lastDay}` }
+}
+
 function formatPeriod(start: string, end: string) {
   const s = new Date(start + 'T12:00:00Z')
   const e = new Date(end + 'T12:00:00Z')
@@ -315,6 +324,160 @@ function InvoiceCard({
   )
 }
 
+// ── Create Invoice Modal ──────────────────────────────────────────────────────
+
+type BillingAccount = { id: string; name: string; billing_email: string }
+
+function CreateInvoiceModal({
+  accounts,
+  periodStart: defaultStart,
+  periodEnd: defaultEnd,
+  onCreated,
+  onClose,
+}: {
+  accounts: BillingAccount[]
+  periodStart: string
+  periodEnd: string
+  onCreated: () => void
+  onClose: () => void
+}) {
+  const [accountId, setAccountId] = useState(accounts[0]?.id ?? '')
+  const [start, setStart] = useState(defaultStart)
+  const [end, setEnd] = useState(defaultEnd)
+  const [lines, setLines] = useState([{ description: '', amount: '' }])
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  function addLine() {
+    setLines((cur) => [...cur, { description: '', amount: '' }])
+  }
+
+  function removeLine(i: number) {
+    setLines((cur) => cur.filter((_, idx) => idx !== i))
+  }
+
+  function updateLine(i: number, field: 'description' | 'amount', val: string) {
+    setLines((cur) => cur.map((l, idx) => idx === i ? { ...l, [field]: val } : l))
+  }
+
+  const total = lines.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0)
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!accountId) return
+    const validLines = lines.filter((l) => l.description.trim() && parseFloat(l.amount) > 0)
+    if (validLines.length === 0) { setError('Add at least one line with a description and amount.'); return }
+    setSaving(true)
+    setError('')
+    const res = await fetch('/api/billing/invoices', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        billing_account_id: accountId,
+        period_start: start || null,
+        period_end: end || null,
+        lines: validLines.map((l) => ({ description: l.description.trim(), amount: parseFloat(l.amount) })),
+      }),
+    })
+    const d = await res.json()
+    if (!res.ok) { setError(d.error ?? 'Failed to create invoice'); setSaving(false); return }
+    onCreated()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-lg rounded-tlw-2xl bg-white shadow-xl">
+        <div className="border-b border-tlw-warm-gray/15 px-6 py-4">
+          <h2 className="text-[15px] font-semibold text-tlw-navy-deep">Create invoice</h2>
+          <p className="mt-0.5 text-[12px] text-tlw-warm-gray">Manually create a draft invoice with custom line items.</p>
+        </div>
+        <form onSubmit={submit} className="max-h-[80vh] overflow-y-auto">
+          <div className="space-y-4 px-6 py-5">
+            <div>
+              <label className="mb-1 block text-[12px] font-medium text-tlw-espresso">Billing account</label>
+              <select
+                className="w-full rounded-tlw-lg border border-tlw-warm-gray/30 bg-tlw-canvas px-3 py-2 text-[13px] text-tlw-espresso focus:outline-none focus:ring-1 focus:ring-tlw-navy-deep/30"
+                value={accountId}
+                onChange={(e) => setAccountId(e.target.value)}
+                required
+              >
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name} · {a.billing_email}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <label className="mb-1 block text-[12px] font-medium text-tlw-espresso">Period start</label>
+                <input type="date" value={start} onChange={(e) => setStart(e.target.value)}
+                  className="w-full rounded-tlw-lg border border-tlw-warm-gray/30 bg-tlw-canvas px-3 py-1.5 text-[13px] text-tlw-espresso focus:outline-none focus:ring-1 focus:ring-tlw-navy-deep/30" />
+              </div>
+              <div className="flex-1">
+                <label className="mb-1 block text-[12px] font-medium text-tlw-espresso">Period end</label>
+                <input type="date" value={end} onChange={(e) => setEnd(e.target.value)}
+                  className="w-full rounded-tlw-lg border border-tlw-warm-gray/30 bg-tlw-canvas px-3 py-1.5 text-[13px] text-tlw-espresso focus:outline-none focus:ring-1 focus:ring-tlw-navy-deep/30" />
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-[12px] font-medium text-tlw-espresso">Line items</label>
+              <div className="space-y-2">
+                {lines.map((line, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <input
+                      className="min-w-0 flex-1 rounded-tlw-lg border border-tlw-warm-gray/30 bg-tlw-canvas px-3 py-1.5 text-[13px] text-tlw-espresso focus:outline-none focus:ring-1 focus:ring-tlw-navy-deep/30"
+                      placeholder="Description"
+                      value={line.description}
+                      onChange={(e) => updateLine(i, 'description', e.target.value)}
+                      required
+                    />
+                    <input
+                      className="w-28 rounded-tlw-lg border border-tlw-warm-gray/30 bg-tlw-canvas px-3 py-1.5 text-right text-[13px] text-tlw-espresso focus:outline-none focus:ring-1 focus:ring-tlw-navy-deep/30"
+                      placeholder="0.00"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={line.amount}
+                      onChange={(e) => updateLine(i, 'amount', e.target.value)}
+                      required
+                    />
+                    {lines.length > 1 && (
+                      <button type="button" onClick={() => removeLine(i)} className="shrink-0 text-[12px] text-tlw-warm-gray hover:text-red-500">✕</button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <button type="button" onClick={addLine} className="mt-2 text-[12px] font-medium text-tlw-navy-deep hover:underline">
+                + Add line
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between border-t border-tlw-warm-gray/10 pt-3">
+              <span className="text-[13px] font-semibold text-tlw-navy-deep">Total</span>
+              <span className="text-[15px] font-bold text-tlw-navy-deep">{money(total)}</span>
+            </div>
+
+            {error && <p className="text-[12px] text-red-600">{error}</p>}
+          </div>
+          <div className="flex items-center justify-end gap-2 border-t border-tlw-warm-gray/10 px-6 py-4">
+            <button type="button" onClick={onClose} className="px-3 py-1.5 text-[13px] text-tlw-warm-gray hover:text-tlw-espresso">
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving || !accountId}
+              className="rounded-tlw-lg bg-tlw-navy-deep px-4 py-1.5 text-[13px] font-medium text-white disabled:opacity-50"
+            >
+              {saving ? 'Creating…' : 'Create draft invoice'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function BillingRunPage() {
@@ -323,10 +486,20 @@ export default function BillingRunPage() {
   const [periodEnd, setPeriodEnd] = useState(def.end)
   const [assembling, setAssembling] = useState(false)
   const [assembleMsg, setAssembleMsg] = useState('')
+  const [assembleDebug, setAssembleDebug] = useState<string[]>([])
   const [invoices, setInvoices] = useState<DraftInvoice[]>([])
   const [loadingInvoices, setLoadingInvoices] = useState(true)
   const [approvingAll, setApprovingAll] = useState(false)
   const [sendingAll, setSendingAll] = useState(false)
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [billingAccounts, setBillingAccounts] = useState<BillingAccount[]>([])
+
+  useEffect(() => {
+    fetch('/api/billing/accounts')
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d) => setBillingAccounts(d.accounts ?? []))
+      .catch(() => {})
+  }, [])
 
   const loadInvoices = useCallback(async (start: string, end: string) => {
     setLoadingInvoices(true)
@@ -347,9 +520,17 @@ export default function BillingRunPage() {
     loadInvoices(periodStart, periodEnd)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  function snapCurrentMonth() {
+    const p = currentMonthPeriod()
+    setPeriodStart(p.start)
+    setPeriodEnd(p.end)
+    loadInvoices(p.start, p.end)
+  }
+
   async function assemble() {
     setAssembling(true)
     setAssembleMsg('')
+    setAssembleDebug([])
     try {
       const res = await fetch('/api/billing/run/assemble', {
         method: 'POST',
@@ -365,6 +546,7 @@ export default function BillingRunPage() {
         if (d.skipped > 0) parts.push(`${d.skipped} account${d.skipped > 1 ? 's' : ''} already invoiced`)
         if (d.empty > 0) parts.push(`${d.empty} account${d.empty > 1 ? 's' : ''} with nothing due`)
         setAssembleMsg(parts.join(' · ') || 'No invoices assembled.')
+        if (d.debug) setAssembleDebug(d.debug)
         await loadInvoices(periodStart, periodEnd)
       }
     } catch {
@@ -486,44 +668,70 @@ export default function BillingRunPage() {
       />
 
       {/* Period picker + assemble */}
-      <div className="mb-6 flex flex-wrap items-end gap-3 rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface px-5 py-4">
-        <div className="space-y-1">
-          <label className="block text-[11px] font-medium uppercase tracking-wider text-tlw-warm-gray">
-            Period start
-          </label>
-          <input
-            type="date"
-            value={periodStart}
-            onChange={(e) => setPeriodStart(e.target.value)}
-            className="rounded-tlw-lg border border-tlw-warm-gray/30 bg-tlw-canvas px-3 py-1.5 text-[13px] text-tlw-espresso focus:outline-none focus:ring-1 focus:ring-tlw-navy-deep/30"
-          />
+      <div className="mb-6 rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface px-5 py-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="space-y-1">
+            <label className="block text-[11px] font-medium uppercase tracking-wider text-tlw-warm-gray">
+              Period start
+            </label>
+            <input
+              type="date"
+              value={periodStart}
+              onChange={(e) => setPeriodStart(e.target.value)}
+              className="rounded-tlw-lg border border-tlw-warm-gray/30 bg-tlw-canvas px-3 py-1.5 text-[13px] text-tlw-espresso focus:outline-none focus:ring-1 focus:ring-tlw-navy-deep/30"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="block text-[11px] font-medium uppercase tracking-wider text-tlw-warm-gray">
+              Period end
+            </label>
+            <input
+              type="date"
+              value={periodEnd}
+              onChange={(e) => setPeriodEnd(e.target.value)}
+              className="rounded-tlw-lg border border-tlw-warm-gray/30 bg-tlw-canvas px-3 py-1.5 text-[13px] text-tlw-espresso focus:outline-none focus:ring-1 focus:ring-tlw-navy-deep/30"
+            />
+          </div>
+          <button
+            onClick={snapCurrentMonth}
+            className="rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-1.5 text-[13px] text-tlw-espresso transition-colors hover:bg-tlw-canvas"
+          >
+            Current month
+          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={assemble}
+              disabled={assembling}
+              className="rounded-tlw-lg border border-tlw-navy-deep bg-tlw-navy-deep px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-tlw-navy-rich disabled:opacity-50"
+            >
+              {assembling ? 'Assembling…' : 'Assemble run'}
+            </button>
+            <button
+              onClick={() => loadInvoices(periodStart, periodEnd)}
+              className="rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-2 text-[13px] text-tlw-espresso transition-colors hover:bg-tlw-canvas"
+            >
+              Refresh
+            </button>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-2 text-[13px] text-tlw-espresso transition-colors hover:bg-tlw-canvas"
+            >
+              + Create invoice
+            </button>
+          </div>
         </div>
-        <div className="space-y-1">
-          <label className="block text-[11px] font-medium uppercase tracking-wider text-tlw-warm-gray">
-            Period end
-          </label>
-          <input
-            type="date"
-            value={periodEnd}
-            onChange={(e) => setPeriodEnd(e.target.value)}
-            className="rounded-tlw-lg border border-tlw-warm-gray/30 bg-tlw-canvas px-3 py-1.5 text-[13px] text-tlw-espresso focus:outline-none focus:ring-1 focus:ring-tlw-navy-deep/30"
-          />
-        </div>
-        <button
-          onClick={assemble}
-          disabled={assembling}
-          className="rounded-tlw-lg border border-tlw-navy-deep bg-tlw-navy-deep px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-tlw-navy-rich disabled:opacity-50"
-        >
-          {assembling ? 'Assembling…' : 'Assemble run'}
-        </button>
-        <button
-          onClick={() => loadInvoices(periodStart, periodEnd)}
-          className="rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-2 text-[13px] text-tlw-espresso transition-colors hover:bg-tlw-canvas"
-        >
-          Refresh
-        </button>
         {assembleMsg && (
-          <p className="w-full text-[12px] text-tlw-warm-gray">{assembleMsg}</p>
+          <p className="mt-2 text-[12px] text-tlw-warm-gray">{assembleMsg}</p>
+        )}
+        {assembleDebug.length > 0 && (
+          <details className="mt-2">
+            <summary className="cursor-pointer text-[11px] text-tlw-warm-gray hover:text-tlw-espresso">Show details</summary>
+            <ul className="mt-1 space-y-0.5 pl-3">
+              {assembleDebug.map((msg, i) => (
+                <li key={i} className="text-[11px] text-tlw-warm-gray">{msg}</li>
+              ))}
+            </ul>
+          </details>
         )}
       </div>
 
@@ -589,6 +797,19 @@ export default function BillingRunPage() {
             />
           ))}
         </div>
+      )}
+
+      {showCreateModal && (
+        <CreateInvoiceModal
+          accounts={billingAccounts}
+          periodStart={periodStart}
+          periodEnd={periodEnd}
+          onCreated={async () => {
+            setShowCreateModal(false)
+            await loadInvoices(periodStart, periodEnd)
+          }}
+          onClose={() => setShowCreateModal(false)}
+        />
       )}
     </>
   )
