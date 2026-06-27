@@ -11,6 +11,7 @@ const MAPS: CoachingMap[] = [
   { name: 'The Airplane Model', blurb: 'Wings / Engines / Fuel / Fuselage — the structural picture' },
   { name: 'First 90 Days' },
   { name: 'Who I Am Becoming' },
+  { name: 'The Becoming Map' },
 ]
 
 /**
