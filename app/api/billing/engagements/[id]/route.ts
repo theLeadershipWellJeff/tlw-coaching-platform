@@ -49,6 +49,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     'installment_schedule',
     'description_template',
     'session_count',
+    'skip_billing',
   ] as const
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
   for (const key of allowed) {

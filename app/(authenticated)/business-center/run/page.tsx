@@ -556,6 +556,7 @@ export default function BillingRunPage() {
   const [assembling, setAssembling] = useState(false)
   const [assembleMsg, setAssembleMsg] = useState('')
   const [assembleDebug, setAssembleDebug] = useState<string[]>([])
+  const [assembleWarnings, setAssembleWarnings] = useState<{ clientName: string; detail: string }[]>([])
   const [invoices, setInvoices] = useState<DraftInvoice[]>([])
   const [loadingInvoices, setLoadingInvoices] = useState(true)
   const [approvingAll, setApprovingAll] = useState(false)
@@ -600,6 +601,7 @@ export default function BillingRunPage() {
     setAssembling(true)
     setAssembleMsg('')
     setAssembleDebug([])
+    setAssembleWarnings([])
     try {
       const res = await fetch('/api/billing/run/assemble', {
         method: 'POST',
@@ -616,6 +618,7 @@ export default function BillingRunPage() {
         if (d.empty > 0) parts.push(`${d.empty} account${d.empty > 1 ? 's' : ''} with nothing due`)
         setAssembleMsg(parts.join(' · ') || 'No invoices assembled.')
         if (d.debug) setAssembleDebug(d.debug)
+        if (d.warnings) setAssembleWarnings(d.warnings)
         await loadInvoices(periodStart, periodEnd)
       }
     } catch {
@@ -791,6 +794,16 @@ export default function BillingRunPage() {
         </div>
         {assembleMsg && (
           <p className="mt-2 text-[12px] text-tlw-warm-gray">{assembleMsg}</p>
+        )}
+        {assembleWarnings.length > 0 && (
+          <div className="mt-3 space-y-1.5">
+            {assembleWarnings.map((w, i) => (
+              <div key={i} className="flex items-start gap-2 rounded-tlw-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                <span className="mt-0.5 text-amber-500">⚠</span>
+                <p className="text-[12px] text-amber-800">{w.detail}</p>
+              </div>
+            ))}
+          </div>
         )}
         {assembleDebug.length > 0 && (
           <details className="mt-2">

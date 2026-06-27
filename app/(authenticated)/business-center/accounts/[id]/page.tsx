@@ -20,6 +20,7 @@ type Engagement = {
   billing_mode: string
   billing_owner: string
   status: string
+  skip_billing: boolean
   rate_hourly: number | null
   monthly_amount: number | null
   billing_day: number | null
@@ -598,6 +599,18 @@ function EngagementRow({ eng, onUpdated }: { eng: Engagement; onUpdated: (update
     }
   }
 
+  async function toggleSkipBilling() {
+    const res = await fetch(`/api/billing/engagements/${eng.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ skip_billing: !eng.skip_billing }),
+    })
+    if (res.ok) {
+      const d = await res.json()
+      onUpdated(d.engagement)
+    }
+  }
+
   const coacheeName = (eng.coachees as any)?.clients?.name ?? '—'
 
   return (
@@ -613,11 +626,21 @@ function EngagementRow({ eng, onUpdated }: { eng: Engagement; onUpdated: (update
             Owner: {eng.billing_owner}
             {eng.billing_owner === 'CA' && ' — not included in billing runs'}
           </p>
+          {eng.skip_billing && (
+            <p className="mt-0.5 text-[11px] font-medium text-amber-600">Skip billing is on — excluded from billing runs</p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium capitalize ${STATUS_STYLES[eng.status] ?? ''}`}>
             {eng.status}
           </span>
+          <button
+            onClick={toggleSkipBilling}
+            title={eng.skip_billing ? 'Click to re-enable billing for this engagement' : 'Click to exclude this engagement from billing runs (lump-sum / already paid)'}
+            className={`text-[11px] hover:underline ${eng.skip_billing ? 'font-medium text-amber-600 hover:text-amber-700' : 'text-tlw-warm-gray hover:text-tlw-espresso'}`}
+          >
+            {eng.skip_billing ? 'Unskip' : 'Skip billing'}
+          </button>
           {eng.status !== 'ended' && (
             <button
               onClick={toggleStatus}
