@@ -140,7 +140,7 @@ export function EditClientModal({
           </div>
           {form.client_type === 'coach' && (
             <p className="mt-1 text-[11px] text-tlw-warm-gray">
-              This person will appear in "My Team" on the roster instead of the main client list. Notes and transcripts are unchanged.
+              This person will appear in &ldquo;My Team&rdquo; on the roster instead of the main client list. Notes and transcripts are unchanged.
             </p>
           )}
         </div>
