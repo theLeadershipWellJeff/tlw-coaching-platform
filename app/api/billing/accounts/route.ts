@@ -11,25 +11,33 @@ export async function GET(req: NextRequest) {
   if (!coach) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const withSummary = req.nextUrl.searchParams.get('withSummary') === '1'
+  const statusParam = req.nextUrl.searchParams.get('status') ?? 'active'
 
   if (withSummary) {
     // Return accounts with coachee + active-engagement counts for the cards view.
-    const { data, error } = await supabase
+    let query = supabase
       .from('billing_accounts')
       .select(`
-        id, name, type,
+        id, name, type, billing_email, status,
         coachees ( id ),
         engagements ( id, status )
       `)
       .eq('coach_id', coach.id)
       .order('name', { ascending: true })
 
+    if (statusParam !== 'all') {
+      query = query.eq('status', statusParam as any)
+    }
+
+    const { data, error } = await query
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
     const accounts = (data ?? []).map((acct: any) => ({
       id: acct.id,
       name: acct.name,
       type: acct.type,
+      billing_email: acct.billing_email,
+      status: acct.status,
       coacheeCount: (acct.coachees ?? []).length,
       activeEngagements: (acct.engagements ?? []).filter((e: any) => e.status === 'active').length,
     }))
@@ -37,12 +45,17 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ accounts })
   }
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('billing_accounts')
     .select('*')
     .eq('coach_id', coach.id)
     .order('name', { ascending: true })
 
+  if (statusParam !== 'all') {
+    query = query.eq('status', statusParam as any)
+  }
+
+  const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ accounts: data })
 }
