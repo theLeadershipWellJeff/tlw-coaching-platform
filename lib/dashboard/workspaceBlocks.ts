@@ -87,6 +87,13 @@ export const WORKSPACE_BLOCK_META: Record<string, WorkspaceBlockMeta> = {
     defaultSize: 'standard',
     selfHeader: true,
   },
+  'ws-billing': {
+    id: 'ws-billing',
+    title: 'Billing',
+    supportedSizes: ['compact', 'standard', 'expanded'],
+    defaultSize: 'standard',
+    selfHeader: true,
+  },
 }
 
 /** Workspace blocks not already placed in the layout — feeds the add-card menu. */
