@@ -17,4 +17,5 @@ export const DEFAULT_WORKSPACE_LAYOUT: CardPlacement[] = [
   { blockId: 'ws-agreements', size: 'standard', order: 7 },
   { blockId: 'ws-agenda', size: 'compact', order: 8 },
   { blockId: 'ws-key-info', size: 'standard', order: 9 },
+  { blockId: 'ws-billing', size: 'standard', order: 10 },
 ]

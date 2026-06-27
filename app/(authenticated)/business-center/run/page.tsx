@@ -391,6 +391,25 @@ function CreateInvoiceModal({
           <h2 className="text-[15px] font-semibold text-tlw-navy-deep">Create invoice</h2>
           <p className="mt-0.5 text-[12px] text-tlw-warm-gray">Manually create a draft invoice with custom line items.</p>
         </div>
+        {accounts.length === 0 ? (
+          <div className="px-6 py-8 text-center">
+            <p className="text-[14px] font-medium text-tlw-navy-deep">No billing accounts yet</p>
+            <p className="mt-1 text-[13px] text-tlw-warm-gray">
+              Create a billing account first at{' '}
+              <a href="/business-center/accounts" className="font-medium text-tlw-navy-deep underline">
+                Business Center → Accounts
+              </a>
+              , or open a client&apos;s workspace and use the <strong>Billing</strong> card to create one there.
+            </p>
+            <button
+              type="button"
+              onClick={onClose}
+              className="mt-4 rounded-tlw-lg border border-tlw-warm-gray/30 px-4 py-1.5 text-[13px] text-tlw-espresso hover:bg-tlw-canvas"
+            >
+              Close
+            </button>
+          </div>
+        ) : (
         <form onSubmit={submit} className="max-h-[80vh] overflow-y-auto">
           <div className="space-y-4 px-6 py-5">
             <div>
@@ -473,6 +492,7 @@ function CreateInvoiceModal({
             </button>
           </div>
         </form>
+        )}
       </div>
     </div>
   )
