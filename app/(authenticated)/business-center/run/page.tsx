@@ -776,7 +776,6 @@ export default function BillingRunPage() {
   })
   const [showSettings, setShowSettings] = useState(false)
   const [savingSettings, setSavingSettings] = useState(false)
-  const [hideDone, setHideDone] = useState(false)
 
   useEffect(() => {
     fetch('/api/billing/accounts')
@@ -1134,12 +1133,6 @@ export default function BillingRunPage() {
             )}
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setHideDone((v) => !v)}
-              className="rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-1.5 text-[12px] text-tlw-warm-gray transition-colors hover:border-tlw-warm-gray/50 hover:text-tlw-espresso"
-            >
-              {hideDone ? `Show all (${hiddenCount} hidden)` : 'Hide sent / paid / failed'}
-            </button>
             {draftCount > 0 && (
               <button
                 onClick={approveAll}
@@ -1174,13 +1167,6 @@ export default function BillingRunPage() {
           <p className="mt-1 text-[13px] text-tlw-warm-gray">
             Set the period above and click <strong>Assemble run</strong> to generate draft invoices for all active TLW-owned engagements.
           </p>
-        </div>
-      ) : visibleInvoices.length === 0 ? (
-        <div className="rounded-tlw-2xl border border-dashed border-tlw-warm-gray/25 bg-tlw-surface/60 px-6 py-8 text-center">
-          <p className="text-[14px] font-medium text-tlw-navy-deep">All invoices are hidden</p>
-          <button onClick={() => setHideDone(false)} className="mt-2 text-[13px] font-medium text-tlw-navy-deep hover:underline">
-            Show {hiddenCount} hidden invoice{hiddenCount !== 1 ? 's' : ''}
-          </button>
         </div>
       ) : (
         <>
