@@ -82,7 +82,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (body.billing_mode === 'per_engagement' && !body.engagement_total)
     return NextResponse.json({ error: 'engagement_total is required for per_engagement mode' }, { status: 400 })
 
-  const { data, error } = await supabase
+  const { data: inserted, error } = await supabase
     .from('engagements')
     .insert({
       coach_id: coach.id,
@@ -100,9 +100,17 @@ export async function POST(req: NextRequest, { params }: Params) {
       description_template: body.description_template ?? null,
       session_count: body.session_count ?? null,
     } as any)
-    .select()
+    .select('id')
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Re-fetch with the coachees → clients join so the UI can display the client name immediately.
+  const { data } = await supabase
+    .from('engagements')
+    .select('*, coachees ( *, clients ( id, name, email ) )')
+    .eq('id', (inserted as any).id)
+    .single()
+
   return NextResponse.json({ engagement: data }, { status: 201 })
 }
