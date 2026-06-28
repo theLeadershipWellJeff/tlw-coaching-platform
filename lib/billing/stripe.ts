@@ -16,7 +16,7 @@ export function getStripe(): Stripe {
   if (!key) throw new Error('STRIPE_SECRET_KEY is not set')
   // Pin to a known-stable API version. The 'dahlia' version (2026-06-24) silently
   // zeroes invoice item amounts when using the `amount` field directly.
-  _stripe = new Stripe(key, { apiVersion: '2024-11-20' as any })
+  _stripe = new Stripe(key, { apiVersion: '2023-10-16' as any })
   return _stripe
 }
 
