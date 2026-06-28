@@ -947,9 +947,22 @@ export default function BillingRunPage() {
     )
   }
 
-  const DONE_STATUSES = ['sent', 'paid', 'failed']
-  const visibleInvoices = hideDone ? invoices.filter((i) => !DONE_STATUSES.includes(i.status)) : invoices
-  const hiddenCount = invoices.length - visibleInvoices.length
+  const SENT_STATUSES = ['sent', 'paid']
+  const activeInvoices = invoices.filter((i) => !SENT_STATUSES.includes(i.status))
+  const sentInvoices = invoices.filter((i) => SENT_STATUSES.includes(i.status))
+
+  // Sort active invoices: enterprise first, then solo; within each group draft → approved → failed
+  const STATUS_ORDER: Record<string, number> = { draft: 0, approved: 1, failed: 2 }
+  function sortInvoices(list: DraftInvoice[]) {
+    return [...list].sort((a, b) => {
+      const aEnt = a.billing_accounts.type === 'enterprise' ? 0 : 1
+      const bEnt = b.billing_accounts.type === 'enterprise' ? 0 : 1
+      if (aEnt !== bEnt) return aEnt - bEnt
+      const aOrd = STATUS_ORDER[a.status] ?? 9
+      const bOrd = STATUS_ORDER[b.status] ?? 9
+      return aOrd - bOrd
+    })
+  }
 
   const draftCount = invoices.filter((i) => i.status === 'draft').length
   const approvedCount = invoices.filter((i) => i.status === 'approved').length
@@ -1170,20 +1183,56 @@ export default function BillingRunPage() {
           </button>
         </div>
       ) : (
-        <div className="space-y-4">
-          {visibleInvoices.map((inv) => (
-            <InvoiceCard
-              key={inv.id}
-              invoice={inv}
-              billingSettings={billingSettings}
-              onApproved={handleApproved}
-              onSent={handleSent}
-              onSkipped={handleSkipped}
-              onLineUpdated={handleLineUpdated}
-              onLineDeleted={handleLineDeleted}
-            />
-          ))}
-        </div>
+        <>
+          {/* Active invoices — enterprises first, then solo, sorted by status */}
+          {activeInvoices.length === 0 && sentInvoices.length > 0 ? null : activeInvoices.length === 0 ? (
+            <div className="rounded-tlw-2xl border border-dashed border-tlw-warm-gray/25 bg-tlw-surface/60 px-6 py-8 text-center">
+              <p className="text-[13px] text-tlw-warm-gray">All invoices have been sent or skipped.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {sortInvoices(activeInvoices).map((inv) => (
+                <InvoiceCard
+                  key={inv.id}
+                  invoice={inv}
+                  billingSettings={billingSettings}
+                  onApproved={handleApproved}
+                  onSent={handleSent}
+                  onSkipped={handleSkipped}
+                  onLineUpdated={handleLineUpdated}
+                  onLineDeleted={handleLineDeleted}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Sent / Paid section — always at the bottom */}
+          {sentInvoices.length > 0 && (
+            <div className="mt-8">
+              <div className="mb-3 flex items-center gap-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-tlw-warm-gray">
+                  Sent · {sentInvoices.length} invoice{sentInvoices.length !== 1 ? 's' : ''}
+                </p>
+                <div className="h-px flex-1 bg-tlw-warm-gray/15" />
+              </div>
+              <div className="space-y-3">
+                {sortInvoices(sentInvoices).map((inv) => (
+                  <InvoiceCard
+                    key={inv.id}
+                    invoice={inv}
+                    billingSettings={billingSettings}
+                    onApproved={handleApproved}
+                    onSent={handleSent}
+                    onSkipped={handleSkipped}
+                    onLineUpdated={handleLineUpdated}
+                    onLineDeleted={handleLineDeleted}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+
       )}
 
       {showCreateModal && (
