@@ -6,7 +6,7 @@ import { PageHeader } from '@/app/components/layout/PageHeader'
 import type { BillingAccount } from '@/lib/billing/types'
 
 type Client = { id: string; name: string; email: string | null }
-type Coach = { id: string; name: string; email: string; role: string }
+type Coach = { id: string; name: string; email: string | null; client_type: string }
 
 type AccountSummary = {
   id: string
@@ -350,13 +350,13 @@ export default function AccountsPage() {
       const [activeRes, closedRes, coachesRes] = await Promise.all([
         fetch('/api/billing/accounts?withSummary=1&status=active'),
         fetch('/api/billing/accounts?withSummary=1&status=closed'),
-        fetch('/api/coaches'),
+        fetch('/api/clients?type=coach'),
       ])
       if (!activeRes.ok || !closedRes.ok) throw new Error()
-      const [activeData, closedData, coachesData] = await Promise.all([activeRes.json(), closedRes.json(), coachesRes.ok ? coachesRes.json() : { coaches: [] }])
+      const [activeData, closedData, coachesData] = await Promise.all([activeRes.json(), closedRes.json(), coachesRes.ok ? coachesRes.json() : { clients: [] }])
       setActiveAccounts(activeData.accounts ?? [])
       setClosedAccounts(closedData.accounts ?? [])
-      setCoaches(coachesData.coaches ?? [])
+      setCoaches(coachesData.clients ?? [])
     } catch {
       setError(true)
     } finally {
@@ -463,7 +463,7 @@ export default function AccountsPage() {
                       <p className="text-[12px] text-tlw-warm-gray">{coach.email}</p>
                     </div>
                     <span className="shrink-0 rounded-full bg-tlw-canvas px-2 py-0.5 text-[11px] font-medium capitalize text-tlw-warm-gray">
-                      {coach.role === 'supervisor' ? 'Supervisor' : 'Coach'}
+                      Coach
                     </span>
                   </Link>
                 ))}
