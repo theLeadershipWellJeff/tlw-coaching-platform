@@ -263,6 +263,7 @@ function InvoiceCard({
   billingSettings,
   onApproved,
   onSent,
+  onSkipped,
   onLineUpdated,
   onLineDeleted,
 }: {
@@ -270,11 +271,13 @@ function InvoiceCard({
   billingSettings: BillingSettings
   onApproved: (id: string) => void
   onSent: (id: string, updates: Partial<DraftInvoice>) => void
+  onSkipped: (id: string) => void
   onLineUpdated: (invoiceId: string, line: InvoiceLine) => void
   onLineDeleted: (invoiceId: string, lineId: string) => void
 }) {
   const [approving, setApproving] = useState(false)
   const [sending, setSending] = useState(false)
+  const [skipping, setSkipping] = useState(false)
   const [sendError, setSendError] = useState<string | null>(invoice.stripe_error ?? null)
   const [showPreview, setShowPreview] = useState(false)
 
@@ -318,6 +321,14 @@ function InvoiceCard({
     } else {
       doApprove()
     }
+  }
+
+  async function doSkip() {
+    if (!window.confirm('Skip this invoice? Draft invoices will release their sessions back for the next billing run.')) return
+    setSkipping(true)
+    const res = await fetch(`/api/billing/invoices/${invoice.id}`, { method: 'DELETE' })
+    if (res.ok) onSkipped(invoice.id)
+    setSkipping(false)
   }
 
   async function send() {
@@ -395,6 +406,15 @@ function InvoiceCard({
               className="rounded-tlw-lg border border-red-300 bg-red-50 px-3 py-1.5 text-[13px] font-medium text-red-700 transition-colors hover:bg-red-100 disabled:opacity-50"
             >
               {sending ? 'Retrying…' : 'Retry send'}
+            </button>
+          )}
+          {(isDraft || isApproved) && (
+            <button
+              onClick={doSkip}
+              disabled={skipping}
+              className="rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-1.5 text-[13px] text-tlw-warm-gray transition-colors hover:border-tlw-warm-gray/50 hover:text-tlw-espresso disabled:opacity-50"
+            >
+              {skipping ? 'Skipping…' : 'Skip'}
             </button>
           )}
         </div>
@@ -519,7 +539,11 @@ function CreateInvoiceModal({
   onCreated: () => void
   onClose: () => void
 }) {
+  const [mode, setMode] = useState<'account' | 'oneoff'>('account')
   const [accountId, setAccountId] = useState(accounts[0]?.id ?? '')
+  // one-off fields
+  const [oneoffName, setOneoffName] = useState('')
+  const [oneoffEmail, setOneoffEmail] = useState('')
   const [start, setStart] = useState(defaultStart)
   const [end, setEnd] = useState(defaultEnd)
   const [lines, setLines] = useState([{ description: '', amount: '' }])
@@ -542,16 +566,35 @@ function CreateInvoiceModal({
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
-    if (!accountId) return
     const validLines = lines.filter((l) => l.description.trim() && parseFloat(l.amount) > 0)
     if (validLines.length === 0) { setError('Add at least one line with a description and amount.'); return }
     setSaving(true)
     setError('')
+
+    let billingAccountId = accountId
+
+    if (mode === 'oneoff') {
+      if (!oneoffName.trim() || !oneoffEmail.trim()) {
+        setError('Enter a name and email for the one-off recipient.')
+        setSaving(false)
+        return
+      }
+      // Create a temporary solo billing account for this recipient.
+      const acctRes = await fetch('/api/billing/accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: oneoffName.trim(), billing_email: oneoffEmail.trim(), type: 'solo' }),
+      })
+      const acctData = await acctRes.json()
+      if (!acctRes.ok) { setError(acctData.error ?? 'Failed to create billing account'); setSaving(false); return }
+      billingAccountId = acctData.account.id
+    }
+
     const res = await fetch('/api/billing/invoices', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        billing_account_id: accountId,
+        billing_account_id: billingAccountId,
         period_start: start || null,
         period_end: end || null,
         lines: validLines.map((l) => ({ description: l.description.trim(), amount: parseFloat(l.amount) })),
@@ -569,40 +612,75 @@ function CreateInvoiceModal({
           <h2 className="text-[15px] font-semibold text-tlw-navy-deep">Create invoice</h2>
           <p className="mt-0.5 text-[12px] text-tlw-warm-gray">Manually create a draft invoice with custom line items.</p>
         </div>
-        {accounts.length === 0 ? (
-          <div className="px-6 py-8 text-center">
-            <p className="text-[14px] font-medium text-tlw-navy-deep">No billing accounts yet</p>
-            <p className="mt-1 text-[13px] text-tlw-warm-gray">
-              Create a billing account first at{' '}
-              <a href="/business-center/accounts" className="font-medium text-tlw-navy-deep underline">
-                Business Center → Accounts
-              </a>
-              , or open a client&apos;s workspace and use the <strong>Billing</strong> card to create one there.
-            </p>
-            <button
-              type="button"
-              onClick={onClose}
-              className="mt-4 rounded-tlw-lg border border-tlw-warm-gray/30 px-4 py-1.5 text-[13px] text-tlw-espresso hover:bg-tlw-canvas"
-            >
-              Close
-            </button>
-          </div>
-        ) : (
         <form onSubmit={submit} className="max-h-[80vh] overflow-y-auto">
           <div className="space-y-4 px-6 py-5">
-            <div>
-              <label className="mb-1 block text-[12px] font-medium text-tlw-espresso">Billing account</label>
-              <select
-                className="w-full rounded-tlw-lg border border-tlw-warm-gray/30 bg-tlw-canvas px-3 py-2 text-[13px] text-tlw-espresso focus:outline-none focus:ring-1 focus:ring-tlw-navy-deep/30"
-                value={accountId}
-                onChange={(e) => setAccountId(e.target.value)}
-                required
+            {/* Mode toggle */}
+            <div className="flex gap-1 rounded-tlw-lg border border-tlw-warm-gray/20 bg-tlw-canvas p-1">
+              <button
+                type="button"
+                onClick={() => setMode('account')}
+                className={`flex-1 rounded-tlw-md py-1.5 text-[12px] font-medium transition-colors ${mode === 'account' ? 'bg-white text-tlw-navy-deep shadow-sm' : 'text-tlw-warm-gray hover:text-tlw-espresso'}`}
               >
-                {accounts.map((a) => (
-                  <option key={a.id} value={a.id}>{a.name} · {a.billing_email}</option>
-                ))}
-              </select>
+                Existing account
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode('oneoff')}
+                className={`flex-1 rounded-tlw-md py-1.5 text-[12px] font-medium transition-colors ${mode === 'oneoff' ? 'bg-white text-tlw-navy-deep shadow-sm' : 'text-tlw-warm-gray hover:text-tlw-espresso'}`}
+              >
+                One-off recipient
+              </button>
             </div>
+
+            {mode === 'account' ? (
+              accounts.length === 0 ? (
+                <div className="rounded-tlw-lg border border-tlw-warm-gray/15 bg-tlw-canvas px-4 py-4 text-center">
+                  <p className="text-[13px] text-tlw-espresso">No billing accounts yet.</p>
+                  <p className="mt-1 text-[12px] text-tlw-warm-gray">
+                    Use <strong>One-off recipient</strong> above, or create an account at{' '}
+                    <a href="/business-center/accounts" className="text-tlw-navy-deep underline">Business Center → Accounts</a>.
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <label className="mb-1 block text-[12px] font-medium text-tlw-espresso">Billing account</label>
+                  <select
+                    className="w-full rounded-tlw-lg border border-tlw-warm-gray/30 bg-tlw-canvas px-3 py-2 text-[13px] text-tlw-espresso focus:outline-none focus:ring-1 focus:ring-tlw-navy-deep/30"
+                    value={accountId}
+                    onChange={(e) => setAccountId(e.target.value)}
+                    required
+                  >
+                    {accounts.map((a) => (
+                      <option key={a.id} value={a.id}>{a.name} · {a.billing_email}</option>
+                    ))}
+                  </select>
+                </div>
+              )
+            ) : (
+              <div className="space-y-3">
+                <div>
+                  <label className="mb-1 block text-[12px] font-medium text-tlw-espresso">Recipient name</label>
+                  <input
+                    className="w-full rounded-tlw-lg border border-tlw-warm-gray/30 bg-tlw-canvas px-3 py-1.5 text-[13px] text-tlw-espresso focus:outline-none focus:ring-1 focus:ring-tlw-navy-deep/30"
+                    placeholder="Jane Smith"
+                    value={oneoffName}
+                    onChange={(e) => setOneoffName(e.target.value)}
+                    required={mode === 'oneoff'}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[12px] font-medium text-tlw-espresso">Recipient email</label>
+                  <input
+                    type="email"
+                    className="w-full rounded-tlw-lg border border-tlw-warm-gray/30 bg-tlw-canvas px-3 py-1.5 text-[13px] text-tlw-espresso focus:outline-none focus:ring-1 focus:ring-tlw-navy-deep/30"
+                    placeholder="jane@example.com"
+                    value={oneoffEmail}
+                    onChange={(e) => setOneoffEmail(e.target.value)}
+                    required={mode === 'oneoff'}
+                  />
+                </div>
+              </div>
+            )}
 
             <div className="flex gap-3">
               <div className="flex-1">
@@ -663,14 +741,13 @@ function CreateInvoiceModal({
             </button>
             <button
               type="submit"
-              disabled={saving || !accountId}
+              disabled={saving || (mode === 'account' && !accountId)}
               className="rounded-tlw-lg bg-tlw-navy-deep px-4 py-1.5 text-[13px] font-medium text-white disabled:opacity-50"
             >
               {saving ? 'Creating…' : 'Create draft invoice'}
             </button>
           </div>
         </form>
-        )}
       </div>
     </div>
   )
@@ -699,6 +776,7 @@ export default function BillingRunPage() {
   })
   const [showSettings, setShowSettings] = useState(false)
   const [savingSettings, setSavingSettings] = useState(false)
+  const [hideDone, setHideDone] = useState(false)
 
   useEffect(() => {
     fetch('/api/billing/accounts')
@@ -854,6 +932,10 @@ export default function BillingRunPage() {
     )
   }
 
+  function handleSkipped(invoiceId: string) {
+    setInvoices((cur) => cur.filter((inv) => inv.id !== invoiceId))
+  }
+
   function handleLineDeleted(invoiceId: string, lineId: string) {
     setInvoices((cur) =>
       cur.map((inv) => {
@@ -864,6 +946,10 @@ export default function BillingRunPage() {
       }),
     )
   }
+
+  const DONE_STATUSES = ['sent', 'paid', 'failed']
+  const visibleInvoices = hideDone ? invoices.filter((i) => !DONE_STATUSES.includes(i.status)) : invoices
+  const hiddenCount = invoices.length - visibleInvoices.length
 
   const draftCount = invoices.filter((i) => i.status === 'draft').length
   const approvedCount = invoices.filter((i) => i.status === 'approved').length
@@ -1035,6 +1121,12 @@ export default function BillingRunPage() {
             )}
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setHideDone((v) => !v)}
+              className="rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-1.5 text-[12px] text-tlw-warm-gray transition-colors hover:border-tlw-warm-gray/50 hover:text-tlw-espresso"
+            >
+              {hideDone ? `Show all (${hiddenCount} hidden)` : 'Hide sent / paid / failed'}
+            </button>
             {draftCount > 0 && (
               <button
                 onClick={approveAll}
@@ -1070,15 +1162,23 @@ export default function BillingRunPage() {
             Set the period above and click <strong>Assemble run</strong> to generate draft invoices for all active TLW-owned engagements.
           </p>
         </div>
+      ) : visibleInvoices.length === 0 ? (
+        <div className="rounded-tlw-2xl border border-dashed border-tlw-warm-gray/25 bg-tlw-surface/60 px-6 py-8 text-center">
+          <p className="text-[14px] font-medium text-tlw-navy-deep">All invoices are hidden</p>
+          <button onClick={() => setHideDone(false)} className="mt-2 text-[13px] font-medium text-tlw-navy-deep hover:underline">
+            Show {hiddenCount} hidden invoice{hiddenCount !== 1 ? 's' : ''}
+          </button>
+        </div>
       ) : (
         <div className="space-y-4">
-          {invoices.map((inv) => (
+          {visibleInvoices.map((inv) => (
             <InvoiceCard
               key={inv.id}
               invoice={inv}
               billingSettings={billingSettings}
               onApproved={handleApproved}
               onSent={handleSent}
+              onSkipped={handleSkipped}
               onLineUpdated={handleLineUpdated}
               onLineDeleted={handleLineDeleted}
             />
