@@ -243,6 +243,7 @@ function AddEngagementModal({ accountId, coachees, onAdded, onClose }: {
   const [applyToAll, setApplyToAll] = useState(isEnterprise)
   const [mode, setMode] = useState<'arrears' | 'subscription' | 'per_engagement'>('arrears')
   const [owner, setOwner] = useState<'TLW' | 'CA'>('TLW')
+  // Shared rate fields (used when applyToAll=true or solo account)
   const [rateHourly, setRateHourly] = useState('')
   const [monthlyAmount, setMonthlyAmount] = useState('')
   const [billingDay, setBillingDay] = useState('1')
@@ -253,10 +254,16 @@ function AddEngagementModal({ accountId, coachees, onAdded, onClose }: {
     { date: '', amount: '', label: 'Mid-point' },
     { date: '', amount: '', label: 'Final' },
   ])
+  // Per-client rates (used when isEnterprise && !applyToAll)
+  const [perClientRates, setPerClientRates] = useState<Record<string, string>>(
+    Object.fromEntries(coachees.map((c) => [c.id, '']))
+  )
   const [sessionCount, setSessionCount] = useState('')
   const [descTemplate, setDescTemplate] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+
+  const perClientMode = isEnterprise && !applyToAll
 
   function updateInstallCount(n: number) {
     setInstallCount(String(n))
@@ -266,7 +273,7 @@ function AddEngagementModal({ accountId, coachees, onAdded, onClose }: {
     })
   }
 
-  function buildBody(cId: string): Record<string, unknown> {
+  function buildBody(cId: string, rateOverride?: string): Record<string, unknown> {
     const body: Record<string, unknown> = {
       coachee_id: cId,
       billing_mode: mode,
@@ -275,9 +282,9 @@ function AddEngagementModal({ accountId, coachees, onAdded, onClose }: {
       session_count: sessionCount ? parseInt(sessionCount, 10) : null,
     }
     if (mode === 'arrears') {
-      body.rate_hourly = parseFloat(rateHourly)
+      body.rate_hourly = parseFloat(rateOverride ?? rateHourly)
     } else if (mode === 'subscription') {
-      body.monthly_amount = parseFloat(monthlyAmount)
+      body.monthly_amount = parseFloat(rateOverride ?? monthlyAmount)
       body.billing_day = parseInt(billingDay, 10)
     } else {
       body.engagement_total = parseFloat(engTotal)
@@ -296,19 +303,29 @@ function AddEngagementModal({ accountId, coachees, onAdded, onClose }: {
     setSaving(true)
     setError('')
 
-    const targets = applyToAll ? coachees.map((c) => c.id) : [coacheeId]
+    let targets: { id: string; rate?: string }[]
+    if (perClientMode) {
+      targets = coachees.map((c) => ({ id: c.id, rate: perClientRates[c.id] }))
+    } else if (applyToAll) {
+      targets = coachees.map((c) => ({ id: c.id }))
+    } else {
+      targets = [{ id: coacheeId }]
+    }
 
-    for (const cId of targets) {
+    for (const t of targets) {
       const res = await fetch(`/api/billing/accounts/${accountId}/engagements`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildBody(cId)),
+        body: JSON.stringify(buildBody(t.id, t.rate)),
       })
       const d = await res.json()
       if (!res.ok) { setError(d.error ?? 'Failed'); setSaving(false); return }
       onAdded(d.engagement)
     }
   }
+
+  const rateLabel = mode === 'arrears' ? 'Hourly rate (USD)' : 'Monthly amount (USD)'
+  const ratePlaceholder = mode === 'arrears' ? '250' : '1500'
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -329,24 +346,15 @@ function AddEngagementModal({ accountId, coachees, onAdded, onClose }: {
                     onChange={(e) => setApplyToAll(e.target.checked)}
                     className="rounded border-tlw-warm-gray/40 text-tlw-navy-deep"
                   />
-                  <span className="text-[13px] font-medium text-tlw-espresso">Apply to all coachees</span>
+                  <span className="text-[13px] font-medium text-tlw-espresso">Same rate for all coachees</span>
                 </label>
-                {!applyToAll && (
-                  <select
-                    className="w-full rounded-tlw-lg border border-tlw-warm-gray/30 bg-tlw-canvas px-3 py-2 text-[13px] text-tlw-espresso focus:outline-none focus:ring-1 focus:ring-tlw-navy-deep/30"
-                    value={coacheeId}
-                    onChange={(e) => setCoacheeId(e.target.value)}
-                    required
-                  >
-                    {coachees.map((c) => (
-                      <option key={c.id} value={c.id}>{c.clients?.name ?? c.id}</option>
-                    ))}
-                  </select>
-                )}
                 {applyToAll && (
                   <p className="text-[12px] text-tlw-warm-gray">
-                    Creates one engagement per coachee: {coachees.map((c) => c.clients?.name ?? '—').join(', ')}.
+                    Creates one engagement per coachee with the same rate: {coachees.map((c) => c.clients?.name ?? '—').join(', ')}.
                   </p>
+                )}
+                {perClientMode && (
+                  <p className="text-[12px] text-tlw-warm-gray">Set a custom rate for each coachee below.</p>
                 )}
               </div>
             )}
@@ -391,7 +399,43 @@ function AddEngagementModal({ accountId, coachees, onAdded, onClose }: {
               </div>
             </div>
 
-            {mode === 'arrears' && (
+            {/* Per-client rate table — enterprise + custom fee mode, arrears or subscription only */}
+            {perClientMode && mode !== 'per_engagement' && (
+              <div className="space-y-2">
+                <p className="text-[12px] font-medium text-tlw-espresso">{rateLabel} per coachee</p>
+                {coachees.map((c) => (
+                  <div key={c.id} className="flex items-center gap-3">
+                    <span className="w-32 truncate text-[13px] text-tlw-espresso">{c.clients?.name ?? c.id}</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      required
+                      placeholder={ratePlaceholder}
+                      value={perClientRates[c.id] ?? ''}
+                      onChange={(e) => setPerClientRates((cur) => ({ ...cur, [c.id]: e.target.value }))}
+                      className="flex-1 rounded-tlw-lg border border-tlw-warm-gray/30 bg-tlw-canvas px-3 py-2 text-[13px] text-tlw-espresso focus:outline-none focus:ring-1 focus:ring-tlw-navy-deep/30"
+                    />
+                  </div>
+                ))}
+                {mode === 'subscription' && (
+                  <div className="flex items-center gap-3 pt-1">
+                    <span className="w-32 text-[12px] text-tlw-warm-gray">Billing day</span>
+                    <input
+                      type="number"
+                      min="1"
+                      max="28"
+                      value={billingDay}
+                      onChange={(e) => setBillingDay(e.target.value)}
+                      className="w-24 rounded-tlw-lg border border-tlw-warm-gray/30 bg-tlw-canvas px-3 py-2 text-[13px] text-tlw-espresso focus:outline-none focus:ring-1 focus:ring-tlw-navy-deep/30"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Shared rate fields — shown when not in per-client mode */}
+            {!perClientMode && mode === 'arrears' && (
               <div>
                 <label className="mb-1 block text-[12px] font-medium text-tlw-espresso">Hourly rate (USD)</label>
                 <input
@@ -407,7 +451,7 @@ function AddEngagementModal({ accountId, coachees, onAdded, onClose }: {
               </div>
             )}
 
-            {mode === 'subscription' && (
+            {!perClientMode && mode === 'subscription' && (
               <div className="flex gap-3">
                 <div className="flex-1">
                   <label className="mb-1 block text-[12px] font-medium text-tlw-espresso">Monthly amount (USD)</label>
@@ -438,6 +482,12 @@ function AddEngagementModal({ accountId, coachees, onAdded, onClose }: {
 
             {mode === 'per_engagement' && (
               <div className="space-y-3">
+                {/* Per-engagement always uses shared schedule (installments apply per coachee equally) */}
+                {perClientMode && (
+                  <p className="rounded-tlw-lg bg-amber-50 px-3 py-2 text-[12px] text-amber-700">
+                    Per-engagement installments use the same schedule for all coachees. To set different amounts, create each engagement separately.
+                  </p>
+                )}
                 <div className="flex gap-3">
                   <div className="flex-1">
                     <label className="mb-1 block text-[12px] font-medium text-tlw-espresso">Engagement total (USD)</label>
@@ -497,6 +547,23 @@ function AddEngagementModal({ accountId, coachees, onAdded, onClose }: {
               </div>
             )}
 
+            {/* Coachee dropdown — solo account or single-coachee selection (non-enterprise) */}
+            {!isEnterprise && (
+              <div>
+                <label className="mb-1 block text-[12px] font-medium text-tlw-espresso">Coachee</label>
+                <select
+                  className="w-full rounded-tlw-lg border border-tlw-warm-gray/30 bg-tlw-canvas px-3 py-2 text-[13px] text-tlw-espresso focus:outline-none focus:ring-1 focus:ring-tlw-navy-deep/30"
+                  value={coacheeId}
+                  onChange={(e) => setCoacheeId(e.target.value)}
+                  required
+                >
+                  {coachees.map((c) => (
+                    <option key={c.id} value={c.id}>{c.clients?.name ?? c.id}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             {/* Session allotment */}
             <div>
               <label className="mb-1 block text-[12px] font-medium text-tlw-espresso">
@@ -536,7 +603,7 @@ function AddEngagementModal({ accountId, coachees, onAdded, onClose }: {
             </button>
             <button
               type="submit"
-              disabled={saving || !coacheeId}
+              disabled={saving || (!isEnterprise && !coacheeId)}
               className="rounded-tlw-lg bg-tlw-navy-deep px-4 py-1.5 text-[13px] font-medium text-white disabled:opacity-50"
             >
               {saving ? 'Creating…' : 'Create engagement'}
