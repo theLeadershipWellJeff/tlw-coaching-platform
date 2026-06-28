@@ -61,3 +61,38 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ invoice: data })
 }
+
+// Skip (void) a draft or approved invoice — clears any billed-session locks so
+// they can be picked up in the next billing run.
+export async function DELETE(_req: NextRequest, { params }: Params) {
+  const supabase = getSupabaseAdmin()
+  const coach = await getSessionCoach(supabase)
+  if (!coach) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { data: existing } = await supabase
+    .from('invoices')
+    .select('id, status')
+    .eq('id', params.id)
+    .eq('coach_id', coach.id)
+    .maybeSingle()
+  if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (!['draft', 'approved'].includes(existing.status)) {
+    return NextResponse.json({ error: 'Only draft or approved invoices can be skipped' }, { status: 409 })
+  }
+
+  // Un-bill any sessions that were locked to this invoice so they can be re-billed.
+  await (supabase as any)
+    .from('billable_sessions')
+    .update({ billed_invoice_id: null })
+    .eq('billed_invoice_id', params.id)
+
+  // Delete the invoice (cascades to invoice_lines).
+  const { error } = await supabase
+    .from('invoices')
+    .delete()
+    .eq('id', params.id)
+    .eq('coach_id', coach.id)
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ ok: true })
+}
