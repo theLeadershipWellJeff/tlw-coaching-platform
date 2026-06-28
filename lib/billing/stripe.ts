@@ -66,9 +66,18 @@ export async function createAndSendStripeInvoice(opts: {
 }): Promise<Stripe.Invoice> {
   const stripe = getStripe()
 
-  // Create invoice items for each line.
-  // Stripe does not allow both `amount` and `quantity` — amount is the total
-  // for the line in cents; quantity is implicit when amount is set directly.
+  // Create the invoice first so we can attach items to it explicitly.
+  // This avoids any ambiguity about which pending items Stripe collects.
+  const invoice = await stripe.invoices.create({
+    customer: opts.customerId,
+    currency: opts.currency,
+    description: opts.description,
+    collection_method: 'send_invoice',
+    days_until_due: 30,
+    metadata: opts.metadata ?? {},
+  })
+
+  // Attach each line item directly to this invoice via the `invoice` param.
   for (const line of opts.lines) {
     const amountCents = Math.round(line.amount * 100)
     if (amountCents <= 0) {
@@ -76,24 +85,15 @@ export async function createAndSendStripeInvoice(opts: {
     }
     await stripe.invoiceItems.create({
       customer: opts.customerId,
+      invoice: invoice.id,
       amount: amountCents,
       currency: opts.currency,
       description: line.description,
     })
   }
 
-  // Create the invoice in draft state.
-  const invoice = await stripe.invoices.create({
-    customer: opts.customerId,
-    currency: opts.currency,
-    description: opts.description,
-    auto_advance: true, // Stripe finalises and sends automatically
-    collection_method: 'send_invoice',
-    days_until_due: 30,
-    metadata: opts.metadata ?? {},
-  })
-
   // Finalise + send.
+  await stripe.invoices.finalizeInvoice(invoice.id)
   const sent = await stripe.invoices.sendInvoice(invoice.id)
   return sent
 }
