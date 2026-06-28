@@ -357,6 +357,16 @@ function InvoiceCard({
         <div>
           <p className="text-[14px] font-semibold text-tlw-navy-deep">{invoice.billing_accounts.name}</p>
           <p className="text-[12px] text-tlw-warm-gray">{invoice.billing_accounts.billing_email}</p>
+          {invoice.billing_accounts.type === 'enterprise' && (() => {
+            const names = Array.from(new Set(
+              invoice.invoice_lines
+                .map((l) => l.coachees?.clients?.name)
+                .filter((n): n is string => !!n)
+            ))
+            return names.length > 0
+              ? <p className="mt-0.5 text-[11px] text-tlw-warm-gray/80">Coachees: {names.join(' · ')}</p>
+              : null
+          })()}
         </div>
         <div className="flex items-center gap-2">
           <StatusChip status={invoice.status} />
@@ -669,7 +679,7 @@ function CreateInvoiceModal({
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function BillingRunPage() {
-  const def = defaultPeriod()
+  const def = currentMonthPeriod()
   const [periodStart, setPeriodStart] = useState(def.start)
   const [periodEnd, setPeriodEnd] = useState(def.end)
   const [assembling, setAssembling] = useState(false)

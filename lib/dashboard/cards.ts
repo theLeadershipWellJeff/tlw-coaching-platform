@@ -101,7 +101,8 @@ export const CARD_META: Record<string, CardMeta> = {
   // ── Business Center cards ────────────────────────────────────────────────
   'bc-billing-run': {
     id: 'bc-billing-run',
-    title: 'Billing run',
+    title: 'Invoicing',
+    titleHref: '/business-center/run',
     surfaces: ['business-center'],
     supportedSizes: ['compact', 'standard', 'expanded'],
     defaultSize: 'standard',
