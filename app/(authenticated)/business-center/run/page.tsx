@@ -763,6 +763,7 @@ export default function BillingRunPage() {
   const [assembleMsg, setAssembleMsg] = useState('')
   const [assembleDebug, setAssembleDebug] = useState<string[]>([])
   const [assembleWarnings, setAssembleWarnings] = useState<{ clientName: string; detail: string }[]>([])
+  const [showDebug, setShowDebug] = useState(false)
   const [invoices, setInvoices] = useState<DraftInvoice[]>([])
   const [loadingInvoices, setLoadingInvoices] = useState(true)
   const [approvingAll, setApprovingAll] = useState(false)
@@ -848,6 +849,8 @@ export default function BillingRunPage() {
         setAssembleMsg(parts.join(' · ') || 'No invoices assembled.')
         if (d.debug) setAssembleDebug(d.debug)
         if (d.warnings) setAssembleWarnings(d.warnings)
+        // Auto-open details when accounts had nothing due — helps diagnose why they didn't appear.
+        if (d.empty > 0 || d.created === 0) setShowDebug(true)
         await loadInvoices(periodStart, periodEnd)
       }
     } catch {
@@ -1049,21 +1052,35 @@ export default function BillingRunPage() {
           <div className="mt-3 space-y-1.5">
             {assembleWarnings.map((w, i) => (
               <div key={i} className="flex items-start gap-2 rounded-tlw-lg border border-amber-200 bg-amber-50 px-3 py-2">
-                <span className="mt-0.5 text-amber-500">⚠</span>
-                <p className="text-[12px] text-amber-800">{w.detail}</p>
+                <span className="mt-0.5 shrink-0 text-amber-500">⚠</span>
+                <p className="min-w-0 flex-1 text-[12px] text-amber-800">{w.detail}</p>
+                <button
+                  onClick={() => setAssembleWarnings((cur) => cur.filter((_, idx) => idx !== i))}
+                  className="shrink-0 text-[12px] font-medium text-amber-600 hover:text-amber-800"
+                  title="Dismiss"
+                >
+                  Dismiss
+                </button>
               </div>
             ))}
           </div>
         )}
         {assembleDebug.length > 0 && (
-          <details className="mt-2">
-            <summary className="cursor-pointer text-[11px] text-tlw-warm-gray hover:text-tlw-espresso">Show details</summary>
-            <ul className="mt-1 space-y-0.5 pl-3">
-              {assembleDebug.map((msg, i) => (
-                <li key={i} className="text-[11px] text-tlw-warm-gray">{msg}</li>
-              ))}
-            </ul>
-          </details>
+          <div className="mt-2">
+            <button
+              onClick={() => setShowDebug((v) => !v)}
+              className="text-[11px] text-tlw-warm-gray hover:text-tlw-espresso"
+            >
+              {showDebug ? '▲ Hide details' : '▼ Show details'}
+            </button>
+            {showDebug && (
+              <ul className="mt-1 space-y-0.5 pl-3">
+                {assembleDebug.map((msg, i) => (
+                  <li key={i} className="text-[11px] text-tlw-warm-gray">{msg}</li>
+                ))}
+              </ul>
+            )}
+          </div>
         )}
       </div>
 
