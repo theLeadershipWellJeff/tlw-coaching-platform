@@ -258,6 +258,101 @@ function StatusChip({ status }: { status: string }) {
   )
 }
 
+// ── Inline add-line form (enterprise) ─────────────────────────────────────────
+
+function AddLineForm({
+  invoiceId,
+  defaultCoacheeId,
+  defaultCoacheeName,
+  accountId,
+  onAdded,
+  onCancel,
+}: {
+  invoiceId: string
+  defaultCoacheeId: string | null
+  defaultCoacheeName: string | null
+  accountId: string
+  onAdded: (line: InvoiceLine) => void
+  onCancel: () => void
+}) {
+  const [desc, setDesc] = useState('')
+  const [amount, setAmount] = useState('')
+  const [coacheeId, setCoacheeId] = useState<string>(defaultCoacheeId ?? '')
+  const [coachees, setCoachees] = useState<{ id: string; name: string }[]>(
+    defaultCoacheeId && defaultCoacheeName ? [{ id: defaultCoacheeId, name: defaultCoacheeName }] : [],
+  )
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  // Load all coachees for this account if we don't have a fixed one.
+  useEffect(() => {
+    if (defaultCoacheeId) return
+    fetch(`/api/billing/accounts/${accountId}`)
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((d) => {
+        const list = (d.account?.coachees ?? []).map((c: any) => ({ id: c.id, name: c.clients?.name ?? c.id }))
+        setCoachees(list)
+        if (list.length > 0) setCoacheeId(list[0].id)
+      })
+      .catch(() => {})
+  }, [accountId, defaultCoacheeId])
+
+  async function save() {
+    if (!desc.trim() || !amount || !coacheeId) { setError('Fill in all fields.'); return }
+    setSaving(true)
+    setError('')
+    const res = await fetch(`/api/billing/invoices/${invoiceId}/lines`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description: desc.trim(), unit_amount: parseFloat(amount), coachee_id: coacheeId, source: 'session' }),
+    })
+    const d = await res.json()
+    if (!res.ok) { setError(d.error ?? 'Failed'); setSaving(false); return }
+    onAdded(d.line)
+  }
+
+  return (
+    <div className="border-t border-tlw-warm-gray/10 px-4 py-3 space-y-2 bg-tlw-canvas/50">
+      {!defaultCoacheeId && coachees.length > 1 && (
+        <select
+          value={coacheeId}
+          onChange={(e) => setCoacheeId(e.target.value)}
+          className="w-full rounded-tlw-lg border border-tlw-warm-gray/30 bg-white px-2.5 py-1.5 text-[13px] text-tlw-espresso focus:outline-none focus:ring-1 focus:ring-tlw-navy-deep/30"
+        >
+          {coachees.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+      )}
+      <div className="flex items-center gap-2">
+        <input
+          autoFocus
+          placeholder="Description"
+          value={desc}
+          onChange={(e) => setDesc(e.target.value)}
+          className="min-w-0 flex-1 rounded-tlw-lg border border-tlw-warm-gray/30 bg-white px-2.5 py-1.5 text-[13px] text-tlw-espresso focus:outline-none focus:ring-1 focus:ring-tlw-navy-deep/30"
+        />
+        <input
+          type="number"
+          min="0"
+          step="0.01"
+          placeholder="0.00"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          className="w-24 rounded-tlw-lg border border-tlw-warm-gray/30 bg-white px-2.5 py-1.5 text-right text-[13px] text-tlw-espresso focus:outline-none focus:ring-1 focus:ring-tlw-navy-deep/30"
+        />
+        <button onClick={save} disabled={saving} className="shrink-0 text-[12px] font-medium text-tlw-navy-deep hover:underline disabled:opacity-50">
+          {saving ? 'Adding…' : 'Add'}
+        </button>
+        <button onClick={onCancel} className="shrink-0 text-[12px] text-tlw-warm-gray hover:text-tlw-espresso">
+          Cancel
+        </button>
+      </div>
+      {error && <p className="text-[11px] text-red-600">{error}</p>}
+    </div>
+  )
+}
+
+// ── Invoice card ───────────────────────────────────────────────────────────────
+
 function InvoiceCard({
   invoice,
   billingSettings,
@@ -266,6 +361,7 @@ function InvoiceCard({
   onSkipped,
   onLineUpdated,
   onLineDeleted,
+  onLineAdded,
 }: {
   invoice: DraftInvoice
   billingSettings: BillingSettings
@@ -274,12 +370,15 @@ function InvoiceCard({
   onSkipped: (id: string) => void
   onLineUpdated: (invoiceId: string, line: InvoiceLine) => void
   onLineDeleted: (invoiceId: string, lineId: string) => void
+  onLineAdded: (invoiceId: string, line: InvoiceLine) => void
 }) {
   const [approving, setApproving] = useState(false)
   const [sending, setSending] = useState(false)
   const [skipping, setSkipping] = useState(false)
   const [sendError, setSendError] = useState<string | null>(invoice.stripe_error ?? null)
   const [showPreview, setShowPreview] = useState(false)
+  // Track which coachee group has the add-line form open (coacheeId | 'new' | null)
+  const [addingForCoachee, setAddingForCoachee] = useState<string | null>(null)
 
   const isDraft = invoice.status === 'draft'
   const isApproved = invoice.status === 'approved'
@@ -433,12 +532,12 @@ function InvoiceCard({
       {invoice.billing_accounts.type === 'enterprise' ? (
         (() => {
           // Group lines by coachee_id
-          const groups = new Map<string, { name: string; lines: InvoiceLine[] }>()
+          const groups = new Map<string, { coacheeId: string; name: string; lines: InvoiceLine[] }>()
           const ungrouped: InvoiceLine[] = []
           for (const line of invoice.invoice_lines) {
             if (line.coachee_id && line.coachees?.clients?.name) {
               const key = line.coachee_id
-              if (!groups.has(key)) groups.set(key, { name: line.coachees.clients.name, lines: [] })
+              if (!groups.has(key)) groups.set(key, { coacheeId: key, name: line.coachees.clients.name, lines: [] })
               groups.get(key)!.lines.push(line)
             } else {
               ungrouped.push(line)
@@ -447,10 +546,20 @@ function InvoiceCard({
           return (
             <div className="divide-y divide-tlw-warm-gray/8">
               {Array.from(groups.values()).map((group) => (
-                <div key={group.name}>
-                  <p className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-tlw-warm-gray">
-                    {group.name}
-                  </p>
+                <div key={group.coacheeId}>
+                  <div className="flex items-center justify-between px-4 pt-3 pb-1">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-tlw-warm-gray">
+                      {group.name}
+                    </p>
+                    {isDraft && addingForCoachee !== group.coacheeId && (
+                      <button
+                        onClick={() => setAddingForCoachee(group.coacheeId)}
+                        className="text-[11px] font-medium text-tlw-navy-deep hover:underline"
+                      >
+                        + Add line
+                      </button>
+                    )}
+                  </div>
                   {group.lines.map((line) => (
                     <LineRow
                       key={line.id}
@@ -461,6 +570,16 @@ function InvoiceCard({
                       onDeleted={(lineId) => onLineDeleted(invoice.id, lineId)}
                     />
                   ))}
+                  {isDraft && addingForCoachee === group.coacheeId && (
+                    <AddLineForm
+                      invoiceId={invoice.id}
+                      defaultCoacheeId={group.coacheeId}
+                      defaultCoacheeName={group.name}
+                      accountId={invoice.billing_account_id}
+                      onAdded={(line) => { onLineAdded(invoice.id, line); setAddingForCoachee(null) }}
+                      onCancel={() => setAddingForCoachee(null)}
+                    />
+                  )}
                 </div>
               ))}
               {ungrouped.map((line) => (
@@ -473,6 +592,28 @@ function InvoiceCard({
                   onDeleted={(lineId) => onLineDeleted(invoice.id, lineId)}
                 />
               ))}
+              {/* Add line for a client not yet on this invoice */}
+              {isDraft && (
+                <div className="px-4 py-2">
+                  {addingForCoachee === 'new' ? (
+                    <AddLineForm
+                      invoiceId={invoice.id}
+                      defaultCoacheeId={null}
+                      defaultCoacheeName={null}
+                      accountId={invoice.billing_account_id}
+                      onAdded={(line) => { onLineAdded(invoice.id, line); setAddingForCoachee(null) }}
+                      onCancel={() => setAddingForCoachee(null)}
+                    />
+                  ) : (
+                    <button
+                      onClick={() => setAddingForCoachee('new')}
+                      className="text-[12px] font-medium text-tlw-navy-deep hover:underline"
+                    >
+                      + Add line for another client
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           )
         })()
@@ -949,6 +1090,17 @@ export default function BillingRunPage() {
     )
   }
 
+  function handleLineAdded(invoiceId: string, line: InvoiceLine) {
+    setInvoices((cur) =>
+      cur.map((inv) => {
+        if (inv.id !== invoiceId) return inv
+        const lines = [...inv.invoice_lines, line]
+        const total = Math.round(lines.reduce((s, l) => s + l.amount, 0) * 100) / 100
+        return { ...inv, invoice_lines: lines, total, subtotal: total }
+      }),
+    )
+  }
+
   const SENT_STATUSES = ['sent', 'paid']
   const activeInvoices = invoices.filter((i) => !SENT_STATUSES.includes(i.status))
   const sentInvoices = invoices.filter((i) => SENT_STATUSES.includes(i.status))
@@ -1204,6 +1356,7 @@ export default function BillingRunPage() {
                   onSkipped={handleSkipped}
                   onLineUpdated={handleLineUpdated}
                   onLineDeleted={handleLineDeleted}
+                  onLineAdded={handleLineAdded}
                 />
               ))}
             </div>
@@ -1229,6 +1382,7 @@ export default function BillingRunPage() {
                     onSkipped={handleSkipped}
                     onLineUpdated={handleLineUpdated}
                     onLineDeleted={handleLineDeleted}
+                    onLineAdded={handleLineAdded}
                   />
                 ))}
               </div>
