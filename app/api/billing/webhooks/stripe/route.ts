@@ -24,6 +24,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { constructWebhookEvent } from '@/lib/billing/stripe'
 import { cancelReminders } from '@/lib/billing/reminders'
+import { sendCoachHtmlEmail } from '@/lib/gmail'
 import type Stripe from 'stripe'
 
 // Stripe sends raw body; disable body parsing.
@@ -70,6 +71,9 @@ export async function POST(req: NextRequest) {
             .in('status', ['sent', 'overdue', 'failed'])
           // Cancel any pending reminders now that it's paid.
           await cancelReminders(supabase, tlwId)
+
+          // Notify the coach by email — best-effort, never blocks the webhook response.
+          sendPaidNotification(supabase, tlwId, stripeInv).catch(() => {})
         }
         break
       }
@@ -154,4 +158,45 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ received: true })
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+async function sendPaidNotification(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  tlwInvoiceId: string,
+  stripeInv: Stripe.Invoice,
+) {
+  const { data: inv } = await supabase
+    .from('invoices')
+    .select('coach_id, total, currency, billing_accounts ( name, billing_email )')
+    .eq('id', tlwInvoiceId)
+    .maybeSingle() as { data: { coach_id: string; total: number; currency: string; billing_accounts: { name: string; billing_email: string } | null } | null }
+  if (!inv) return
+
+  const { data: coach } = await supabase
+    .from('coaches')
+    .select('email, name, google_refresh_token')
+    .eq('id', inv.coach_id)
+    .maybeSingle() as { data: { email: string; name: string; google_refresh_token: string | null } | null }
+  if (!coach?.email) return
+
+  const account = (inv as any).billing_accounts
+  const total = (inv.total ?? 0).toLocaleString('en-US', { style: 'currency', currency: (inv.currency ?? 'usd').toUpperCase() })
+  const hostedUrl = (stripeInv as any).hosted_invoice_url ?? null
+
+  const html = `
+<div style="font-family:sans-serif;max-width:540px;margin:0 auto;padding:24px;">
+  <p style="margin:0 0 4px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:#8a7f78;">Payment received</p>
+  <h2 style="margin:0 0 12px;font-size:20px;color:#1a1f5e;">${total} paid</h2>
+  <p style="margin:0 0 4px;font-size:14px;color:#3B3328;"><strong>${account?.name ?? 'Client'}</strong></p>
+  <p style="margin:0 0 16px;font-size:13px;color:#8a7f78;">${account?.billing_email ?? ''}</p>
+  ${hostedUrl ? `<p style="font-size:12px;color:#8a7f78;">Stripe invoice: <a href="${hostedUrl}" style="color:#1a1f5e;">${hostedUrl}</a></p>` : ''}
+</div>`
+
+  await sendCoachHtmlEmail(coach as any, {
+    to: coach.email,
+    subject: `Payment received — ${total} from ${account?.name ?? 'client'}`,
+    html,
+  })
 }

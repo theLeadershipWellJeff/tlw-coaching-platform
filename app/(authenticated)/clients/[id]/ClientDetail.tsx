@@ -107,6 +107,12 @@ export function ClientDetail({ clientId }: { clientId: string }) {
         >
           Import transcripts from Plaud
         </button>
+        <Link
+          href="/business-center/run"
+          className="rounded-tlw-lg border border-tlw-warm-gray/30 px-4 py-2 text-[13px] font-medium text-tlw-espresso transition-colors hover:border-tlw-warm-gray/50"
+        >
+          Create invoice
+        </Link>
       </div>
 
       {/* Card grid — coach-global layout, per-client data via WorkspaceContext. */}

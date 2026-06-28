@@ -47,10 +47,41 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       .single()
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    // Sync name/email to the client's solo billing account if one exists.
+    if ('name' in patch || 'email' in patch) {
+      syncBillingAccount(supabase, params.id, patch).catch(() => {})
+    }
+
     return NextResponse.json({ client: data })
   } catch (e) {
     return toErrorResponse(e)
   }
+}
+
+async function syncBillingAccount(
+  supabase: ReturnType<typeof import('@/lib/supabase/server').getSupabaseAdmin>,
+  clientId: string,
+  patch: { name?: any; email?: any },
+) {
+  const { data: coachee } = await (supabase as any)
+    .from('coachees')
+    .select('billing_account_id, billing_accounts ( id, type )')
+    .eq('client_id', clientId)
+    .maybeSingle()
+  if (!coachee?.billing_account_id) return
+  const account = coachee.billing_accounts
+  if (account?.type !== 'solo') return
+
+  const update: Record<string, string> = {}
+  if ('name' in patch && patch.name) update.name = patch.name
+  if ('email' in patch && patch.email) update.billing_email = patch.email
+  if (Object.keys(update).length === 0) return
+
+  await (supabase as any)
+    .from('billing_accounts')
+    .update(update)
+    .eq('id', coachee.billing_account_id)
 }
 
 // Delete a client (cascades to its notes + actions).
