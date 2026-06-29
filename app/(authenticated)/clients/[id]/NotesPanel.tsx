@@ -18,6 +18,7 @@ type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 // capture-panel checkbox can mark it done.
 type NoteAction = {
   id: string
+  note_id: string | null
   description: string
   status: string
   completed_at: string | null
@@ -170,6 +171,7 @@ export function NotesPanel({ clientId, autoNew = false }: { clientId: string; au
               key={active.id}
               clientId={clientId}
               note={active}
+              notes={notes}
               client={client}
               onClientUpdated={setClient}
               onSaved={onSaved}
@@ -238,6 +240,7 @@ function RecentNotes({
 function NoteEditor({
   clientId,
   note,
+  notes,
   client,
   onClientUpdated,
   onSaved,
@@ -245,6 +248,7 @@ function NoteEditor({
 }: {
   clientId: string
   note: Note
+  notes: Note[]
   client: Client | null
   onClientUpdated: (c: Client) => void
   onSaved: (n: Note) => void
@@ -259,11 +263,21 @@ function NoteEditor({
   const [sendOpen, setSendOpen] = useState(false)
   const [scheduleOpen, setScheduleOpen] = useState(false)
   const [noteActions, setNoteActions] = useState<NoteAction[]>([])
+  const [priorActions, setPriorActions] = useState<NoteAction[]>([])
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const dirty = useRef(false)
 
   // Live ACTION:/INSIGHT: capture, derived straight from the note text.
   const captures = useMemo(() => extractCaptures(text), [text])
+
+  // Insights from prior notes (not the current note) — 5 most recent INSIGHT:
+  // lines across all other loaded notes, newest note first.
+  const priorInsights = useMemo(() => {
+    return notes
+      .filter((n) => n.id !== note.id)
+      .flatMap((n) => extractCaptures(htmlToText(n.content || '')).insights.map((i) => i.text))
+      .slice(0, 5)
+  }, [notes, note.id])
 
   // Persist this note's actions on open — so an older note's ACTION: lines flow
   // to the workspace and their checkboxes are immediately checkable.
@@ -272,6 +286,27 @@ function NoteEditor({
     fetch(`/api/clients/${clientId}/notes/${note.id}/actions`, { method: 'POST' })
       .then((r) => (r.ok ? r.json() : { actions: [] }))
       .then((d) => !cancelled && setNoteActions(d.actions || []))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [clientId, note.id])
+
+  // Fetch all open actions for this client (from prior notes) so the coach can
+  // see and check them off without leaving the note editor.
+  useEffect(() => {
+    let cancelled = false
+    fetch(`/api/clients/${clientId}/actions`)
+      .then((r) => (r.ok ? r.json() : { actions: [] }))
+      .then((d) => {
+        if (cancelled) return
+        // Exclude the current note's own actions (those come from noteActions)
+        // and exclude already-completed/dropped actions — only open prior ones.
+        const prior = (d.actions || []).filter(
+          (a: NoteAction) => a.note_id !== note.id && a.status === 'open'
+        )
+        setPriorActions(prior.slice(0, 5))
+      })
       .catch(() => {})
     return () => {
       cancelled = true
@@ -298,16 +333,22 @@ function NoteEditor({
   }, [clientId, note.id, title, content, date, duration, onSaved])
 
   // Coach-side check/uncheck of a captured action — optimistic, then persisted.
+  // Works for both current-note actions and prior-note actions.
   const toggleAction = useCallback(
     async (row: NoteAction) => {
       const next = row.status === 'done' ? 'open' : 'done'
-      setNoteActions((prev) =>
-        prev.map((a) =>
-          a.id === row.id
-            ? { ...a, status: next, completed_at: next === 'done' ? new Date().toISOString() : null }
-            : a
-        )
-      )
+      const optimistic = (a: NoteAction) =>
+        a.id === row.id
+          ? { ...a, status: next, completed_at: next === 'done' ? new Date().toISOString() : null }
+          : a
+      // Optimistically update whichever list this row belongs to.
+      setNoteActions((prev) => prev.map(optimistic))
+      setPriorActions((prev) => {
+        const updated = prev.map(optimistic)
+        // When a prior action is marked done, remove it from the prior panel
+        // (it's no longer open). When un-done, keep it.
+        return next === 'done' ? updated.filter((a) => a.id !== row.id) : updated
+      })
       try {
         const res = await fetch(`/api/clients/${clientId}/actions/${row.id}`, {
           method: 'PATCH',
@@ -388,6 +429,8 @@ function NoteEditor({
         <CapturePanel
           captures={captures}
           noteActions={noteActions}
+          priorActions={priorActions}
+          priorInsights={priorInsights}
           onToggleAction={toggleAction}
           client={client}
           onClientUpdated={onClientUpdated}
@@ -489,12 +532,16 @@ type CaptureItem = { text: string; done?: boolean; onToggle?: () => void }
 function CapturePanel({
   captures,
   noteActions,
+  priorActions,
+  priorInsights,
   onToggleAction,
   client,
   onClientUpdated,
 }: {
   captures: ReturnType<typeof extractCaptures>
   noteActions: NoteAction[]
+  priorActions: NoteAction[]
+  priorInsights: string[]
   onToggleAction: (row: NoteAction) => void
   client: Client | null
   onClientUpdated: (c: Client) => void
@@ -515,6 +562,16 @@ function CapturePanel({
   })
   const insightItems: CaptureItem[] = insights.map((i) => ({ text: i.text }))
 
+  // Prior open actions from other sessions — checkable.
+  const priorActionItems: CaptureItem[] = priorActions.map((a) => ({
+    text: a.description,
+    done: a.status === 'done',
+    onToggle: () => onToggleAction(a),
+  }))
+
+  // Prior insights from other sessions — read-only reference.
+  const priorInsightItems: CaptureItem[] = priorInsights.map((text) => ({ text }))
+
   return (
     <div className="space-y-4 lg:sticky lg:top-4 lg:self-start">
       {/* Persistent client context sits above the live capture… */}
@@ -524,6 +581,7 @@ function CapturePanel({
         label="Actions"
         emptyHint="Lines starting with ACTION:"
         items={actionItems}
+        priorItems={priorActionItems}
         accent="text-tlw-navy-rich"
       />
       <CaptureGroup
@@ -531,6 +589,7 @@ function CapturePanel({
         label="Insights"
         emptyHint="Lines starting with INSIGHT:"
         items={insightItems}
+        priorItems={priorInsightItems}
         accent="text-tlw-signal-orange"
       />
       {/* …and the assigned map + engagement goals below it. */}
@@ -548,18 +607,39 @@ function CaptureGroup({
   label,
   emptyHint,
   items,
+  priorItems = [],
   accent,
 }: {
   kind: 'action' | 'insight'
   label: string
   emptyHint: string
   items: CaptureItem[]
+  priorItems?: CaptureItem[]
   accent: string
 }) {
   const [showAll, setShowAll] = useState(false)
   // Newest first — the latest captured line sits at the top of the list.
   const ordered = [...items].reverse()
   const visible = showAll ? ordered : ordered.slice(0, CAPTURE_LIMIT)
+  const total = items.length + priorItems.length
+
+  function renderItem(item: CaptureItem, i: number) {
+    return (
+      <li
+        key={i}
+        className={`flex gap-2 text-[13px] leading-snug ${
+          item.done ? 'text-tlw-warm-gray' : 'text-tlw-espresso'
+        }`}
+      >
+        {kind === 'action' ? (
+          <ActionCheckbox done={!!item.done} onToggle={item.onToggle} />
+        ) : (
+          <span className="shrink-0 text-tlw-signal-orange">✦</span>
+        )}
+        <span className={item.done ? 'line-through' : ''}>{item.text}</span>
+      </li>
+    )
+  }
 
   return (
     <div className="rounded-tlw-lg border border-tlw-warm-gray/15 bg-tlw-surface p-3">
@@ -567,33 +647,25 @@ function CaptureGroup({
         <p className={`text-[11px] font-semibold uppercase tracking-[1.5px] ${accent}`}>
           {label}
         </p>
-        {items.length > 0 && (
+        {total > 0 && (
           <span className="rounded-full bg-tlw-canvas px-1.5 text-[11px] text-tlw-warm-gray">
-            {items.length}
+            {total}
           </span>
         )}
       </div>
-      {items.length === 0 ? (
+      {total === 0 ? (
         <p className="text-[12px] text-tlw-warm-gray/70">{emptyHint}</p>
       ) : (
         <>
-          <ul className="space-y-1.5">
-            {visible.map((item, i) => (
-              <li
-                key={i}
-                className={`flex gap-2 text-[13px] leading-snug ${
-                  item.done ? 'text-tlw-warm-gray' : 'text-tlw-espresso'
-                }`}
-              >
-                {kind === 'action' ? (
-                  <ActionCheckbox done={!!item.done} onToggle={item.onToggle} />
-                ) : (
-                  <span className="shrink-0 text-tlw-signal-orange">✦</span>
-                )}
-                <span className={item.done ? 'line-through' : ''}>{item.text}</span>
-              </li>
-            ))}
-          </ul>
+          {/* Current note's captures — newest at the top */}
+          {items.length > 0 && (
+            <ul className="space-y-1.5">
+              {visible.map((item, i) => renderItem(item, i))}
+            </ul>
+          )}
+          {items.length === 0 && priorItems.length > 0 && (
+            <p className="text-[12px] text-tlw-warm-gray/70">{emptyHint}</p>
+          )}
           {items.length > CAPTURE_LIMIT && (
             <button
               onClick={() => setShowAll((s) => !s)}
@@ -601,6 +673,17 @@ function CaptureGroup({
             >
               {showAll ? 'Show fewer' : `Show all ${items.length}`}
             </button>
+          )}
+          {/* Prior sessions — shown below a divider */}
+          {priorItems.length > 0 && (
+            <div className={items.length > 0 ? 'mt-3 border-t border-tlw-warm-gray/15 pt-2' : ''}>
+              <p className="mb-1.5 text-[10px] uppercase tracking-[1.5px] text-tlw-warm-gray/60">
+                Prior sessions
+              </p>
+              <ul className="space-y-1.5">
+                {priorItems.map((item, i) => renderItem(item, i))}
+              </ul>
+            </div>
           )}
         </>
       )}

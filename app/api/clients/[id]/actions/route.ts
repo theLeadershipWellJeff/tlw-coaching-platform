@@ -12,7 +12,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
     const { data, error } = await supabase
       .from('actions')
-      .select('id, description, status, due_date, completed_at, created_at')
+      .select('id, note_id, description, status, due_date, completed_at, created_at')
       .eq('client_id', params.id)
       .order('created_at', { ascending: false })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
