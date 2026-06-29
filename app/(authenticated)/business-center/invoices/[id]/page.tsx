@@ -176,6 +176,68 @@ function EditLineModal({ line, invoiceId, onSaved, onDeleted, onClose }: {
   )
 }
 
+// ── Mark paid modal ───────────────────────────────────────────────────────────
+
+function MarkPaidModal({ invoiceId, onPaid, onClose }: {
+  invoiceId: string
+  onPaid: (invoice: InvoiceWithLines) => void
+  onClose: () => void
+}) {
+  const [note, setNote] = useState('Bank transfer')
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState('')
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    setSaving(true)
+    setErr('')
+    const res = await fetch(`/api/billing/invoices/${invoiceId}/mark-paid`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ note: note.trim() || null }),
+    })
+    const data = await res.json()
+    if (!res.ok) { setErr(data.error ?? 'Failed'); setSaving(false); return }
+    onPaid(data.invoice)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-sm rounded-tlw-2xl bg-white shadow-xl">
+        <div className="border-b border-tlw-warm-gray/15 px-6 py-4">
+          <h2 className="text-[15px] font-semibold text-tlw-navy-deep">Mark as paid</h2>
+          <p className="mt-0.5 text-[12px] text-tlw-warm-gray">Record a payment received outside Stripe (wire, ACH, check, etc.).</p>
+        </div>
+        <form onSubmit={submit}>
+          <div className="px-6 py-5 space-y-3">
+            <label className="block">
+              <span className="text-[12px] font-medium text-tlw-espresso">Payment note <span className="font-normal text-tlw-warm-gray">(optional)</span></span>
+              <input
+                autoFocus
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="e.g. Bank transfer, ACH, Check #1234"
+                className="mt-1 w-full rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-canvas px-3 py-2 text-[13px] text-tlw-espresso outline-none focus:border-tlw-signal-orange"
+              />
+            </label>
+            {err && <p className="text-[12px] text-red-600">{err}</p>}
+          </div>
+          <div className="flex items-center justify-end gap-2 border-t border-tlw-warm-gray/10 px-6 py-4">
+            <button type="button" onClick={onClose} className="px-3 py-1.5 text-[13px] text-tlw-warm-gray hover:text-tlw-espresso">Cancel</button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="rounded-tlw-lg bg-emerald-600 px-4 py-1.5 text-[13px] font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+            >
+              {saving ? 'Saving…' : 'Mark as paid'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function InvoiceDetailPage() {
@@ -186,6 +248,7 @@ export default function InvoiceDetailPage() {
   const [editLine, setEditLine] = useState<InvoiceLine | null>(null)
   const [message, setMessage] = useState('')
   const [savingMessage, setSavingMessage] = useState(false)
+  const [showMarkPaid, setShowMarkPaid] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -245,8 +308,16 @@ export default function InvoiceDetailPage() {
                 {invoice.status}
               </span>
             )}
+            {invoice && ['sent', 'overdue', 'failed'].includes(invoice.status) && (
+              <button
+                onClick={() => setShowMarkPaid(true)}
+                className="rounded-tlw-lg bg-emerald-600 px-3 py-1.5 text-[13px] font-medium text-white hover:bg-emerald-700"
+              >
+                Mark as paid
+              </button>
+            )}
             <Link
-              href="/business-center"
+              href="/business-center/invoices"
               className="rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-1.5 text-[13px] text-tlw-espresso transition-colors hover:bg-tlw-canvas"
             >
               ← Back
@@ -343,7 +414,9 @@ export default function InvoiceDetailPage() {
                   <p>Approved by {invoice.approved_by ?? '—'} · {new Date(invoice.approved_at).toLocaleString()}</p>
                 )}
                 {invoice.sent_at && <p>Sent · {new Date(invoice.sent_at).toLocaleString()}</p>}
-                {invoice.paid_at && <p>Paid · {new Date(invoice.paid_at).toLocaleString()}</p>}
+                {invoice.paid_at && (
+                  <p>Paid · {new Date(invoice.paid_at).toLocaleString()}{(invoice as any).payment_note ? ` · ${(invoice as any).payment_note}` : ''}</p>
+                )}
               </div>
             </section>
           )}
@@ -367,6 +440,14 @@ export default function InvoiceDetailPage() {
             />
           )}
         </div>
+      )}
+
+      {showMarkPaid && invoice && (
+        <MarkPaidModal
+          invoiceId={invoice.id}
+          onPaid={(inv) => { setInvoice(inv as InvoiceWithLines); setShowMarkPaid(false) }}
+          onClose={() => setShowMarkPaid(false)}
+        />
       )}
     </>
   )
