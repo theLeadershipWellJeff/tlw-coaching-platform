@@ -63,18 +63,24 @@ function Body({ size, data, loading, error }: { size: CardSize; loading: boolean
   return (
     <div className="space-y-2">
       {overdueCount > 0 && (
-        <div className="flex items-center justify-between rounded-tlw-lg bg-red-50 px-3 py-2">
+        <Link
+          href="/business-center/invoices?status=overdue"
+          className="flex items-center justify-between rounded-tlw-lg bg-red-50 px-3 py-2 transition-colors hover:bg-red-100"
+        >
           <span className="text-[13px] font-medium text-red-700">
             {overdueCount} overdue
           </span>
           <span className="text-[13px] font-semibold text-red-700">{money(overdueTotal)}</span>
-        </div>
+        </Link>
       )}
       {openCount > 0 && (
-        <div className="flex items-center justify-between rounded-tlw-lg bg-tlw-canvas px-3 py-2">
+        <Link
+          href="/business-center/invoices?status=sent"
+          className="flex items-center justify-between rounded-tlw-lg bg-tlw-canvas px-3 py-2 transition-colors hover:bg-tlw-warm-gray/10"
+        >
           <span className="text-[13px] text-tlw-espresso">{openCount} sent / awaiting payment</span>
           <span className="text-[13px] font-medium text-tlw-navy-deep">{money(openTotal)}</span>
-        </div>
+        </Link>
       )}
       {size !== 'compact' && remindersThisWeek > 0 && (
         <p className="text-[12px] text-tlw-warm-gray">

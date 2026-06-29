@@ -186,6 +186,8 @@ export default function InvoiceDetailPage() {
   const [editLine, setEditLine] = useState<InvoiceLine | null>(null)
   const [message, setMessage] = useState('')
   const [savingMessage, setSavingMessage] = useState(false)
+  const [markingPaid, setMarkingPaid] = useState(false)
+  const [markPaidErr, setMarkPaidErr] = useState('')
 
   useEffect(() => {
     if (!id) return
@@ -195,6 +197,22 @@ export default function InvoiceDetailPage() {
       .catch(() => setError(true))
       .finally(() => setLoading(false))
   }, [id])
+
+  async function markPaid() {
+    if (!invoice) return
+    if (!confirm('Mark this invoice as paid via bank transfer / manual payment?')) return
+    setMarkingPaid(true)
+    setMarkPaidErr('')
+    const res = await fetch(`/api/billing/invoices/${invoice.id}/mark-paid`, { method: 'POST' })
+    const data = await res.json()
+    if (!res.ok) {
+      setMarkPaidErr(data.error ?? 'Failed to mark as paid')
+      setMarkingPaid(false)
+      return
+    }
+    setInvoice((inv) => inv ? { ...inv, status: 'paid', paid_at: data.invoice.paid_at } : inv)
+    setMarkingPaid(false)
+  }
 
   async function saveMessage() {
     if (!invoice) return
@@ -355,6 +373,24 @@ export default function InvoiceDetailPage() {
                 Approve and send actions coming in Phase 3/4.
               </p>
             </div>
+          )}
+
+          {/* Manual payment registration */}
+          {['sent', 'overdue', 'failed'].includes(invoice.status) && (
+            <section className="rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface px-5 py-4">
+              <p className="mb-1 text-[13px] font-semibold text-tlw-navy-deep">Register payment</p>
+              <p className="mb-3 text-[12px] text-tlw-warm-gray">
+                Use this if the client paid by bank transfer or another method that doesn&apos;t go through Stripe.
+              </p>
+              <button
+                onClick={markPaid}
+                disabled={markingPaid}
+                className="rounded-tlw-lg bg-green-700 px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-green-800 disabled:opacity-50"
+              >
+                {markingPaid ? 'Saving…' : 'Mark as paid (manual / bank transfer)'}
+              </button>
+              {markPaidErr && <p className="mt-2 text-[12px] text-red-600">{markPaidErr}</p>}
+            </section>
           )}
 
           {editLine && (
