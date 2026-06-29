@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { PageHeader } from '@/app/components/layout/PageHeader'
 
 type Invoice = {
@@ -45,10 +45,12 @@ function formatPeriod(start: string | null, end: string | null): string {
 
 export default function InvoicesPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [status, setStatus] = useState<StatusFilter>('all')
+  const initialStatus = (searchParams.get('status') ?? 'all') as StatusFilter
+  const [status, setStatus] = useState<StatusFilter>(STATUS_OPTIONS.includes(initialStatus) ? initialStatus : 'all')
   const [periodStart, setPeriodStart] = useState('')
   const [periodEnd, setPeriodEnd] = useState('')
 
