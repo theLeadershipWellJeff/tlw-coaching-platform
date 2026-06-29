@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { PageHeader } from '@/app/components/layout/PageHeader'
 
 type Invoice = {
@@ -17,8 +17,31 @@ type Invoice = {
   } | null
 }
 
-const STATUS_OPTIONS = ['all', 'draft', 'approved', 'sent', 'paid', 'overdue', 'void'] as const
+const STATUS_OPTIONS = ['all', 'outstanding', 'draft', 'approved', 'sent', 'paid', 'overdue', 'void'] as const
 type StatusFilter = (typeof STATUS_OPTIONS)[number]
+
+// Map filter values to the ?status= query the API accepts
+const STATUS_API: Record<StatusFilter, string | null> = {
+  all: null,
+  outstanding: 'sent,overdue',
+  draft: 'draft',
+  approved: 'approved',
+  sent: 'sent',
+  paid: 'paid',
+  overdue: 'overdue',
+  void: 'void',
+}
+
+const STATUS_LABEL: Record<StatusFilter, string> = {
+  all: 'All statuses',
+  outstanding: 'Outstanding (sent + overdue)',
+  draft: 'Draft',
+  approved: 'Approved',
+  sent: 'Sent',
+  paid: 'Paid',
+  overdue: 'Overdue',
+  void: 'Void',
+}
 
 const STATUS_STYLES: Record<string, string> = {
   draft: 'bg-tlw-canvas text-tlw-warm-gray',
@@ -45,17 +68,25 @@ function formatPeriod(start: string | null, end: string | null): string {
 
 export default function InvoicesPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [status, setStatus] = useState<StatusFilter>('all')
+  // Pre-filter from ?status= query param (e.g. from the AR card link).
+  // 'sent,overdue' maps to the 'outstanding' filter option.
+  const rawStatus = searchParams.get('status') ?? 'all'
+  const initStatus: StatusFilter = rawStatus === 'sent,overdue' || rawStatus === 'sent%2Coverdue'
+    ? 'outstanding'
+    : STATUS_OPTIONS.includes(rawStatus as StatusFilter) ? (rawStatus as StatusFilter) : 'all'
+  const [status, setStatus] = useState<StatusFilter>(initStatus)
   const [periodStart, setPeriodStart] = useState('')
   const [periodEnd, setPeriodEnd] = useState('')
 
   const loadInvoices = useCallback(async () => {
     setLoading(true)
     const params = new URLSearchParams({ limit: '200' })
-    if (status !== 'all') params.set('status', status)
+    const apiStatus = STATUS_API[status]
+    if (apiStatus) params.set('status', apiStatus)
     if (periodStart) params.set('periodStart', periodStart)
     if (periodEnd) params.set('periodEnd', periodEnd)
 
@@ -112,7 +143,7 @@ export default function InvoicesPage() {
           className="rounded-tlw-lg border border-tlw-warm-gray/30 bg-tlw-surface px-3 py-1.5 text-[13px] text-tlw-espresso focus:outline-none focus:ring-1 focus:ring-tlw-navy-deep/30"
         >
           {STATUS_OPTIONS.map((s) => (
-            <option key={s} value={s} className="capitalize">{s === 'all' ? 'All statuses' : s.charAt(0).toUpperCase() + s.slice(1)}</option>
+            <option key={s} value={s}>{STATUS_LABEL[s]}</option>
           ))}
         </select>
         <div className="flex items-center gap-2">

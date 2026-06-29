@@ -110,6 +110,7 @@ export const CARD_META: Record<string, CardMeta> = {
   'bc-outstanding-ar': {
     id: 'bc-outstanding-ar',
     title: 'Outstanding / AR',
+    titleHref: '/business-center/invoices?status=sent%2Coverdue',
     surfaces: ['business-center'],
     supportedSizes: ['compact', 'standard', 'expanded'],
     defaultSize: 'standard',
