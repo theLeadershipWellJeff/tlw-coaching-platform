@@ -3,22 +3,30 @@ import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { toErrorResponse } from '@/lib/api-handler'
 import { requireClientCoach } from '@/lib/client-access'
 import { syncAppointmentFromCalendar } from '@/lib/appointments'
+import { syncExternalBookings } from '@/lib/booking-sync'
 
 export const runtime = 'nodejs'
 
 // The client's upcoming (future, still-scheduled) sessions, soonest first.
 // Drives the workspace Sessions card and the compact list on the name card.
 //
-// Before listing, reconcile each of THIS coach's appointments with its calendar
-// event so a session the coach just dragged to a new time (or deleted) shows its
-// current time — and the 24h reminder follows. Only the coach who owns the event
-// is synced (a shared coach's token can't read it); best-effort so a calendar
-// hiccup never blocks the list.
+// Before listing we do two things (both best-effort — a hiccup never blocks):
+// 1. Run a calendar delta sync so any NEW bookings (Calendly, HubSpot, or a
+//    session the coach added directly in GCal) are captured into `appointments`
+//    immediately, without waiting for the hourly cron.
+// 2. Reconcile each existing row with its calendar event so a dragged/deleted
+//    session shows its current time.
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const supabase = getSupabaseAdmin()
     const coach = await requireClientCoach(supabase, params.id)
 
+    // 1. Discover new calendar events (incremental delta — fast when up to date).
+    if (coach.google_refresh_token) {
+      await syncExternalBookings(supabase, coach).catch(() => {})
+    }
+
+    // 2. Reconcile existing rows for this client with their calendar events.
     const { data: own } = await supabase
       .from('appointments')
       .select('id, scheduled_at, google_event_id, status')

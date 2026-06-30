@@ -293,6 +293,7 @@ export function ScorecardSpace() {
   const [focus, setFocus] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [assigning, setAssigning] = useState<string | null>(null)
+  const [assigningElapsed, setAssigningElapsed] = useState(0)
   const [assignError, setAssignError] = useState<Record<string, string>>({})
   const [picked, setPicked] = useState<Record<string, string>>({})
   const [deletePending, setDeletePending] = useState<string | null>(null)
@@ -388,6 +389,12 @@ export function ScorecardSpace() {
       setReportDeleting(null)
     }
   }
+
+  useEffect(() => {
+    if (!assigning) { setAssigningElapsed(0); return }
+    const t = setInterval(() => setAssigningElapsed((s) => s + 1), 1000)
+    return () => clearInterval(t)
+  }, [assigning])
 
   async function confirmClient(transcriptId: string) {
     const clientId = picked[transcriptId]
@@ -602,16 +609,7 @@ export function ScorecardSpace() {
                       disabled={!picked[t.id] || assigning === t.id}
                       className="rounded-tlw-md bg-tlw-navy-rich px-3 py-1.5 text-[12px] font-medium text-tlw-cream transition-opacity duration-tlw-base hover:opacity-90 disabled:opacity-40"
                     >
-                      {assigning === t.id ? (
-                        <span className="flex items-center gap-1.5">
-                          <span className="inline-flex gap-0.5">
-                            <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: '0ms' }} />
-                            <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: '150ms' }} />
-                            <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: '300ms' }} />
-                          </span>
-                          scoring
-                        </span>
-                      ) : 'confirm & score'}
+                      {assigning === t.id ? `Analyzing… ${assigningElapsed}s` : 'confirm & score'}
                     </button>
                   </div>
                   {assignError[t.id] && (
