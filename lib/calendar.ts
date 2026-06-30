@@ -559,9 +559,15 @@ export function matchEventToClient(
   }
 
   const roster: RosterClient[] = clients.map((c) => ({ id: c.id, name: c.name }))
+  const rawTitle = event.summary as string | undefined
+  // Strip "Coaching — Name" prefix that the native scheduler puts on events so
+  // "Coaching — Jane Smith" matches the roster entry "Jane Smith" (Jaccard on
+  // the full title only reaches 0.67, below the 0.85 confident threshold).
+  const cleanedTitle = rawTitle?.replace(/^coaching\s*[—\-–]\s*/i, '').trim() || rawTitle
   for (const [name, via] of [
     [guestName, 'attendee_name' as const],
-    [event.summary as string | undefined, 'event_title' as const],
+    [cleanedTitle, 'event_title' as const],
+    ...(cleanedTitle !== rawTitle ? [[rawTitle, 'event_title' as const]] as const : []),
   ] as const) {
     if (!name) continue
     const m = matchClient(name, roster)
