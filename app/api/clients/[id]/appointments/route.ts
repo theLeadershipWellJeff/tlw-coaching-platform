@@ -42,7 +42,6 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
           .is('client_id', null)
           .eq('status', 'scheduled')
           .filter('attendee_email', 'ilike', clientRow.email)
-          .catch(() => {})
       }
     }
 
