@@ -284,6 +284,7 @@ export type Nudge = {
   linked_resource_slug: string | null
   draft_subject: string | null
   draft_body: string | null
+  coach_note: string | null
   status: string // draft | approved | scheduled | sent | skipped | snoozed
   scheduled_for: Timestamp | null
   sent_at: Timestamp | null
