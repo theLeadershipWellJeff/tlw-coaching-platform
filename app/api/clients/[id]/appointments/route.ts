@@ -24,6 +24,26 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     // 1. Discover new calendar events (incremental delta — fast when up to date).
     if (coach.google_refresh_token) {
       await syncExternalBookings(supabase, coach).catch(() => {})
+
+      // 1b. Rescue previously-unmatched rows whose attendee_email matches this
+      // client's email. This handles the case where the email wasn't on the client
+      // record at sync time, or where title-matching fell short (e.g. a new client
+      // or an event the cron captured before the roster was complete).
+      const { data: clientRow } = await supabase
+        .from('clients')
+        .select('email')
+        .eq('id', params.id)
+        .maybeSingle()
+      if (clientRow?.email) {
+        await supabase
+          .from('appointments')
+          .update({ client_id: params.id })
+          .eq('coach_id', coach.id)
+          .is('client_id', null)
+          .eq('status', 'scheduled')
+          .filter('attendee_email', 'ilike', clientRow.email)
+          .catch(() => {})
+      }
     }
 
     // 2. Reconcile existing rows for this client with their calendar events.
