@@ -14,7 +14,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     const { data, error } = await supabase
       .from('nudges')
       .select(
-        'id, type, origin, status, trigger_excerpt, rationale, draft_subject, draft_body, scheduled_for, sent_at, created_at'
+        'id, type, origin, status, trigger_excerpt, rationale, draft_subject, draft_body, coach_note, scheduled_for, sent_at, created_at'
       )
       .eq('client_id', params.id)
       .in('status', ['draft', 'scheduled', 'snoozed', 'sent'])
