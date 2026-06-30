@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react'
 
 export interface EmailItem {
   id: string
+  clientId: string | null
   clientName: string
   type: string
   subject: string | null
