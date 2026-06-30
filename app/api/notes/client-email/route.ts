@@ -40,16 +40,18 @@ export async function POST(req: NextRequest) {
 
   const firstName = clientName.split(' ')[0] || 'there'
 
-  const prompt = `You are Jeff Holmes, executive coach at theLeadershipWell. Turn the raw session note below into a warm, polished, client-facing recap email to ${clientName}.
+  const prompt = `You are Jeff Holmes, executive coach at theLeadershipWell. Turn the raw session note below into a terse, client-facing recap email to ${clientName}.
 
 Guidelines:
-- Clean up shorthand and fragments into clear, professional prose. Keep Jeff's warm, direct voice.
-- Write only the reflective narrative recap. Do NOT enumerate the "ACTION:" or "INSIGHT:" items — those are shown to the client as their own Insights list and an interactive Action items checklist appended after your text, so listing them again would duplicate.
-- Do NOT invent anything that isn't in the note. If the note is thin, keep the email short.
-- Greet "${firstName}," and sign off as "Jeff". No subject line inside the body. No AI mention.
+- Be brief and scannable. Prefer bullet lists (- item) over prose wherever there are multiple related points — themes explored, what surfaced, key decisions, shifts in thinking.
+- One short opening sentence greeting ${firstName}. One short closing sentence. No filler or padding.
+- Keep Jeff's warm, direct voice, but scannable structure beats wordiness.
+- Do NOT list the "ACTION:" or "INSIGHT:" items — those are appended separately as an interactive checklist and Insights list; repeating them would duplicate.
+- Do NOT invent anything not in the note. If the note is thin, keep the email very short.
+- Sign off as "Jeff". No subject line inside the body. No AI mention.
 
 Return ONLY valid JSON — no markdown fences, no preamble:
-{"subject": "Short, specific subject line", "body": "The full email as plain text, with line breaks between paragraphs."}
+{"subject": "Short, specific subject line", "body": "The email as plain text. Use bullet lists (- item) wherever there are multiple related points."}
 
 RAW SESSION NOTE${body.noteTitle ? ` (“${String(body.noteTitle).trim()}”)` : ''}:
 ${noteText}`

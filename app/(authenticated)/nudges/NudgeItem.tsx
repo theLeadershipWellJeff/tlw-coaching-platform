@@ -12,6 +12,7 @@ export interface NudgeRow {
   rationale: string | null
   draft_subject: string | null
   draft_body: string | null
+  coach_note?: string | null
   scheduled_for: string | null
   sent_at?: string | null
   created_at: string
@@ -60,6 +61,7 @@ export function NudgeItem({
 }) {
   const [subject, setSubject] = useState(nudge.draft_subject || '')
   const [bodyText, setBodyText] = useState(nudge.draft_body || '')
+  const [coachNote, setCoachNote] = useState(nudge.coach_note || '')
   const [when, setWhen] = useState(toLocalInput(nudge.scheduled_for))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -67,6 +69,7 @@ export function NudgeItem({
   const dirty =
     subject !== (nudge.draft_subject || '') ||
     bodyText !== (nudge.draft_body || '') ||
+    coachNote !== (nudge.coach_note || '') ||
     when !== toLocalInput(nudge.scheduled_for)
 
   async function patch(payload: Record<string, unknown>) {
@@ -91,7 +94,7 @@ export function NudgeItem({
   // Bundle any unsaved edits into the action call so it acts on the latest text.
   function edits(): Record<string, unknown> {
     const whenIso = when ? new Date(when).toISOString() : null
-    return { draft_subject: subject, draft_body: bodyText, scheduled_for: whenIso }
+    return { draft_subject: subject, draft_body: bodyText, coach_note: coachNote || null, scheduled_for: whenIso }
   }
 
   return (
@@ -133,6 +136,14 @@ export function NudgeItem({
         <div className="space-y-1">
           {subject && <p className="text-[13px] font-medium text-tlw-espresso">{subject}</p>}
           <p className="whitespace-pre-wrap text-[13px] text-tlw-espresso">{bodyText}</p>
+          {nudge.coach_note && (
+            <div className="mt-2 rounded-tlw-md border border-tlw-warm-gray/20 bg-tlw-canvas/60 px-3 py-2">
+              <p className="mb-1 text-[10px] font-medium uppercase tracking-[1.5px] text-tlw-warm-gray">
+                Private note
+              </p>
+              <p className="whitespace-pre-wrap text-[12px] text-tlw-warm-gray">{nudge.coach_note}</p>
+            </div>
+          )}
         </div>
       ) : (
         <>
@@ -149,6 +160,18 @@ export function NudgeItem({
             placeholder="Message"
             className="mb-2 w-full resize-y rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-surface px-3 py-2 text-[13px] leading-relaxed text-tlw-espresso focus:border-tlw-navy-rich focus:outline-none"
           />
+          <div className="mb-2">
+            <label className="mb-1 block text-[11px] font-medium uppercase tracking-[1.5px] text-tlw-warm-gray">
+              Private note (not sent)
+            </label>
+            <textarea
+              value={coachNote}
+              onChange={(e) => setCoachNote(e.target.value)}
+              rows={2}
+              placeholder="e.g. reference the Skydive story"
+              className="w-full resize-y rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-canvas/60 px-3 py-2 text-[12px] leading-relaxed text-tlw-espresso placeholder:text-tlw-warm-gray/60 focus:border-tlw-navy-rich focus:outline-none"
+            />
+          </div>
 
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <label className="text-[11px] text-tlw-warm-gray">Send time</label>

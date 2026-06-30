@@ -13,6 +13,7 @@ const PatchSchema = z.object({
   // Edits to the draft (any subset).
   draft_subject: z.string().max(300).optional(),
   draft_body: z.string().max(8000).optional(),
+  coach_note: z.string().max(2000).nullable().optional(),
   scheduled_for: z.string().datetime().nullable().optional(),
   // A queue action to take after applying any edits.
   action: z.enum(['schedule', 'send', 'skip', 'snooze']).optional(),
@@ -40,6 +41,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { nudgeId: s
     const edits: NudgeUpdate = {}
     if (body.draft_subject !== undefined) edits.draft_subject = body.draft_subject
     if (body.draft_body !== undefined) edits.draft_body = body.draft_body
+    if (body.coach_note !== undefined) edits.coach_note = body.coach_note
     if (body.scheduled_for !== undefined) edits.scheduled_for = body.scheduled_for
     if (Object.keys(edits).length) {
       edits.updated_at = new Date().toISOString()

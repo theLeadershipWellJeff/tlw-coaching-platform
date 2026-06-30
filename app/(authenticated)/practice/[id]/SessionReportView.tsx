@@ -262,7 +262,9 @@ export function SessionReportView({ id }: { id: string }) {
 
   // rescore state
   const [rescoring, setRescoring] = useState(false)
+  const [rescoreElapsed, setRescoreElapsed] = useState(0)
   const [rescoreMsg, setRescoreMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [emailElapsed, setEmailElapsed] = useState(0)
 
   useEffect(() => {
     fetch('/api/coach')
@@ -270,6 +272,18 @@ export function SessionReportView({ id }: { id: string }) {
       .then((d) => setSupervisorEmail(d?.coach?.supervisor_email ?? null))
       .catch(() => {})
   }, [])
+
+  useEffect(() => {
+    if (!rescoring) { setRescoreElapsed(0); return }
+    const t = setInterval(() => setRescoreElapsed((s) => s + 1), 1000)
+    return () => clearInterval(t)
+  }, [rescoring])
+
+  useEffect(() => {
+    if (!emailing) { setEmailElapsed(0); return }
+    const t = setInterval(() => setEmailElapsed((s) => s + 1), 1000)
+    return () => clearInterval(t)
+  }, [emailing])
 
   async function emailReport() {
     setEmailing(true)
@@ -438,16 +452,7 @@ export function SessionReportView({ id }: { id: string }) {
             title="Re-run the engine against the current rubric"
             className="rounded-tlw-md border border-tlw-warm-gray/30 px-3 py-1.5 text-[12px] font-medium text-tlw-espresso transition-opacity duration-tlw-base hover:opacity-80 disabled:opacity-40"
           >
-            {rescoring ? (
-              <span className="flex items-center gap-1.5">
-                <span className="inline-flex gap-0.5">
-                  <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: '300ms' }} />
-                </span>
-                rescoring
-              </span>
-            ) : 'rescore'}
+            {rescoring ? `Analyzing… ${rescoreElapsed}s` : 'rescore'}
           </button>
           {rescoreMsg && (
             <p
@@ -687,16 +692,7 @@ export function SessionReportView({ id }: { id: string }) {
               disabled={emailing || (emailRecipient === 'other' && !emailOther.trim())}
               className="rounded-tlw-md bg-tlw-navy-rich px-3 py-1.5 text-[12px] font-medium text-tlw-cream transition-opacity duration-tlw-base hover:opacity-90 disabled:opacity-40"
             >
-              {emailing ? (
-                <span className="flex items-center gap-1.5">
-                  <span className="inline-flex gap-0.5">
-                    <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: '0ms' }} />
-                    <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: '150ms' }} />
-                    <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: '300ms' }} />
-                  </span>
-                  sending
-                </span>
-              ) : 'send report'}
+              {emailing ? `Sending… ${emailElapsed}s` : 'send report'}
             </button>
           </div>
           {emailMsg && (

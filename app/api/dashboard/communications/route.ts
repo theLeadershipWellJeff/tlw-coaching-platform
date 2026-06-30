@@ -80,6 +80,7 @@ export async function GET() {
 
   const items = rows.map((r) => ({
     id: r.id,
+    clientId: r.client_id || null,
     clientName: (r.client_id && nameById[r.client_id]) || '—',
     type: r.type,
     subject: r.subject,
