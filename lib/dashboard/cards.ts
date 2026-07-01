@@ -98,6 +98,14 @@ export const CARD_META: Record<string, CardMeta> = {
     defaultSize: 'standard',
     selfHeader: true,
   },
+  'coaching-hours': {
+    id: 'coaching-hours',
+    title: 'Coaching hours',
+    icon: '⏱',
+    surfaces: ['dashboard', 'business-center'],
+    supportedSizes: ['compact', 'standard', 'expanded'],
+    defaultSize: 'standard',
+  },
   // ── Business Center cards ────────────────────────────────────────────────
   'bc-billing-run': {
     id: 'bc-billing-run',
