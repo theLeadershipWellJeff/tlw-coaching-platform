@@ -117,7 +117,9 @@ export async function POST(req: NextRequest) {
 
       case 'payment_intent.succeeded': {
         const pi = event.data.object as Stripe.PaymentIntent
-        const tlwId = pi.metadata?.tlw_invoice_id
+        // For hosted invoices Stripe auto-creates the PI without our metadata —
+        // fall back to looking up our invoice via the Stripe invoice ID.
+        const tlwId = pi.metadata?.tlw_invoice_id ?? await resolveTlwIdFromStripeInvoice(supabase, (pi as any).invoice)
         if (tlwId) {
           await supabase
             .from('invoices')
@@ -138,7 +140,9 @@ export async function POST(req: NextRequest) {
 
       case 'payment_intent.payment_failed': {
         const pi = event.data.object as Stripe.PaymentIntent
-        const tlwId = pi.metadata?.tlw_invoice_id
+        // For hosted invoices Stripe auto-creates the PI without our metadata —
+        // fall back to looking up our invoice via the Stripe invoice ID.
+        const tlwId = pi.metadata?.tlw_invoice_id ?? await resolveTlwIdFromStripeInvoice(supabase, (pi as any).invoice)
         if (tlwId) {
           const lastErr = pi.last_payment_error
           const errMsg = lastErr?.message ?? 'Stripe payment failed'
@@ -167,7 +171,22 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ received: true })
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+// Stripe hosted invoices auto-create PaymentIntents without our metadata.
+// Look up the TLW invoice id via the stripe_invoice_id we stored at send time.
+async function resolveTlwIdFromStripeInvoice(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  stripeInvoiceId: string | null | undefined,
+): Promise<string | null> {
+  if (!stripeInvoiceId) return null
+  const { data } = await supabase
+    .from('invoices')
+    .select('id')
+    .eq('stripe_invoice_id', stripeInvoiceId)
+    .maybeSingle()
+  return data?.id ?? null
+}
 
 async function sendPaidNotification(
   supabase: ReturnType<typeof getSupabaseAdmin>,
