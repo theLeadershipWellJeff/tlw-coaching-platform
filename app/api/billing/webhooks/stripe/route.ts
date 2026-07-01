@@ -53,6 +53,9 @@ export async function POST(req: NextRequest) {
   const supabase = getSupabaseAdmin()
   const now = new Date().toISOString()
 
+  // All DB work is best-effort after signature verification — we return 200
+  // regardless so Stripe doesn't retry an already-verified event indefinitely.
+  // Errors are logged for investigation via Vercel logs.
   try {
     switch (event.type) {
       case 'invoice.paid': {
@@ -70,8 +73,9 @@ export async function POST(req: NextRequest) {
             .eq('id', tlwId)
             .in('status', ['sent', 'overdue', 'failed'])
           // Cancel any pending reminders now that it's paid.
-          await cancelReminders(supabase, tlwId)
-
+          await cancelReminders(supabase, tlwId).catch((e: any) => {
+            console.error('cancelReminders failed (non-fatal):', e?.message)
+          })
           // Notify the coach by email — best-effort, never blocks the webhook response.
           sendPaidNotification(supabase, tlwId, stripeInv).catch(() => {})
         }
@@ -125,7 +129,9 @@ export async function POST(req: NextRequest) {
             })
             .eq('id', tlwId)
             .in('status', ['sent', 'overdue', 'failed'])
-          await cancelReminders(supabase, tlwId)
+          await cancelReminders(supabase, tlwId).catch((e: any) => {
+            console.error('cancelReminders failed (non-fatal):', e?.message)
+          })
         }
         break
       }
@@ -153,8 +159,9 @@ export async function POST(req: NextRequest) {
         break
     }
   } catch (e: any) {
+    // Log but still return 200 — the event was verified and we don't want
+    // Stripe to keep retrying. Check Vercel logs for the error detail.
     console.error(`Stripe webhook handler error (${event.type}):`, e)
-    return NextResponse.json({ error: 'Internal handler error' }, { status: 500 })
   }
 
   return NextResponse.json({ received: true })
