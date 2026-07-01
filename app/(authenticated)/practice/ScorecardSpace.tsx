@@ -6,6 +6,7 @@ import { bandDefinition, nextBand } from '@/lib/scoring/rubric'
 import { bandColor, BandChip } from './ui'
 import { AddTranscript } from './AddTranscript'
 import { GrowthAreasSpace } from './GrowthAreasSpace'
+import { CoachingHoursWidget } from '@/components/coaching-hours/CoachingHoursWidget'
 import { PanelBoard, type Panel } from '@/app/components/layout/PanelBoard'
 
 const STORAGE_KEY = 'tlw-practice-layout'
@@ -763,6 +764,18 @@ export function ScorecardSpace() {
   const allPanels: Panel[] = [
     ...panels,
     {
+      id: 'coaching-hours',
+      label: 'Coaching hours',
+      node: (
+        <section>
+          <h2 className="mb-4 text-[15px] font-medium text-tlw-navy-deep">Coaching hours</h2>
+          <div className="rounded-tlw-lg p-4" style={{ backgroundColor: 'var(--color-surface)' }}>
+            <CoachingHoursWidget />
+          </div>
+        </section>
+      ),
+    },
+    {
       id: 'growth-areas',
       label: 'Growth Areas',
       node: <GrowthAreasSpace />,
@@ -774,7 +787,7 @@ export function ScorecardSpace() {
       storageKey={STORAGE_KEY}
       panels={allPanels}
       columns={1}
-      defaultLayout={[['add-transcript', 'revenue', 'headline', 'score-trend', 'needs-review', 'competencies', 'sessions', 'growth-areas']]}
+      defaultLayout={[['add-transcript', 'revenue', 'coaching-hours', 'headline', 'score-trend', 'needs-review', 'competencies', 'sessions', 'growth-areas']]}
     />
   )
 }
