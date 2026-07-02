@@ -24,6 +24,10 @@ export interface IngestInput {
   driveFileId?: string | null
   source?: string
   sessionDate?: string | null // override (YYYY-MM-DD), used by manual add
+  // An explicit title supplied by the caller (e.g. Zapier maps Plaud's summary
+  // here). Treated as the summary source for the title, so a matched client
+  // still wins ("Client · date"); this rescues the unmatched/timestamp cases.
+  title?: string | null
   autoScore?: boolean
   // Assign this exact client and skip matching — used by per-client import,
   // where the coach has already told us whose session this is.
@@ -88,7 +92,7 @@ export async function ingestMarkdown(
           buildTranscriptTitle({
             clientName: fc.name,
             sessionDate: dupe.session_date || parsed.sessionDate,
-            summaryRaw: parsed.titleRaw,
+            summaryRaw: input.title || parsed.titleRaw,
             filename,
           })
         await supabase
@@ -165,7 +169,7 @@ export async function ingestMarkdown(
   const title = buildTranscriptTitle({
     clientName: matchedName,
     sessionDate: input.sessionDate || parsed.sessionDate,
-    summaryRaw: parsed.titleRaw,
+    summaryRaw: input.title || parsed.titleRaw,
     filename,
   })
 
