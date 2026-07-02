@@ -16,6 +16,7 @@ import {
   zonedWallClockToUtc,
   type RosterClientWithEmail,
 } from '@/lib/calendar'
+import { ymdInTimeZone } from '@/lib/datetime'
 
 export interface IngestInput {
   coach: Coach
@@ -129,6 +130,22 @@ export async function ingestMarkdown(
     }
   }
 
+  // Resolve the recording's absolute instant. A timestamp with an explicit zone
+  // (Plaud's UTC "create time", e.g. "…13:37:22Z") is absolute; a bare local
+  // timestamp is wall-clock in the coach's zone.
+  const sessionInstant: Date | null = parsed.sessionInstant
+    ? new Date(parsed.sessionInstant)
+    : parsed.sessionDate && parsed.sessionTime
+      ? zonedWallClockToUtc(parsed.sessionDate, parsed.sessionTime, coach.timezone)
+      : null
+  const validInstant = sessionInstant && !Number.isNaN(sessionInstant.getTime()) ? sessionInstant : null
+
+  // The session's calendar date as it reads in the coach's zone — so an absolute
+  // UTC instant near midnight doesn't shift the session onto the wrong day.
+  const sessionDate =
+    input.sessionDate ||
+    (parsed.sessionInstant && validInstant ? ymdInTimeZone(validInstant, coach.timezone) : parsed.sessionDate)
+
   let match: { clientId: string | null; confidence: number; status: string }
   let matchedName: string | null = null
 
@@ -146,15 +163,12 @@ export async function ingestMarkdown(
       clients.map((c) => ({ id: c.id, name: c.name }) as RosterClient)
     )
 
-    // 2) Otherwise, resolve by timestamp: align the recording time (local wall
-    //    clock, the coach's timezone) with the calendar and read the guest.
-    if (match.status !== 'matched' && parsed.sessionDate && parsed.sessionTime) {
-      const instant = zonedWallClockToUtc(parsed.sessionDate, parsed.sessionTime, coach.timezone)
-      if (instant) {
-        const cal = await findClientFromCalendar(coach, instant, clients)
-        if (cal.status === 'matched' && cal.clientId) {
-          match = { clientId: cal.clientId, confidence: cal.confidence, status: 'matched' }
-        }
+    // 2) Otherwise, resolve by timestamp: align the recording instant with the
+    //    calendar and read the guest.
+    if (match.status !== 'matched' && validInstant) {
+      const cal = await findClientFromCalendar(coach, validInstant, clients)
+      if (cal.status === 'matched' && cal.clientId) {
+        match = { clientId: cal.clientId, confidence: cal.confidence, status: 'matched' }
       }
     }
     matchedName = match.clientId ? clients.find((c) => c.id === match.clientId)?.name || null : null
@@ -168,7 +182,7 @@ export async function ingestMarkdown(
   // Plaud's summary title, else a real (non-timestamp) filename.
   const title = buildTranscriptTitle({
     clientName: matchedName,
-    sessionDate: input.sessionDate || parsed.sessionDate,
+    sessionDate,
     summaryRaw: input.title || parsed.titleRaw,
     filename,
   })
@@ -183,7 +197,7 @@ export async function ingestMarkdown(
     title,
     raw_md: markdown,
     content_hash: contentHash,
-    session_date: input.sessionDate || parsed.sessionDate,
+    session_date: sessionDate,
     match_status: match.status,
     match_confidence: match.confidence,
   }

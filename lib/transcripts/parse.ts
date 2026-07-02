@@ -18,6 +18,10 @@ export interface ParsedTranscript {
   sessionNumber: number | null
   engagementTotal: number | null
   titleRaw: string | null // Plaud's own summary title from front matter, if any
+  // Absolute ISO instant when the timestamp carried an explicit zone (a trailing
+  // `Z` or `±HH:MM` — e.g. Plaud's UTC "create time"). When set, the caller uses
+  // it directly instead of re-interpreting the time in the coach's timezone.
+  sessionInstant: string | null
   body: string // transcript text with front matter stripped
   isSpeakerSeparated: boolean
 }
@@ -91,6 +95,23 @@ export function deriveInitials(name: string | null): string | null {
   return tokens.map((t) => `${t[0].toUpperCase()}.`).join('')
 }
 
+/**
+ * If a timestamp carries an explicit zone — a trailing `Z` or a `±HH:MM` offset —
+ * it names an absolute instant, not a local wall-clock. Return its ISO instant so
+ * the caller uses it directly instead of re-interpreting it in the coach's zone.
+ * (Plaud's "create time" arrives as UTC, e.g. "2026-06-05T13:37:22Z"; read as a
+ * local wall-clock it would land the calendar lookup hours off.)
+ */
+function absoluteInstant(raw: string | null): string | null {
+  if (!raw) return null
+  const m = raw.match(/(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?\s*(Z|[+-]\d{2}:?\d{2})/)
+  if (!m) return null
+  const zone = m[7] === 'Z' ? 'Z' : m[7].replace(/^([+-]\d{2}):?(\d{2})$/, '$1:$2')
+  const iso = `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6] || '00'}${zone}`
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? null : d.toISOString()
+}
+
 /** Pull a wall-clock time "HH:MM(:SS)" from a string, or null. */
 function extractTime(raw: string | null): string | null {
   if (!raw) return null
@@ -128,8 +149,8 @@ function parseSessionNumber(fields: Record<string, string>): { number: number | 
  */
 function parseFilename(
   filename: string | null
-): { name: string | null; date: string | null; time: string | null } {
-  if (!filename) return { name: null, date: null, time: null }
+): { name: string | null; date: string | null; time: string | null; instant: string | null } {
+  if (!filename) return { name: null, date: null, time: null, instant: null }
   const base = filename.replace(/\.[a-z0-9]+$/i, '')
 
   // Full timestamp first: date + time together (Plaud's default title).
@@ -139,14 +160,14 @@ function parseFilename(
     const time = extractTime(tsMatch[0])
     const namePart = base.replace(tsMatch[0], ' ')
     const name = cleanName(namePart)
-    return { name: name || null, date, time }
+    return { name: name || null, date, time, instant: absoluteInstant(base) }
   }
 
   const dateMatch = base.match(/\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}/)
   const date = dateMatch ? normalizeDate(dateMatch[0]) : null
   let namePart = base
   if (dateMatch) namePart = base.replace(dateMatch[0], ' ')
-  return { name: cleanName(namePart) || null, date, time: null }
+  return { name: cleanName(namePart) || null, date, time: null, instant: null }
 }
 
 function cleanName(s: string): string {
@@ -192,6 +213,7 @@ export function parseTranscript(filename: string | null, md: string): ParsedTran
   const dateField = pick(fields, ['date', 'sessiondate', 'sessiondatetime', 'recordeddate'])
   const sessionDate = normalizeDate(dateField) || fromFile.date
   const sessionTime = extractTime(dateField) || fromFile.time
+  const sessionInstant = absoluteInstant(dateField) || fromFile.instant
 
   const { number, total } = parseSessionNumber(fields)
 
@@ -204,6 +226,7 @@ export function parseTranscript(filename: string | null, md: string): ParsedTran
     sessionNumber: number,
     engagementTotal: total,
     titleRaw: pick(fields, ['title', 'topic', 'subject', 'summary']),
+    sessionInstant,
     body,
     isSpeakerSeparated: detectSpeakerSeparation(body),
   }
