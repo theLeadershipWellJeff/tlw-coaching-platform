@@ -1,5 +1,6 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { Client } from '@/lib/supabase/types'
 
 type Component = { name: string; description: string }
@@ -74,6 +75,7 @@ export function CoachingMapCard({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [size, setSize] = useState<Size>('medium')
+  const [viewOpen, setViewOpen] = useState(false)
 
   const options = MAPS.some((m) => m.name === value) || !value ? MAPS : [...MAPS, { name: value, components: [] }]
   const selectedMap = MAPS.find((m) => m.name === value)
@@ -170,11 +172,93 @@ export function CoachingMapCard({
           </div>
         </div>
       ) : value ? (
-        <MapView map={selectedMap} fallbackName={value} size={size} />
+        <MapView map={selectedMap} fallbackName={value} size={size} onOpen={() => setViewOpen(true)} />
       ) : (
         <p className="text-[12px] text-tlw-warm-gray/70">No map assigned yet.</p>
       )}
+
+      {viewOpen && <MapStructureModal map={selectedMap} fallbackName={value} onClose={() => setViewOpen(false)} />}
     </div>
+  )
+}
+
+/**
+ * Pop-up view of the assigned map's full structure. Portaled to <body> like the
+ * Client goals modal — this card lives in the notes panel's sticky rail, whose
+ * stacking context would otherwise trap the overlay beneath the note editor.
+ */
+function MapStructureModal({
+  map,
+  fallbackName,
+  onClose,
+}: {
+  map: CoachingMap | undefined
+  fallbackName: string
+  onClose: () => void
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const name = map?.name ?? fallbackName
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-tlw-navy-deep/40 p-4 py-10"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-xl rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface p-6 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-4 flex items-start justify-between">
+          <div>
+            <p className="text-[11px] font-medium uppercase tracking-[2px] text-tlw-warm-gray">Coaching map</p>
+            <p className="mt-0.5 text-[17px] font-medium text-tlw-navy-deep">{name}</p>
+            {map?.blurb && <p className="mt-1 text-[12px] leading-snug text-tlw-warm-gray">{map.blurb}</p>}
+          </div>
+          <button
+            onClick={onClose}
+            className="text-tlw-warm-gray transition-colors hover:text-tlw-espresso"
+            aria-label="Close"
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </div>
+
+        {map?.components.length ? (
+          <ul className="space-y-3">
+            {map.components.map((c, i) => (
+              <li key={c.name} className="flex gap-3">
+                <span className="mt-0.5 shrink-0 text-[11px] font-semibold text-tlw-signal-orange/70">{i + 1}</span>
+                <div>
+                  <p className="text-[13px] font-semibold text-tlw-espresso">{c.name}</p>
+                  <p className="mt-0.5 text-[12px] leading-snug text-tlw-warm-gray">{c.description}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-[12px] text-tlw-warm-gray/70">No structure is defined for this map.</p>
+        )}
+
+        <div className="mt-6 flex justify-end">
+          <button
+            onClick={onClose}
+            className="rounded-tlw-lg bg-tlw-navy-rich px-4 py-2 text-[13px] font-medium text-tlw-cream transition-opacity hover:opacity-90"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
   )
 }
 
@@ -182,23 +266,36 @@ function MapView({
   map,
   fallbackName,
   size,
+  onOpen,
 }: {
   map: CoachingMap | undefined
   fallbackName: string
   size: Size
+  onOpen: () => void
 }) {
   const name = map?.name ?? fallbackName
 
+  // The map name opens the structure pop-up in every size mode.
+  const nameButton = (className: string) => (
+    <button
+      onClick={onOpen}
+      title="View the map's structure"
+      className={`${className} text-left text-tlw-espresso underline-offset-2 hover:text-tlw-navy-deep hover:underline`}
+    >
+      {name}
+    </button>
+  )
+
   // Small: just the map name
   if (size === 'small') {
-    return <p className="text-[13px] font-medium text-tlw-espresso">{name}</p>
+    return nameButton('text-[13px] font-medium')
   }
 
   // Medium: name + component list (no descriptions)
   if (size === 'medium') {
     return (
       <div>
-        <p className="mb-2 text-[13px] font-medium text-tlw-espresso">{name}</p>
+        <div className="mb-2">{nameButton('text-[13px] font-medium')}</div>
         {map?.components.length ? (
           <ul className="space-y-1">
             {map.components.map((c, i) => (
@@ -220,7 +317,7 @@ function MapView({
   // Large: name + components with descriptions
   return (
     <div>
-      <p className="mb-3 text-[13px] font-medium text-tlw-espresso">{name}</p>
+      <div className="mb-3">{nameButton('text-[13px] font-medium')}</div>
       {map?.components.length ? (
         <ul className="space-y-2.5">
           {map.components.map((c, i) => (
