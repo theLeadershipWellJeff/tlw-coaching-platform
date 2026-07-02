@@ -2,22 +2,65 @@
 import { useState } from 'react'
 import type { Client } from '@/lib/supabase/types'
 
-// The maps core to theLeadershipWell's practice. `blurb` is a short reminder of
-// the framework; FUTURE: build out fuller descriptions here so the coach can
-// click a map to see the framework while coaching.
-type CoachingMap = { name: string; blurb?: string }
+type Component = { name: string; description: string }
+type CoachingMap = { name: string; blurb?: string; components: Component[] }
+
 const MAPS: CoachingMap[] = [
-  { name: 'The 6 Components' },
-  { name: 'The Airplane Model', blurb: 'Wings / Engines / Fuel / Fuselage — the structural picture' },
-  { name: 'First 90 Days' },
-  { name: 'Who I Am Becoming' },
-  { name: 'The Becoming Map' },
+  {
+    name: 'The 6 Components',
+    components: [
+      { name: 'Identity', description: 'Who you believe yourself to be — values, strengths, and the story you tell about yourself.' },
+      { name: 'Mindset', description: 'The habitual patterns of thought that shape how you interpret challenge, failure, and opportunity.' },
+      { name: 'Relationships', description: 'The quality and health of the connections that enable — or constrain — your leadership.' },
+      { name: 'Practices', description: 'The consistent habits and rituals that sustain your energy and effectiveness over time.' },
+      { name: 'Environment', description: 'The physical, cultural, and systemic context you operate in, and how it supports or limits you.' },
+      { name: 'Impact', description: 'The difference you are making — outcomes, legacy, and how your work ripples outward.' },
+    ],
+  },
+  {
+    name: 'The Airplane Model',
+    blurb: 'Wings / Engines / Fuel / Fuselage — the structural picture',
+    components: [
+      { name: 'Wings', description: 'Vision and direction — the lift that keeps you moving forward and sets the trajectory.' },
+      { name: 'Engines', description: 'Drive and motivation — what powers you and keeps momentum even in resistance.' },
+      { name: 'Fuel', description: 'Resources, energy, and support — what you need to sustain the journey without burning out.' },
+      { name: 'Fuselage', description: 'Your core structure — the values, character, and integrity that hold everything together.' },
+    ],
+  },
+  {
+    name: 'First 90 Days',
+    components: [
+      { name: 'Listen & Learn', description: 'Resist the urge to act. Gather data, build relationships, and understand the real landscape.' },
+      { name: 'Diagnose', description: 'Identify the critical challenges and opportunities based on what you\'ve heard and observed.' },
+      { name: 'Build Allies', description: 'Cultivate key relationships across the organization — up, across, and down.' },
+      { name: 'Early Wins', description: 'Choose a visible, achievable win that builds credibility and signals your leadership style.' },
+      { name: 'Set Direction', description: 'Communicate a clear vision and priorities so the team knows where you\'re headed together.' },
+    ],
+  },
+  {
+    name: 'Who I Am Becoming',
+    components: [
+      { name: 'The Gap', description: 'The honest distance between who you are today and the leader you sense yourself becoming.' },
+      { name: 'Core Convictions', description: 'The non-negotiable beliefs and values that anchor your identity through change.' },
+      { name: 'Formative Experiences', description: 'The moments — good and hard — that have shaped you most deeply as a person and leader.' },
+      { name: 'Emerging Self', description: 'The qualities, capacities, and ways of being you are actively growing into.' },
+      { name: 'Legacy', description: 'What you want to be true of you — the lasting mark of how you led and lived.' },
+    ],
+  },
+  {
+    name: 'The Becoming Map',
+    components: [
+      { name: 'Origin', description: 'Where you come from — the background, story, and experiences that formed your foundation.' },
+      { name: 'Anchors', description: 'The values, people, and commitments that keep you grounded when everything is shifting.' },
+      { name: 'Tensions', description: 'The creative friction between who you\'ve been and who you\'re called to become.' },
+      { name: 'Threshold', description: 'The liminal space of transformation — what it feels like to be in between.' },
+      { name: 'Horizon', description: 'The vision of the person and leader you are moving toward — not yet arrived, but clearly sensed.' },
+    ],
+  },
 ]
 
-/**
- * The coaching map assigned to this client (persistent, per-client). Chosen from
- * the practice's maps; stored as the map name so older free-text values survive.
- */
+type Size = 'small' | 'medium' | 'large'
+
 export function CoachingMapCard({
   client,
   onUpdated,
@@ -30,10 +73,10 @@ export function CoachingMapCard({
   const [draft, setDraft] = useState(value)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [size, setSize] = useState<Size>('medium')
 
-  // Keep an unknown stored value (e.g. an older free-text entry) selectable.
-  const options = MAPS.some((m) => m.name === value) || !value ? MAPS : [...MAPS, { name: value }]
-  const selectedBlurb = MAPS.find((m) => m.name === value)?.blurb
+  const options = MAPS.some((m) => m.name === value) || !value ? MAPS : [...MAPS, { name: value, components: [] }]
+  const selectedMap = MAPS.find((m) => m.name === value)
 
   async function save() {
     setBusy(true)
@@ -57,19 +100,40 @@ export function CoachingMapCard({
 
   return (
     <div className="rounded-tlw-lg border border-tlw-warm-gray/15 bg-tlw-surface p-3">
+      {/* Header row */}
       <div className="mb-2 flex items-center justify-between">
         <p className="text-[11px] font-semibold uppercase tracking-[1.5px] text-tlw-navy-deep">Coaching map</p>
-        {!editing && (
-          <button
-            onClick={() => {
-              setDraft(value)
-              setEditing(true)
-            }}
-            className="text-[11px] font-medium text-tlw-warm-gray hover:text-tlw-espresso"
-          >
-            edit
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {!editing && value && (
+            <div className="flex items-center gap-0.5 rounded border border-tlw-warm-gray/20 bg-tlw-cream/60 px-1 py-0.5">
+              {(['small', 'medium', 'large'] as Size[]).map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setSize(s)}
+                  title={s.charAt(0).toUpperCase() + s.slice(1)}
+                  className={`rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors ${
+                    size === s
+                      ? 'bg-tlw-navy-rich text-tlw-cream'
+                      : 'text-tlw-warm-gray hover:text-tlw-espresso'
+                  }`}
+                >
+                  {s === 'small' ? 'S' : s === 'medium' ? 'M' : 'L'}
+                </button>
+              ))}
+            </div>
+          )}
+          {!editing && (
+            <button
+              onClick={() => {
+                setDraft(value)
+                setEditing(true)
+              }}
+              className="text-[11px] font-medium text-tlw-warm-gray hover:text-tlw-espresso"
+            >
+              edit
+            </button>
+          )}
+        </div>
       </div>
 
       {error && <p className="mb-2 text-[11px] text-tlw-signal-orange">{error}</p>}
@@ -106,12 +170,73 @@ export function CoachingMapCard({
           </div>
         </div>
       ) : value ? (
-        <>
-          <p className="text-[13px] font-medium text-tlw-espresso">{value}</p>
-          {selectedBlurb && <p className="mt-0.5 text-[11px] leading-snug text-tlw-warm-gray">{selectedBlurb}</p>}
-        </>
+        <MapView map={selectedMap} fallbackName={value} size={size} />
       ) : (
         <p className="text-[12px] text-tlw-warm-gray/70">No map assigned yet.</p>
+      )}
+    </div>
+  )
+}
+
+function MapView({
+  map,
+  fallbackName,
+  size,
+}: {
+  map: CoachingMap | undefined
+  fallbackName: string
+  size: Size
+}) {
+  const name = map?.name ?? fallbackName
+
+  // Small: just the map name
+  if (size === 'small') {
+    return <p className="text-[13px] font-medium text-tlw-espresso">{name}</p>
+  }
+
+  // Medium: name + component list (no descriptions)
+  if (size === 'medium') {
+    return (
+      <div>
+        <p className="mb-2 text-[13px] font-medium text-tlw-espresso">{name}</p>
+        {map?.components.length ? (
+          <ul className="space-y-1">
+            {map.components.map((c, i) => (
+              <li key={c.name} className="flex items-baseline gap-2">
+                <span className="shrink-0 text-[10px] font-semibold text-tlw-signal-orange/70">
+                  {i + 1}
+                </span>
+                <span className="text-[12px] font-medium text-tlw-espresso">{c.name}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          map?.blurb && <p className="text-[11px] leading-snug text-tlw-warm-gray">{map.blurb}</p>
+        )}
+      </div>
+    )
+  }
+
+  // Large: name + components with descriptions
+  return (
+    <div>
+      <p className="mb-3 text-[13px] font-medium text-tlw-espresso">{name}</p>
+      {map?.components.length ? (
+        <ul className="space-y-2.5">
+          {map.components.map((c, i) => (
+            <li key={c.name} className="flex gap-2.5">
+              <span className="mt-0.5 shrink-0 text-[10px] font-semibold text-tlw-signal-orange/70">
+                {i + 1}
+              </span>
+              <div>
+                <p className="text-[12px] font-semibold text-tlw-espresso">{c.name}</p>
+                <p className="mt-0.5 text-[11px] leading-snug text-tlw-warm-gray">{c.description}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        map?.blurb && <p className="text-[11px] leading-snug text-tlw-warm-gray">{map.blurb}</p>
       )}
     </div>
   )
