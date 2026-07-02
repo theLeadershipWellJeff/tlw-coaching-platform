@@ -737,7 +737,9 @@ free-text note shown to the client at the top of the invoice; both additive/null
 032 billing skip + warnings (`engagements.skip_billing` boolean; `billable_sessions.appointment_id`
 FK; `billing_run_warnings` table for calendar cross-check and subscription no-sessions warnings) ·
 033 billing settings (`coaches.billing_settings` jsonb — preview_before_approve, auto_send_on_approve,
-cc_self_on_send; additive, NULL = defaults).
+cc_self_on_send; additive, NULL = defaults) · 034 transcript title (`transcripts.title` — human-readable
+title proposed at ingest from the calendar-slot match / Plaud summary / non-timestamp filename, coach-editable
+in the review queue; additive, nullable, NULL = UI falls back to filename/"Untitled"; **applied**).
 
 **Tenant scoping (015).** `coach_clients` (coach_id, client_id, role) is the
 ownership link. Client access is enforced **server-side** by the session coach,
