@@ -190,9 +190,18 @@ newest-first, 5 visible with a "Show all" expander; the notes list does the same
 **plus** persistent, per-client context loaded from the client record: **Key info**
 (`clients.key_info`,
 freeform reference — boss/spouse/kids), **Coaching map** (`clients.coaching_map`,
-a pulldown of the practice's maps — defined in `CoachingMapCard.tsx#MAPS`: The 6
-Components / The Airplane Model / First 90 Days / Who I Am Becoming; `blurb` field
-is the future home of click-to-view framework descriptions), and **Engagement
+a pulldown of the practice's maps — registry in `CoachingMapCard.tsx#MAPS`: The 6
+Components / The Airplane Model / First 90 Days / Who I Am Becoming / The Becoming
+Map. Clicking the assigned map's name opens a **structure pop-up** (portaled to
+`document.body` — the sticky rail's stacking context would otherwise trap it under
+the note editor; the Client goals modal is portaled for the same reason). The
+displayed structure is **drawn live from the vault repo**: `GET /api/vault/map?name=…`
+→ `lib/vault/maps.ts#getMapFromVault` finds the vault note by **title** (filename
+match anywhere in the repo, 5-min in-memory cache) and parses `### NN · Component`
+sections + `> [!question]` callouts into `{name, description, question}`. The
+hard-coded `MAPS` entries are the pulldown registry + **offline fallback only** —
+vault unconfigured / note missing / no `###` sections degrades to the built-in
+copy, never a blank card), and **Engagement
 goals** (the same `clients.coaching_goals` as the workspace card, edited via the
 "Client goals" modal). All three save with PATCH `/api/clients/[id]`
 (`KeyInfoCard`, `CoachingMapCard`, `EngagementGoalsCard`).
@@ -917,15 +926,13 @@ and back in** to grant calendar-write + populate the refresh token with it;
   prior notes (not just the current note), as a read-only reference list using the
   existing ✦ icon. Helps the coach see patterns without leaving the note editor.
 
-- **Coaching map — clickable framework viewer.** Once a coaching map is selected in
-  the `CoachingMapCard` pulldown, the map name becomes a clickable link/button that
-  opens an **inline dropdown or panel** listing the components of that framework
-  (e.g. "The 6 Components" lists all six; "Who I Am Becoming" lists its parts).
-  Content is static for now (defined in `CoachingMapCard.tsx#MAPS` — add a `components`
-  array to each map entry). Eventually this will be graphical; for now a clean list
-  is sufficient. Includes a **"Send to client"** button that emails the client a
-  formatted list of that framework's components as a quick reminder (uses the existing
-  Gmail send path, `POST /api/email/send`; no note attachment).
+- **Coaching map — clickable framework viewer.** ✅ Built: the assigned map's name
+  opens a structure pop-up whose content is drawn live from the vault repo
+  (`/api/vault/map` + `lib/vault/maps.ts`; built-in `MAPS` copy = offline fallback —
+  see the Session-notes panel section). Still open: the **"Send to client"** button
+  that emails the client a formatted list of that framework's components as a quick
+  reminder (uses the existing Gmail send path, `POST /api/email/send`; no note
+  attachment), and an eventual graphical rendering.
 
 - **Dashboard — Emails Sent card clickable.** The "Emails Sent" summary card on the
   dashboard becomes clickable and opens a modal listing all sent emails (from

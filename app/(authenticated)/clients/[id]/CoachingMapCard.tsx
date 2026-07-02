@@ -1,20 +1,61 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { Client } from '@/lib/supabase/types'
 
-type Component = { name: string; description: string }
+type Component = { name: string; description: string; question?: string }
 type CoachingMap = { name: string; blurb?: string; components: Component[] }
 
+// The pulldown's map registry + offline fallback. The DISPLAYED structure is
+// drawn live from the vault repo (GET /api/vault/map — a note titled like the
+// map, parsed by lib/vault/maps.ts); these built-in copies render only when the
+// vault is unconfigured/unreachable or has no matching note.
 const MAPS: CoachingMap[] = [
   {
     name: 'The 6 Components',
     components: [
-      { name: 'Identity', description: 'Who you believe yourself to be — values, strengths, and the story you tell about yourself.' },
-      { name: 'Mindset', description: 'The habitual patterns of thought that shape how you interpret challenge, failure, and opportunity.' },
-      { name: 'Relationships', description: 'The quality and health of the connections that enable — or constrain — your leadership.' },
-      { name: 'Practices', description: 'The consistent habits and rituals that sustain your energy and effectiveness over time.' },
-      { name: 'Environment', description: 'The physical, cultural, and systemic context you operate in, and how it supports or limits you.' },
-      { name: 'Impact', description: 'The difference you are making — outcomes, legacy, and how your work ripples outward.' },
+      {
+        name: 'Vision',
+        description:
+          'The clear, compelling summit your organization is climbing toward — a future state vivid enough to motivate, defined enough to measure, and aligned with your purpose and values. It answers: Where are we going and why does it matter?',
+        question:
+          'How clear, repeatable, and compelling is your vision for the organization or for this project — and what stands between you and it?',
+      },
+      {
+        name: 'People',
+        description:
+          'The right people, in the right seats. Every team member either adds value above the waterline or creates drag below it. The leader’s job is to see clearly and choose: develop the person’s capacity, or dismiss with dignity before the cost compounds.',
+        question:
+          'Which people are adding the most value to your organisation — and which are creating the most friction?',
+      },
+      {
+        name: 'Metrics',
+        description:
+          'Measure what matters — the handful of numbers that tell you whether the business is healthy right now. The best metrics are leading, not lagging — they signal what is coming before it arrives, giving leaders time to act rather than react.',
+        question:
+          'Which metrics need the most immediate attention — and are they telling you where you’re headed or only where you’ve been?',
+      },
+      {
+        name: 'Processes',
+        description:
+          'Organizing the organization — the how of your business, the repeatable ways work gets done. Strong processes remove friction, create consistency, and free leaders to lead. Weak ones create rework, confusion, and dependency on heroics.',
+        question:
+          'Which processes need to be developed or refined to remove friction or accelerate output?',
+      },
+      {
+        name: 'Issues',
+        description:
+          'The obstacles, barriers, and problems standing in the way of the vision. Every organisation has them. Great teams surface them, prioritise ruthlessly, and solve them at the root — not the symptom. (Wickman, Traction)',
+        question:
+          'What are two or three key issues that, if solved, would make the greatest difference to you right now?',
+      },
+      {
+        name: 'Traction',
+        description:
+          'The cadence and structure for accountability and alignment — the discipline that converts vision into weekly, quarterly, and annual results. Without traction, great plans simply age on whiteboards.',
+        question:
+          'What things are currently slipping, getting lost, or stuck — and what structure would restore momentum?',
+      },
     ],
   },
   {
@@ -74,9 +115,30 @@ export function CoachingMapCard({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [size, setSize] = useState<Size>('medium')
+  const [viewOpen, setViewOpen] = useState(false)
+  const [vaultMap, setVaultMap] = useState<CoachingMap | null>(null)
 
   const options = MAPS.some((m) => m.name === value) || !value ? MAPS : [...MAPS, { name: value, components: [] }]
-  const selectedMap = MAPS.find((m) => m.name === value)
+  // Live vault content wins; the built-in copy is the offline fallback.
+  const selectedMap = vaultMap ?? MAPS.find((m) => m.name === value)
+  const fromVault = vaultMap !== null
+
+  // Pull the assigned map's live structure from the vault repo. Errors and
+  // missing notes resolve to { map: null } → the built-in copy renders instead.
+  useEffect(() => {
+    setVaultMap(null)
+    if (!value) return
+    let cancelled = false
+    fetch(`/api/vault/map?name=${encodeURIComponent(value)}`)
+      .then((res) => (res.ok ? res.json() : { map: null }))
+      .then((data) => {
+        if (!cancelled && data.map?.components?.length) setVaultMap(data.map)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [value])
 
   async function save() {
     setBusy(true)
@@ -170,11 +232,104 @@ export function CoachingMapCard({
           </div>
         </div>
       ) : value ? (
-        <MapView map={selectedMap} fallbackName={value} size={size} />
+        <MapView map={selectedMap} fallbackName={value} size={size} onOpen={() => setViewOpen(true)} />
       ) : (
         <p className="text-[12px] text-tlw-warm-gray/70">No map assigned yet.</p>
       )}
+
+      {viewOpen && (
+        <MapStructureModal map={selectedMap} fallbackName={value} fromVault={fromVault} onClose={() => setViewOpen(false)} />
+      )}
     </div>
+  )
+}
+
+/**
+ * Pop-up view of the assigned map's full structure. Portaled to <body> like the
+ * Client goals modal — this card lives in the notes panel's sticky rail, whose
+ * stacking context would otherwise trap the overlay beneath the note editor.
+ */
+function MapStructureModal({
+  map,
+  fallbackName,
+  fromVault,
+  onClose,
+}: {
+  map: CoachingMap | undefined
+  fallbackName: string
+  fromVault: boolean
+  onClose: () => void
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const name = map?.name ?? fallbackName
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-tlw-navy-deep/40 p-4 py-10"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-xl rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface p-6 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-4 flex items-start justify-between">
+          <div>
+            <p className="text-[11px] font-medium uppercase tracking-[2px] text-tlw-warm-gray">
+              Coaching map{fromVault && <span className="ml-2 normal-case tracking-normal text-tlw-warm-gray/60">· live from vault</span>}
+            </p>
+            <p className="mt-0.5 text-[17px] font-medium text-tlw-navy-deep">{name}</p>
+            {map?.blurb && <p className="mt-1 text-[12px] leading-snug text-tlw-warm-gray">{map.blurb}</p>}
+          </div>
+          <button
+            onClick={onClose}
+            className="text-tlw-warm-gray transition-colors hover:text-tlw-espresso"
+            aria-label="Close"
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </div>
+
+        {map?.components.length ? (
+          <ul className="space-y-4">
+            {map.components.map((c, i) => (
+              <li key={c.name} className="flex gap-3">
+                <span className="mt-0.5 shrink-0 text-[11px] font-semibold text-tlw-signal-orange/70">{i + 1}</span>
+                <div>
+                  <p className="text-[13px] font-semibold text-tlw-espresso">{c.name}</p>
+                  <p className="mt-0.5 text-[12px] leading-snug text-tlw-warm-gray">{c.description}</p>
+                  {c.question && (
+                    <p className="mt-1.5 border-l-2 border-tlw-signal-orange/40 pl-2 text-[12px] italic leading-snug text-tlw-espresso/80">
+                      {c.question}
+                    </p>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-[12px] text-tlw-warm-gray/70">No structure is defined for this map.</p>
+        )}
+
+        <div className="mt-6 flex justify-end">
+          <button
+            onClick={onClose}
+            className="rounded-tlw-lg bg-tlw-navy-rich px-4 py-2 text-[13px] font-medium text-tlw-cream transition-opacity hover:opacity-90"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
   )
 }
 
@@ -182,23 +337,36 @@ function MapView({
   map,
   fallbackName,
   size,
+  onOpen,
 }: {
   map: CoachingMap | undefined
   fallbackName: string
   size: Size
+  onOpen: () => void
 }) {
   const name = map?.name ?? fallbackName
 
+  // The map name opens the structure pop-up in every size mode.
+  const nameButton = (className: string) => (
+    <button
+      onClick={onOpen}
+      title="View the map's structure"
+      className={`${className} text-left text-tlw-espresso underline-offset-2 hover:text-tlw-navy-deep hover:underline`}
+    >
+      {name}
+    </button>
+  )
+
   // Small: just the map name
   if (size === 'small') {
-    return <p className="text-[13px] font-medium text-tlw-espresso">{name}</p>
+    return nameButton('text-[13px] font-medium')
   }
 
   // Medium: name + component list (no descriptions)
   if (size === 'medium') {
     return (
       <div>
-        <p className="mb-2 text-[13px] font-medium text-tlw-espresso">{name}</p>
+        <div className="mb-2">{nameButton('text-[13px] font-medium')}</div>
         {map?.components.length ? (
           <ul className="space-y-1">
             {map.components.map((c, i) => (
@@ -220,7 +388,7 @@ function MapView({
   // Large: name + components with descriptions
   return (
     <div>
-      <p className="mb-3 text-[13px] font-medium text-tlw-espresso">{name}</p>
+      <div className="mb-3">{nameButton('text-[13px] font-medium')}</div>
       {map?.components.length ? (
         <ul className="space-y-2.5">
           {map.components.map((c, i) => (
