@@ -6,9 +6,10 @@ import type { Client } from '@/lib/supabase/types'
 type Component = { name: string; description: string; question?: string }
 type CoachingMap = { name: string; blurb?: string; components: Component[] }
 
-// "The 6 Components" content is Jeff's canonical framework text from the vault
-// (TheLeadershipWell-Vault). If it changes there, update it here to match — the
-// card is static and does not read from the vault.
+// The pulldown's map registry + offline fallback. The DISPLAYED structure is
+// drawn live from the vault repo (GET /api/vault/map — a note titled like the
+// map, parsed by lib/vault/maps.ts); these built-in copies render only when the
+// vault is unconfigured/unreachable or has no matching note.
 const MAPS: CoachingMap[] = [
   {
     name: 'The 6 Components',
@@ -115,9 +116,29 @@ export function CoachingMapCard({
   const [error, setError] = useState('')
   const [size, setSize] = useState<Size>('medium')
   const [viewOpen, setViewOpen] = useState(false)
+  const [vaultMap, setVaultMap] = useState<CoachingMap | null>(null)
 
   const options = MAPS.some((m) => m.name === value) || !value ? MAPS : [...MAPS, { name: value, components: [] }]
-  const selectedMap = MAPS.find((m) => m.name === value)
+  // Live vault content wins; the built-in copy is the offline fallback.
+  const selectedMap = vaultMap ?? MAPS.find((m) => m.name === value)
+  const fromVault = vaultMap !== null
+
+  // Pull the assigned map's live structure from the vault repo. Errors and
+  // missing notes resolve to { map: null } → the built-in copy renders instead.
+  useEffect(() => {
+    setVaultMap(null)
+    if (!value) return
+    let cancelled = false
+    fetch(`/api/vault/map?name=${encodeURIComponent(value)}`)
+      .then((res) => (res.ok ? res.json() : { map: null }))
+      .then((data) => {
+        if (!cancelled && data.map?.components?.length) setVaultMap(data.map)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [value])
 
   async function save() {
     setBusy(true)
@@ -216,7 +237,9 @@ export function CoachingMapCard({
         <p className="text-[12px] text-tlw-warm-gray/70">No map assigned yet.</p>
       )}
 
-      {viewOpen && <MapStructureModal map={selectedMap} fallbackName={value} onClose={() => setViewOpen(false)} />}
+      {viewOpen && (
+        <MapStructureModal map={selectedMap} fallbackName={value} fromVault={fromVault} onClose={() => setViewOpen(false)} />
+      )}
     </div>
   )
 }
@@ -229,10 +252,12 @@ export function CoachingMapCard({
 function MapStructureModal({
   map,
   fallbackName,
+  fromVault,
   onClose,
 }: {
   map: CoachingMap | undefined
   fallbackName: string
+  fromVault: boolean
   onClose: () => void
 }) {
   useEffect(() => {
@@ -256,7 +281,9 @@ function MapStructureModal({
       >
         <div className="mb-4 flex items-start justify-between">
           <div>
-            <p className="text-[11px] font-medium uppercase tracking-[2px] text-tlw-warm-gray">Coaching map</p>
+            <p className="text-[11px] font-medium uppercase tracking-[2px] text-tlw-warm-gray">
+              Coaching map{fromVault && <span className="ml-2 normal-case tracking-normal text-tlw-warm-gray/60">· live from vault</span>}
+            </p>
             <p className="mt-0.5 text-[17px] font-medium text-tlw-navy-deep">{name}</p>
             {map?.blurb && <p className="mt-1 text-[12px] leading-snug text-tlw-warm-gray">{map.blurb}</p>}
           </div>
