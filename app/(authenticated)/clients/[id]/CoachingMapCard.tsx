@@ -3,19 +3,58 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { Client } from '@/lib/supabase/types'
 
-type Component = { name: string; description: string }
+type Component = { name: string; description: string; question?: string }
 type CoachingMap = { name: string; blurb?: string; components: Component[] }
 
+// "The 6 Components" content is Jeff's canonical framework text from the vault
+// (TheLeadershipWell-Vault). If it changes there, update it here to match — the
+// card is static and does not read from the vault.
 const MAPS: CoachingMap[] = [
   {
     name: 'The 6 Components',
     components: [
-      { name: 'Identity', description: 'Who you believe yourself to be — values, strengths, and the story you tell about yourself.' },
-      { name: 'Mindset', description: 'The habitual patterns of thought that shape how you interpret challenge, failure, and opportunity.' },
-      { name: 'Relationships', description: 'The quality and health of the connections that enable — or constrain — your leadership.' },
-      { name: 'Practices', description: 'The consistent habits and rituals that sustain your energy and effectiveness over time.' },
-      { name: 'Environment', description: 'The physical, cultural, and systemic context you operate in, and how it supports or limits you.' },
-      { name: 'Impact', description: 'The difference you are making — outcomes, legacy, and how your work ripples outward.' },
+      {
+        name: 'Vision',
+        description:
+          'The clear, compelling summit your organization is climbing toward — a future state vivid enough to motivate, defined enough to measure, and aligned with your purpose and values. It answers: Where are we going and why does it matter?',
+        question:
+          'How clear, repeatable, and compelling is your vision for the organization or for this project — and what stands between you and it?',
+      },
+      {
+        name: 'People',
+        description:
+          'The right people, in the right seats. Every team member either adds value above the waterline or creates drag below it. The leader’s job is to see clearly and choose: develop the person’s capacity, or dismiss with dignity before the cost compounds.',
+        question:
+          'Which people are adding the most value to your organisation — and which are creating the most friction?',
+      },
+      {
+        name: 'Metrics',
+        description:
+          'Measure what matters — the handful of numbers that tell you whether the business is healthy right now. The best metrics are leading, not lagging — they signal what is coming before it arrives, giving leaders time to act rather than react.',
+        question:
+          'Which metrics need the most immediate attention — and are they telling you where you’re headed or only where you’ve been?',
+      },
+      {
+        name: 'Processes',
+        description:
+          'Organizing the organization — the how of your business, the repeatable ways work gets done. Strong processes remove friction, create consistency, and free leaders to lead. Weak ones create rework, confusion, and dependency on heroics.',
+        question:
+          'Which processes need to be developed or refined to remove friction or accelerate output?',
+      },
+      {
+        name: 'Issues',
+        description:
+          'The obstacles, barriers, and problems standing in the way of the vision. Every organisation has them. Great teams surface them, prioritise ruthlessly, and solve them at the root — not the symptom. (Wickman, Traction)',
+        question:
+          'What are two or three key issues that, if solved, would make the greatest difference to you right now?',
+      },
+      {
+        name: 'Traction',
+        description:
+          'The cadence and structure for accountability and alignment — the discipline that converts vision into weekly, quarterly, and annual results. Without traction, great plans simply age on whiteboards.',
+        question:
+          'What things are currently slipping, getting lost, or stuck — and what structure would restore momentum?',
+      },
     ],
   },
   {
@@ -233,13 +272,18 @@ function MapStructureModal({
         </div>
 
         {map?.components.length ? (
-          <ul className="space-y-3">
+          <ul className="space-y-4">
             {map.components.map((c, i) => (
               <li key={c.name} className="flex gap-3">
                 <span className="mt-0.5 shrink-0 text-[11px] font-semibold text-tlw-signal-orange/70">{i + 1}</span>
                 <div>
                   <p className="text-[13px] font-semibold text-tlw-espresso">{c.name}</p>
                   <p className="mt-0.5 text-[12px] leading-snug text-tlw-warm-gray">{c.description}</p>
+                  {c.question && (
+                    <p className="mt-1.5 border-l-2 border-tlw-signal-orange/40 pl-2 text-[12px] italic leading-snug text-tlw-espresso/80">
+                      {c.question}
+                    </p>
+                  )}
                 </div>
               </li>
             ))}
