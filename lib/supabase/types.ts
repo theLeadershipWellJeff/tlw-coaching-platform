@@ -422,6 +422,7 @@ export type Transcript = {
   source: string
   drive_file_id: string | null
   filename: string | null
+  title: string | null // human-readable title (calendar/Plaud-derived, coach-editable)
   raw_md: string
   content_hash: string
   session_date: DateString | null

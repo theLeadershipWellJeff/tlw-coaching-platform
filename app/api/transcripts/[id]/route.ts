@@ -3,7 +3,7 @@ import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { getSessionCoach } from '@/lib/coach'
 import { coachCanAccessClient } from '@/lib/client-access'
 import { runAndStoreReport } from '@/lib/scoring/store'
-import { parseTranscript } from '@/lib/transcripts/parse'
+import { parseTranscript, buildTranscriptTitle } from '@/lib/transcripts/parse'
 
 export const runtime = 'nodejs'
 // Scoring a full transcript can exceed a minute (engine times out at 100s).
@@ -29,7 +29,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
   const { data: transcript, error } = await supabase
     .from('transcripts')
-    .select('id, filename, session_date, source, raw_md')
+    .select('id, filename, title, session_date, source, raw_md')
     .eq('id', params.id)
     .eq('coach_id', coach.id)
     .maybeSingle()
@@ -42,6 +42,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   return NextResponse.json({
     id: transcript.id,
     filename: transcript.filename,
+    title: transcript.title,
     session_date: transcript.session_date,
     source: transcript.source,
     speakerSeparated: parsed.isSpeakerSeparated,
@@ -52,8 +53,9 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
 /**
  * Resolve a needs-review transcript by confirming its client, then score it.
- * Also used to re-score (pass rescore: true without changing the client).
- * Body: { clientId?: string, rescore?: boolean }
+ * Also used to re-score (pass rescore: true without changing the client) and to
+ * rename the transcript (pass title only — no scoring).
+ * Body: { clientId?: string, rescore?: boolean, title?: string }
  */
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   let supabase: ReturnType<typeof getSupabaseAdmin>
@@ -82,6 +84,21 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (readErr) return NextResponse.json({ error: readErr.message }, { status: 500 })
   if (!transcript) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
+  // Rename: if a title was provided, apply it. When that's the whole request
+  // (no client to confirm, no rescore), we're done — don't score.
+  if (typeof body.title === 'string') {
+    const title = body.title.trim() || null
+    const { error: titleErr } = await supabase
+      .from('transcripts')
+      .update({ title })
+      .eq('id', transcript.id)
+    if (titleErr) return NextResponse.json({ error: titleErr.message }, { status: 500 })
+    transcript.title = title
+    if (!body.clientId && !body.rescore) {
+      return NextResponse.json({ title })
+    }
+  }
+
   // Confirm the client assignment if one was provided.
   if (body.clientId) {
     // Tenant boundary: a transcript may only be assigned to a client this coach
@@ -96,15 +113,25 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       .maybeSingle()
     if (!client) return NextResponse.json({ error: 'Unknown client' }, { status: 400 })
 
+    // Confirming the client is the manual equivalent of a calendar-slot match, so
+    // upgrade a still-generic title ("Session · …" or empty) to the client-anchored
+    // one. Leave a Plaud summary or a coach-renamed title untouched.
+    const currentTitle = (transcript.title || '').trim()
+    const isGeneric = !currentTitle || /^Session · /.test(currentTitle)
+    const nextTitle = isGeneric
+      ? buildTranscriptTitle({ clientName: client.name, sessionDate: transcript.session_date })
+      : transcript.title
+
     const { data: updated, error: updErr } = await supabase
       .from('transcripts')
-      .update({ client_id: client.id, match_status: 'matched', match_confidence: 1 })
+      .update({ client_id: client.id, match_status: 'matched', match_confidence: 1, title: nextTitle })
       .eq('id', transcript.id)
       .select('*')
       .single()
     if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 })
     transcript.client_id = updated.client_id
     transcript.match_status = updated.match_status
+    transcript.title = updated.title
   }
 
   if (!transcript.client_id) {

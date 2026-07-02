@@ -40,6 +40,7 @@ interface TranscriptRow {
   client_initials: string | null
   client_name: string | null
   filename: string | null
+  title: string | null
   session_date: string | null
   match_confidence: number | null
   preview: string | null
@@ -305,6 +306,9 @@ export function ScorecardSpace() {
   const [previewCache, setPreviewCache] = useState<
     Record<string, { loading?: boolean; text?: string; truncated?: boolean; speakerSeparated?: boolean; error?: string }>
   >({})
+  const [renaming, setRenaming] = useState<string | null>(null)
+  const [renameText, setRenameText] = useState('')
+  const [renameSaving, setRenameSaving] = useState(false)
 
   async function togglePreview(id: string) {
     if (openPreview === id) {
@@ -396,6 +400,30 @@ export function ScorecardSpace() {
     const t = setInterval(() => setAssigningElapsed((s) => s + 1), 1000)
     return () => clearInterval(t)
   }, [assigning])
+
+  function startRename(t: TranscriptRow) {
+    setRenaming(t.id)
+    setRenameText(t.title || t.filename || '')
+  }
+
+  async function saveRename(transcriptId: string) {
+    setRenameSaving(true)
+    try {
+      const res = await fetch(`/api/transcripts/${transcriptId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: renameText.trim() }),
+      })
+      if (res.ok) {
+        const d = await res.json().catch(() => ({}))
+        const title = d.title ?? (renameText.trim() || null)
+        setNeedsReview((rows) => rows.map((r) => (r.id === transcriptId ? { ...r, title } : r)))
+        setRenaming(null)
+      }
+    } finally {
+      setRenameSaving(false)
+    }
+  }
 
   async function confirmClient(transcriptId: string) {
     const clientId = picked[transcriptId]
@@ -544,12 +572,54 @@ export function ScorecardSpace() {
                 >
                   <div className="flex flex-wrap items-center gap-3">
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-[13px] text-tlw-espresso">
-                        {t.filename || 'Untitled recording'}{' '}
-                        {(t.client_name || t.client_initials) && (
-                          <span className="text-tlw-warm-gray">· {t.client_name || t.client_initials}</span>
-                        )}
-                      </p>
+                      {renaming === t.id ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            autoFocus
+                            value={renameText}
+                            onChange={(e) => setRenameText(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') saveRename(t.id)
+                              if (e.key === 'Escape') setRenaming(null)
+                            }}
+                            placeholder="Title…"
+                            className="min-w-0 flex-1 rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-surface px-2 py-1 text-[13px] text-tlw-espresso"
+                          />
+                          <button
+                            onClick={() => saveRename(t.id)}
+                            disabled={renameSaving}
+                            className="rounded-tlw-md bg-tlw-navy-rich px-2.5 py-1 text-[12px] font-medium text-tlw-cream transition-opacity duration-tlw-base hover:opacity-90 disabled:opacity-40"
+                          >
+                            {renameSaving ? 'saving…' : 'save'}
+                          </button>
+                          <button
+                            onClick={() => setRenaming(null)}
+                            disabled={renameSaving}
+                            className="rounded-tlw-md px-1.5 py-1 text-[12px] text-tlw-warm-gray transition-opacity duration-tlw-base hover:opacity-80"
+                          >
+                            cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="group flex items-center gap-1.5 text-[13px] text-tlw-espresso">
+                          <span className="truncate">
+                            {t.title || t.filename || 'Untitled recording'}{' '}
+                            {(t.client_name || t.client_initials) && (
+                              <span className="text-tlw-warm-gray">· {t.client_name || t.client_initials}</span>
+                            )}
+                          </span>
+                          <button
+                            onClick={() => startRename(t)}
+                            title="Rename"
+                            className="shrink-0 text-tlw-warm-gray opacity-0 transition-opacity duration-tlw-base hover:text-tlw-espresso group-hover:opacity-100"
+                          >
+                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M12 20h9" />
+                              <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                            </svg>
+                          </button>
+                        </p>
+                      )}
                       <p className="text-[11px] text-tlw-warm-gray">
                         {fmtDate(t.session_date)}
                         {t.match_confidence != null && t.match_confidence > 0 && (

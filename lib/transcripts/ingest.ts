@@ -8,7 +8,7 @@
 import { createHash } from 'crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Coach, Database } from '@/lib/supabase/types'
-import { parseTranscript, deriveInitials } from './parse'
+import { parseTranscript, deriveInitials, buildTranscriptTitle } from './parse'
 import { matchClient, type RosterClient } from './match'
 import { runAndStoreReport } from '@/lib/scoring/store'
 import {
@@ -64,11 +64,12 @@ export async function ingestMarkdown(
   const { coach, markdown } = input
   const filename = input.filename ?? null
   const contentHash = createHash('sha256').update(canonicalizeForHash(markdown)).digest('hex')
+  const parsed = parseTranscript(filename, markdown)
 
   // Idempotency: already ingested this exact transcript?
   const { data: dupe } = await supabase
     .from('transcripts')
-    .select('id, client_id, match_status, match_confidence, client_initials')
+    .select('id, client_id, match_status, match_confidence, client_initials, title, session_date')
     .eq('content_hash', contentHash)
     .maybeSingle()
   if (dupe) {
@@ -80,6 +81,16 @@ export async function ingestMarkdown(
       const fc = input.forceClient
       const initials = deriveInitials(fc.name)
       if (dupe.client_id !== fc.id || dupe.match_status !== 'matched') {
+        // Now that we know the client, give it a calendar-slot-style title too
+        // (unless it already carries one the coach may have edited).
+        const title =
+          dupe.title ||
+          buildTranscriptTitle({
+            clientName: fc.name,
+            sessionDate: dupe.session_date || parsed.sessionDate,
+            summaryRaw: parsed.titleRaw,
+            filename,
+          })
         await supabase
           .from('transcripts')
           .update({
@@ -87,6 +98,7 @@ export async function ingestMarkdown(
             client_initials: initials,
             match_status: 'matched',
             match_confidence: 1,
+            title,
           })
           .eq('id', dupe.id)
       }
@@ -96,7 +108,7 @@ export async function ingestMarkdown(
         matchStatus: 'matched',
         matchConfidence: 1,
         clientInitials: initials,
-        speakerSeparated: parseTranscript(filename, markdown).isSpeakerSeparated,
+        speakerSeparated: parsed.isSpeakerSeparated,
         reportId: null,
         scoringError: null,
       }
@@ -107,13 +119,11 @@ export async function ingestMarkdown(
       matchStatus: dupe.match_status,
       matchConfidence: dupe.match_confidence ?? 0,
       clientInitials: dupe.client_initials,
-      speakerSeparated: parseTranscript(filename, markdown).isSpeakerSeparated,
+      speakerSeparated: parsed.isSpeakerSeparated,
       reportId: null,
       scoringError: null,
     }
   }
-
-  const parsed = parseTranscript(filename, markdown)
 
   let match: { clientId: string | null; confidence: number; status: string }
   let matchedName: string | null = null
@@ -150,6 +160,15 @@ export async function ingestMarkdown(
   // else from whatever name the file carried.
   const clientInitials = matchedName ? deriveInitials(matchedName) : parsed.clientInitials
 
+  // Propose a human title — the calendar/name match gives us the client; else
+  // Plaud's summary title, else a real (non-timestamp) filename.
+  const title = buildTranscriptTitle({
+    clientName: matchedName,
+    sessionDate: input.sessionDate || parsed.sessionDate,
+    summaryRaw: parsed.titleRaw,
+    filename,
+  })
+
   const insert: Database['public']['Tables']['transcripts']['Insert'] = {
     coach_id: coach.id,
     client_id: match.clientId,
@@ -157,6 +176,7 @@ export async function ingestMarkdown(
     source: input.source || 'plaud',
     drive_file_id: input.driveFileId ?? null,
     filename,
+    title,
     raw_md: markdown,
     content_hash: contentHash,
     session_date: input.sessionDate || parsed.sessionDate,
