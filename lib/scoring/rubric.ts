@@ -70,19 +70,24 @@ export const COMPETENCY_BANDS: Record<number, Partial<Record<Band, string>>> = {
   // 1 — Demonstrates ethical practice. Gate 1 (two-tier, v0.4): a signed
   // agreement on file satisfies the disclosure obligation; else verbal consent
   // to record at open passes. The band-2 ceiling applies only when BOTH are
-  // absent. Recording consent (agreement or verbal) = band-4 marker. The
-  // coaching/counseling boundary (1.06) is crossed only by wound-repair attempts.
+  // absent. v0.5.2 platform-boolean precedence: observed in-session verbal
+  // consent PASSES the gate regardless of the recording_authorized/agreement_on_file
+  // booleans — but passing the gate confirms only the FLOOR. Band 4 requires the
+  // fuller ethical infrastructure CONFIRMED ON FILE (signed agreement AND recorded
+  // authorization); unset/false platform booleans cap C1 below band 4 even when
+  // the gate passes on verbal consent. The coaching/counseling boundary (1.06) is
+  // crossed only by wound-repair attempts.
   1: {
     Emerging:
       'Ethical obligations not met; confidentiality or role distinctions breached.',
     Developing:
       'Partial ethical practice; no signed agreement on file AND no verbal consent to record at session open (Gate 1 — band-2 ceiling).',
     Proficient:
-      'Ethical standards met; role distinctions generally maintained; recording consent in place (signed agreement on file or verbal consent at open).',
+      'Ethical standards met; role distinctions generally maintained; recording consent obtained (signed agreement on file, or observed verbal consent at open). Verbal consent with unset/false platform booleans lands here — the gate passes but the on-file infrastructure is not confirmed (v0.5.2 ceiling: below band 4).',
     Strong:
-      'Recording/AI consent established — by a signed coaching agreement on file or explicit verbal consent at session open. Role distinctions maintained throughout (ICF 1.06, 2.5).',
+      'Recording/AI consent infrastructure CONFIRMED ON FILE — a signed coaching agreement AND recorded authorization on the client record, not verbal consent alone. Role distinctions maintained throughout (ICF 1.06, 2.5). v0.5.2: observed verbal consent passes the gate but does not, by itself, reach band 4 — the platform booleans must confirm the infrastructure.',
     Masterful:
-      'Ethics woven into the coaching relationship itself — proactive, transparent, client-empowering. The client experiences the ethical stance as care, not compliance.',
+      'Ethics woven into the coaching relationship itself — proactive, transparent, client-empowering. The client experiences the ethical stance as care, not compliance. On-file consent infrastructure fully confirmed.',
   },
   // 2 — Embodies a coaching mindset. v0.5 B2: signaling a role shift earns
   // mindset credit off the floor (2.04 bias-awareness, ethics 3.7 disclosure).
@@ -213,7 +218,7 @@ export const CROSS_COMPETENCY_PRINCIPLES: { name: string; text: string }[] = [
   },
   {
     name: 'The Consultant Pull Signature',
-    text: 'v0.5 A4: consultant move count > 3 is a coach-facing advisory flag ("pattern to watch"), not a score-down on C2. The mode read lands on C7 and the overall via Q:S (redefined as questions:consultative-telling). When the coach perceives ~60% questions but the engine reads Q:S < 1:1, that gap is the signature of consultant pull under engagement.',
+    text: 'v0.5.2: a consultant move is a contiguous ENVELOPE (opened by a role-shift out of coaching mode, closed by re-contract, a floor-returning question, or a pause the client fills) — counted ONCE per envelope, not per advice-act. v0.5 A4: envelope count > 3 is a coach-facing advisory flag ("pattern to watch"), not a score-down on C2. The mode read lands on C7 and the overall via Q:S (redefined as questions:consultative-telling). When the coach perceives ~60% questions but the engine reads Q:S < 1:1, that gap is the signature of consultant pull under engagement. Execution quality (each envelope terse and floor-returned) is scored per envelope even when the count stays within coaching mode.',
   },
   {
     name: 'The Co-thinking / Consulting Boundary',
