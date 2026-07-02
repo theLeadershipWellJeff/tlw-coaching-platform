@@ -12,9 +12,10 @@ A coaching platform for Dr. Jeff Holmes (theLeadershipWell). Two pillars:
    sent via Gmail.
 2. **Coaching scorecard** — scores recorded sessions against the ICF 2025 Core
    Competencies refined by theLeadershipWell's standards. The **consolidated
-   spec `spec/theLeadershipWell_Session_Report_Spec_v0.4.md` is the single
-   source of truth** — read it before touching scoring (the older `..._v0.3.md`
-   is kept for history only).
+   spec `spec/theLeadershipWell_Session_Report_Spec_v0.4.md` is the base source
+   of truth**, then apply the deltas **in order**: `..._v0.5.md` → `..._v0.5.1.md`
+   → **`..._v0.5.2.md` (latest — read this last)**. Read the base + all deltas
+   before touching scoring (the older `..._v0.3.md` is kept for history only).
 
 Plus a **client workspace** (per-client hub) and **roster**.
 
@@ -139,6 +140,23 @@ consultant-move** who-synthesises test, and the **single-instance band-4
 standard** for C4–C7. Output carries `gates_triggered` (per competency + session)
 and `session.standing_engagement`; shape = spec §14 (`lib/scoring/types.ts`).
 `lib/scoring/aggregate.ts` rolls reports into the dashboard/scorecard numbers.
+
+**v0.5.2 additions (T.S. anchor, July 2 2026).** (1) **Layer 0 data integrity**
+runs before scoring, all fail-loud into `report.integrity`: L0.1 collapses phantom/
+minority speakers (model-reported `speaker_reassignments`, `confirmed:false`), L0.2
+keeps only telling statements in the Q:S denominator (`question_to_statement_note`),
+L0.3 re-verifies every **quoted** evidence string is a literal transcript substring
+in `enforceRules` (`verifyEvidenceVerbatim` — pass `transcript` in; misses set
+`evidence_verbatim_check:"fail"`). `flags_for_manual_review` aggregates these +
+low-confidence attribution; surfaced as a warning banner on the report. (2) A
+**consultant move is a contiguous envelope** (open at a role-shift, close at re-
+contract / floor-returning question / client-filled pause) counted **once per
+envelope** with a `span`; count>3 stays amber advisory (v0.5 A4, no C2 cap),
+execution scored per envelope. (3) **C1 platform-boolean precedence:** observed
+verbal consent passes Gate 1 regardless of `recording_authorized`
+(`gate1 = !agreementOnFile && !verbalConsent`); but unconfirmed on-file
+infrastructure (not both `agreement_on_file` AND `recording_authorized===true`)
+caps C1 at **3.4** below band 4 (`c1_ceiling`).
 
 **Rescore.** `runAndStoreReport` upserts on `transcript_id`, so re-running it
 replaces the machine report in place (coach self-scores/notes live in separate

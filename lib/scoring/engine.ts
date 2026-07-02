@@ -1,9 +1,27 @@
 /**
- * The coaching evaluation engine — spec v0.5.
+ * The coaching evaluation engine — spec v0.5.2.
  *
  * Sends a speaker-separated transcript to Claude with the Session Report Spec
- * v0.5 encoded as instructions, gets back the §12 JSON, then enforces the
+ * v0.5.2 encoded as instructions, gets back the §12 JSON, then enforces the
  * mechanical rules deterministically in code so they can't drift.
+ *
+ * v0.5.2 changes from v0.5.1 (T.S. session calibration, July 2 2026):
+ *   L0 — Data-integrity layer that runs BEFORE scoring, all fail-loud:
+ *     L0.1 collapse phantom/minority speakers (<5% of turns or <3 turns) onto the
+ *          nearest primary speaker, surfaced for manual confirmation.
+ *     L0.2 classify every coach utterance BEFORE the ratio — only telling
+ *          statements count toward the Q:S denominator (evocative reflections out).
+ *     L0.3 every quoted evidence string must be a literal transcript substring —
+ *          verified in code, fail-loud (flags for manual review) on any miss.
+ *   §7 — A consultant move is a contiguous ENVELOPE (opened by a role-shift out of
+ *        coaching mode, closed by re-contract / a floor-returning question / a
+ *        pause the client fills), NOT a single advice-act. Count increments once
+ *        per envelope; each move carries a `span`. Fixes the T.S. 7-vs-2 count gap.
+ *   C1 — Platform-boolean precedence: observed in-session verbal consent PASSES
+ *        the Tier-2 gate regardless of the recording_authorized boolean; the gate
+ *        fails only when BOTH no agreement on file AND no verbal consent. But
+ *        unset/false platform booleans cap C1 BELOW band 4 — band 4 requires the
+ *        on-file infrastructure (signed agreement + recorded authorization).
  *
  * v0.5 changes from v0.4:
  *   A1: Speaker-attribution integrity step — role-map by session structure, not
@@ -39,9 +57,11 @@ import type {
   CompetencyScore,
   ConsultantMove,
   Flag,
+  IntegrityBlock,
   Metrics,
   RecordingConsentFlag,
   SessionReportJson,
+  SpeakerReassignment,
   UtteranceTaxonomy,
 } from './types'
 
@@ -130,7 +150,7 @@ function buildPrompt(transcript: string, ctx: ScoringContext): string {
     (p) => `  - ${p.name}: ${p.text}`
   ).join('\n')
 
-  return `Score this coaching session against theLeadershipWell's Session Report Spec v0.5.
+  return `Score this coaching session against theLeadershipWell's Session Report Spec v0.5.2.
 
 SESSION CONTEXT
   coach: ${ctx.coachName}
@@ -157,6 +177,11 @@ ${buildRubricBlock()}
 
 CROSS-COMPETENCY PRINCIPLES (theLeadershipWell IP — apply across all eight):
 ${principles}
+
+LAYER 0 — DATA INTEGRITY (v0.5.2 — run these THREE checks BEFORE any metric or competency is scored; all are FAIL-LOUD: flag for manual confirmation, never silently proceed):
+  L0.1 — SPEAKER MIS-ATTRIBUTION COLLAPSE. A phantom or minority speaker label (one appearing in fewer than 5% of turns, OR fewer than 3 turns total — whichever is larger) is a candidate mis-attribution that distorts talk-time and the Q:S ratio. Reassign each such turn to the nearest PRIMARY speaker by content and role consistency (question-asking cadence / reflective register → coach; narrative / self-disclosure → client). Record every reassignment in integrity.speaker_reassignments as { from, to, turns:[timestamps], confirmed:false } and DO NOT silently merge — the reassignment is provisional until a human confirms it.
+  L0.2 — UTTERANCE CLASSIFICATION PRECEDES THE RATIO. Classify every coach utterance into its bucket (STEP 2 below) BEFORE computing question_to_statement. Evocative reflections are evocation, not telling — they are EXCLUDED from the statement denominator; only consultative/telling statements count. This prevents the coach's strongest register (evocative reflection) from being miscounted as telling and inflating the denominator.
+  L0.3 — EVIDENCE STRINGS MUST BE VERBATIM. Every string you place inside quotation marks — in a competency evidence note, an evidence_moments quote_short, or anywhere — MUST be a LITERAL substring of the transcript above (identical except for whitespace and casing). NEVER synthesize, reconstruct, paraphrase, or approximate a quote and present it inside quotation marks. If you want to characterize a move in your own words, do so WITHOUT quotation marks (an unquoted paraphrase is fine). A fabricated quote is fatal to a calibration anchor. The engine re-verifies every quoted string against the transcript after you respond and fails loud on any miss.
 
 STEP 1 — SPEAKER ATTRIBUTION (v0.5 A1 — do this BEFORE computing any metrics):
   Transcripts from Plaud use numbered diarization (Speaker 1, Speaker 2, …) — NOT role-mapped. Do NOT assume the lower-numbered speaker is the coach.
@@ -188,7 +213,12 @@ theLEADERSHIPWELL STANDARDS (apply these on top of ICF):
   - Flagged emotion (>= 2 per session): coach moves that tune into client emotion. See EMOTION MOVE CLASSIFICATION.
   - Feeling exploration (>= 1 per session): staying WITH a feeling and asking into its origin, meaning, function, or cost. ZERO explorations triggers Gate 3 on C6's EMOTIONAL DIMENSION (see GATE RULES and C6 DIMENSIONAL SCORING).
   - Q:S: questions:consultative-telling — parity (1:1) or statements-lead is red.
-  - Consultant/teaching/framework moves: welcome when signaled, permissioned, brief, and floor-returned. For each, mark the four criteria true/false. Count > 3 is a coach-facing advisory flag ("pattern to watch") — it does NOT cap C2. v0.5 A4.
+  - Consultant/teaching/framework moves are counted as ENVELOPES (v0.5.2 §7 — the single most important counting rule):
+      · An envelope OPENS at a role-shift OUT of coaching mode (into consulting, teaching, mentoring, framework-offering, or spiritual direction) — whether that shift is signaled or unsignaled.
+      · An envelope CLOSES at the coach's return to coaching mode, evidenced by ANY of: (a) an explicit re-contract ("I'll put my coach hat back on"); (b) a floor-returning coaching question ("What are your thoughts on that?", "How do you feel about that?"); (c) a pause after which the client returns to reflection unprompted (the coach hands the role back and the client picks it up).
+      · EVERYTHING between open and close is ONE move — regardless of how many sentences, distinct recommendations, or topic shifts occur inside the envelope. Increment the count ONCE per envelope. Do NOT count each discrete advice-act separately (that is the bug this rule fixes).
+      · Score each ENVELOPE on the four criteria at envelope scope: Signaled (was the OPENING role-shift named?), Permissioned (did the client agree before the envelope proceeded?), Brief (is the WHOLE envelope terse, or does it crowd out client discovery? — long envelopes fail brief even when they pass the other three), Floor returned (did a close-signal a/b/c actually occur?). Record each move's approximate transcript span (e.g. "50:40-53:21").
+      · Envelope count > 3 is a coach-facing advisory flag ("pattern to watch") — it does NOT cap C2 (v0.5 A4). Execution quality is judged per envelope regardless of the count.
   - Attunement Standard (Competencies 5, 6, 8): focus earns a 3; reaching a 4 REQUIRES attunement — visible responsiveness to what is emerging beneath the content.
   - SINGLE-INSTANCE STANDARD: for C4, C5, C6, C7, ONE clear qualifying band-4 move is sufficient to reach band 4.
 
@@ -213,16 +243,16 @@ C8 OFFER vs. RECOMMENDATION (v0.5 B5 — the "without attachment" test):
   - Recommendation: coach authors the forward action, hands it over, client receives. Coach is invested in adoption. Caps at band 3 (does not meet authorship hinge).
   - Offer of the client's own insight: the client has already touched the action/insight; the coach crystallizes it into concrete form and hands it BACK for the client to accept, reject, or reshape. Coach is NOT attached. Authorship stays with the client. Meets the band-4 hinge (8.02, 8.03).
 
-AI / RECORDING DISCLOSURE — TWO-TIER STANDARD (spec §9 C1; drives Gate 1):
-  - Tier 1 — agreement on file: if agreement_on_file is true AND recording_authorized is not false, the disclosure obligation is FULLY satisfied. Do NOT evaluate session-level disclosure. Set verbal_consent_to_record to false. Gate 1 does NOT trigger.
-    EXCEPTION (v0.5 A3): if agreement_on_file is true AND recording_authorized is false, this may be a data-capture error. Still set verbal_consent_to_record based on what you hear. The ENGINE will handle the Gate 1 decision — do not apply it yourself.
-  - Tier 2 — no agreement on file: scan the first ~5 minutes for explicit client consent to RECORD. ANY affirmative response passes. Set verbal_consent_to_record true if present, otherwise false.
+AI / RECORDING DISCLOSURE — TWO-TIER STANDARD (spec §9 C1; drives Gate 1. v0.5.2 platform-boolean precedence):
+  - ALWAYS scan the first ~5 minutes for explicit client consent to RECORD ("are you okay if I record our session?" → client affirms). ANY affirmative response = observed verbal consent. Set verbal_consent_to_record true if present, otherwise false — do this regardless of the platform booleans, because observed in-session consent PASSES the disclosure gate even when recording_authorized is unset or false (v0.5.2: observed evidence outranks an unset/false flag for the purpose of passing the gate).
+  - The two-tier gate FAILS only when BOTH: (i) no signed agreement on file AND (ii) no verbal consent observed in-session. If either holds, the gate passes. The engine computes the Gate 1 decision — do not apply it yourself.
+  - CEILING (v0.5.2): passing the gate confirms only the FLOOR. It does NOT certify that the fuller ethical infrastructure (signed agreement + recorded authorization) is complete. Band 4+ requires that infrastructure confirmed on file; when the platform booleans are unset/false the engine caps C1 below band 4 even though the gate passes. So a session that passes on verbal consent alone should land around band 3 (Proficient), not band 4 — score C1 on its merits and let the engine apply the ceiling.
   - You are NOT required to find AI scoring disclosure anywhere. The signed agreement carries those obligations.
 
 COACHING / COUNSELING BOUNDARY (§9 C1.06): crossed ONLY when the coach attempts to repair psychological wounds. NOT a violation: psychological analysis of third parties as context; exploring the client's emotional patterns/triggers; emotional-wellbeing regulation; relational dynamics where the client is the focal point; extended exploration of the client's internal experience. Flag ONLY on: diagnosing a psychological condition, therapeutic intervention aimed at resolving trauma, or a sustained therapeutic frame. When in doubt, do NOT flag.
 
 GATE RULES (hard ceilings — enforced in code; report each gate boolean and list the gate id on the affected competency):
-  - Gate 1 → C1 capped at band 2: ONLY when NO agreement on file AND no verbal consent to record (agreement_on_file false AND verbal_consent_to_record false). NOTE: when agreement_on_file is true and recording_authorized is false, the ENGINE handles this case — set verbal_consent_to_record from what you hear and let the engine decide.
+  - Gate 1 → C1 capped at band 2: ONLY when NO agreement on file AND no verbal consent to record (agreement_on_file false AND verbal_consent_to_record false). v0.5.2: observed verbal consent passes this gate regardless of the recording_authorized boolean. SEPARATELY, when the on-file infrastructure is not confirmed (no signed agreement on file, or recording_authorized not true), the engine caps C1 below band 4 — this is a ceiling, not the gate.
   - Gate 2 → C3 capped at band 2: no client-named insight at close AND no standing engagement. If standing engagement present, Gate 2 does NOT trigger. NOTE (v0.5.1 Patch 2): a client-generated recap or summary at close satisfies the close for C3 band 4 — explicit coach-named closure is a band-5 signal only, not a band-4 requirement.
   - Gate 3 → C6 EMOTIONAL DIMENSION capped at band 3 (score 3.0): zero qualifying feeling explorations. The cognitive/structural dimension is NOT capped. IMPORTANT: do NOT apply this cap to the top-level C6 score or to the emotional sub-score yourself — report raw sub-scores in "dimensions" and let the engine enforce Gate 3 and compute the composite. The composite formula (cognitive-favoring weighted blend with emotional floor) can lift the final C6 above 3.0 when cognitive/structural listening is strong.
 
@@ -231,11 +261,12 @@ SET session.standing_engagement to true when the transcript shows an ongoing eng
 TRANSCRIPT REQUIREMENT
   You need a speaker-separated verbatim transcript to compute metrics. If NOT speaker-separated, set every metric field to null and set metrics.source to "unavailable". Otherwise set metrics.source to "parsed".
 
-Return EXACTLY this JSON shape (v0.5):
+Return EXACTLY this JSON shape (v0.5.2):
 {
   "session": { "coach": "${ctx.coachName}", "client_initials": "${ctx.clientInitials}", "type": "${ctx.sessionType || ''}", "session_number": ${ctx.sessionNumber ?? 'null'}, "engagement_total": ${ctx.engagementTotal ?? 'null'}, "date": "${ctx.sessionDate}", "standing_engagement": false },
   "overall_score": 0.0,
   "band": "Proficient",
+  "integrity": { "speaker_reassignments": [ { "from": "Speaker 3", "to": "coach", "turns": ["48:45"], "confirmed": false } ] },
   "attribution": { "method": "role-mapped", "source": "plaud-diarization", "confidence": "high", "likely_swap_flag": false },
   "competencies": [
     { "id": 1, "name": "Demonstrates ethical practice", "domain": "Foundation", "score": 3.0, "band": "Proficient", "evidence": "one line tied to a moment", "subcompetency_refs": ["1.01"], "gates_triggered": [] },
@@ -253,13 +284,15 @@ Return EXACTLY this JSON shape (v0.5):
     "flagged_emotion_count": 0,
     "feeling_explorations": 0,
     "question_to_statement": "1:1",
+    "question_to_statement_note": "telling_statements only; evocative_reflections excluded (L0.2)",
     "utterance_taxonomy": { "questions": 0, "evocative_reflections": 0, "co_thinking": 0, "consultative_telling": 0, "process_logistics": 0 },
     "reflective_pauses": 0,
     "role_shifts_flagged": 0,
     "consultant_moves": {
       "count": 0,
+      "unit": "envelope",
       "moves": [
-        { "description": "...", "signaled": true, "permissioned": true, "brief": true, "floor_returned": true, "score": 4, "status": "green" }
+        { "description": "...", "span": "50:40-53:21", "signaled": true, "permissioned": true, "brief": true, "floor_returned": true, "score": 4, "status": "green" }
       ]
     },
     "source": "parsed"
@@ -363,6 +396,8 @@ function enforceMetrics(raw: any): Metrics {
       (m?.floor_returned ? 1 : 0)
     return {
       description: String(m?.description || ''),
+      // v0.5.2: the envelope's approximate transcript span, when the model reports it.
+      span: m?.span ? String(m.span) : undefined,
       signaled: !!m?.signaled,
       permissioned: !!m?.permissioned,
       brief: !!m?.brief,
@@ -411,10 +446,15 @@ function enforceMetrics(raw: any): Metrics {
     feeling_explorations_flag: explorationFlag(explorations),
     question_to_statement: raw?.question_to_statement ?? null,
     question_to_statement_flag: questionStatementFlag(raw?.question_to_statement),
+    question_to_statement_note:
+      typeof raw?.question_to_statement_note === 'string' && raw.question_to_statement_note.trim()
+        ? raw.question_to_statement_note.trim()
+        : 'telling_statements only; evocative_reflections excluded (L0.2)',
     reflective_pauses: raw?.reflective_pauses == null ? null : Number(raw.reflective_pauses),
     role_shifts_flagged: raw?.role_shifts_flagged == null ? null : Number(raw.role_shifts_flagged),
     consultant_moves: {
       count,
+      unit: 'envelope',
       count_flag: countFlag,
       execution_flag: executionFlag,
       caps_c2: false,
@@ -427,6 +467,73 @@ function enforceMetrics(raw: any): Metrics {
   }
 }
 
+// v0.5.2 L0.3 — verbatim evidence verification.
+// Normalize for whitespace and casing ONLY (the spec's allowed normalizations),
+// so a quoted evidence string can be checked as a literal substring of the source.
+function normalizeForVerbatim(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[‘’“”]/g, "'") // curly quotes → straight (cosmetic, not content)
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/**
+ * Pull every quoted span out of a free-text note. Matches straight and curly
+ * double quotes. Used to verify quotes embedded in competency evidence notes,
+ * not just the dedicated evidence_moments quotes.
+ */
+function extractQuotedSpans(text: string): string[] {
+  const out: string[] = []
+  const re = /["“]([^"“”]{6,})["”]/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(text)) !== null) out.push(m[1])
+  return out
+}
+
+/**
+ * True when a quoted evidence string appears verbatim in the transcript
+ * (whitespace/casing-normalized). Ellipsis-elided quotes ("a … b") pass when
+ * each non-trivial fragment is itself a substring — coaches routinely elide.
+ */
+function isVerbatim(quote: string, normalizedTranscript: string): boolean {
+  const fragments = quote
+    .split(/\s*(?:\.\.\.|…)\s*/)
+    .map((f) => normalizeForVerbatim(f))
+    .filter((f) => f.length >= 6)
+  if (fragments.length === 0) return true // nothing substantive to verify
+  return fragments.every((f) => normalizedTranscript.includes(f))
+}
+
+/**
+ * v0.5.2 L0.3 validation gate. Verify every quoted string in the report's
+ * evidence (evidence_moments quotes + quotes embedded in competency evidence
+ * notes) against the transcript. Returns pass/fail and the offending quotes.
+ * Fail-loud: a miss flags the scorecard for manual review (it does not discard
+ * the report — the human decides).
+ */
+function verifyEvidenceVerbatim(
+  raw: any,
+  transcript: string | undefined
+): { check: 'pass' | 'fail' | 'unchecked'; misses: string[] } {
+  if (!transcript || !transcript.trim()) return { check: 'unchecked', misses: [] }
+  const normalized = normalizeForVerbatim(transcript)
+  const quotes: string[] = []
+  for (const e of Array.isArray(raw?.evidence_moments) ? raw.evidence_moments : []) {
+    if (e?.quote_short) quotes.push(String(e.quote_short))
+  }
+  for (const c of Array.isArray(raw?.competencies) ? raw.competencies : []) {
+    if (c?.evidence) quotes.push(...extractQuotedSpans(String(c.evidence)))
+  }
+  const misses = quotes.filter((q) => q.trim() && !isVerbatim(q, normalized))
+  return { check: misses.length > 0 ? 'fail' : 'pass', misses }
+}
+
+// v0.5.2 C1 ceiling — the top score C1 may reach when the on-file consent
+// infrastructure is not confirmed (verbal consent passes the gate but does not,
+// by itself, reach band 4). 3.4 keeps C1 in the Proficient band, below Strong.
+const C1_INFRASTRUCTURE_CEILING = 3.4
+
 /**
  * Enforce the deterministic scoring rules (spec v0.4 §10 gates + §6.4 average):
  *   - Gate 3: zero feeling explorations caps Competency 6 at band 3 (recomputed
@@ -438,7 +545,11 @@ function enforceMetrics(raw: any): Metrics {
  *   - overall = equal-weighted mean of the 8 competency scores, 1 decimal.
  * plus re-derive every band from its score. Returns a clean SessionReportJson.
  */
-export function enforceRules(raw: any, ctx: ScoringContext): SessionReportJson {
+export function enforceRules(
+  raw: any,
+  ctx: ScoringContext,
+  transcript?: string
+): SessionReportJson {
   // Build the canonical 8-competency array from the model output, keyed by id,
   // so a missing or mis-ordered entry can't corrupt the report.
   const byId = new Map<number, any>()
@@ -462,16 +573,21 @@ export function enforceRules(raw: any, ctx: ScoringContext): SessionReportJson {
   const agreementOnFile = !!ctx.agreementOnFile
   const recordingAuthorized = ctx.recordingAuthorized ?? null
   const verbalConsent = !!raw?.verbal_consent_to_record
-  // v0.5 A3: when an agreement IS on file but recording_authorized = false, this
-  // may be a data-capture error (catastrophic: −2 bands on C1). Emit a fail-loud
-  // flag and withhold Gate 1 cap until a human confirms it is a genuine decline.
-  // Gate 1 itself is working as designed — only the silent application of a
-  // high-cost default is the defect.
-  const recordingConsentOnFile = agreementOnFile && recordingAuthorized !== false
+  // v0.5.2 C1 platform-boolean precedence: observed in-session verbal consent
+  // PASSES the Tier-2 gate regardless of the recording_authorized boolean. The
+  // two-tier gate therefore fails ONLY when BOTH (i) no signed agreement on file
+  // AND (ii) no verbal consent observed. (This subsumes the v0.5 A3 carve-out:
+  // an agreement on file passes clause (i) on its own.)
+  const gate1 = !agreementOnFile && !verbalConsent
+  // v0.5.2 C1 ceiling: passing the gate confirms only the FLOOR. Band 4+ requires
+  // the fuller ethical infrastructure CONFIRMED ON FILE — a signed agreement AND
+  // recorded authorization. When either platform boolean is unset/false, cap C1
+  // below band 4 even though the gate passes on verbal consent.
+  const c1InfrastructureConfirmed = agreementOnFile && recordingAuthorized === true
+  // v0.5 A3: an agreement on file with recording_authorized = false may still be
+  // a data-capture question worth a human's eye — surface it as a manual-review
+  // flag (it no longer withholds the gate, which now passes on the agreement).
   const recordingConsentNeedsConfirmation = agreementOnFile && recordingAuthorized === false
-  // Gate 1 fires only when: not in the needs-confirmation state AND consent is
-  // on neither path (no agreement OR explicit decline + no verbal consent).
-  const gate1 = !recordingConsentNeedsConfirmation && !recordingConsentOnFile && !verbalConsent
   const agreementGap = !agreementOnFile
   const gate2 = !!g.gate_2 && !standingEngagement
   // v0.5 B3: gate3 drives C6 EMOTIONAL dimension cap only (not all of C6).
@@ -486,6 +602,15 @@ export function enforceRules(raw: any, ctx: ScoringContext): SessionReportJson {
     // Gate 1 → C1 ≤ 2; Gate 2 → C3 ≤ 2.
     if (def.id === 1 && gate1 && score > 2) { score = 2; gates.push('gate_1') }
     if (def.id === 3 && gate2 && score > 2) { score = 2; gates.push('gate_2') }
+
+    // v0.5.2 C1 infrastructure ceiling: when the on-file consent infrastructure
+    // is not confirmed (verbal consent may pass the gate, but the signed agreement
+    // + recorded authorization are not both on file), cap C1 below band 4. Skip
+    // when Gate 1 already capped harder at band 2.
+    if (def.id === 1 && !gate1 && !c1InfrastructureConfirmed && score > C1_INFRASTRUCTURE_CEILING) {
+      score = C1_INFRASTRUCTURE_CEILING
+      gates.push('c1_ceiling')
+    }
 
     // v0.5.1 Patch 1: Gate 3 caps C6 EMOTIONAL DIMENSION only — never the composite.
     // Model must return dimensions.{emotional.score, cognitive_structural.score} as
@@ -551,6 +676,37 @@ export function enforceRules(raw: any, ctx: ScoringContext): SessionReportJson {
       }
     : undefined
 
+  // v0.5.2 Layer 0 — assemble the data-integrity block. L0.1 speaker
+  // reassignments come from the model (provisional, confirmed=false); L0.3
+  // verbatim check runs here against the transcript; both feed a fail-loud
+  // manual-review flag list alongside low-confidence attribution and the
+  // recording-consent question.
+  const speakerReassignments: SpeakerReassignment[] = Array.isArray(raw?.integrity?.speaker_reassignments)
+    ? raw.integrity.speaker_reassignments.map((r: any) => ({
+        from: String(r?.from ?? 'unknown'),
+        to: String(r?.to ?? 'unknown'),
+        turns: Array.isArray(r?.turns) ? r.turns.map(String) : [],
+        confirmed: !!r?.confirmed,
+      }))
+    : []
+  const verbatim = verifyEvidenceVerbatim(raw, transcript)
+  const manualReviewFlags: string[] = []
+  if (speakerReassignments.some((r) => !r.confirmed)) manualReviewFlags.push('speaker_reassignment_unconfirmed')
+  if (verbatim.check === 'fail') manualReviewFlags.push('evidence_verbatim_failed')
+  if (metrics.attribution?.confidence === 'low') manualReviewFlags.push('low_attribution_confidence')
+  if (metrics.attribution?.likely_swap_flag) manualReviewFlags.push('likely_speaker_swap')
+  if (recordingConsentNeedsConfirmation) manualReviewFlags.push('recording_consent_needs_confirmation')
+  if (verbatim.misses.length > 0) {
+    console.warn(
+      `v0.5.2 L0.3: ${verbatim.misses.length} quoted evidence string(s) not found verbatim in the transcript — flagged for manual review.`
+    )
+  }
+  const integrity: IntegrityBlock = {
+    speaker_reassignments: speakerReassignments,
+    evidence_verbatim_check: verbatim.check,
+    flags_for_manual_review: manualReviewFlags,
+  }
+
   return {
     session: {
       coach: ctx.coachName,
@@ -567,6 +723,7 @@ export function enforceRules(raw: any, ctx: ScoringContext): SessionReportJson {
     },
     overall_score: overall,
     band: bandForScore(overall),
+    integrity,
     competencies,
     metrics,
     gates_triggered: { gate_1: gate1, gate_2: gate2, gate_3: gate3 },
@@ -648,7 +805,7 @@ export async function scoreTranscript(
     throw new Error('Engine returned invalid JSON.')
   }
   assertReportShape(parsed)
-  return enforceRules(parsed, ctx)
+  return enforceRules(parsed, ctx, transcript)
 }
 
 // re-export for callers that only need the type

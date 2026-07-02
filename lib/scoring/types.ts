@@ -35,6 +35,24 @@ export interface RecordingConsentFlag {
   status: 'confirmed' | 'needs_confirmation' | 'declined'
 }
 
+// v0.5.2 §Engine Layer 0: data-integrity gates that run BEFORE any metric is
+// computed. All three are fail-loud — they flag for manual confirmation rather
+// than silently proceeding.
+export interface SpeakerReassignment {
+  from: string // the candidate mis-attributed speaker label, e.g. "Speaker 3"
+  to: string // the primary speaker it was reassigned to, e.g. "coach" | "client"
+  turns: string[] // timestamps/markers of the reassigned turns
+  confirmed: boolean // false until a human confirms (fail-loud, L0.1)
+}
+export interface IntegrityBlock {
+  // L0.1 — phantom/minority speaker turns reassigned to the nearest primary speaker.
+  speaker_reassignments: SpeakerReassignment[]
+  // L0.3 — every quoted evidence string verified as a literal transcript substring.
+  evidence_verbatim_check: 'pass' | 'fail' | 'unchecked'
+  // Aggregated fail-loud flags requiring manual review before delivery.
+  flags_for_manual_review: string[]
+}
+
 // v0.5 B3: C6 dimensional split — emotional (6.04) + cognitive/structural (6.01–6.03, 6.05–6.06)
 export interface C6Dimensions {
   emotional: {
@@ -59,18 +77,25 @@ export interface CompetencyScore {
   dimensions?: C6Dimensions // C6 only (v0.5 B3 dimensional split)
 }
 
+// v0.5.2 §7: a consultant move is a contiguous ENVELOPE (opens at a role-shift
+// out of coaching mode, closes on re-contract / a floor-returning question / a
+// pause the client fills), NOT a single advice-act. Everything between open and
+// close is ONE move regardless of how many sentences or distinct recommendations
+// it contains. `span` records the envelope's approximate transcript timespan.
 export interface ConsultantMove {
   description: string
+  span?: string // e.g. "50:40-53:21" — the envelope's timespan in the transcript
   signaled: boolean
   permissioned: boolean
   brief: boolean
   floor_returned: boolean
-  score: number // 0..4 — count of criteria met
+  score: number // 0..4 — count of criteria met (evaluated at envelope scope)
   status: Flag
 }
 
 export interface ConsultantMoves {
-  count: number
+  count: number // envelope count (v0.5.2: once per envelope, not per advice-act)
+  unit: 'envelope' // v0.5.2 §7: the counting unit is the envelope
   count_flag: Flag // amber when >3 (v0.5 A4: advisory flag only, not a score cap)
   execution_flag: Flag
   caps_c2: false // v0.5 A4: consultant move count no longer scores C2 down
@@ -87,6 +112,9 @@ export interface Metrics {
   feeling_explorations_flag: Flag | null
   question_to_statement: string | null // e.g. "1:1.1" — v0.5: questions:consultative-telling only
   question_to_statement_flag: Flag | null
+  // v0.5.2 L0.2: reminder that only telling statements count toward the
+  // denominator — evocative reflections are excluded (classification precedes the ratio).
+  question_to_statement_note?: string | null
   reflective_pauses: number | null
   role_shifts_flagged: number | null
   consultant_moves: ConsultantMoves | null
@@ -148,6 +176,9 @@ export interface SessionReportJson {
   session: SessionMeta
   overall_score: number
   band: Band
+  // v0.5.2 §Engine Layer 0: data-integrity results (speaker reassignments,
+  // verbatim-evidence check, manual-review flags). Runs before scoring.
+  integrity?: IntegrityBlock
   competencies: CompetencyScore[]
   metrics: Metrics
   gates_triggered: GatesTriggered // session-level gate state (spec §10)
