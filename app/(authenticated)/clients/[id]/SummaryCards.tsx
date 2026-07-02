@@ -21,7 +21,7 @@ export function TranscriptsCard({ clientId, reloadKey = 0 }: { clientId: string;
         setItems(
           (d.transcripts || []).map((t: any) => ({
             id: t.id,
-            label: t.filename || 'Transcript',
+            label: t.title || t.filename || 'Transcript',
             sub: [fmtDate(t.session_date), t.match_status === 'needs_review' ? 'needs review' : '']
               .filter(Boolean)
               .join(' · '),

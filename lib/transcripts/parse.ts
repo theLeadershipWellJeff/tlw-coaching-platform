@@ -17,6 +17,7 @@ export interface ParsedTranscript {
   sessionType: string | null
   sessionNumber: number | null
   engagementTotal: number | null
+  titleRaw: string | null // Plaud's own summary title from front matter, if any
   body: string // transcript text with front matter stripped
   isSpeakerSeparated: boolean
 }
@@ -202,7 +203,76 @@ export function parseTranscript(filename: string | null, md: string): ParsedTran
     sessionType: pick(fields, ['type', 'sessiontype', 'engagementtype']),
     sessionNumber: number,
     engagementTotal: total,
+    titleRaw: pick(fields, ['title', 'topic', 'subject', 'summary']),
     body,
     isSpeakerSeparated: detectSpeakerSeparation(body),
   }
+}
+
+// ── Proposed transcript titles ────────────────────────────────────────────────
+
+/** "2026-06-12" -> "Jun 12, 2026" (read the calendar parts, no TZ shift). */
+export function formatSessionDate(date: string | null): string | null {
+  if (!date) return null
+  const m = date.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/)
+  if (!m) return null
+  const dt = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+  if (Number.isNaN(dt.getTime())) return null
+  return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+/** Plaud's default filename is a bare timestamp ("2026-06-12 16:05:41") — not a
+ *  real title, so we never surface it as one. */
+function isTimestampName(filename: string): boolean {
+  const base = filename.replace(/\.[a-z0-9]+$/i, '').trim()
+  return /^\d{4}-\d{1,2}-\d{1,2}[ T_]+\d{1,2}:\d{2}(?::\d{2})?$/.test(base)
+}
+
+/** Light clean for using a filename as a title: drop the extension and turn
+ *  separators into spaces. Keeps the words (unlike cleanName, which strips
+ *  "session/coaching/…" for name-matching). */
+function titleFromFilename(filename: string): string {
+  return filename
+    .replace(/\.[a-z0-9]+$/i, '')
+    .replace(/[_]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+const MAX_TITLE = 80
+
+function clip(s: string): string {
+  const t = s.trim()
+  return t.length > MAX_TITLE ? `${t.slice(0, MAX_TITLE - 1).trimEnd()}…` : t
+}
+
+/**
+ * Compose the best available human title for a transcript. Priority (the
+ * calendar slot is the ideal source, per the coach):
+ *   1. Matched client → "Client Name · Mon DD, YYYY" — the calendar/name match
+ *      supplies the client; the date anchors it.
+ *   2. Plaud's own summary title from the md front matter.
+ *   3. A real filename (e.g. Plaud's Drive summary), when it isn't a bare timestamp.
+ *   4. Date only → "Session · Mon DD, YYYY".
+ *   5. null → the UI falls back to the filename / "Untitled recording".
+ */
+export function buildTranscriptTitle(opts: {
+  clientName?: string | null
+  sessionDate?: string | null
+  summaryRaw?: string | null
+  filename?: string | null
+}): string | null {
+  const dateLabel = formatSessionDate(opts.sessionDate ?? null)
+
+  if (opts.clientName?.trim()) {
+    const name = opts.clientName.trim()
+    return dateLabel ? `${name} · ${dateLabel}` : name
+  }
+  if (opts.summaryRaw?.trim()) return clip(opts.summaryRaw)
+  if (opts.filename && !isTimestampName(opts.filename)) {
+    const cleaned = titleFromFilename(opts.filename)
+    if (cleaned) return clip(cleaned)
+  }
+  if (dateLabel) return `Session · ${dateLabel}`
+  return null
 }
