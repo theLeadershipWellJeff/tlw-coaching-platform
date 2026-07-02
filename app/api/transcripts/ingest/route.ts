@@ -16,7 +16,8 @@ export const maxDuration = 60
  * session. The actual work (dedupe, parse, match, score) lives in
  * ingestMarkdown, shared with the in-app manual add.
  *
- * Body: { filename?, markdown, driveFileId?, coachEmail?, coachName? }
+ * Body: { filename?, markdown, title?|summary?, driveFileId?, coachEmail?, coachName? }
+ *   - title/summary: an explicit human title (e.g. Zapier maps Plaud's summary here).
  * Header: x-ingest-secret: <INGEST_SECRET>
  */
 export async function POST(req: NextRequest) {
@@ -65,6 +66,7 @@ export async function POST(req: NextRequest) {
       coach,
       markdown,
       filename: body.filename ?? null,
+      title: body.title ?? body.summary ?? null,
       driveFileId: body.driveFileId ?? body.drive_file_id ?? null,
       source: body.source || 'plaud',
     })
