@@ -238,9 +238,42 @@ export function CoachingMapCard({
       )}
 
       {viewOpen && (
-        <MapStructureModal map={selectedMap} fallbackName={value} fromVault={fromVault} onClose={() => setViewOpen(false)} />
+        <MapStructureModal
+          map={selectedMap}
+          fallbackName={value}
+          fromVault={fromVault}
+          client={client}
+          onClose={() => setViewOpen(false)}
+        />
       )}
     </div>
+  )
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
+/**
+ * The client-facing reminder email: a short intro + the map's component list.
+ * Inline styles only (email-safe); /api/email/send wraps it in the base font
+ * and appends the coach signature server-side.
+ */
+function buildMapEmailHtml(map: CoachingMap, clientName: string): string {
+  const first = clientName.trim().split(/\s+/)[0] || clientName
+  const items = map.components
+    .map(
+      (c) =>
+        `<li style="margin-bottom:10px;"><strong>${escapeHtml(c.name)}</strong>${
+          c.description ? ` — ${escapeHtml(c.description)}` : ''
+        }</li>`
+    )
+    .join('')
+  return (
+    `<p>Hi ${escapeHtml(first)},</p>` +
+    `<p>Here&rsquo;s a quick reference of <strong>${escapeHtml(map.name)}</strong> — the map we&rsquo;re working from together:</p>` +
+    `<ol style="margin:12px 0;padding-left:22px;">${items}</ol>` +
+    `<p>Keep this handy between our sessions.</p>`
   )
 }
 
@@ -248,18 +281,25 @@ export function CoachingMapCard({
  * Pop-up view of the assigned map's full structure. Portaled to <body> like the
  * Client goals modal — this card lives in the notes panel's sticky rail, whose
  * stacking context would otherwise trap the overlay beneath the note editor.
+ * "Send to client" emails the component list as a quick mid-session reminder
+ * via the standard branded send path (POST /api/email/send).
  */
 function MapStructureModal({
   map,
   fallbackName,
   fromVault,
+  client,
   onClose,
 }: {
   map: CoachingMap | undefined
   fallbackName: string
   fromVault: boolean
+  client: Client
   onClose: () => void
 }) {
+  const [sendState, setSendState] = useState<'idle' | 'confirm' | 'sending' | 'sent'>('idle')
+  const [sendError, setSendError] = useState('')
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
@@ -269,6 +309,31 @@ function MapStructureModal({
   }, [onClose])
 
   const name = map?.name ?? fallbackName
+  const canSend = Boolean(client.email && map?.components.length)
+
+  async function send() {
+    if (!map || !client.email) return
+    setSendState('sending')
+    setSendError('')
+    try {
+      const res = await fetch('/api/email/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientId: client.id,
+          to: client.email,
+          subject: `Our coaching map: ${map.name}`,
+          bodyHtml: buildMapEmailHtml(map, client.name),
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Send failed')
+      setSendState('sent')
+    } catch (e: any) {
+      setSendError(e.message || 'Send failed')
+      setSendState('confirm')
+    }
+  }
 
   return createPortal(
     <div
@@ -319,7 +384,55 @@ function MapStructureModal({
           <p className="text-[12px] text-tlw-warm-gray/70">No structure is defined for this map.</p>
         )}
 
-        <div className="mt-6 flex justify-end">
+        {sendError && <p className="mt-4 text-[11px] text-tlw-signal-orange">{sendError}</p>}
+
+        <div className="mt-6 flex items-center justify-between gap-3">
+          {/* Send-to-client: a quick emailed reminder of the map's components. */}
+          <div className="flex items-center gap-3">
+            {sendState === 'sent' ? (
+              <p className="text-[12px] font-medium text-tlw-espresso">
+                ✓ Sent to {client.email}
+              </p>
+            ) : sendState === 'confirm' || sendState === 'sending' ? (
+              <>
+                <p className="text-[12px] text-tlw-warm-gray">
+                  Email this list to <span className="font-medium text-tlw-espresso">{client.email}</span>?
+                </p>
+                <button
+                  onClick={send}
+                  disabled={sendState === 'sending'}
+                  className="rounded-tlw-md bg-tlw-navy-rich px-3 py-1.5 text-[11px] font-medium text-tlw-cream transition-opacity hover:opacity-90 disabled:opacity-40"
+                >
+                  {sendState === 'sending' ? 'Sending…' : 'Send'}
+                </button>
+                <button
+                  onClick={() => {
+                    setSendState('idle')
+                    setSendError('')
+                  }}
+                  disabled={sendState === 'sending'}
+                  className="text-[11px] text-tlw-warm-gray hover:text-tlw-espresso disabled:opacity-40"
+                >
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => setSendState('confirm')}
+                disabled={!canSend}
+                title={
+                  !client.email
+                    ? 'No email on file for this client'
+                    : !map?.components.length
+                      ? 'This map has no components to send'
+                      : 'Email the client this map as a quick reminder'
+                }
+                className="rounded-tlw-lg border border-tlw-warm-gray/25 px-4 py-2 text-[13px] font-medium text-tlw-espresso transition-colors hover:border-tlw-navy-rich hover:text-tlw-navy-deep disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Send to client
+              </button>
+            )}
+          </div>
           <button
             onClick={onClose}
             className="rounded-tlw-lg bg-tlw-navy-rich px-4 py-2 text-[13px] font-medium text-tlw-cream transition-opacity hover:opacity-90"
