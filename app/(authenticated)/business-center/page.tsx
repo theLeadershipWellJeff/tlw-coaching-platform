@@ -1,32 +1,5 @@
-import Link from 'next/link'
-import { PageHeader } from '@/app/components/layout/PageHeader'
-import { BusinessCenterSurface } from '@/components/business-center/BusinessCenterSurface'
+import { redirect } from 'next/navigation'
 
 export default function BusinessCenterPage() {
-  return (
-    <>
-      <PageHeader
-        eyebrow="theLeadershipWell"
-        title="Business Center"
-        subtitle="Billing, accounts, and invoices"
-        actions={
-          <div className="flex items-center gap-2">
-            <Link
-              href="/business-center/coaches"
-              className="rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-1.5 text-[13px] text-tlw-espresso transition-colors hover:bg-tlw-canvas"
-            >
-              My Team
-            </Link>
-            <Link
-              href="/business-center/invoices"
-              className="rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-1.5 text-[13px] text-tlw-espresso transition-colors hover:bg-tlw-canvas"
-            >
-              Invoices
-            </Link>
-          </div>
-        }
-      />
-      <BusinessCenterSurface />
-    </>
-  )
+  redirect('/business-center/invoices')
 }

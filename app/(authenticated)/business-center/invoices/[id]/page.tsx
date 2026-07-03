@@ -254,7 +254,7 @@ export default function InvoiceDetailPage() {
   return (
     <>
       <PageHeader
-        breadcrumb={`Business Center / ${invoice?.account?.name ?? 'Invoices'}`}
+        breadcrumb={`Invoices / ${invoice?.account?.name ?? '…'}`}
         title={period ? `Invoice · ${period}` : 'Invoice'}
         actions={
           <div className="flex items-center gap-2">
@@ -264,7 +264,7 @@ export default function InvoiceDetailPage() {
               </span>
             )}
             <Link
-              href="/business-center"
+              href="/business-center/invoices"
               className="rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-1.5 text-[13px] text-tlw-espresso transition-colors hover:bg-tlw-canvas"
             >
               ← Back
