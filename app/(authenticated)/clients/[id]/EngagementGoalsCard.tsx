@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { Client } from '@/lib/supabase/types'
 import { GoalRows, type GoalDraft, toDrafts, cleanGoals, emptyGoal, untitledGoals } from './GoalRows'
 
@@ -117,7 +118,10 @@ function ClientGoalsModal({
     }
   }
 
-  return (
+  // Portal to <body>: this modal opens from inside the notes panel's sticky
+  // rail, and position:sticky creates a stacking context that would trap the
+  // overlay's z-index beneath the note editor (clicks fell through to it).
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-tlw-navy-deep/40 p-4 py-10"
       onClick={onClose}
@@ -157,6 +161,7 @@ function ClientGoalsModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

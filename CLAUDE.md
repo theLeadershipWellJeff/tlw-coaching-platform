@@ -12,9 +12,10 @@ A coaching platform for Dr. Jeff Holmes (theLeadershipWell). Two pillars:
    sent via Gmail.
 2. **Coaching scorecard** — scores recorded sessions against the ICF 2025 Core
    Competencies refined by theLeadershipWell's standards. The **consolidated
-   spec `spec/theLeadershipWell_Session_Report_Spec_v0.4.md` is the single
-   source of truth** — read it before touching scoring (the older `..._v0.3.md`
-   is kept for history only).
+   spec `spec/theLeadershipWell_Session_Report_Spec_v0.4.md` is the base source
+   of truth**, then apply the deltas **in order**: `..._v0.5.md` → `..._v0.5.1.md`
+   → **`..._v0.5.2.md` (latest — read this last)**. Read the base + all deltas
+   before touching scoring (the older `..._v0.3.md` is kept for history only).
 
 Plus a **client workspace** (per-client hub) and **roster**.
 
@@ -140,6 +141,23 @@ standard** for C4–C7. Output carries `gates_triggered` (per competency + sessi
 and `session.standing_engagement`; shape = spec §14 (`lib/scoring/types.ts`).
 `lib/scoring/aggregate.ts` rolls reports into the dashboard/scorecard numbers.
 
+**v0.5.2 additions (T.S. anchor, July 2 2026).** (1) **Layer 0 data integrity**
+runs before scoring, all fail-loud into `report.integrity`: L0.1 collapses phantom/
+minority speakers (model-reported `speaker_reassignments`, `confirmed:false`), L0.2
+keeps only telling statements in the Q:S denominator (`question_to_statement_note`),
+L0.3 re-verifies every **quoted** evidence string is a literal transcript substring
+in `enforceRules` (`verifyEvidenceVerbatim` — pass `transcript` in; misses set
+`evidence_verbatim_check:"fail"`). `flags_for_manual_review` aggregates these +
+low-confidence attribution; surfaced as a warning banner on the report. (2) A
+**consultant move is a contiguous envelope** (open at a role-shift, close at re-
+contract / floor-returning question / client-filled pause) counted **once per
+envelope** with a `span`; count>3 stays amber advisory (v0.5 A4, no C2 cap),
+execution scored per envelope. (3) **C1 platform-boolean precedence:** observed
+verbal consent passes Gate 1 regardless of `recording_authorized`
+(`gate1 = !agreementOnFile && !verbalConsent`); but unconfirmed on-file
+infrastructure (not both `agreement_on_file` AND `recording_authorized===true`)
+caps C1 at **3.4** below band 4 (`c1_ceiling`).
+
 **Rescore.** `runAndStoreReport` upserts on `transcript_id`, so re-running it
 replaces the machine report in place (coach self-scores/notes live in separate
 columns and survive; a `reviewed` report stays reviewed). The report page has a
@@ -172,9 +190,18 @@ newest-first, 5 visible with a "Show all" expander; the notes list does the same
 **plus** persistent, per-client context loaded from the client record: **Key info**
 (`clients.key_info`,
 freeform reference — boss/spouse/kids), **Coaching map** (`clients.coaching_map`,
-a pulldown of the practice's maps — defined in `CoachingMapCard.tsx#MAPS`: The 6
-Components / The Airplane Model / First 90 Days / Who I Am Becoming; `blurb` field
-is the future home of click-to-view framework descriptions), and **Engagement
+a pulldown of the practice's maps — registry in `CoachingMapCard.tsx#MAPS`: The 6
+Components / The Airplane Model / First 90 Days / Who I Am Becoming / The Becoming
+Map. Clicking the assigned map's name opens a **structure pop-up** (portaled to
+`document.body` — the sticky rail's stacking context would otherwise trap it under
+the note editor; the Client goals modal is portaled for the same reason). The
+displayed structure is **drawn live from the vault repo**: `GET /api/vault/map?name=…`
+→ `lib/vault/maps.ts#getMapFromVault` finds the vault note by **title** (filename
+match anywhere in the repo, 5-min in-memory cache) and parses `### NN · Component`
+sections + `> [!question]` callouts into `{name, description, question}`. The
+hard-coded `MAPS` entries are the pulldown registry + **offline fallback only** —
+vault unconfigured / note missing / no `###` sections degrades to the built-in
+copy, never a blank card), and **Engagement
 goals** (the same `clients.coaching_goals` as the workspace card, edited via the
 "Client goals" modal). All three save with PATCH `/api/clients/[id]`
 (`KeyInfoCard`, `CoachingMapCard`, `EngagementGoalsCard`).
@@ -737,7 +764,9 @@ free-text note shown to the client at the top of the invoice; both additive/null
 032 billing skip + warnings (`engagements.skip_billing` boolean; `billable_sessions.appointment_id`
 FK; `billing_run_warnings` table for calendar cross-check and subscription no-sessions warnings) ·
 033 billing settings (`coaches.billing_settings` jsonb — preview_before_approve, auto_send_on_approve,
-cc_self_on_send; additive, NULL = defaults).
+cc_self_on_send; additive, NULL = defaults) · 034 transcript title (`transcripts.title` — human-readable
+title proposed at ingest from the calendar-slot match / Plaud summary / non-timestamp filename, coach-editable
+in the review queue; additive, nullable, NULL = UI falls back to filename/"Untitled"; **applied**).
 
 **Tenant scoping (015).** `coach_clients` (coach_id, client_id, role) is the
 ownership link. Client access is enforced **server-side** by the session coach,
@@ -897,15 +926,13 @@ and back in** to grant calendar-write + populate the refresh token with it;
   prior notes (not just the current note), as a read-only reference list using the
   existing ✦ icon. Helps the coach see patterns without leaving the note editor.
 
-- **Coaching map — clickable framework viewer.** Once a coaching map is selected in
-  the `CoachingMapCard` pulldown, the map name becomes a clickable link/button that
-  opens an **inline dropdown or panel** listing the components of that framework
-  (e.g. "The 6 Components" lists all six; "Who I Am Becoming" lists its parts).
-  Content is static for now (defined in `CoachingMapCard.tsx#MAPS` — add a `components`
-  array to each map entry). Eventually this will be graphical; for now a clean list
-  is sufficient. Includes a **"Send to client"** button that emails the client a
-  formatted list of that framework's components as a quick reminder (uses the existing
-  Gmail send path, `POST /api/email/send`; no note attachment).
+- **Coaching map — clickable framework viewer.** ✅ Built: the assigned map's name
+  opens a structure pop-up whose content is drawn live from the vault repo
+  (`/api/vault/map` + `lib/vault/maps.ts`; built-in `MAPS` copy = offline fallback —
+  see the Session-notes panel section). Still open: the **"Send to client"** button
+  that emails the client a formatted list of that framework's components as a quick
+  reminder (uses the existing Gmail send path, `POST /api/email/send`; no note
+  attachment), and an eventual graphical rendering.
 
 - **Dashboard — Emails Sent card clickable.** The "Emails Sent" summary card on the
   dashboard becomes clickable and opens a modal listing all sent emails (from

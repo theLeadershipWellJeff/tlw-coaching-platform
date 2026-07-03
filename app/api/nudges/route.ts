@@ -15,7 +15,7 @@ export async function GET() {
     const { data: nudges, error } = await supabase
       .from('nudges')
       .select(
-        'id, client_id, type, origin, status, trigger_excerpt, rationale, draft_subject, draft_body, scheduled_for, created_at'
+        'id, client_id, type, origin, status, trigger_excerpt, rationale, draft_subject, draft_body, coach_note, scheduled_for, created_at'
       )
       .eq('coach_id', coach.id)
       .in('status', ['draft', 'scheduled', 'snoozed'])

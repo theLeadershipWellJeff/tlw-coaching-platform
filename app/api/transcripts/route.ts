@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
 
   let query = supabase
     .from('transcripts')
-    .select('id, client_id, client_initials, filename, raw_md, session_date, match_status, match_confidence, created_at')
+    .select('id, client_id, client_initials, filename, title, raw_md, session_date, match_status, match_confidence, created_at')
     .eq('coach_id', coach.id)
     .order('created_at', { ascending: false })
   if (status !== 'all') {

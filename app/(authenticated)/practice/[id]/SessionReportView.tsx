@@ -124,6 +124,18 @@ const GATE_LABELS: Record<string, string> = {
   gate_1: 'gate 1 · no agreement on file & no recording consent — capped at developing',
   gate_2: 'gate 2 · no named insight at close — capped at developing',
   gate_3: 'gate 3 · zero feeling explorations — capped at proficient',
+  // v0.5.2 C1 ceiling: verbal consent passes the gate, but the on-file consent
+  // infrastructure (signed agreement + recorded authorization) isn't confirmed.
+  c1_ceiling: 'consent infrastructure not confirmed on file — capped below strong (v0.5.2)',
+}
+
+/** Human labels for the v0.5.2 Layer-0 manual-review flags. */
+const REVIEW_FLAG_LABELS: Record<string, string> = {
+  speaker_reassignment_unconfirmed: 'a phantom/minority speaker was reassigned — confirm the attribution',
+  evidence_verbatim_failed: 'a quoted evidence string was not found verbatim in the transcript',
+  low_attribution_confidence: 'speaker roles could not be mapped with confidence',
+  likely_speaker_swap: 'the coach/client roles may be swapped',
+  recording_consent_needs_confirmation: 'agreement on file but recording marked declined — confirm the record',
 }
 
 function fmtDate(d: string | null | undefined): string {
@@ -206,7 +218,10 @@ function ConversationMetrics({ m }: { m: Metrics }) {
           {cm.moves.map((mv, i) => (
             <div key={i} className="rounded-tlw-lg p-3" style={{ backgroundColor: 'var(--color-surface)' }}>
               <div className="flex items-center justify-between gap-3">
-                <p className="text-[13px] text-tlw-espresso">{mv.description}</p>
+                <p className="text-[13px] text-tlw-espresso">
+                  {mv.description}
+                  {mv.span && <span className="ml-2 text-[11px] text-tlw-warm-gray">· {mv.span}</span>}
+                </p>
                 <span className="shrink-0 text-[13px] font-medium" style={{ color: flagColor(mv.status) }}>
                   {mv.score}/4
                 </span>
@@ -262,7 +277,9 @@ export function SessionReportView({ id }: { id: string }) {
 
   // rescore state
   const [rescoring, setRescoring] = useState(false)
+  const [rescoreElapsed, setRescoreElapsed] = useState(0)
   const [rescoreMsg, setRescoreMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [emailElapsed, setEmailElapsed] = useState(0)
 
   useEffect(() => {
     fetch('/api/coach')
@@ -270,6 +287,18 @@ export function SessionReportView({ id }: { id: string }) {
       .then((d) => setSupervisorEmail(d?.coach?.supervisor_email ?? null))
       .catch(() => {})
   }, [])
+
+  useEffect(() => {
+    if (!rescoring) { setRescoreElapsed(0); return }
+    const t = setInterval(() => setRescoreElapsed((s) => s + 1), 1000)
+    return () => clearInterval(t)
+  }, [rescoring])
+
+  useEffect(() => {
+    if (!emailing) { setEmailElapsed(0); return }
+    const t = setInterval(() => setEmailElapsed((s) => s + 1), 1000)
+    return () => clearInterval(t)
+  }, [emailing])
 
   async function emailReport() {
     setEmailing(true)
@@ -438,16 +467,7 @@ export function SessionReportView({ id }: { id: string }) {
             title="Re-run the engine against the current rubric"
             className="rounded-tlw-md border border-tlw-warm-gray/30 px-3 py-1.5 text-[12px] font-medium text-tlw-espresso transition-opacity duration-tlw-base hover:opacity-80 disabled:opacity-40"
           >
-            {rescoring ? (
-              <span className="flex items-center gap-1.5">
-                <span className="inline-flex gap-0.5">
-                  <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: '300ms' }} />
-                </span>
-                rescoring
-              </span>
-            ) : 'rescore'}
+            {rescoring ? `Analyzing… ${rescoreElapsed}s` : 'rescore'}
           </button>
           {rescoreMsg && (
             <p
@@ -459,6 +479,34 @@ export function SessionReportView({ id }: { id: string }) {
           )}
         </div>
       </div>
+
+      {/* Data-integrity manual-review banner (v0.5.2 Layer 0) — fail-loud items
+          the engine surfaced for a human to confirm before trusting the score. */}
+      {report.integrity && report.integrity.flags_for_manual_review.length > 0 && (
+        <div
+          className="mt-4 rounded-tlw-lg border p-4"
+          style={{ borderColor: 'var(--color-warning)', backgroundColor: 'var(--color-warning)10' }}
+        >
+          <p className="text-[12px] font-semibold uppercase tracking-[1.5px]" style={{ color: 'var(--color-warning)' }}>
+            ⚑ Flagged for manual review
+          </p>
+          <ul className="mt-2 space-y-1">
+            {report.integrity.flags_for_manual_review.map((f) => (
+              <li key={f} className="text-[12px] text-tlw-espresso">
+                · {REVIEW_FLAG_LABELS[f] || f}
+              </li>
+            ))}
+          </ul>
+          {report.integrity.speaker_reassignments.length > 0 && (
+            <p className="mt-2 text-[11px]" style={{ color: 'var(--color-muted)' }}>
+              speaker reassignments:{' '}
+              {report.integrity.speaker_reassignments
+                .map((r) => `${r.from} → ${r.to}${r.turns.length ? ` (${r.turns.join(', ')})` : ''}`)
+                .join(' · ')}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Growth area development focus — at the very top, before self-score */}
       <DevelopmentFocusCards reportId={id} />
@@ -687,16 +735,7 @@ export function SessionReportView({ id }: { id: string }) {
               disabled={emailing || (emailRecipient === 'other' && !emailOther.trim())}
               className="rounded-tlw-md bg-tlw-navy-rich px-3 py-1.5 text-[12px] font-medium text-tlw-cream transition-opacity duration-tlw-base hover:opacity-90 disabled:opacity-40"
             >
-              {emailing ? (
-                <span className="flex items-center gap-1.5">
-                  <span className="inline-flex gap-0.5">
-                    <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: '0ms' }} />
-                    <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: '150ms' }} />
-                    <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: '300ms' }} />
-                  </span>
-                  sending
-                </span>
-              ) : 'send report'}
+              {emailing ? `Sending… ${emailElapsed}s` : 'send report'}
             </button>
           </div>
           {emailMsg && (

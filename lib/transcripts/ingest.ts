@@ -8,7 +8,7 @@
 import { createHash } from 'crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Coach, Database } from '@/lib/supabase/types'
-import { parseTranscript, deriveInitials } from './parse'
+import { parseTranscript, deriveInitials, buildTranscriptTitle } from './parse'
 import { matchClient, type RosterClient } from './match'
 import { runAndStoreReport } from '@/lib/scoring/store'
 import {
@@ -16,6 +16,7 @@ import {
   zonedWallClockToUtc,
   type RosterClientWithEmail,
 } from '@/lib/calendar'
+import { ymdInTimeZone } from '@/lib/datetime'
 
 export interface IngestInput {
   coach: Coach
@@ -24,6 +25,10 @@ export interface IngestInput {
   driveFileId?: string | null
   source?: string
   sessionDate?: string | null // override (YYYY-MM-DD), used by manual add
+  // An explicit title supplied by the caller (e.g. Zapier maps Plaud's summary
+  // here). Treated as the summary source for the title, so a matched client
+  // still wins ("Client · date"); this rescues the unmatched/timestamp cases.
+  title?: string | null
   autoScore?: boolean
   // Assign this exact client and skip matching — used by per-client import,
   // where the coach has already told us whose session this is.
@@ -64,11 +69,12 @@ export async function ingestMarkdown(
   const { coach, markdown } = input
   const filename = input.filename ?? null
   const contentHash = createHash('sha256').update(canonicalizeForHash(markdown)).digest('hex')
+  const parsed = parseTranscript(filename, markdown)
 
   // Idempotency: already ingested this exact transcript?
   const { data: dupe } = await supabase
     .from('transcripts')
-    .select('id, client_id, match_status, match_confidence, client_initials')
+    .select('id, client_id, match_status, match_confidence, client_initials, title, session_date')
     .eq('content_hash', contentHash)
     .maybeSingle()
   if (dupe) {
@@ -80,6 +86,16 @@ export async function ingestMarkdown(
       const fc = input.forceClient
       const initials = deriveInitials(fc.name)
       if (dupe.client_id !== fc.id || dupe.match_status !== 'matched') {
+        // Now that we know the client, give it a calendar-slot-style title too
+        // (unless it already carries one the coach may have edited).
+        const title =
+          dupe.title ||
+          buildTranscriptTitle({
+            clientName: fc.name,
+            sessionDate: dupe.session_date || parsed.sessionDate,
+            summaryRaw: input.title || parsed.titleRaw,
+            filename,
+          })
         await supabase
           .from('transcripts')
           .update({
@@ -87,6 +103,7 @@ export async function ingestMarkdown(
             client_initials: initials,
             match_status: 'matched',
             match_confidence: 1,
+            title,
           })
           .eq('id', dupe.id)
       }
@@ -96,7 +113,7 @@ export async function ingestMarkdown(
         matchStatus: 'matched',
         matchConfidence: 1,
         clientInitials: initials,
-        speakerSeparated: parseTranscript(filename, markdown).isSpeakerSeparated,
+        speakerSeparated: parsed.isSpeakerSeparated,
         reportId: null,
         scoringError: null,
       }
@@ -107,13 +124,27 @@ export async function ingestMarkdown(
       matchStatus: dupe.match_status,
       matchConfidence: dupe.match_confidence ?? 0,
       clientInitials: dupe.client_initials,
-      speakerSeparated: parseTranscript(filename, markdown).isSpeakerSeparated,
+      speakerSeparated: parsed.isSpeakerSeparated,
       reportId: null,
       scoringError: null,
     }
   }
 
-  const parsed = parseTranscript(filename, markdown)
+  // Resolve the recording's absolute instant. A timestamp with an explicit zone
+  // (Plaud's UTC "create time", e.g. "…13:37:22Z") is absolute; a bare local
+  // timestamp is wall-clock in the coach's zone.
+  const sessionInstant: Date | null = parsed.sessionInstant
+    ? new Date(parsed.sessionInstant)
+    : parsed.sessionDate && parsed.sessionTime
+      ? zonedWallClockToUtc(parsed.sessionDate, parsed.sessionTime, coach.timezone)
+      : null
+  const validInstant = sessionInstant && !Number.isNaN(sessionInstant.getTime()) ? sessionInstant : null
+
+  // The session's calendar date as it reads in the coach's zone — so an absolute
+  // UTC instant near midnight doesn't shift the session onto the wrong day.
+  const sessionDate =
+    input.sessionDate ||
+    (parsed.sessionInstant && validInstant ? ymdInTimeZone(validInstant, coach.timezone) : parsed.sessionDate)
 
   let match: { clientId: string | null; confidence: number; status: string }
   let matchedName: string | null = null
@@ -132,15 +163,12 @@ export async function ingestMarkdown(
       clients.map((c) => ({ id: c.id, name: c.name }) as RosterClient)
     )
 
-    // 2) Otherwise, resolve by timestamp: align the recording time (local wall
-    //    clock, the coach's timezone) with the calendar and read the guest.
-    if (match.status !== 'matched' && parsed.sessionDate && parsed.sessionTime) {
-      const instant = zonedWallClockToUtc(parsed.sessionDate, parsed.sessionTime, coach.timezone)
-      if (instant) {
-        const cal = await findClientFromCalendar(coach, instant, clients)
-        if (cal.status === 'matched' && cal.clientId) {
-          match = { clientId: cal.clientId, confidence: cal.confidence, status: 'matched' }
-        }
+    // 2) Otherwise, resolve by timestamp: align the recording instant with the
+    //    calendar and read the guest.
+    if (match.status !== 'matched' && validInstant) {
+      const cal = await findClientFromCalendar(coach, validInstant, clients)
+      if (cal.status === 'matched' && cal.clientId) {
+        match = { clientId: cal.clientId, confidence: cal.confidence, status: 'matched' }
       }
     }
     matchedName = match.clientId ? clients.find((c) => c.id === match.clientId)?.name || null : null
@@ -150,6 +178,15 @@ export async function ingestMarkdown(
   // else from whatever name the file carried.
   const clientInitials = matchedName ? deriveInitials(matchedName) : parsed.clientInitials
 
+  // Propose a human title — the calendar/name match gives us the client; else
+  // Plaud's summary title, else a real (non-timestamp) filename.
+  const title = buildTranscriptTitle({
+    clientName: matchedName,
+    sessionDate,
+    summaryRaw: input.title || parsed.titleRaw,
+    filename,
+  })
+
   const insert: Database['public']['Tables']['transcripts']['Insert'] = {
     coach_id: coach.id,
     client_id: match.clientId,
@@ -157,9 +194,10 @@ export async function ingestMarkdown(
     source: input.source || 'plaud',
     drive_file_id: input.driveFileId ?? null,
     filename,
+    title,
     raw_md: markdown,
     content_hash: contentHash,
-    session_date: input.sessionDate || parsed.sessionDate,
+    session_date: sessionDate,
     match_status: match.status,
     match_confidence: match.confidence,
   }

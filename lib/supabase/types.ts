@@ -284,6 +284,7 @@ export type Nudge = {
   linked_resource_slug: string | null
   draft_subject: string | null
   draft_body: string | null
+  coach_note: string | null
   status: string // draft | approved | scheduled | sent | skipped | snoozed
   scheduled_for: Timestamp | null
   sent_at: Timestamp | null
@@ -421,6 +422,7 @@ export type Transcript = {
   source: string
   drive_file_id: string | null
   filename: string | null
+  title: string | null // human-readable title (calendar/Plaud-derived, coach-editable)
   raw_md: string
   content_hash: string
   session_date: DateString | null

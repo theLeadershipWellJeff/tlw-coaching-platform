@@ -12,7 +12,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
     const { data: transcripts, error } = await supabase
       .from('transcripts')
-      .select('id, session_date, filename, source, match_status, created_at')
+      .select('id, session_date, filename, title, source, match_status, created_at')
       .eq('client_id', params.id)
       .order('session_date', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false })

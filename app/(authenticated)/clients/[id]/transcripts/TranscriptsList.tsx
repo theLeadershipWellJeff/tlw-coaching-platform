@@ -6,6 +6,7 @@ interface Row {
   id: string
   session_date: string | null
   filename: string | null
+  title: string | null
   source: string
   match_status: string
   reportId: string | null
@@ -56,7 +57,7 @@ export function TranscriptsList({ clientId }: { clientId: string }) {
         const inner = (
           <div className="flex items-center justify-between gap-4 rounded-tlw-xl border border-tlw-warm-gray/15 bg-tlw-surface p-4 transition-colors duration-tlw-base hover:border-tlw-warm-gray/30">
             <div className="min-w-0">
-              <p className="truncate text-[14px] font-medium text-tlw-navy-deep">{t.filename || 'Transcript'}</p>
+              <p className="truncate text-[14px] font-medium text-tlw-navy-deep">{t.title || t.filename || 'Transcript'}</p>
               <p className="mt-0.5 text-[12px] text-tlw-warm-gray">
                 {fmtDate(t.session_date)} · {t.source}
               </p>

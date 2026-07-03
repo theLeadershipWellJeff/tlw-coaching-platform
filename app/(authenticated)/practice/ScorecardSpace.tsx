@@ -6,6 +6,7 @@ import { bandDefinition, nextBand } from '@/lib/scoring/rubric'
 import { bandColor, BandChip } from './ui'
 import { AddTranscript } from './AddTranscript'
 import { GrowthAreasSpace } from './GrowthAreasSpace'
+import { CoachingHoursWidget } from '@/components/coaching-hours/CoachingHoursWidget'
 import { PanelBoard, type Panel } from '@/app/components/layout/PanelBoard'
 
 const STORAGE_KEY = 'tlw-practice-layout'
@@ -39,6 +40,7 @@ interface TranscriptRow {
   client_initials: string | null
   client_name: string | null
   filename: string | null
+  title: string | null
   session_date: string | null
   match_confidence: number | null
   preview: string | null
@@ -293,6 +295,7 @@ export function ScorecardSpace() {
   const [focus, setFocus] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [assigning, setAssigning] = useState<string | null>(null)
+  const [assigningElapsed, setAssigningElapsed] = useState(0)
   const [assignError, setAssignError] = useState<Record<string, string>>({})
   const [picked, setPicked] = useState<Record<string, string>>({})
   const [deletePending, setDeletePending] = useState<string | null>(null)
@@ -303,6 +306,9 @@ export function ScorecardSpace() {
   const [previewCache, setPreviewCache] = useState<
     Record<string, { loading?: boolean; text?: string; truncated?: boolean; speakerSeparated?: boolean; error?: string }>
   >({})
+  const [renaming, setRenaming] = useState<string | null>(null)
+  const [renameText, setRenameText] = useState('')
+  const [renameSaving, setRenameSaving] = useState(false)
 
   async function togglePreview(id: string) {
     if (openPreview === id) {
@@ -386,6 +392,36 @@ export function ScorecardSpace() {
       }
     } finally {
       setReportDeleting(null)
+    }
+  }
+
+  useEffect(() => {
+    if (!assigning) { setAssigningElapsed(0); return }
+    const t = setInterval(() => setAssigningElapsed((s) => s + 1), 1000)
+    return () => clearInterval(t)
+  }, [assigning])
+
+  function startRename(t: TranscriptRow) {
+    setRenaming(t.id)
+    setRenameText(t.title || t.filename || '')
+  }
+
+  async function saveRename(transcriptId: string) {
+    setRenameSaving(true)
+    try {
+      const res = await fetch(`/api/transcripts/${transcriptId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: renameText.trim() }),
+      })
+      if (res.ok) {
+        const d = await res.json().catch(() => ({}))
+        const title = d.title ?? (renameText.trim() || null)
+        setNeedsReview((rows) => rows.map((r) => (r.id === transcriptId ? { ...r, title } : r)))
+        setRenaming(null)
+      }
+    } finally {
+      setRenameSaving(false)
     }
   }
 
@@ -536,12 +572,54 @@ export function ScorecardSpace() {
                 >
                   <div className="flex flex-wrap items-center gap-3">
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-[13px] text-tlw-espresso">
-                        {t.filename || 'Untitled recording'}{' '}
-                        {(t.client_name || t.client_initials) && (
-                          <span className="text-tlw-warm-gray">· {t.client_name || t.client_initials}</span>
-                        )}
-                      </p>
+                      {renaming === t.id ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            autoFocus
+                            value={renameText}
+                            onChange={(e) => setRenameText(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') saveRename(t.id)
+                              if (e.key === 'Escape') setRenaming(null)
+                            }}
+                            placeholder="Title…"
+                            className="min-w-0 flex-1 rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-surface px-2 py-1 text-[13px] text-tlw-espresso"
+                          />
+                          <button
+                            onClick={() => saveRename(t.id)}
+                            disabled={renameSaving}
+                            className="rounded-tlw-md bg-tlw-navy-rich px-2.5 py-1 text-[12px] font-medium text-tlw-cream transition-opacity duration-tlw-base hover:opacity-90 disabled:opacity-40"
+                          >
+                            {renameSaving ? 'saving…' : 'save'}
+                          </button>
+                          <button
+                            onClick={() => setRenaming(null)}
+                            disabled={renameSaving}
+                            className="rounded-tlw-md px-1.5 py-1 text-[12px] text-tlw-warm-gray transition-opacity duration-tlw-base hover:opacity-80"
+                          >
+                            cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="group flex items-center gap-1.5 text-[13px] text-tlw-espresso">
+                          <span className="truncate">
+                            {t.title || t.filename || 'Untitled recording'}{' '}
+                            {(t.client_name || t.client_initials) && (
+                              <span className="text-tlw-warm-gray">· {t.client_name || t.client_initials}</span>
+                            )}
+                          </span>
+                          <button
+                            onClick={() => startRename(t)}
+                            title="Rename"
+                            className="shrink-0 text-tlw-warm-gray opacity-0 transition-opacity duration-tlw-base hover:text-tlw-espresso group-hover:opacity-100"
+                          >
+                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M12 20h9" />
+                              <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                            </svg>
+                          </button>
+                        </p>
+                      )}
                       <p className="text-[11px] text-tlw-warm-gray">
                         {fmtDate(t.session_date)}
                         {t.match_confidence != null && t.match_confidence > 0 && (
@@ -602,16 +680,7 @@ export function ScorecardSpace() {
                       disabled={!picked[t.id] || assigning === t.id}
                       className="rounded-tlw-md bg-tlw-navy-rich px-3 py-1.5 text-[12px] font-medium text-tlw-cream transition-opacity duration-tlw-base hover:opacity-90 disabled:opacity-40"
                     >
-                      {assigning === t.id ? (
-                        <span className="flex items-center gap-1.5">
-                          <span className="inline-flex gap-0.5">
-                            <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: '0ms' }} />
-                            <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: '150ms' }} />
-                            <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: '300ms' }} />
-                          </span>
-                          scoring
-                        </span>
-                      ) : 'confirm & score'}
+                      {assigning === t.id ? `Analyzing… ${assigningElapsed}s` : 'confirm & score'}
                     </button>
                   </div>
                   {assignError[t.id] && (
@@ -765,6 +834,18 @@ export function ScorecardSpace() {
   const allPanels: Panel[] = [
     ...panels,
     {
+      id: 'coaching-hours',
+      label: 'Coaching hours',
+      node: (
+        <section>
+          <h2 className="mb-4 text-[15px] font-medium text-tlw-navy-deep">Coaching hours</h2>
+          <div className="rounded-tlw-lg p-4" style={{ backgroundColor: 'var(--color-surface)' }}>
+            <CoachingHoursWidget />
+          </div>
+        </section>
+      ),
+    },
+    {
       id: 'growth-areas',
       label: 'Growth Areas',
       node: <GrowthAreasSpace />,
@@ -776,7 +857,7 @@ export function ScorecardSpace() {
       storageKey={STORAGE_KEY}
       panels={allPanels}
       columns={1}
-      defaultLayout={[['add-transcript', 'revenue', 'headline', 'score-trend', 'needs-review', 'competencies', 'sessions', 'growth-areas']]}
+      defaultLayout={[['add-transcript', 'revenue', 'coaching-hours', 'headline', 'score-trend', 'needs-review', 'competencies', 'sessions', 'growth-areas']]}
     />
   )
 }
