@@ -1,4 +1,6 @@
-import { redirect } from 'next/navigation'
+import Link from 'next/link'
+import { PageHeader } from '@/app/components/layout/PageHeader'
+import { BusinessCenterSurface } from '@/components/business-center/BusinessCenterSurface'
 
 export default function BusinessCenterPage() {
   return (
