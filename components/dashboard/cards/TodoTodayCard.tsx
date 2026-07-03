@@ -136,7 +136,7 @@ function TodoTodayBody() {
         <Skeleton />
       ) : !hasAnything ? (
         <div className="flex min-h-[120px] flex-col items-center justify-center rounded-tlw-2xl border border-dashed border-tlw-warm-gray/25 bg-tlw-surface/60 px-6 text-center">
-          <p className="text-[13px] text-tlw-warm-gray">You're all caught up.</p>
+          <p className="text-[13px] text-tlw-warm-gray">You&apos;re all caught up.</p>
           <p className="mt-1 text-[12px] text-tlw-warm-gray">No pending nudges, preps, or transcripts right now.</p>
         </div>
       ) : (
