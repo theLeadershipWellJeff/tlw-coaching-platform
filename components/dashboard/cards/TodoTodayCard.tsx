@@ -181,7 +181,7 @@ function TodoTodayBody() {
                   >
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[14px] font-medium text-tlw-navy-deep">
-                        {s.clientName || s.summary || 'Session'}
+                        {s.clientName || s.title || 'Session'}
                       </p>
                       <p className="mt-0.5 text-[12px] text-tlw-warm-gray">
                         {s.start ? formatSessionDate(s.start, timeZone) : '—'}
