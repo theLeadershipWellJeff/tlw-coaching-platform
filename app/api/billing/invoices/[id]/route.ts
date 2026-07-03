@@ -25,7 +25,16 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  return NextResponse.json({ invoice: data })
+
+  // Reshape Supabase join names to match InvoiceWithLines type.
+  const { invoice_lines, billing_accounts, invoice_reminders, ...rest } = data as any
+  const invoice = {
+    ...rest,
+    lines: invoice_lines ?? [],
+    account: billing_accounts ?? null,
+    reminders: invoice_reminders ?? [],
+  }
+  return NextResponse.json({ invoice })
 }
 
 export async function PATCH(req: NextRequest, { params }: Params) {
