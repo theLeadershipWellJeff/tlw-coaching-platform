@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, Suspense } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { PageHeader } from '@/app/components/layout/PageHeader'
@@ -43,7 +43,7 @@ function formatPeriod(start: string | null, end: string | null): string {
   return fmt((start ?? end)!)
 }
 
-export default function InvoicesPage() {
+function InvoicesContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [invoices, setInvoices] = useState<Invoice[]>([])
@@ -175,5 +175,13 @@ export default function InvoicesPage() {
         </div>
       )}
     </>
+  )
+}
+
+export default function InvoicesPage() {
+  return (
+    <Suspense fallback={<div className="h-32 animate-pulse rounded-tlw-2xl bg-tlw-surface/70" />}>
+      <InvoicesContent />
+    </Suspense>
   )
 }
