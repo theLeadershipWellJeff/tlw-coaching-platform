@@ -129,6 +129,7 @@ export async function GET() {
     }
 
     for (const n of nudges || []) {
+      if (!n.sent_at) continue
       // Scheduled nudges (cron-sent) = system; immediate coach sends = coach
       const actor: AccomplishedActor = n.scheduled_for ? 'system' : 'coach'
       const typeLabel = NUDGE_TYPE_LABEL[n.type] || 'nudge'
