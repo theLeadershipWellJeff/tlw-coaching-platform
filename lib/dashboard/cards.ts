@@ -106,6 +106,20 @@ export const CARD_META: Record<string, CardMeta> = {
     supportedSizes: ['compact', 'standard', 'expanded'],
     defaultSize: 'standard',
   },
+  'todo-today': {
+    id: 'todo-today',
+    title: 'To-Do Today',
+    surfaces: ['dashboard'],
+    supportedSizes: ['standard', 'expanded'],
+    defaultSize: 'standard',
+  },
+  'accomplished-today': {
+    id: 'accomplished-today',
+    title: 'Accomplished Today',
+    surfaces: ['dashboard'],
+    supportedSizes: ['standard', 'expanded'],
+    defaultSize: 'standard',
+  },
   // ── Business Center cards ────────────────────────────────────────────────
   'bc-billing-run': {
     id: 'bc-billing-run',

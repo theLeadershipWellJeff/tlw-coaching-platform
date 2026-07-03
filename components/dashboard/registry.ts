@@ -18,6 +18,8 @@ import { scorecardCard } from './cards/ScorecardCard'
 import { unmatchedBookingsCard } from './cards/UnmatchedBookingsCard'
 import { suggestedNudgesCard } from './cards/SuggestedNudgesCard'
 import { coachingHoursCard } from './cards/CoachingHoursCard'
+import { todoTodayCard } from './cards/TodoTodayCard'
+import { accomplishedTodayCard } from './cards/AccomplishedTodayCard'
 
 export const DASHBOARD_CARDS: Record<string, DashboardCard<any>> = {
   'past-revenue': pastRevenueCard,
@@ -32,6 +34,8 @@ export const DASHBOARD_CARDS: Record<string, DashboardCard<any>> = {
   'unmatched-bookings': unmatchedBookingsCard,
   'suggested-nudges': suggestedNudgesCard,
   'coaching-hours': coachingHoursCard,
+  'todo-today': todoTodayCard,
+  'accomplished-today': accomplishedTodayCard,
 }
 
 export function getDashboardCard(id: string): DashboardCard<any> | undefined {
