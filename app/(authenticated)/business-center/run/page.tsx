@@ -1136,10 +1136,10 @@ export default function BillingRunPage() {
         subtitle={invoices.length > 0 ? formatPeriod(periodStart, periodEnd) : undefined}
         actions={
           <Link
-            href="/business-center"
+            href="/business-center/invoices"
             className="rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-1.5 text-[13px] text-tlw-espresso transition-colors hover:bg-tlw-canvas"
           >
-            ← Back
+            ← Invoices
           </Link>
         }
       />
