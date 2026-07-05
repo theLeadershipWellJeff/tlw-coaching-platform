@@ -114,6 +114,30 @@ manual paste and per-client Drive import):
 4. on a confident match, **score** (`lib/scoring/store.ts#runAndStoreReport`).
 Uncertain/ambiguous matches → `needs_review` (never guessed).
 
+**Titles for incoming transcripts.** `transcripts.title` (migration 034) is
+proposed at ingest: matched client → "Client · Mon DD, YYYY"; else Zapier's
+`title`/`summary` field or the md front-matter title; else the **first markdown
+heading** in the body (`parse.ts#headingTitle` — timestamp/generic headings
+skipped); else a real non-timestamp filename. For an **unmatched** transcript
+still left with nothing (or just "Session · date"), a best-effort Claude call
+(`lib/transcripts/title.ts#proposeTranscriptTitle`, `TITLE_MODEL` env or a haiku
+default) reads the opening and proposes "Participant — topic" so the review
+queue says who it is without opening the transcript. The webhook path also
+defaults an undated transcript's `session_date` to **today in the coach's zone**
+(`ingest.ts` `assumeSessionToday`, set only by `/api/transcripts/ingest` —
+Zapier fires minutes after the recording ends; manual/Drive backfills never
+assume).
+
+**Add without scoring.** Not every recording is a coaching conversation (new-
+client orientations, teaching sessions) — the coach can file one on a client
+without a scorecard. Three surfaces: the review queue's **"add, don't score"**
+button (`PATCH /api/transcripts/[id]` with `{clientId, score:false}` — assigns
+the client + `matched`, skips the engine), the manual paste form's **"score this
+session"** checkbox (`/api/transcripts/manual` `autoScore:false` →
+`ingestMarkdown`), and the client workspace transcripts list, which shows
+unscored rows as "not scored" with a **"score now"** button (`PATCH` with
+`{rescore:true}`) so an unscored transcript can always be scored later.
+
 ### Scoring engine (`lib/scoring/engine.ts`)
 Prompts Claude with the consolidated v0.4 rubric — the **per-competency band
 definitions** (rendered from `rubric.ts#COMPETENCY_BANDS`, all eight) and the

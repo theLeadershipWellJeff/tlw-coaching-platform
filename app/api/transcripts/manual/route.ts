@@ -13,7 +13,9 @@ export const maxDuration = 120
  * the webhook, but authenticated by the signed-in coach's session and attributed
  * to that coach.
  *
- * Body: { markdown, title?, sessionDate? }
+ * Body: { markdown, title?, sessionDate?, autoScore? }
+ *   - autoScore: false = add without scoring (the transcript still matches and
+ *     files on the client; it can be scored later from their transcripts list).
  */
 export async function POST(req: NextRequest) {
   let supabase: ReturnType<typeof getSupabaseAdmin>
@@ -47,6 +49,7 @@ export async function POST(req: NextRequest) {
       filename: title,
       source: 'manual',
       sessionDate,
+      autoScore: body.autoScore !== false,
     })
     return NextResponse.json(result)
   } catch (e: any) {

@@ -11,6 +11,7 @@ interface Result {
   reportId: string | null
   scoringError: string | null
   duplicate?: boolean
+  scored?: boolean // whether scoring was requested for this add
 }
 
 /**
@@ -23,6 +24,7 @@ export function AddTranscript({ onAdded }: { onAdded: () => void }) {
   const [title, setTitle] = useState('')
   const [date, setDate] = useState('')
   const [text, setText] = useState('')
+  const [score, setScore] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<Result | null>(null)
@@ -36,13 +38,13 @@ export function AddTranscript({ onAdded }: { onAdded: () => void }) {
       const res = await fetch('/api/transcripts/manual', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ markdown: text, title: title || null, sessionDate: date || null }),
+        body: JSON.stringify({ markdown: text, title: title || null, sessionDate: date || null, autoScore: score }),
       })
       const data = await res.json()
       if (!res.ok) {
         setError(data.error || 'Something went wrong.')
       } else {
-        setResult(data)
+        setResult({ ...data, scored: score })
         setTitle('')
         setDate('')
         setText('')
@@ -70,8 +72,10 @@ export function AddTranscript({ onAdded }: { onAdded: () => void }) {
     <div className="rounded-tlw-lg p-4" style={{ backgroundColor: 'var(--color-surface)' }}>
       <p className="text-[13px] font-medium text-tlw-navy-deep">Add a transcript</p>
       <p className="mt-1 text-[12px] text-tlw-warm-gray">
-        Paste a session transcript to score it. Put the client&apos;s name in the title so it can be
-        matched — if it can&apos;t match confidently, it&apos;ll wait in the needs-review queue below.
+        Paste a session transcript to score it — or untick &ldquo;score this session&rdquo; to just file
+        it on the client (e.g. an orientation that isn&apos;t really a coaching conversation). Put the
+        client&apos;s name in the title so it can be matched — if it can&apos;t match confidently,
+        it&apos;ll wait in the needs-review queue below.
       </p>
 
       <div className="mt-3 flex flex-wrap gap-3">
@@ -103,8 +107,12 @@ export function AddTranscript({ onAdded }: { onAdded: () => void }) {
           disabled={busy || !text.trim()}
           className="rounded-tlw-md bg-tlw-navy-rich px-3 py-1.5 text-[12px] font-medium text-tlw-cream transition-opacity duration-tlw-base hover:opacity-90 disabled:opacity-40"
         >
-          {busy ? 'scoring…' : 'add & score'}
+          {busy ? (score ? 'scoring…' : 'adding…') : score ? 'add & score' : 'add only'}
         </button>
+        <label className="flex cursor-pointer items-center gap-1.5 text-[12px] text-tlw-espresso">
+          <input type="checkbox" checked={score} onChange={(e) => setScore(e.target.checked)} />
+          score this session
+        </label>
         <button
           onClick={() => {
             setOpen(false)
@@ -115,7 +123,7 @@ export function AddTranscript({ onAdded }: { onAdded: () => void }) {
         >
           close
         </button>
-        {busy && <span className="text-[11px] text-tlw-warm-gray">this can take ~20–40s</span>}
+        {busy && score && <span className="text-[11px] text-tlw-warm-gray">this can take ~20–40s</span>}
       </div>
 
       {error && (
@@ -128,6 +136,11 @@ export function AddTranscript({ onAdded }: { onAdded: () => void }) {
         <div className="mt-3 text-[12px]">
           {result.duplicate ? (
             <p className="text-tlw-warm-gray">Already ingested — this exact transcript is on file.</p>
+          ) : result.matchStatus === 'matched' && result.scored === false ? (
+            <p style={{ color: 'var(--color-success)' }}>
+              Added to the client&apos;s file ({result.clientInitials}) without scoring. You can score it
+              later from their transcripts list.
+            </p>
           ) : result.matchStatus === 'matched' && result.reportId ? (
             <p style={{ color: 'var(--color-success)' }}>
               Scored ({result.clientInitials}).{' '}
