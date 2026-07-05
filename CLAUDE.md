@@ -197,8 +197,18 @@ W") previously substring-matched any title containing "w". Fixed in
 
 ### CA notes / clients import
 `/api/clients/import` (clients) and `/api/clients/[id]/import-notes` (notes,
-`Session.getAll`). Both idempotent. Roster has bulk buttons; the notes button
-loops active clients one request at a time with progress.
+`Session.getAll`). Both idempotent. The API routes remain, but the roster's bulk
+"Import from CA" buttons were removed (the CA migration is done) — replaced by
+the Active/Inactive roster toggle (below).
+
+### Roster Active/Inactive toggle (`clients/ClientsRoster.tsx`)
+The roster splits on `clients.status`: a segmented **Active / Inactive** toggle
+(with counts) where the CA import buttons used to be. "Active" = everything not
+`inactive` (so `prospect` shows there); "Inactive" is the archive of finished
+clients — all data (notes, transcripts, reports) kept intact, workspace fully
+reachable. A client moves lists via the workspace edit modal's Status field
+(gear icon); no new column or migration — `status` has always carried
+active|prospect|inactive. The My Team section filters by the same toggle.
 
 ### Client workspace (`app/(authenticated)/clients/[id]`)
 Name card (gear → edit), Transcripts + Notes summary cards, New note / Send
