@@ -194,8 +194,9 @@ function TodoTodayBody() {
             )}
           </Section>
 
-          {/* Transcripts to score */}
-          <Section title="Transcripts to score" count={transcripts.length}>
+          {/* Transcripts waiting on a client to be confirmed (same set as the
+              Practice review queue — filed/scored transcripts never appear) */}
+          <Section title="Transcripts to review" count={transcripts.length}>
             {transcripts.length === 0 ? (
               <EmptySlate message="No transcripts waiting" />
             ) : (

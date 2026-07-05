@@ -83,30 +83,20 @@ export async function GET() {
       }
     }
 
-    // Transcripts needing scoring or review
+    // Transcripts waiting on the coach — same definition as the Practice review
+    // queue: needs_review/unmatched only. A matched transcript with no report is
+    // NOT a to-do — it's the deliberate "filed without scoring" state (orientation
+    // /teaching sessions); scoring later is optional, via the client workspace's
+    // "score now" button.
     const { data: transcripts } = await supabase
       .from('transcripts')
       .select('id, client_id, client_initials, filename, title, session_date, match_status, created_at')
       .eq('coach_id', coach.id)
-      .in('match_status', ['needs_review', 'unmatched', 'matched'])
+      .in('match_status', ['needs_review', 'unmatched'])
       .order('created_at', { ascending: false })
       .limit(20)
 
-    // Filter matched transcripts to those without a report
-    const matchedIds = (transcripts || [])
-      .filter((t) => t.match_status === 'matched')
-      .map((t) => t.id)
-
-    let scoredIds = new Set<string>()
-    if (matchedIds.length) {
-      const { data: reports } = await supabase
-        .from('session_reports')
-        .select('transcript_id')
-        .in('transcript_id', matchedIds)
-      for (const r of reports || []) if (r.transcript_id) scoredIds.add(r.transcript_id)
-    }
-
-    // Client names for transcripts
+    // Client names for transcripts (a needs_review row can carry a best-guess client)
     const transcriptClientIds = Array.from(
       new Set((transcripts || []).filter((t) => t.client_id).map((t) => t.client_id as string)),
     )
@@ -119,21 +109,15 @@ export async function GET() {
       for (const c of tclients || []) transcriptNameMap.set(c.id, c.name)
     }
 
-    const scoringQueue = (transcripts || [])
-      .filter((t) => {
-        if (t.match_status === 'needs_review' || t.match_status === 'unmatched') return true
-        if (t.match_status === 'matched' && !scoredIds.has(t.id)) return true
-        return false
-      })
-      .map((t) => ({
-        id: t.id,
-        client_id: t.client_id,
-        client_name: t.client_id ? transcriptNameMap.get(t.client_id) || t.client_initials || 'Unknown' : null,
-        title: t.title || t.filename || 'Untitled',
-        session_date: t.session_date,
-        match_status: t.match_status,
-        needs_review: t.match_status !== 'matched',
-      }))
+    const scoringQueue = (transcripts || []).map((t) => ({
+      id: t.id,
+      client_id: t.client_id,
+      client_name: t.client_id ? transcriptNameMap.get(t.client_id) || t.client_initials || 'Unknown' : null,
+      title: t.title || t.filename || 'Untitled',
+      session_date: t.session_date,
+      match_status: t.match_status,
+      needs_review: true,
+    }))
 
     return NextResponse.json({ nudges: nudgeSuggestions, transcripts: scoringQueue })
   } catch (e) {
