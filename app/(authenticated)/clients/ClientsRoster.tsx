@@ -17,10 +17,9 @@ export function ClientsRoster() {
   const [showAdd, setShowAdd] = useState(false)
   // After creating a client, offer to issue the coaching agreement now.
   const [justCreated, setJustCreated] = useState<{ id: string; name: string } | null>(null)
-  const [importing, setImporting] = useState(false)
-  const [importMsg, setImportMsg] = useState('')
-  const [importingNotes, setImportingNotes] = useState(false)
-  const [notesMsg, setNotesMsg] = useState('')
+  // Active roster vs. the archived (inactive) list. Finished clients keep all
+  // their data — notes, transcripts, reports — they just live on the other tab.
+  const [view, setView] = useState<'active' | 'inactive'>('active')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -48,60 +47,13 @@ export function ClientsRoster() {
     load()
   }, [load])
 
-  async function importFromCA() {
-    if (importing) return
-    setImporting(true)
-    setImportMsg('')
-    try {
-      const res = await fetch('/api/clients/import', { method: 'POST' })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Import failed')
-      setImportMsg(
-        data.imported > 0
-          ? `Imported ${data.imported} new ${data.imported === 1 ? 'client' : 'clients'} (${data.skipped} already here).`
-          : `Up to date — all ${data.total} Coach Accountable clients are already imported.`
-      )
-      if (data.imported > 0) await load()
-    } catch (e: any) {
-      setImportMsg(e.message)
-    }
-    setImporting(false)
-  }
+  // Split the roster by status: "inactive" is the archive of finished clients;
+  // everything else (active, prospect) is the working list.
+  const inView = (c: Client) => (view === 'inactive' ? c.status === 'inactive' : c.status !== 'inactive')
+  const activeCount = clients.filter((c) => c.status !== 'inactive').length
+  const inactiveCount = clients.length - activeCount
 
-  // Port Coach Accountable session notes for every active client. Runs one
-  // request per client so each stays within limits, with live progress; it's
-  // idempotent, so re-running only pulls in anything new.
-  async function importNotesFromCA() {
-    if (importingNotes) return
-    const active = [...clients, ...teamClients].filter((c) => c.status === 'active')
-    if (active.length === 0) {
-      setNotesMsg('No active clients to import notes for.')
-      return
-    }
-    setImportingNotes(true)
-    setNotesMsg('')
-    let imported = 0
-    let done = 0
-    for (const c of active) {
-      setNotesMsg(`Importing notes… ${done + 1} of ${active.length} (${c.name})`)
-      try {
-        const res = await fetch(`/api/clients/${c.id}/import-notes`, { method: 'POST' })
-        const data = await res.json()
-        if (res.ok) imported += data.imported || 0
-      } catch {
-        /* keep going — re-running fills any gaps */
-      }
-      done++
-    }
-    setNotesMsg(
-      `Done — imported ${imported} note${imported === 1 ? '' : 's'} across ${active.length} active client${
-        active.length === 1 ? '' : 's'
-      }.`
-    )
-    setImportingNotes(false)
-  }
-
-  const visible = clients.filter((c) => {
+  const visible = clients.filter(inView).filter((c) => {
     if (!filter) return true
     const q = filter.toLowerCase()
     return (
@@ -110,6 +62,7 @@ export function ClientsRoster() {
       (c.company || '').toLowerCase().includes(q)
     )
   })
+  const visibleTeam = teamClients.filter(inView)
 
   return (
     <div className="space-y-6">
@@ -121,20 +74,36 @@ export function ClientsRoster() {
           className="w-full max-w-xs rounded-tlw-lg border border-tlw-warm-gray/25 bg-tlw-surface px-3 py-2 text-[13px] text-tlw-espresso outline-none transition-colors focus:border-tlw-signal-orange"
         />
         <div className="flex items-center gap-2">
-          <button
-            onClick={importFromCA}
-            disabled={importing}
-            className="rounded-tlw-lg border border-tlw-warm-gray/30 px-4 py-2 text-[13px] font-medium text-tlw-espresso transition-colors hover:border-tlw-warm-gray/50 disabled:opacity-60"
+          <div
+            className="flex items-center rounded-tlw-lg border border-tlw-warm-gray/30 p-0.5"
+            role="tablist"
+            aria-label="Client list"
           >
-            {importing ? 'Importing…' : 'Import clients from CA'}
-          </button>
-          <button
-            onClick={importNotesFromCA}
-            disabled={importingNotes}
-            className="rounded-tlw-lg border border-tlw-warm-gray/30 px-4 py-2 text-[13px] font-medium text-tlw-espresso transition-colors hover:border-tlw-warm-gray/50 disabled:opacity-60"
-          >
-            {importingNotes ? 'Importing notes…' : 'Import notes from CA'}
-          </button>
+            <button
+              role="tab"
+              aria-selected={view === 'active'}
+              onClick={() => setView('active')}
+              className={`rounded-tlw-md px-4 py-1.5 text-[13px] font-medium transition-colors ${
+                view === 'active'
+                  ? 'bg-tlw-navy-rich text-tlw-cream'
+                  : 'text-tlw-espresso hover:bg-tlw-canvas'
+              }`}
+            >
+              Active{activeCount > 0 ? ` (${activeCount})` : ''}
+            </button>
+            <button
+              role="tab"
+              aria-selected={view === 'inactive'}
+              onClick={() => setView('inactive')}
+              className={`rounded-tlw-md px-4 py-1.5 text-[13px] font-medium transition-colors ${
+                view === 'inactive'
+                  ? 'bg-tlw-navy-rich text-tlw-cream'
+                  : 'text-tlw-espresso hover:bg-tlw-canvas'
+              }`}
+            >
+              Inactive{inactiveCount > 0 ? ` (${inactiveCount})` : ''}
+            </button>
+          </div>
           <button
             onClick={() => setShowAdd(true)}
             className="rounded-tlw-lg bg-tlw-navy-rich px-4 py-2 text-[13px] font-medium text-tlw-cream transition-colors hover:bg-tlw-navy-rich/85"
@@ -144,8 +113,13 @@ export function ClientsRoster() {
         </div>
       </div>
 
-      {importMsg && <p className="text-[13px] text-tlw-warm-gray">{importMsg}</p>}
-      {notesMsg && <p className="text-[13px] text-tlw-warm-gray">{notesMsg}</p>}
+      {view === 'inactive' && (
+        <p className="text-[12px] text-tlw-warm-gray">
+          Finished clients live here with all their notes, transcripts, and reports intact. To move a
+          client, open their page and set Status to inactive (gear icon) — or back to active to
+          restore them to the working roster.
+        </p>
+      )}
 
       {justCreated && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-tlw-xl border border-tlw-warm-gray/20 bg-tlw-surface p-4">
@@ -188,17 +162,23 @@ export function ClientsRoster() {
             Try again
           </button>
         </div>
-      ) : visible.length === 0 ? (
+      ) : visible.length === 0 && visibleTeam.length === 0 ? (
         <div className="flex min-h-[220px] flex-col items-center justify-center rounded-tlw-2xl border border-dashed border-tlw-warm-gray/25 bg-tlw-surface/60 px-8 text-center">
           <h2 className="mb-1 text-base font-medium text-tlw-navy-deep">
-            {clients.length === 0 ? 'No clients yet' : 'No matches'}
+            {view === 'inactive' && inactiveCount === 0
+              ? 'No inactive clients'
+              : clients.length === 0
+              ? 'No clients yet'
+              : 'No matches'}
           </h2>
           <p className="mb-4 max-w-sm text-[13px] text-tlw-warm-gray">
-            {clients.length === 0
+            {view === 'inactive' && inactiveCount === 0
+              ? 'When you finish with a client, set their Status to inactive on their page (gear icon) and they’ll be archived here with all their data.'
+              : clients.length === 0
               ? 'Add your first client to start keeping notes in the app.'
               : 'Try a different search.'}
           </p>
-          {clients.length === 0 && (
+          {view === 'active' && clients.length === 0 && (
             <button
               onClick={() => setShowAdd(true)}
               className="text-[13px] font-medium text-tlw-signal-orange hover:underline"
@@ -215,13 +195,13 @@ export function ClientsRoster() {
             ))}
           </div>
 
-          {teamClients.length > 0 && (
+          {visibleTeam.length > 0 && (
             <div>
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-tlw-warm-gray">
                 My Team — coaches
               </p>
               <div className="space-y-2">
-                {teamClients.map((c) => (
+                {visibleTeam.map((c) => (
                   <ClientCard key={c.id} c={c} pendingAgreements={{}} isTeam />
                 ))}
               </div>
