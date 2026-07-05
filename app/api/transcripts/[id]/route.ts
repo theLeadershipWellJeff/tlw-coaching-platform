@@ -53,9 +53,12 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
 /**
  * Resolve a needs-review transcript by confirming its client, then score it.
- * Also used to re-score (pass rescore: true without changing the client) and to
- * rename the transcript (pass title only — no scoring).
- * Body: { clientId?: string, rescore?: boolean, title?: string }
+ * Also used to re-score (pass rescore: true without changing the client), to
+ * rename the transcript (pass title only — no scoring), and to file a
+ * transcript on a client WITHOUT scoring it (pass score: false — e.g. an
+ * orientation/teaching session that isn't really a coaching conversation but
+ * whose content the coach wants on the client's record).
+ * Body: { clientId?: string, rescore?: boolean, title?: string, score?: boolean }
  */
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   let supabase: ReturnType<typeof getSupabaseAdmin>
@@ -139,6 +142,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       { error: 'Assign a client before scoring (clientId required).' },
       { status: 400 }
     )
+  }
+
+  // Add-but-don't-score: the client is confirmed (the transcript is now on
+  // their file and out of the review queue), scoring is skipped. It can still
+  // be scored later from the client's transcripts list.
+  if (body.score === false) {
+    return NextResponse.json({ matchStatus: transcript.match_status, scored: false })
   }
 
   try {

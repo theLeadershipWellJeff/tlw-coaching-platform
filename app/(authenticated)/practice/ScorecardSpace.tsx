@@ -295,6 +295,7 @@ export function ScorecardSpace() {
   const [focus, setFocus] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [assigning, setAssigning] = useState<string | null>(null)
+  const [assignMode, setAssignMode] = useState<'score' | 'add'>('score')
   const [assigningElapsed, setAssigningElapsed] = useState(0)
   const [assignError, setAssignError] = useState<Record<string, string>>({})
   const [picked, setPicked] = useState<Record<string, string>>({})
@@ -425,25 +426,32 @@ export function ScorecardSpace() {
     }
   }
 
-  async function confirmClient(transcriptId: string) {
+  async function confirmClient(transcriptId: string, score: boolean) {
     const clientId = picked[transcriptId]
     if (!clientId) return
     setAssigning(transcriptId)
+    setAssignMode(score ? 'score' : 'add')
     setAssignError((e) => ({ ...e, [transcriptId]: '' }))
     try {
       const res = await fetch(`/api/transcripts/${transcriptId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId }),
+        body: JSON.stringify(score ? { clientId } : { clientId, score: false }),
       })
       if (res.ok) {
         await load()
       } else {
         const data = await res.json().catch(() => ({}))
-        setAssignError((e) => ({ ...e, [transcriptId]: data.error || 'Scoring failed. Please try again.' }))
+        setAssignError((e) => ({
+          ...e,
+          [transcriptId]: data.error || (score ? 'Scoring failed. Please try again.' : 'Could not add. Please try again.'),
+        }))
       }
     } catch {
-      setAssignError((e) => ({ ...e, [transcriptId]: 'Network error while scoring. Please try again.' }))
+      setAssignError((e) => ({
+        ...e,
+        [transcriptId]: score ? 'Network error while scoring. Please try again.' : 'Network error. Please try again.',
+      }))
     } finally {
       setAssigning(null)
     }
@@ -558,7 +566,9 @@ export function ScorecardSpace() {
           <p className="mb-4 text-[12px] text-tlw-warm-gray">
             These transcripts couldn&apos;t be matched to a client — either the guess was uncertain or
             the file carried no name to match on (common for timestamp-named recordings). Confirm the
-            client to score them; matches are never auto-assigned without confidence.
+            client to score them, or use &ldquo;add, don&apos;t score&rdquo; to file one on the client
+            without a scorecard (e.g. an orientation or teaching session). Matches are never
+            auto-assigned without confidence.
           </p>
           <div className="space-y-2">
             {needsReview.map((t) => {
@@ -676,11 +686,19 @@ export function ScorecardSpace() {
                       ))}
                     </select>
                     <button
-                      onClick={() => confirmClient(t.id)}
+                      onClick={() => confirmClient(t.id, true)}
                       disabled={!picked[t.id] || assigning === t.id}
                       className="rounded-tlw-md bg-tlw-navy-rich px-3 py-1.5 text-[12px] font-medium text-tlw-cream transition-opacity duration-tlw-base hover:opacity-90 disabled:opacity-40"
                     >
-                      {assigning === t.id ? `Analyzing… ${assigningElapsed}s` : 'confirm & score'}
+                      {assigning === t.id && assignMode === 'score' ? `Analyzing… ${assigningElapsed}s` : 'confirm & score'}
+                    </button>
+                    <button
+                      onClick={() => confirmClient(t.id, false)}
+                      disabled={!picked[t.id] || assigning === t.id}
+                      title="File this transcript on the client without scoring it — it can be scored later from their transcripts list"
+                      className="rounded-tlw-md border border-tlw-warm-gray/25 px-2.5 py-1.5 text-[12px] text-tlw-espresso transition-opacity duration-tlw-base hover:opacity-80 disabled:opacity-40"
+                    >
+                      {assigning === t.id && assignMode === 'add' ? 'adding…' : "add, don't score"}
                     </button>
                   </div>
                   {assignError[t.id] && (

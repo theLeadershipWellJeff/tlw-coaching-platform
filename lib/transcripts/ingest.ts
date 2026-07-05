@@ -9,6 +9,7 @@ import { createHash } from 'crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Coach, Database } from '@/lib/supabase/types'
 import { parseTranscript, deriveInitials, buildTranscriptTitle } from './parse'
+import { proposeTranscriptTitle } from './title'
 import { matchClient, type RosterClient } from './match'
 import { runAndStoreReport } from '@/lib/scoring/store'
 import {
@@ -29,6 +30,11 @@ export interface IngestInput {
   // here). Treated as the summary source for the title, so a matched client
   // still wins ("Client · date"); this rescues the unmatched/timestamp cases.
   title?: string | null
+  // When no date can be parsed from the transcript, assume it happened today
+  // (in the coach's timezone). Set by the Zapier webhook, which fires within
+  // minutes of the recording ending — never by manual/Drive backfills, where
+  // the session may be weeks old.
+  assumeSessionToday?: boolean
   autoScore?: boolean
   // Assign this exact client and skip matching — used by per-client import,
   // where the coach has already told us whose session this is.
@@ -41,6 +47,7 @@ export interface IngestResult {
   matchStatus: string
   matchConfidence: number
   clientInitials: string | null
+  title: string | null
   speakerSeparated: boolean
   reportId: string | null
   scoringError: string | null
@@ -113,6 +120,7 @@ export async function ingestMarkdown(
         matchStatus: 'matched',
         matchConfidence: 1,
         clientInitials: initials,
+        title: dupe.title,
         speakerSeparated: parsed.isSpeakerSeparated,
         reportId: null,
         scoringError: null,
@@ -124,6 +132,7 @@ export async function ingestMarkdown(
       matchStatus: dupe.match_status,
       matchConfidence: dupe.match_confidence ?? 0,
       clientInitials: dupe.client_initials,
+      title: dupe.title,
       speakerSeparated: parsed.isSpeakerSeparated,
       reportId: null,
       scoringError: null,
@@ -144,7 +153,8 @@ export async function ingestMarkdown(
   // UTC instant near midnight doesn't shift the session onto the wrong day.
   const sessionDate =
     input.sessionDate ||
-    (parsed.sessionInstant && validInstant ? ymdInTimeZone(validInstant, coach.timezone) : parsed.sessionDate)
+    (parsed.sessionInstant && validInstant ? ymdInTimeZone(validInstant, coach.timezone) : parsed.sessionDate) ||
+    (input.assumeSessionToday ? ymdInTimeZone(new Date(), coach.timezone) : null)
 
   let match: { clientId: string | null; confidence: number; status: string }
   let matchedName: string | null = null
@@ -180,12 +190,21 @@ export async function ingestMarkdown(
 
   // Propose a human title — the calendar/name match gives us the client; else
   // Plaud's summary title, else a real (non-timestamp) filename.
-  const title = buildTranscriptTitle({
+  let title = buildTranscriptTitle({
     clientName: matchedName,
     sessionDate,
     summaryRaw: input.title || parsed.titleRaw,
     filename,
   })
+
+  // Unmatched with nothing better than a bare date ("Session · …") or nothing
+  // at all: ask Claude to read the opening and name the session — participant
+  // name when audible + topic — so the review queue identifies it at a glance.
+  // Best-effort: a failure leaves the deterministic title in place.
+  if (match.status !== 'matched' && (!title || /^Session · /.test(title))) {
+    const proposed = await proposeTranscriptTitle(parsed.body, { coachName: coach.name })
+    if (proposed) title = proposed
+  }
 
   const insert: Database['public']['Tables']['transcripts']['Insert'] = {
     coach_id: coach.id,
@@ -230,6 +249,7 @@ export async function ingestMarkdown(
     matchStatus: match.status,
     matchConfidence: Number(match.confidence.toFixed(2)),
     clientInitials: parsed.clientInitials,
+    title,
     speakerSeparated: parsed.isSpeakerSeparated,
     reportId,
     scoringError,

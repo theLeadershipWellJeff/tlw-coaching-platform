@@ -69,6 +69,9 @@ export async function POST(req: NextRequest) {
       title: body.title ?? body.summary ?? null,
       driveFileId: body.driveFileId ?? body.drive_file_id ?? null,
       source: body.source || 'plaud',
+      // Zapier fires within minutes of the recording ending, so an undated
+      // transcript can safely default to today (coach's timezone).
+      assumeSessionToday: true,
     })
 
     // Hold-for-review-but-tell-me: a freshly ingested session that couldn't be
@@ -77,7 +80,7 @@ export async function POST(req: NextRequest) {
     if (!result.duplicate && !result.reportId && result.matchStatus !== 'matched') {
       try {
         await sendNeedsReviewEmail(coach, {
-          filename: body.filename ?? null,
+          filename: result.title || body.filename || null,
           preview: previewOf(markdown),
         })
       } catch (e: any) {

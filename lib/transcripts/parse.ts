@@ -198,6 +198,25 @@ function detectSpeakerSeparation(body: string): boolean {
   return labeled >= 6 && speakers.size >= 2
 }
 
+/**
+ * A leading markdown heading is often the only title signal in a bare Plaud
+ * export (no front matter, no filename via Zapier). Use it when it's a real
+ * title — not a timestamp, not a generic "Transcript"/"Notes" label.
+ */
+function headingTitle(body: string): string | null {
+  const lines = body.split('\n', 12)
+  for (const line of lines) {
+    const m = line.match(/^#{1,6}\s+(.+?)\s*#*\s*$/)
+    if (!m) continue
+    const text = m[1].trim()
+    if (!text) continue
+    if (/^\d{4}-\d{1,2}-\d{1,2}([ T_]+\d{1,2}:\d{2}(:\d{2})?)?$/.test(text)) continue
+    if (/^(transcript|notes?|recording|session)$/i.test(text)) continue
+    return text
+  }
+  return null
+}
+
 export function parseTranscript(filename: string | null, md: string): ParsedTranscript {
   const { fields, body } = parseFrontMatter(md)
   const fromFile = parseFilename(filename)
@@ -225,7 +244,7 @@ export function parseTranscript(filename: string | null, md: string): ParsedTran
     sessionType: pick(fields, ['type', 'sessiontype', 'engagementtype']),
     sessionNumber: number,
     engagementTotal: total,
-    titleRaw: pick(fields, ['title', 'topic', 'subject', 'summary']),
+    titleRaw: pick(fields, ['title', 'topic', 'subject', 'summary']) || headingTitle(body),
     sessionInstant,
     body,
     isSpeakerSeparated: detectSpeakerSeparation(body),
