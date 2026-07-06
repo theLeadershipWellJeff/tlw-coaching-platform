@@ -36,6 +36,13 @@ export function EditClientModal({
     for (const { key } of FIELDS) f[key] = (client[key] as string) || ''
     return f
   })
+  // Agreement acknowledgment — the same clients columns the scoring engine's
+  // Gate 1 reads (migration 018). Lets the coach record an agreement signed on
+  // another platform (e.g. Coach Accountable) without re-issuing one here.
+  const [agreementOnFile, setAgreementOnFile] = useState<boolean>(!!client.agreement_on_file)
+  const [recording, setRecording] = useState<'yes' | 'no' | 'unset'>(
+    client.recording_authorized === true ? 'yes' : client.recording_authorized === false ? 'no' : 'unset'
+  )
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   // Favorite zones learned from the coach's existing clients (+ their own zone).
@@ -68,6 +75,8 @@ export function EditClientModal({
         timezone: form.timezone.trim() || null,
         timezone_label: form.timezone.trim() ? form.timezone_label.trim() || null : null,
         client_type: form.client_type,
+        agreement_on_file: agreementOnFile,
+        recording_authorized: recording === 'yes' ? true : recording === 'no' ? false : null,
       }
       for (const { key } of FIELDS) payload[key] = form[key].trim() || (key === 'name' ? form[key] : null)
       const res = await fetch(`/api/clients/${client.id}`, {
@@ -159,6 +168,58 @@ export function EditClientModal({
             ))}
           </select>
         </label>
+
+        <div className="block rounded-tlw-md border border-tlw-warm-gray/20 bg-tlw-canvas/60 p-3">
+          <span className="text-[11px] font-medium uppercase tracking-[1.5px] text-tlw-warm-gray">Agreement &amp; recording</span>
+          <label className="mt-2 flex cursor-pointer items-start gap-2.5">
+            <input
+              type="checkbox"
+              checked={agreementOnFile}
+              onChange={(e) => setAgreementOnFile(e.target.checked)}
+              className="mt-0.5 h-4 w-4 accent-tlw-navy-rich"
+            />
+            <span className="text-[13px] text-tlw-espresso">
+              Signed coaching agreement on file
+              <span className="mt-0.5 block text-[11px] leading-snug text-tlw-warm-gray">
+                Check this for an agreement signed outside this platform (e.g. Coach Accountable) — no need to
+                re-issue. The scorecard&apos;s ethics gate (C1) reads this directly.
+              </span>
+            </span>
+          </label>
+          <div className="mt-3">
+            <span className="text-[11px] font-medium uppercase tracking-[1.5px] text-tlw-warm-gray">
+              Recording &amp; AI processing
+            </span>
+            <div className="mt-1 flex gap-2">
+              {([
+                { val: 'yes', label: 'Authorized' },
+                { val: 'no', label: 'Do not record' },
+                { val: 'unset', label: 'Not set' },
+              ] as const).map(({ val, label }) => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => setRecording(val)}
+                  className={`flex-1 rounded-tlw-md border px-2 py-1.5 text-[12px] font-medium transition-colors ${
+                    recording === val
+                      ? val === 'no'
+                        ? 'border-tlw-signal-orange bg-tlw-signal-orange/10 text-tlw-signal-orange'
+                        : 'border-tlw-navy-rich bg-tlw-navy-rich text-tlw-cream'
+                      : 'border-tlw-warm-gray/25 text-tlw-espresso hover:bg-tlw-canvas'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {recording === 'no' && (
+              <p className="mt-1.5 text-[11px] leading-snug" style={{ color: '#E8650A' }}>
+                ⚑ A non-dismissible no-recording flag will show on this client&apos;s workspace, and any scored
+                session will carry a manual-review flag.
+              </p>
+            )}
+          </div>
+        </div>
 
         <label className="block">
           <span className="text-[11px] font-medium uppercase tracking-[1.5px] text-tlw-warm-gray">Session fee (per hour)</span>

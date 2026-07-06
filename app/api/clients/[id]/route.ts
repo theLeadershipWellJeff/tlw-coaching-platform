@@ -35,6 +35,22 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   for (const key of allowed) {
     if (key in body) patch[key] = body[key]
   }
+    // Agreement acknowledgment (migration 018 columns) — lets the coach record an
+    // agreement signed outside this platform (e.g. Coach Accountable) and the
+    // client's recording decision without re-issuing. These are the fields the
+    // scoring engine's Gate 1 reads, so validate strictly.
+    if ('agreement_on_file' in body) {
+      if (typeof body.agreement_on_file !== 'boolean') {
+        return NextResponse.json({ error: 'agreement_on_file must be a boolean' }, { status: 400 })
+      }
+      patch.agreement_on_file = body.agreement_on_file
+    }
+    if ('recording_authorized' in body) {
+      if (body.recording_authorized !== null && typeof body.recording_authorized !== 'boolean') {
+        return NextResponse.json({ error: 'recording_authorized must be a boolean or null' }, { status: 400 })
+      }
+      patch.recording_authorized = body.recording_authorized
+    }
     if (Object.keys(patch).length === 0) {
       return NextResponse.json({ error: 'No fields to update' }, { status: 400 })
     }
