@@ -32,6 +32,9 @@ export async function GET(req: NextRequest) {
 
     // Pending-agreement indicator (migration 018): clientId → days since the most
     // recent unsigned ('sent') agreement was issued, for the roster's 7-day flag.
+    // A client whose agreement is acknowledged on file (signed externally, e.g.
+    // Coach Accountable) is covered — never flag a stale platform issue for them.
+    const agreementOnFile = new Set((data || []).filter((c) => c.agreement_on_file).map((c) => c.id))
     const pendingAgreements: Record<string, number> = {}
     const { data: pending } = await supabase
       .from('agreements')
@@ -41,6 +44,7 @@ export async function GET(req: NextRequest) {
       .order('sent_at', { ascending: false })
     for (const row of pending || []) {
       if (row.client_id in pendingAgreements) continue // keep the most recent
+      if (agreementOnFile.has(row.client_id)) continue
       pendingAgreements[row.client_id] = Math.floor(
         (Date.now() - new Date(row.sent_at).getTime()) / (24 * 60 * 60 * 1000)
       )

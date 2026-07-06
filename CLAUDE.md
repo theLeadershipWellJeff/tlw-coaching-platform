@@ -321,11 +321,27 @@ immutable `signed_agreement_html`, invalidates the token, **promotes
 the coach a notification + the client their copy (both via
 `lib/gmail.ts#sendCoachHtmlEmail`, unattended).
 
-The workspace `AgreementsCard` shows none/awaiting/active, recording status, and
-the **no-recording compliance flag** (the one Signal-Orange instance), with
-Issue/View/Re-issue. The same non-dismissible no-recording banner shows in the
+**External acknowledgment (no re-issue).** An agreement signed outside the
+platform (e.g. on Coach Accountable) is recorded via the edit-client modal's
+**Agreement & recording** section: a "Signed coaching agreement on file" checkbox
+(`clients.agreement_on_file`) + an Authorized / **Do not record** / Not set choice
+(`clients.recording_authorized` true/false/null) — the exact fields Gate 1 and the
+C1 infrastructure ceiling read, so the ethics clear on the next score without
+issuing a platform agreement. `PATCH /api/clients/[id]` accepts both (strictly
+validated booleans; no migration — 018 columns). The coach can also override
+recording mid-engagement (a client who withdraws permission → "Do not record" →
+the no-recording flag + a manual-review flag on any scored session). **Existing
+reports need a rescore to pick up a changed acknowledgment.**
+
+The workspace `AgreementsCard` shows none/awaiting/active/**on-file (external,
+no `agreements` row — with an "Issue a platform agreement instead" fallback)**,
+recording status (client record first, agreement row as fallback), and
+the **no-recording compliance flag** (the one Signal-Orange instance, shown
+whenever `clients.recording_authorized === false`), with Issue/View/Re-issue.
+The same non-dismissible no-recording banner shows in the
 client header (`ClientDetail`). The roster flags an agreement **unsigned > 7 days**
-(amber dot; `pendingAgreements` from `GET /api/clients`). `clients.agreement_on_file`
+(amber dot; `pendingAgreements` from `GET /api/clients` — suppressed for clients
+whose agreement is on file externally). `clients.agreement_on_file`
 + `clients.recording_authorized` are the **source of truth the scoring Gate 1
 reads** (see the scoring engine section). Status vocabulary is `sent | active`
 (`none` = no row).

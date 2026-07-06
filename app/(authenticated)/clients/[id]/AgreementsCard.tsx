@@ -54,7 +54,16 @@ export function AgreementsCard({
   }, [client.id, reloadKey])
 
   const latest = rows[0]
-  const status = !latest ? 'none' : latest.status // none | sent | active
+  // 'external' = no agreement issued through the platform, but the coach has
+  // acknowledged a signed agreement on file (edit-client modal — e.g. one signed
+  // on Coach Accountable). Same client columns Gate 1 reads, so ethics clear.
+  const status = latest ? latest.status : client.agreement_on_file ? 'external' : 'none' // none | sent | active | external
+
+  // The client record is the source of truth for recording consent (it's what
+  // scoring reads, and the coach can override it — e.g. a client who withdraws
+  // recording permission mid-engagement). Fall back to the signed agreement row.
+  const recAuth = client.recording_authorized ?? latest?.recording_authorized ?? null
+  const recLabel = recAuth === true ? 'authorized' : recAuth === false ? 'not authorized' : 'unknown'
 
   return (
     <div className="rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface p-6">
@@ -68,7 +77,10 @@ export function AgreementsCard({
       ) : (
         <div className="space-y-3">
           {status === 'none' && (
-            <p className="text-[13px] text-tlw-warm-gray">No coaching agreement has been issued to this client yet.</p>
+            <p className="text-[13px] text-tlw-warm-gray">
+              No coaching agreement has been issued to this client yet. Signed one elsewhere (e.g. Coach
+              Accountable)? Mark it on file via the edit (gear) menu — no need to re-issue.
+            </p>
           )}
 
           {status === 'sent' && latest && (
@@ -81,19 +93,19 @@ export function AgreementsCard({
           {status === 'active' && latest && (
             <div className="text-[13px] text-tlw-espresso">
               <p>Issued {fmtDate(latest.sent_at)} · signed {fmtDate(latest.signed_at)}</p>
-              <p className="text-tlw-warm-gray">
-                Recording &amp; AI processing:{' '}
-                {latest.recording_authorized === true
-                  ? 'authorized'
-                  : latest.recording_authorized === false
-                  ? 'not authorized'
-                  : 'unknown'}
-              </p>
+              <p className="text-tlw-warm-gray">Recording &amp; AI processing: {recLabel}</p>
+            </div>
+          )}
+
+          {status === 'external' && (
+            <div className="text-[13px] text-tlw-espresso">
+              <p>Signed agreement on file — recorded outside this platform (e.g. Coach Accountable).</p>
+              <p className="text-tlw-warm-gray">Recording &amp; AI processing: {recLabel}</p>
             </div>
           )}
 
           {/* No-recording compliance flag (the single Signal Orange instance). */}
-          {status === 'active' && client.recording_authorized === false && (
+          {client.recording_authorized === false && (
             <div
               className="rounded-tlw-md px-3 py-2 text-[12px] font-medium"
               style={{ background: 'rgba(232,101,10,.10)', color: '#E8650A' }}
@@ -109,6 +121,10 @@ export function AgreementsCard({
                 className="rounded-tlw-lg bg-tlw-navy-rich px-4 py-2 text-[13px] font-medium text-tlw-cream transition-opacity hover:opacity-90"
               >
                 Issue Agreement
+              </button>
+            ) : status === 'external' ? (
+              <button onClick={onIssue} className="text-[12px] text-tlw-warm-gray hover:text-tlw-espresso">
+                Issue a platform agreement instead
               </button>
             ) : (
               <>
@@ -141,6 +157,7 @@ function StatusBadge({ status }: { status: string }) {
     none: { label: 'No Agreement', cls: 'bg-tlw-canvas text-tlw-warm-gray' },
     sent: { label: 'Awaiting Signature', cls: 'bg-amber-100 text-amber-800' },
     active: { label: 'Active', cls: 'bg-green-100 text-green-800' },
+    external: { label: 'On File', cls: 'bg-green-100 text-green-800' },
   }
   const s = map[status] || map.none
   return <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ${s.cls}`}>{s.label}</span>
