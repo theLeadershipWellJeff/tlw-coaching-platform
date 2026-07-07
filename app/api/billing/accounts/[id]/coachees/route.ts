@@ -66,6 +66,17 @@ export async function POST(req: NextRequest, { params }: Params) {
       .select('*, clients ( id, name, email )')
       .single()
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    // Move their engagements too, so billing runs group them under the new
+    // account (an engagement left pointing at the old account would bill the
+    // client individually instead of rolling up).
+    const { error: engErr } = await supabase
+      .from('engagements')
+      .update({ billing_account_id: params.id })
+      .eq('coachee_id', existing.id)
+      .eq('coach_id', coach.id)
+    if (engErr) return NextResponse.json({ error: `coachee moved but engagements failed to follow: ${engErr.message}` }, { status: 500 })
+
     return NextResponse.json({ coachee: data, reassigned: true })
   }
 
