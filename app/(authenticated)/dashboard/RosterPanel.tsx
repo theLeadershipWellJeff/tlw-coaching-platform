@@ -30,7 +30,10 @@ export function RosterPanel({
 }) {
   const [filter, setFilter] = useState('')
 
+  // Archived clients (the permanent record) never surface on the dashboard —
+  // they live only on the roster's Archived tab.
   const visible = clients.filter((c) => {
+    if (c.status === 'archived') return false
     if (!filter) return true
     const q = filter.toLowerCase()
     return (
