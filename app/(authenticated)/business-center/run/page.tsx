@@ -9,23 +9,29 @@ function money(n: number) {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 })
 }
 
-/** Default period = previous calendar month. */
-function defaultPeriod(): { start: string; end: string } {
+/** Current month as a YYYY-MM month-input value. */
+function currentMonthValue(): string {
   const now = new Date()
-  const y = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear()
-  const m = now.getMonth() === 0 ? 12 : now.getMonth()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+}
+
+/** Full calendar-month period for a YYYY-MM month value. */
+function monthPeriod(month: string): { start: string; end: string } {
+  const [y, m] = month.split('-').map(Number)
   const pad = (n: number) => String(n).padStart(2, '0')
   const lastDay = new Date(y, m, 0).getDate()
   return { start: `${y}-${pad(m)}-01`, end: `${y}-${pad(m)}-${lastDay}` }
 }
 
-function currentMonthPeriod(): { start: string; end: string } {
-  const now = new Date()
-  const y = now.getFullYear()
-  const m = now.getMonth() + 1
-  const pad = (n: number) => String(n).padStart(2, '0')
-  const lastDay = new Date(y, m, 0).getDate()
-  return { start: `${y}-${pad(m)}-01`, end: `${y}-${pad(m)}-${lastDay}` }
+/** The month before a YYYY-MM value, e.g. "2026-07" → "2026-06". */
+function previousMonthValue(month: string): string {
+  const [y, m] = month.split('-').map(Number)
+  return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`
+}
+
+function monthLabel(month: string): string {
+  const [y, m] = month.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, 15)).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 }
 
 function formatPeriod(start: string, end: string) {
@@ -903,7 +909,8 @@ function CreateInvoiceModal({
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function BillingRunPage() {
-  const def = currentMonthPeriod()
+  const [cycleMonth, setCycleMonth] = useState(currentMonthValue())
+  const def = monthPeriod(currentMonthValue())
   const [periodStart, setPeriodStart] = useState(def.start)
   const [periodEnd, setPeriodEnd] = useState(def.end)
   const [assembling, setAssembling] = useState(false)
@@ -967,8 +974,10 @@ export default function BillingRunPage() {
     loadInvoices(periodStart, periodEnd)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  function snapCurrentMonth() {
-    const p = currentMonthPeriod()
+  function setCycle(month: string) {
+    if (!/^\d{4}-\d{2}$/.test(month)) return
+    setCycleMonth(month)
+    const p = monthPeriod(month)
     setPeriodStart(p.start)
     setPeriodEnd(p.end)
     loadInvoices(p.start, p.end)
@@ -1155,31 +1164,20 @@ export default function BillingRunPage() {
         <div className="flex flex-wrap items-end gap-3">
           <div className="space-y-1">
             <label className="block text-[11px] font-medium uppercase tracking-wider text-tlw-warm-gray">
-              Period start
+              Billing cycle
             </label>
             <input
-              type="date"
-              value={periodStart}
-              onChange={(e) => setPeriodStart(e.target.value)}
-              className="rounded-tlw-lg border border-tlw-warm-gray/30 bg-tlw-canvas px-3 py-1.5 text-[13px] text-tlw-espresso focus:outline-none focus:ring-1 focus:ring-tlw-navy-deep/30"
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="block text-[11px] font-medium uppercase tracking-wider text-tlw-warm-gray">
-              Period end
-            </label>
-            <input
-              type="date"
-              value={periodEnd}
-              onChange={(e) => setPeriodEnd(e.target.value)}
+              type="month"
+              value={cycleMonth}
+              onChange={(e) => setCycle(e.target.value)}
               className="rounded-tlw-lg border border-tlw-warm-gray/30 bg-tlw-canvas px-3 py-1.5 text-[13px] text-tlw-espresso focus:outline-none focus:ring-1 focus:ring-tlw-navy-deep/30"
             />
           </div>
           <button
-            onClick={snapCurrentMonth}
+            onClick={() => setCycle(currentMonthValue())}
             className="rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-1.5 text-[13px] text-tlw-espresso transition-colors hover:bg-tlw-canvas"
           >
-            Current month
+            This month
           </button>
           <div className="flex items-center gap-2">
             <button
@@ -1203,6 +1201,10 @@ export default function BillingRunPage() {
             </button>
           </div>
         </div>
+        <p className="mt-2 text-[12px] text-tlw-warm-gray">
+          {monthLabel(cycleMonth)} cycle: subscription clients bill for <strong>{monthLabel(cycleMonth)}</strong> (in advance);
+          hourly clients bill for sessions delivered in <strong>{monthLabel(previousMonthValue(cycleMonth))}</strong> (in arrears — never further back).
+        </p>
         {assembleMsg && (
           <p className="mt-2 text-[12px] text-tlw-warm-gray">{assembleMsg}</p>
         )}
@@ -1338,9 +1340,9 @@ export default function BillingRunPage() {
         </div>
       ) : invoices.length === 0 ? (
         <div className="rounded-tlw-2xl border border-dashed border-tlw-warm-gray/25 bg-tlw-surface/60 px-6 py-12 text-center">
-          <p className="text-[14px] font-medium text-tlw-navy-deep">No invoices for this period</p>
+          <p className="text-[14px] font-medium text-tlw-navy-deep">No invoices for this cycle</p>
           <p className="mt-1 text-[13px] text-tlw-warm-gray">
-            Set the period above and click <strong>Assemble run</strong> to generate draft invoices for all active TLW-owned engagements.
+            Pick the billing cycle above and click <strong>Assemble run</strong> to generate draft invoices for all active TLW-owned engagements.
           </p>
         </div>
       ) : (

@@ -12,15 +12,26 @@
  *
  * Nothing sends or charges. That is Phase 4.
  *
- * Mode logic:
- *  arrears        → pull unbilled delivered sessions in the period, one line
- *                   per coachee (grouped, with dates), per-coachee for
- *                   enterprise; one grouped line for solo.
- *  subscription   → re-draw a flat monthly line at engagement.monthly_amount.
+ * Cycle semantics: [periodStart, periodEnd] is the BILLING CYCLE (normally the
+ * current calendar month, picked on the run page).
+ *  arrears        → hourly clients bill in arrears: pull unbilled delivered
+ *                   sessions from the ONE MONTH immediately before the cycle
+ *                   (a July cycle bills June sessions). The run never reaches
+ *                   further back — older unbilled sessions (e.g. billed in a
+ *                   different system) stay out. One line per coachee (grouped,
+ *                   with dates), per-coachee for enterprise; one grouped line
+ *                   for solo.
+ *  subscription   → billed in advance: a flat monthly line at
+ *                   engagement.monthly_amount for the cycle month itself.
  *                   Deduped against existing invoices for the period.
  *  per_engagement → surface any installment whose due_date ≤ periodEnd that
  *                   hasn't already been invoiced (tracked via
  *                   invoice_lines for the coachee + source).
+ *
+ * Account grouping: invoices group by the COACHEE'S CURRENT billing account,
+ * not the engagement's stored billing_account_id — so a client moved onto an
+ * enterprise account rolls up to the enterprise invoice even if their
+ * engagement row still points at the old solo account.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { deriveBillableSessions } from './sessions'
@@ -60,18 +71,40 @@ type EngagementRow = {
   coachees: {
     id: string
     client_id: string
+    billing_account_id: string
     clients: { id: string; name: string; email: string | null }
+    billing_accounts: AccountRow | null
   }
-  billing_accounts: {
-    id: string
-    name: string
-    type: string
-    billing_email: string
-  }
+  billing_accounts: AccountRow
+}
+
+type AccountRow = {
+  id: string
+  name: string
+  type: string
+  billing_email: string
 }
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100
+}
+
+/** Add n months to a YYYY-MM-DD date, clamping to the target month's last day. */
+function addMonths(d: string, n: number): string {
+  const dt = new Date(d + 'T12:00:00Z')
+  const day = dt.getUTCDate()
+  dt.setUTCDate(1)
+  dt.setUTCMonth(dt.getUTCMonth() + n)
+  const lastDay = new Date(Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth() + 1, 0)).getUTCDate()
+  dt.setUTCDate(Math.min(day, lastDay))
+  return dt.toISOString().slice(0, 10)
+}
+
+/** The YYYY-MM-DD day before the given date. */
+function dayBefore(d: string): string {
+  const dt = new Date(d + 'T12:00:00Z')
+  dt.setUTCDate(dt.getUTCDate() - 1)
+  return dt.toISOString().slice(0, 10)
 }
 
 function formatDate(d: string): string {
@@ -182,12 +215,21 @@ export async function assembleRun(
   periodStart: string,
   periodEnd: string,
 ): Promise<RunResult> {
+  // Hourly (arrears) clients bill in arrears: their session window is the one
+  // month immediately before the cycle. A July 1–31 cycle bills June 1–30
+  // sessions. Anything older never surfaces.
+  const arrearsStart = addMonths(periodStart, -1)
+  const arrearsEnd = dayBefore(periodStart)
+
   // 1. Load all active, TLW-owned engagements with their coachee + account.
+  // The coachee's CURRENT account is fetched too — it wins over the
+  // engagement's stored billing_account_id (which can go stale when a client
+  // is moved onto an enterprise account after the engagement was created).
   const { data: engagements, error: engErr } = await supabase
     .from('engagements')
     .select(`
       *,
-      coachees ( id, client_id, clients ( id, name, email ) ),
+      coachees ( id, client_id, billing_account_id, clients ( id, name, email ), billing_accounts ( id, name, type, billing_email ) ),
       billing_accounts ( id, name, type, billing_email )
     `)
     .eq('coach_id', coachId)
@@ -199,10 +241,17 @@ export async function assembleRun(
     return { created: 0, skipped: 0, empty: 0, invoiceIds: [], warnings: [], debug: ['No active TLW-owned engagements found for this coach. Create engagements with billing_owner=TLW and status=active on the Accounts page.'] }
   }
 
-  // 2. Group engagements by billing account.
+  // 2. Group engagements by the coachee's current billing account.
   const byAccount = new Map<string, EngagementRow[]>()
+  const resolveAccountId = (eng: EngagementRow) => eng.coachees?.billing_account_id ?? eng.billing_account_id
+  const debug: string[] = []
   for (const eng of engagements as EngagementRow[]) {
-    const acctId = eng.billing_account_id
+    const acctId = resolveAccountId(eng)
+    if (acctId !== eng.billing_account_id) {
+      const name = eng.coachees?.clients?.name ?? eng.id
+      const acctName = eng.coachees?.billing_accounts?.name ?? acctId
+      debug.push(`  ${name}: engagement pointed at an older account — rolled up to their current account "${acctName}".`)
+    }
     if (!byAccount.has(acctId)) byAccount.set(acctId, [])
     byAccount.get(acctId)!.push(eng)
   }
@@ -212,11 +261,15 @@ export async function assembleRun(
   let empty = 0
   const invoiceIds: string[] = []
   const warnings: RunWarning[] = []
-  const debug: string[] = [`Found ${engagements.length} active TLW-owned engagement(s) across ${new Set((engagements as EngagementRow[]).map(e => e.billing_account_id)).size} account(s).`]
+  debug.unshift(
+    `Billing cycle ${periodStart} → ${periodEnd}: subscriptions bill this cycle in advance; hourly sessions bill from ${arrearsStart} → ${arrearsEnd}.`,
+    `Found ${engagements.length} active TLW-owned engagement(s) across ${byAccount.size} account(s).`,
+  )
 
   // 3. Process each account.
   for (const [accountId, acctEngagements] of Array.from(byAccount)) {
-    const account = acctEngagements[0].billing_accounts
+    const account =
+      acctEngagements[0].coachees?.billing_accounts ?? acctEngagements[0].billing_accounts
     const isEnterprise = account.type === 'enterprise'
 
     // Lines to build for this invoice.
@@ -260,24 +313,24 @@ export async function assembleRun(
             rate_hourly: eng.rate_hourly,
           },
           clientId,
-          periodStart,
-          periodEnd,
+          arrearsStart,
+          arrearsEnd,
         )
 
         if (sessions.length === 0) {
-          debug.push(`  Arrears engagement for ${clientName}: 0 notes with session_date in [${periodStart}, ${periodEnd}] and duration_minutes > 0. Check that notes have the correct session_date.`)
+          debug.push(`  Hourly engagement for ${clientName}: 0 notes with session_date in [${arrearsStart}, ${arrearsEnd}] (the month before this cycle) and duration_minutes > 0. Check that notes have the correct session_date.`)
           continue
         }
 
         // Cross-check note-based sessions against calendar appointments.
         if (clientId) {
-          const calCount = await countCalendarSessions(supabase, coachId, clientId, periodStart, periodEnd)
+          const calCount = await countCalendarSessions(supabase, coachId, clientId, arrearsStart, arrearsEnd)
           if (calCount === 0) {
-            const detail = `Billing ${sessions.length} session${sessions.length > 1 ? 's' : ''} from notes for ${clientName} but no calendar appointments found in this period. Verify the session dates are correct.`
+            const detail = `Billing ${sessions.length} session${sessions.length > 1 ? 's' : ''} from notes for ${clientName} but no calendar appointments found in the billed month (${formatMonth(arrearsEnd)}). Verify the session dates are correct.`
             warnings.push({ kind: 'no_calendar_sessions', clientName, detail })
             debug.push(`  ⚠ ${detail}`)
           } else if (calCount !== sessions.length) {
-            const detail = `Note-based session count (${sessions.length}) doesn't match calendar appointments (${calCount}) for ${clientName}. Review before approving.`
+            const detail = `Note-based session count (${sessions.length}) doesn't match calendar appointments (${calCount}) for ${clientName} in ${formatMonth(arrearsEnd)}. Review before approving.`
             warnings.push({ kind: 'no_calendar_sessions', clientName, detail })
             debug.push(`  ⚠ ${detail}`)
           }
