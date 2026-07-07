@@ -13,7 +13,9 @@ const FIELDS: { key: keyof Client; label: string; type?: string; placeholder?: s
   { key: 'address', label: 'Address' },
 ]
 
-const STATUSES = ['active', 'prospect', 'inactive']
+// 'archived' = the permanent record of everyone ever coached — hidden from both
+// the Active and Inactive roster lists (its own Archived tab), all data intact.
+const STATUSES = ['active', 'prospect', 'inactive', 'archived']
 
 export function EditClientModal({
   client,

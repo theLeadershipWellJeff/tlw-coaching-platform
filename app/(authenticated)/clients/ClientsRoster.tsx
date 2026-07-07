@@ -3,8 +3,17 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import type { Client } from '@/lib/supabase/types'
+import { BulkEmailModal } from './BulkEmailModal'
 
 const STATUSES = ['active', 'prospect', 'inactive'] as const
+
+type RosterView = 'active' | 'inactive' | 'archived'
+
+const VIEW_LABELS: Record<RosterView, string> = {
+  active: 'Active',
+  inactive: 'Inactive',
+  archived: 'Archived',
+}
 
 export function ClientsRoster() {
   const router = useRouter()
@@ -17,9 +26,10 @@ export function ClientsRoster() {
   const [showAdd, setShowAdd] = useState(false)
   // After creating a client, offer to issue the coaching agreement now.
   const [justCreated, setJustCreated] = useState<{ id: string; name: string } | null>(null)
-  // Active roster vs. the archived (inactive) list. Finished clients keep all
-  // their data — notes, transcripts, reports — they just live on the other tab.
-  const [view, setView] = useState<'active' | 'inactive'>('active')
+  // Active roster / the inactive list / the long-term archive. Clients keep all
+  // their data — notes, transcripts, reports — whichever tab they live on.
+  const [view, setView] = useState<RosterView>('active')
+  const [showBulkEmail, setShowBulkEmail] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -47,11 +57,31 @@ export function ClientsRoster() {
     load()
   }, [load])
 
-  // Split the roster by status: "inactive" is the archive of finished clients;
-  // everything else (active, prospect) is the working list.
-  const inView = (c: Client) => (view === 'inactive' ? c.status === 'inactive' : c.status !== 'inactive')
-  const activeCount = clients.filter((c) => c.status !== 'inactive').length
-  const inactiveCount = clients.length - activeCount
+  // Split the roster by status: "inactive" is the resting list of finished
+  // clients; "archived" is the permanent record of everyone ever coached,
+  // hidden from both working lists; everything else (active, prospect) is the
+  // working list.
+  const viewOf = (c: Client): RosterView =>
+    c.status === 'archived' ? 'archived' : c.status === 'inactive' ? 'inactive' : 'active'
+  const inView = (c: Client) => viewOf(c) === view
+  const counts: Record<RosterView, number> = { active: 0, inactive: 0, archived: 0 }
+  for (const c of clients) counts[viewOf(c)]++
+
+  // Move a client between the lists in place (Archive / Restore row buttons).
+  const setStatus = useCallback(async (id: string, status: string) => {
+    const prev = clients
+    setClients((cs) => cs.map((c) => (c.id === id ? { ...c, status } : c)))
+    try {
+      const res = await fetch(`/api/clients/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      })
+      if (!res.ok) throw new Error()
+    } catch {
+      setClients(prev) // roll back on failure
+    }
+  }, [clients])
 
   const visible = clients.filter(inView).filter((c) => {
     if (!filter) return true
@@ -79,31 +109,29 @@ export function ClientsRoster() {
             role="tablist"
             aria-label="Client list"
           >
-            <button
-              role="tab"
-              aria-selected={view === 'active'}
-              onClick={() => setView('active')}
-              className={`rounded-tlw-md px-4 py-1.5 text-[13px] font-medium transition-colors ${
-                view === 'active'
-                  ? 'bg-tlw-navy-rich text-tlw-cream'
-                  : 'text-tlw-espresso hover:bg-tlw-canvas'
-              }`}
-            >
-              Active{activeCount > 0 ? ` (${activeCount})` : ''}
-            </button>
-            <button
-              role="tab"
-              aria-selected={view === 'inactive'}
-              onClick={() => setView('inactive')}
-              className={`rounded-tlw-md px-4 py-1.5 text-[13px] font-medium transition-colors ${
-                view === 'inactive'
-                  ? 'bg-tlw-navy-rich text-tlw-cream'
-                  : 'text-tlw-espresso hover:bg-tlw-canvas'
-              }`}
-            >
-              Inactive{inactiveCount > 0 ? ` (${inactiveCount})` : ''}
-            </button>
+            {(['active', 'inactive', 'archived'] as const).map((v) => (
+              <button
+                key={v}
+                role="tab"
+                aria-selected={view === v}
+                onClick={() => setView(v)}
+                className={`rounded-tlw-md px-4 py-1.5 text-[13px] font-medium transition-colors ${
+                  view === v
+                    ? 'bg-tlw-navy-rich text-tlw-cream'
+                    : 'text-tlw-espresso hover:bg-tlw-canvas'
+                }`}
+              >
+                {VIEW_LABELS[v]}{counts[v] > 0 ? ` (${counts[v]})` : ''}
+              </button>
+            ))}
           </div>
+          <button
+            onClick={() => setShowBulkEmail(true)}
+            disabled={loading || clients.filter(inView).length === 0}
+            className="rounded-tlw-lg border border-tlw-navy-rich px-4 py-2 text-[13px] font-medium text-tlw-navy-rich transition-colors hover:bg-tlw-navy-rich/5 disabled:opacity-40"
+          >
+            ✉ Email all
+          </button>
           <button
             onClick={() => setShowAdd(true)}
             className="rounded-tlw-lg bg-tlw-navy-rich px-4 py-2 text-[13px] font-medium text-tlw-cream transition-colors hover:bg-tlw-navy-rich/85"
@@ -117,7 +145,14 @@ export function ClientsRoster() {
         <p className="text-[12px] text-tlw-warm-gray">
           Finished clients live here with all their notes, transcripts, and reports intact. To move a
           client, open their page and set Status to inactive (gear icon) — or back to active to
-          restore them to the working roster.
+          restore them to the working roster. Use Archive to move a client to the long-term record.
+        </p>
+      )}
+      {view === 'archived' && (
+        <p className="text-[12px] text-tlw-warm-gray">
+          The permanent record of everyone you&apos;ve ever coached. Archived clients don&apos;t
+          appear on the Active or Inactive lists, but all their data stays intact and their page
+          is fully reachable. Restore moves a client back to the Inactive list.
         </p>
       )}
 
@@ -165,15 +200,17 @@ export function ClientsRoster() {
       ) : visible.length === 0 && visibleTeam.length === 0 ? (
         <div className="flex min-h-[220px] flex-col items-center justify-center rounded-tlw-2xl border border-dashed border-tlw-warm-gray/25 bg-tlw-surface/60 px-8 text-center">
           <h2 className="mb-1 text-base font-medium text-tlw-navy-deep">
-            {view === 'inactive' && inactiveCount === 0
-              ? 'No inactive clients'
+            {view !== 'active' && counts[view] === 0
+              ? `No ${view} clients`
               : clients.length === 0
               ? 'No clients yet'
               : 'No matches'}
           </h2>
           <p className="mb-4 max-w-sm text-[13px] text-tlw-warm-gray">
-            {view === 'inactive' && inactiveCount === 0
-              ? 'When you finish with a client, set their Status to inactive on their page (gear icon) and they’ll be archived here with all their data.'
+            {view === 'inactive' && counts.inactive === 0
+              ? 'When you finish with a client, set their Status to inactive on their page (gear icon) and they’ll be kept here with all their data.'
+              : view === 'archived' && counts.archived === 0
+              ? 'Archive a client from the Inactive list to keep a permanent record without seeing them on either working list.'
               : clients.length === 0
               ? 'Add your first client to start keeping notes in the app.'
               : 'Try a different search.'}
@@ -191,7 +228,19 @@ export function ClientsRoster() {
         <div className="space-y-6">
           <div className="space-y-2">
             {visible.map((c) => (
-              <ClientCard key={c.id} c={c} pendingAgreements={pendingAgreements} />
+              <ClientCard
+                key={c.id}
+                c={c}
+                pendingAgreements={pendingAgreements}
+                quickAction={
+                  view === 'inactive'
+                    ? { label: 'Archive', title: 'Move to the permanent archive', to: 'archived' }
+                    : view === 'archived'
+                    ? { label: 'Restore', title: 'Move back to the Inactive list', to: 'inactive' }
+                    : undefined
+                }
+                onSetStatus={setStatus}
+              />
             ))}
           </div>
 
@@ -210,6 +259,14 @@ export function ClientsRoster() {
         </div>
       )}
 
+      {showBulkEmail && (
+        <BulkEmailModal
+          listLabel={VIEW_LABELS[view]}
+          recipients={visible.map((c) => ({ id: c.id, name: c.name, email: c.email }))}
+          onClose={() => setShowBulkEmail(false)}
+        />
+      )}
+
       {showAdd && (
         <AddClientModal
           onClose={() => setShowAdd(false)}
@@ -224,10 +281,13 @@ export function ClientsRoster() {
   )
 }
 
-function ClientCard({ c, pendingAgreements, isTeam = false }: {
+function ClientCard({ c, pendingAgreements, isTeam = false, quickAction, onSetStatus }: {
   c: Client
   pendingAgreements: Record<string, number>
   isTeam?: boolean
+  /** One-click move between lists (Archive on the Inactive tab, Restore on Archived). */
+  quickAction?: { label: string; title: string; to: string }
+  onSetStatus?: (id: string, status: string) => void
 }) {
   return (
     <Link
@@ -259,15 +319,30 @@ function ClientCard({ c, pendingAgreements, isTeam = false }: {
             {[c.title, c.company].filter(Boolean).join(' · ') || c.email || '—'}
           </p>
         </div>
-        <span
-          className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-medium capitalize ${
-            c.status === 'active'
-              ? 'bg-tlw-navy-rich/10 text-tlw-navy-rich'
-              : 'bg-tlw-warm-gray/15 text-tlw-warm-gray'
-          }`}
-        >
-          {c.status}
-        </span>
+        <div className="flex shrink-0 items-center gap-2">
+          {quickAction && onSetStatus && (
+            <button
+              title={quickAction.title}
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                onSetStatus(c.id, quickAction.to)
+              }}
+              className="rounded-tlw-md border border-tlw-warm-gray/30 px-2.5 py-1 text-[11px] font-medium text-tlw-warm-gray opacity-0 transition-all hover:border-tlw-navy-rich hover:text-tlw-navy-rich group-hover:opacity-100"
+            >
+              {quickAction.label}
+            </button>
+          )}
+          <span
+            className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium capitalize ${
+              c.status === 'active'
+                ? 'bg-tlw-navy-rich/10 text-tlw-navy-rich'
+                : 'bg-tlw-warm-gray/15 text-tlw-warm-gray'
+            }`}
+          >
+            {c.status}
+          </span>
+        </div>
       </div>
     </Link>
   )

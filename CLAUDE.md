@@ -201,14 +201,30 @@ W") previously substring-matched any title containing "w". Fixed in
 "Import from CA" buttons were removed (the CA migration is done) — replaced by
 the Active/Inactive roster toggle (below).
 
-### Roster Active/Inactive toggle (`clients/ClientsRoster.tsx`)
-The roster splits on `clients.status`: a segmented **Active / Inactive** toggle
-(with counts) where the CA import buttons used to be. "Active" = everything not
-`inactive` (so `prospect` shows there); "Inactive" is the archive of finished
-clients — all data (notes, transcripts, reports) kept intact, workspace fully
-reachable. A client moves lists via the workspace edit modal's Status field
-(gear icon); no new column or migration — `status` has always carried
-active|prospect|inactive. The My Team section filters by the same toggle.
+### Roster Active/Inactive/Archived toggle + Email all (`clients/ClientsRoster.tsx`)
+The roster splits on `clients.status`: a segmented **Active / Inactive /
+Archived** toggle (with counts) where the CA import buttons used to be. "Active"
+= everything not `inactive`/`archived` (so `prospect` shows there); "Inactive"
+is the resting list of finished clients; **"Archived"** is the permanent record
+of everyone ever coached — hidden from the working lists AND the dashboard
+Clients panel (`RosterPanel` filters it out), but all data (notes, transcripts,
+reports) intact and the workspace fully reachable. Rows on the Inactive tab get
+a hover **Archive** button, rows on Archived get **Restore** (both
+`PATCH /api/clients/[id]` `{status}`, optimistic with rollback); the workspace
+edit modal's Status field carries all four values. No column or migration —
+`status` is unconstrained text (active|prospect|inactive|archived). The My Team
+section filters by the same toggle.
+
+**Email all (`clients/BulkEmailModal.tsx`).** A roster button that mass-emails
+every client in the **currently visible list** (respects the toggle + the search
+filter). Compose (subject/body, `{{first_name}}` merge token, recipient list
+with no-email skips, locked signature preview) → review (personalized preview) →
+send: the modal loops recipients client-side (concurrency 3) calling the
+existing `POST /api/email/send` per client — one individual email each (never a
+group To line), `cc: ''` to suppress the default Cc, signature appended
+server-side, every send logged to `communications`. Progress bar + failure list
+with "Retry failed". Gmail's own daily send limits apply (~500/day consumer,
+~2000/day Workspace) — split a very large blast across days.
 
 ### Client workspace (`app/(authenticated)/clients/[id]`)
 Name card (gear → edit), Transcripts + Notes summary cards, New note / Send
