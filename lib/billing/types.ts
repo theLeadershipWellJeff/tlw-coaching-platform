@@ -88,6 +88,7 @@ export type Invoice = {
   stripe_invoice_id: string | null
   stripe_payment_intent_id: string | null
   stripe_error: string | null
+  client_message: string | null
   approved_by: string | null
   approved_at: Timestamp | null
   sent_at: Timestamp | null

@@ -188,12 +188,15 @@ export default function InvoiceDetailPage() {
   const [savingMessage, setSavingMessage] = useState(false)
   const [markingPaid, setMarkingPaid] = useState(false)
   const [markPaidErr, setMarkPaidErr] = useState('')
+  const [approving, setApproving] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [actionErr, setActionErr] = useState('')
 
   useEffect(() => {
     if (!id) return
     fetch(`/api/billing/invoices/${id}`)
       .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((d) => { setInvoice(d.invoice); setMessage((d.invoice as any).client_message ?? '') })
+      .then((d) => { setInvoice(d.invoice); setMessage(d.invoice.client_message ?? '') })
       .catch(() => setError(true))
       .finally(() => setLoading(false))
   }, [id])
@@ -217,12 +220,64 @@ export default function InvoiceDetailPage() {
   async function saveMessage() {
     if (!invoice) return
     setSavingMessage(true)
+    await persistMessage()
+    setSavingMessage(false)
+  }
+
+  // Writes the note if it changed. Called by the Save button and before approving,
+  // so a typed-but-unsaved note is never lost on Approve / Approve & send.
+  async function persistMessage() {
+    if (!invoice) return
+    const trimmed = message.trim() || null
+    if (trimmed === (invoice.client_message ?? null)) return
     await fetch(`/api/billing/invoices/${invoice.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ client_message: message.trim() || null }),
+      body: JSON.stringify({ client_message: trimmed }),
     })
-    setSavingMessage(false)
+    setInvoice((inv) => inv ? { ...inv, client_message: trimmed } : inv)
+  }
+
+  async function approve(): Promise<boolean> {
+    if (!invoice) return false
+    setApproving(true)
+    setActionErr('')
+    await persistMessage()
+    const res = await fetch(`/api/billing/invoices/${invoice.id}/approve`, { method: 'POST' })
+    const data = await res.json()
+    if (!res.ok) {
+      setActionErr(data.error ?? 'Failed to approve invoice')
+      setApproving(false)
+      return false
+    }
+    setInvoice((inv) => inv
+      ? { ...inv, status: 'approved', approved_by: data.invoice.approved_by, approved_at: data.invoice.approved_at }
+      : inv)
+    setApproving(false)
+    return true
+  }
+
+  async function send() {
+    if (!invoice) return
+    setSending(true)
+    setActionErr('')
+    const res = await fetch(`/api/billing/invoices/${invoice.id}/send`, { method: 'POST' })
+    const data = await res.json()
+    if (res.ok && data.ok) {
+      setInvoice((inv) => inv
+        ? { ...inv, status: 'sent', stripe_invoice_id: data.stripeId ?? null, sent_at: new Date().toISOString(), stripe_error: null }
+        : inv)
+    } else {
+      const err = data.error ?? 'Unknown error sending invoice'
+      setActionErr(err)
+      setInvoice((inv) => inv ? { ...inv, stripe_error: err } : inv)
+    }
+    setSending(false)
+  }
+
+  async function approveAndSend() {
+    const ok = await approve()
+    if (ok) await send()
   }
 
   function addLine(line: InvoiceLine) {
@@ -303,7 +358,7 @@ export default function InvoiceDetailPage() {
               </div>
             ) : (
               <p className="text-[13px] text-tlw-espresso">
-                {(invoice as any).client_message ?? <span className="italic text-tlw-warm-gray/50">No message added.</span>}
+                {invoice.client_message ?? <span className="italic text-tlw-warm-gray/50">No message added.</span>}
               </p>
             )}
           </section>
@@ -366,13 +421,64 @@ export default function InvoiceDetailPage() {
             </section>
           )}
 
-          {/* Phase 3/4 actions placeholder */}
-          {invoice.status === 'draft' && (
-            <div className="rounded-tlw-2xl border border-dashed border-tlw-warm-gray/25 bg-tlw-surface/60 px-6 py-6 text-center">
-              <p className="text-[13px] text-tlw-warm-gray">
-                Approve and send actions coming in Phase 3/4.
+          {/* Approve / send actions */}
+          {['draft', 'approved', 'failed'].includes(invoice.status) && (
+            <section className="rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface px-5 py-4">
+              <p className="mb-1 text-[13px] font-semibold text-tlw-navy-deep">
+                {invoice.status === 'draft' ? 'Approve & send' : 'Send invoice'}
               </p>
-            </div>
+              <p className="mb-3 text-[12px] text-tlw-warm-gray">
+                {invoice.status === 'draft'
+                  ? 'Approving locks the line items and message. Sending emails the client a Stripe-hosted invoice they can pay by card or bank transfer.'
+                  : 'This invoice is approved. Sending emails the client a Stripe-hosted invoice they can pay by card or bank transfer.'}
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                {invoice.status === 'draft' && (
+                  <>
+                    <button
+                      onClick={approve}
+                      disabled={approving || sending || invoice.lines.length === 0}
+                      className="rounded-tlw-lg bg-tlw-navy-deep px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-tlw-navy-rich disabled:opacity-50"
+                    >
+                      {approving ? 'Approving…' : 'Approve'}
+                    </button>
+                    <button
+                      onClick={approveAndSend}
+                      disabled={approving || sending || invoice.lines.length === 0}
+                      className="rounded-tlw-lg bg-tlw-signal-orange px-4 py-2 text-[13px] font-medium text-white transition-colors hover:opacity-90 disabled:opacity-50"
+                    >
+                      {approving ? 'Approving…' : sending ? 'Sending…' : 'Approve & send via Stripe'}
+                    </button>
+                  </>
+                )}
+                {invoice.status === 'approved' && (
+                  <button
+                    onClick={send}
+                    disabled={sending}
+                    className="rounded-tlw-lg bg-tlw-signal-orange px-4 py-2 text-[13px] font-medium text-white transition-colors hover:opacity-90 disabled:opacity-50"
+                  >
+                    {sending ? 'Sending…' : 'Send via Stripe'}
+                  </button>
+                )}
+                {invoice.status === 'failed' && (
+                  <button
+                    onClick={send}
+                    disabled={sending}
+                    className="rounded-tlw-lg border border-red-300 bg-red-50 px-4 py-2 text-[13px] font-medium text-red-700 transition-colors hover:bg-red-100 disabled:opacity-50"
+                  >
+                    {sending ? 'Retrying…' : 'Retry send'}
+                  </button>
+                )}
+              </div>
+              {invoice.status === 'draft' && invoice.lines.length === 0 && (
+                <p className="mt-2 text-[12px] text-tlw-warm-gray">Add at least one line item before approving.</p>
+              )}
+              {(actionErr || invoice.stripe_error) && (
+                <p className="mt-3 rounded-tlw-lg border border-red-100 bg-red-50 px-3 py-2 text-[12px] text-red-700">
+                  <strong>Stripe error:</strong> {actionErr || invoice.stripe_error}
+                </p>
+              )}
+            </section>
           )}
 
           {/* Manual payment registration */}
