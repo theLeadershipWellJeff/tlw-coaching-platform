@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { COMPETENCIES, DOMAINS } from '@/lib/scoring/rubric'
 import type { GrowthAreaAssessment, GrowthAreaBand, SessionReport } from '@/lib/supabase/types'
-import type { Band, Metrics } from '@/lib/scoring/types'
+import type { Band, Metrics, SessionReportJson } from '@/lib/scoring/types'
 import { BandChip, BandPill, MetricCard, Section, flagColor } from '../ui'
 
 // ── Growth area assessment cards ─────────────────────────────────────────────
@@ -129,13 +129,198 @@ const GATE_LABELS: Record<string, string> = {
   c1_ceiling: 'consent infrastructure not confirmed on file — capped below strong (v0.5.2)',
 }
 
-/** Human labels for the v0.5.2 Layer-0 manual-review flags. */
-const REVIEW_FLAG_LABELS: Record<string, string> = {
-  speaker_reassignment_unconfirmed: 'a phantom/minority speaker was reassigned — confirm the attribution',
-  evidence_verbatim_failed: 'a quoted evidence string was not found verbatim in the transcript',
-  low_attribution_confidence: 'speaker roles could not be mapped with confidence',
-  likely_speaker_swap: 'the coach/client roles may be swapped',
-  recording_consent_needs_confirmation: 'agreement on file but recording marked declined — confirm the record',
+/** Titles + fix-it guidance for the v0.5.2 Layer-0 manual-review flags. */
+const REVIEW_FLAG_GUIDE: Record<string, { title: string; fix: string }> = {
+  speaker_reassignment_unconfirmed: {
+    title: 'Speaker attribution needs confirmation',
+    fix: 'The engine folded a phantom/minority speaker label into the main speakers (listed below). Check the transcript at the marked turns — if the merge reads correctly, mark it reviewed (this confirms the reassignment). If it looks wrong, fix the transcript and use the rescore button above.',
+  },
+  evidence_verbatim_failed: {
+    title: 'A quoted evidence line isn’t an exact transcript match',
+    fix: 'One or more quotes in the evidence below may be paraphrased rather than verbatim. Skim the competency evidence against the transcript — if the substance holds, mark it reviewed. If the evidence looks invented, rescore.',
+  },
+  low_attribution_confidence: {
+    title: 'Speaker roles mapped with low confidence',
+    fix: 'The engine wasn’t sure who is coach and who is client, which affects talk-time and the question:statement ratio. Check the transcript opening — if the roles are right, mark it reviewed. If they’re swapped, fix the transcript and rescore.',
+  },
+  likely_speaker_swap: {
+    title: 'Coach/client roles may be swapped',
+    fix: 'One speaker holds the coaching frame but also most of the talk-time — a sign the labels may be reversed. Check the transcript; if the roles are actually correct, mark it reviewed. If they’re swapped, fix the transcript and rescore.',
+  },
+  recording_consent_needs_confirmation: {
+    title: 'Recording consent needs confirmation',
+    fix: 'The client record shows an agreement on file but recording marked declined. Open the client record (edit → Agreement & recording) and confirm their actual choice — then rescore so the score picks it up. If “declined” is correct, mark it reviewed.',
+  },
+}
+
+/** Interactive manual-review panel — each Layer-0 flag can be reviewed and
+    resolved in place. Resolutions persist in report.integrity.resolutions and
+    reset on a rescore (new machine output needs a fresh review). */
+function ManualReviewPanel({
+  report,
+  reportId,
+  clientId,
+  onUpdated,
+}: {
+  report: SessionReportJson
+  reportId: string
+  clientId: string | null
+  onUpdated: (row: SessionReport) => void
+}) {
+  const integrity = report.integrity
+  const flags = integrity?.flags_for_manual_review ?? []
+  const resolutions = integrity?.resolutions ?? {}
+  const unresolved = flags.filter((f) => !resolutions[f])
+  const allResolved = flags.length > 0 && unresolved.length === 0
+  const [collapsed, setCollapsed] = useState(allResolved)
+  const [busy, setBusy] = useState<string | null>(null)
+  const [noteFor, setNoteFor] = useState<string | null>(null)
+  const [noteText, setNoteText] = useState('')
+  const [err, setErr] = useState('')
+
+  if (!integrity || flags.length === 0) return null
+
+  async function apply(flag: string, note: string, undo = false) {
+    setBusy(flag)
+    setErr('')
+    try {
+      const res = await fetch(`/api/reports/${reportId}/resolve-flag`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ flag, note: note || undefined, undo }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok) {
+        onUpdated(data.report)
+        setNoteFor(null)
+        setNoteText('')
+      } else {
+        setErr(data.error || 'Could not update the flag.')
+      }
+    } catch {
+      setErr('Network error while updating the flag.')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const tone = allResolved ? 'var(--color-success)' : 'var(--color-warning)'
+  const attrib = report.metrics?.attribution
+
+  return (
+    <div className="mt-4 rounded-tlw-lg border p-4" style={{ borderColor: tone, backgroundColor: `${tone}10` }}>
+      <button
+        onClick={() => setCollapsed((c) => !c)}
+        className="flex w-full items-center justify-between text-left"
+      >
+        <p className="text-[12px] font-semibold uppercase tracking-[1.5px]" style={{ color: tone }}>
+          {allResolved
+            ? `✓ Manual review complete · ${flags.length} flag${flags.length > 1 ? 's' : ''} reviewed`
+            : `⚑ Flagged for manual review · ${unresolved.length} of ${flags.length} open`}
+        </p>
+        <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>
+          {collapsed ? '▼ show' : '▲ hide'}
+        </span>
+      </button>
+
+      {!collapsed && (
+        <div className="mt-3 space-y-3">
+          {flags.map((f) => {
+            const guide = REVIEW_FLAG_GUIDE[f] ?? { title: f, fix: 'Review this flag against the transcript, then mark it reviewed.' }
+            const res = resolutions[f]
+            const isAttributionFlag = f === 'low_attribution_confidence' || f === 'likely_speaker_swap'
+            return (
+              <div key={f} className="rounded-tlw-md p-3" style={{ backgroundColor: 'var(--color-surface)' }}>
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <p className="text-[13px] font-medium text-tlw-espresso">
+                    {res ? <span style={{ color: 'var(--color-success)' }}>✓ </span> : '· '}
+                    {guide.title}
+                  </p>
+                  {res ? (
+                    <button
+                      onClick={() => apply(f, '', true)}
+                      disabled={busy === f}
+                      className="text-[11px] text-tlw-warm-gray underline-offset-2 hover:underline disabled:opacity-50"
+                    >
+                      {busy === f ? 'reopening…' : 'reopen'}
+                    </button>
+                  ) : (
+                    <div className="flex shrink-0 items-center gap-2">
+                      {noteFor !== f && (
+                        <button
+                          onClick={() => { setNoteFor(f); setNoteText('') }}
+                          className="text-[11px] text-tlw-warm-gray underline-offset-2 hover:underline"
+                        >
+                          + note
+                        </button>
+                      )}
+                      <button
+                        onClick={() => apply(f, noteFor === f ? noteText.trim() : '')}
+                        disabled={busy === f}
+                        className="rounded-tlw-md px-3 py-1 text-[12px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                        style={{ backgroundColor: 'var(--tlw-navy-rich, #1a1f5e)' }}
+                      >
+                        {busy === f ? 'saving…' : 'Mark reviewed'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {res ? (
+                  <p className="mt-1 text-[11px]" style={{ color: 'var(--color-muted)' }}>
+                    reviewed by {res.resolved_by} · {new Date(res.resolved_at).toLocaleString()}
+                    {res.note ? <> · “{res.note}”</> : null}
+                  </p>
+                ) : (
+                  <>
+                    <p className="mt-1 text-[12px] leading-relaxed text-tlw-espresso">{guide.fix}</p>
+
+                    {f === 'speaker_reassignment_unconfirmed' && integrity.speaker_reassignments.length > 0 && (
+                      <ul className="mt-2 space-y-0.5">
+                        {integrity.speaker_reassignments.map((r, i) => (
+                          <li key={i} className="text-[11px]" style={{ color: 'var(--color-muted)' }}>
+                            {r.from} → {r.to}
+                            {r.turns.length ? ` · turns: ${r.turns.join(', ')}` : ''}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    {isAttributionFlag && attrib && (
+                      <p className="mt-2 text-[11px]" style={{ color: 'var(--color-muted)' }}>
+                        attribution: {attrib.method} via {attrib.source} · confidence {attrib.confidence}
+                      </p>
+                    )}
+
+                    {f === 'recording_consent_needs_confirmation' && clientId && (
+                      <Link
+                        href={`/clients/${clientId}`}
+                        className="mt-2 inline-block text-[12px] font-medium text-tlw-signal-orange hover:underline"
+                      >
+                        Open the client record →
+                      </Link>
+                    )}
+
+                    {noteFor === f && (
+                      <textarea
+                        value={noteText}
+                        onChange={(e) => setNoteText(e.target.value)}
+                        rows={2}
+                        placeholder="Optional note — what you checked, what you found…"
+                        className="mt-2 w-full rounded-tlw-md border border-tlw-warm-gray/25 px-3 py-2 text-[12px] text-tlw-espresso outline-none focus:border-tlw-signal-orange"
+                        style={{ backgroundColor: 'var(--color-bg, #fff)' }}
+                      />
+                    )}
+                  </>
+                )}
+              </div>
+            )
+          })}
+          {err && <p className="text-[12px]" style={{ color: 'var(--color-danger)' }}>{err}</p>}
+        </div>
+      )}
+    </div>
+  )
 }
 
 function fmtDate(d: string | null | undefined): string {
@@ -480,33 +665,17 @@ export function SessionReportView({ id }: { id: string }) {
         </div>
       </div>
 
-      {/* Data-integrity manual-review banner (v0.5.2 Layer 0) — fail-loud items
-          the engine surfaced for a human to confirm before trusting the score. */}
-      {report.integrity && report.integrity.flags_for_manual_review.length > 0 && (
-        <div
-          className="mt-4 rounded-tlw-lg border p-4"
-          style={{ borderColor: 'var(--color-warning)', backgroundColor: 'var(--color-warning)10' }}
-        >
-          <p className="text-[12px] font-semibold uppercase tracking-[1.5px]" style={{ color: 'var(--color-warning)' }}>
-            ⚑ Flagged for manual review
-          </p>
-          <ul className="mt-2 space-y-1">
-            {report.integrity.flags_for_manual_review.map((f) => (
-              <li key={f} className="text-[12px] text-tlw-espresso">
-                · {REVIEW_FLAG_LABELS[f] || f}
-              </li>
-            ))}
-          </ul>
-          {report.integrity.speaker_reassignments.length > 0 && (
-            <p className="mt-2 text-[11px]" style={{ color: 'var(--color-muted)' }}>
-              speaker reassignments:{' '}
-              {report.integrity.speaker_reassignments
-                .map((r) => `${r.from} → ${r.to}${r.turns.length ? ` (${r.turns.join(', ')})` : ''}`)
-                .join(' · ')}
-            </p>
-          )}
-        </div>
-      )}
+      {/* Data-integrity manual-review panel (v0.5.2 Layer 0) — fail-loud items
+          the engine surfaced for a human to confirm before trusting the score.
+          Each flag can be reviewed and resolved in place. Keyed so a resolve
+          (which changes resolution state) remounts with fresh collapse state. */}
+      <ManualReviewPanel
+        key={JSON.stringify(report.integrity?.resolutions ?? {})}
+        report={report}
+        reportId={id}
+        clientId={row?.client_id ?? null}
+        onUpdated={(updated) => setRow(updated)}
+      />
 
       {/* Growth area development focus — at the very top, before self-score */}
       <DevelopmentFocusCards reportId={id} />

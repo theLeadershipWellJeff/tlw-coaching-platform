@@ -44,6 +44,16 @@ export interface SpeakerReassignment {
   turns: string[] // timestamps/markers of the reassigned turns
   confirmed: boolean // false until a human confirms (fail-loud, L0.1)
 }
+// A coach's resolution of one manual-review flag (set via
+// POST /api/reports/[id]/resolve-flag). Lives inside the report jsonb, so a
+// rescore — which regenerates the flags — correctly resets resolutions too.
+export interface FlagResolution {
+  action: 'confirmed'
+  note?: string
+  resolved_at: string // ISO timestamp
+  resolved_by: string // coach email
+}
+
 export interface IntegrityBlock {
   // L0.1 — phantom/minority speaker turns reassigned to the nearest primary speaker.
   speaker_reassignments: SpeakerReassignment[]
@@ -51,6 +61,9 @@ export interface IntegrityBlock {
   evidence_verbatim_check: 'pass' | 'fail' | 'unchecked'
   // Aggregated fail-loud flags requiring manual review before delivery.
   flags_for_manual_review: string[]
+  // Coach resolutions, keyed by flag id. A flag stays listed for audit; the UI
+  // shows it as resolved. Absent/empty = nothing reviewed yet.
+  resolutions?: Record<string, FlagResolution>
 }
 
 // v0.5 B3: C6 dimensional split — emotional (6.04) + cognitive/structural (6.01–6.03, 6.05–6.06)
