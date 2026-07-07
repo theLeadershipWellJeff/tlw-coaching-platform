@@ -465,7 +465,13 @@ function InvoiceCard({
       {/* Header */}
       <div className="flex items-center justify-between gap-4 border-b border-tlw-warm-gray/10 px-4 py-3">
         <div>
-          <p className="text-[14px] font-semibold text-tlw-navy-deep">{invoice.billing_accounts.name}</p>
+          <Link
+            href={`/business-center/invoices/${invoice.id}`}
+            className="group/name inline-flex items-baseline gap-1.5 text-[14px] font-semibold text-tlw-navy-deep hover:underline"
+          >
+            {invoice.billing_accounts.name}
+            <span className="text-[11px] font-normal text-tlw-warm-gray opacity-0 transition-opacity group-hover/name:opacity-100">open →</span>
+          </Link>
           <p className="text-[12px] text-tlw-warm-gray">{invoice.billing_accounts.billing_email}</p>
           {invoice.billing_accounts.type === 'enterprise' && (() => {
             const names = Array.from(new Set(
