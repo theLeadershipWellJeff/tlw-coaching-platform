@@ -232,11 +232,17 @@ export function ClientsRoster() {
                 key={c.id}
                 c={c}
                 pendingAgreements={pendingAgreements}
-                quickAction={
+                quickActions={
                   view === 'inactive'
-                    ? { label: 'Archive', title: 'Move to the permanent archive', to: 'archived' }
+                    ? [
+                        { label: 'Activate', title: 'Return to the Active roster', to: 'active' },
+                        { label: 'Archive', title: 'Move to the permanent archive', to: 'archived' },
+                      ]
                     : view === 'archived'
-                    ? { label: 'Restore', title: 'Move back to the Inactive list', to: 'inactive' }
+                    ? [
+                        { label: 'Activate', title: 'Return to the Active roster', to: 'active' },
+                        { label: 'Restore', title: 'Move back to the Inactive list', to: 'inactive' },
+                      ]
                     : undefined
                 }
                 onSetStatus={setStatus}
@@ -281,12 +287,12 @@ export function ClientsRoster() {
   )
 }
 
-function ClientCard({ c, pendingAgreements, isTeam = false, quickAction, onSetStatus }: {
+function ClientCard({ c, pendingAgreements, isTeam = false, quickActions, onSetStatus }: {
   c: Client
   pendingAgreements: Record<string, number>
   isTeam?: boolean
-  /** One-click move between lists (Archive on the Inactive tab, Restore on Archived). */
-  quickAction?: { label: string; title: string; to: string }
+  /** One-click moves between lists (Activate/Archive on the Inactive tab, Activate/Restore on Archived). */
+  quickActions?: { label: string; title: string; to: string }[]
   onSetStatus?: (id: string, status: string) => void
 }) {
   return (
@@ -320,19 +326,21 @@ function ClientCard({ c, pendingAgreements, isTeam = false, quickAction, onSetSt
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {quickAction && onSetStatus && (
-            <button
-              title={quickAction.title}
-              onClick={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                onSetStatus(c.id, quickAction.to)
-              }}
-              className="rounded-tlw-md border border-tlw-warm-gray/30 px-2.5 py-1 text-[11px] font-medium text-tlw-warm-gray opacity-0 transition-all hover:border-tlw-navy-rich hover:text-tlw-navy-rich group-hover:opacity-100"
-            >
-              {quickAction.label}
-            </button>
-          )}
+          {onSetStatus &&
+            quickActions?.map((a) => (
+              <button
+                key={a.label}
+                title={a.title}
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  onSetStatus(c.id, a.to)
+                }}
+                className="rounded-tlw-md border border-tlw-warm-gray/30 px-2.5 py-1 text-[11px] font-medium text-tlw-warm-gray opacity-0 transition-all hover:border-tlw-navy-rich hover:text-tlw-navy-rich group-hover:opacity-100"
+              >
+                {a.label}
+              </button>
+            ))}
           <span
             className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium capitalize ${
               c.status === 'active'
