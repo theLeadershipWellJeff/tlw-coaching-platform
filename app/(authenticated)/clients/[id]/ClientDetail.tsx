@@ -75,7 +75,13 @@ export function ClientDetail({ clientId }: { clientId: string }) {
         ← Back to roster
       </Link>
 
-      <NameCard client={client} onUpdated={setClient} apptReload={apptReload} coachTimezone={coachTimezone} />
+      <NameCard
+        client={client}
+        onUpdated={setClient}
+        apptReload={apptReload}
+        coachTimezone={coachTimezone}
+        onIssueAgreement={() => setIssuing(true)}
+      />
 
       {/* Compliance guardrail — non-dismissible (migration 018). */}
       {client.recording_authorized === false && (

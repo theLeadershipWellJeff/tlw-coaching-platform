@@ -53,11 +53,14 @@ export function NameCard({
   onUpdated,
   apptReload = 0,
   coachTimezone,
+  onIssueAgreement,
 }: {
   client: Client
   onUpdated: (c: Client) => void
   apptReload?: number
   coachTimezone?: string
+  /** Passed to the edit modal — its "Issue agreement" action opens the issue flow. */
+  onIssueAgreement?: () => void
 }) {
   const [editing, setEditing] = useState(false)
 
@@ -117,7 +120,14 @@ export function NameCard({
         </p>
       )}
 
-      {editing && <EditClientModal client={client} onClose={() => setEditing(false)} onSaved={onUpdated} />}
+      {editing && (
+        <EditClientModal
+          client={client}
+          onClose={() => setEditing(false)}
+          onSaved={onUpdated}
+          onIssueAgreement={onIssueAgreement}
+        />
+      )}
     </div>
   )
 }
