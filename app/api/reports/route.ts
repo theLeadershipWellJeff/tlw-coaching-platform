@@ -18,7 +18,7 @@ export async function GET() {
   const { data, error } = await supabase
     .from('session_reports')
     .select(
-      'id, client_id, client_initials, session_date, session_type, session_number, engagement_total, overall_score, band, coach_overall, status'
+      'id, transcript_id, client_id, client_initials, session_date, session_type, session_number, engagement_total, overall_score, band, coach_overall, status'
     )
     .eq('coach_id', coach.id)
     .order('session_date', { ascending: false, nullsFirst: false })

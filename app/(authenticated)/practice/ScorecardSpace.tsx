@@ -1,6 +1,8 @@
 'use client'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import { useScoringJobs, startScoring, retryScoring, dismissScoringJob } from '@/lib/scoring-jobs'
+import { ScoringProgressBar } from '@/app/components/shared/ScoringProgress'
 import type { ScorecardSummary, CompetencyAverage } from '@/lib/scoring/aggregate'
 import { bandDefinition, nextBand } from '@/lib/scoring/rubric'
 import { bandColor, BandChip } from './ui'
@@ -302,8 +304,6 @@ export function ScorecardSpace() {
   const [focus, setFocus] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [assigning, setAssigning] = useState<string | null>(null)
-  const [assignMode, setAssignMode] = useState<'score' | 'add'>('score')
-  const [assigningElapsed, setAssigningElapsed] = useState(0)
   const [assignError, setAssignError] = useState<Record<string, string>>({})
   const [picked, setPicked] = useState<Record<string, string>>({})
   const [deletePending, setDeletePending] = useState<string | null>(null)
@@ -403,11 +403,19 @@ export function ScorecardSpace() {
     }
   }
 
+  // Background scoring jobs (lib/scoring-jobs.ts) — persisted in localStorage,
+  // so a score started here survives navigating away. When a job finishes,
+  // refresh the lists (the new report appears in Sessions/summary).
+  const scoringJobs = useScoringJobs()
+  const runningJobs = useRef<Set<string>>(new Set())
   useEffect(() => {
-    if (!assigning) { setAssigningElapsed(0); return }
-    const t = setInterval(() => setAssigningElapsed((s) => s + 1), 1000)
-    return () => clearInterval(t)
-  }, [assigning])
+    const nowRunning = new Set(scoringJobs.filter((j) => j.status === 'running').map((j) => j.transcriptId))
+    const justFinished = Array.from(runningJobs.current).some(
+      (id) => !nowRunning.has(id) && scoringJobs.some((j) => j.transcriptId === id && j.status === 'done')
+    )
+    runningJobs.current = nowRunning
+    if (justFinished) load()
+  }, [scoringJobs, load])
 
   function startRename(t: TranscriptRow) {
     setRenaming(t.id)
@@ -433,32 +441,42 @@ export function ScorecardSpace() {
     }
   }
 
-  async function confirmClient(transcriptId: string, score: boolean) {
+  // Confirm & score runs in the background: register the job, fire the PATCH
+  // without awaiting, and move the row to the "Scoring in progress" strip. The
+  // coach is free to leave — the server finishes on its own and the strip's
+  // progress bar picks the job back up on return.
+  function confirmAndScore(t: TranscriptRow) {
+    const clientId = picked[t.id]
+    if (!clientId) return
+    const clientName = clients.find((c) => c.id === clientId)?.name || 'Client'
+    startScoring({
+      transcriptId: t.id,
+      label: `${clientName} · ${t.title || t.filename || 'Transcript'}`,
+      body: { clientId },
+    })
+    setNeedsReview((rows) => rows.filter((r) => r.id !== t.id))
+  }
+
+  // Add-but-don't-score is quick — stays synchronous.
+  async function confirmClient(transcriptId: string) {
     const clientId = picked[transcriptId]
     if (!clientId) return
     setAssigning(transcriptId)
-    setAssignMode(score ? 'score' : 'add')
     setAssignError((e) => ({ ...e, [transcriptId]: '' }))
     try {
       const res = await fetch(`/api/transcripts/${transcriptId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(score ? { clientId } : { clientId, score: false }),
+        body: JSON.stringify({ clientId, score: false }),
       })
       if (res.ok) {
         await load()
       } else {
         const data = await res.json().catch(() => ({}))
-        setAssignError((e) => ({
-          ...e,
-          [transcriptId]: data.error || (score ? 'Scoring failed. Please try again.' : 'Could not add. Please try again.'),
-        }))
+        setAssignError((e) => ({ ...e, [transcriptId]: data.error || 'Could not add. Please try again.' }))
       }
     } catch {
-      setAssignError((e) => ({
-        ...e,
-        [transcriptId]: score ? 'Network error while scoring. Please try again.' : 'Network error. Please try again.',
-      }))
+      setAssignError((e) => ({ ...e, [transcriptId]: 'Network error. Please try again.' }))
     } finally {
       setAssigning(null)
     }
@@ -562,6 +580,73 @@ export function ScorecardSpace() {
         </section>
       ),
     },
+    ...(scoringJobs.length > 0
+      ? [
+          {
+            id: 'scoring-jobs',
+            label: 'Scoring in progress',
+            node: (
+              <section className="pt-8" style={{ borderTop: '0.5px solid var(--color-divider)' }}>
+                <h2 className="mb-1 text-[15px] font-medium text-tlw-navy-deep">Scoring in progress</h2>
+                <p className="mb-4 text-[12px] text-tlw-warm-gray">
+                  Scoring runs in the background (~2 minutes per session) — you&apos;re free to leave this
+                  page and come back; the bar keeps filling and the finished report appears in Sessions.
+                </p>
+                <div className="space-y-2">
+                  {scoringJobs.map((j) => (
+                    <div
+                      key={j.transcriptId}
+                      className="rounded-tlw-lg p-3"
+                      style={{ backgroundColor: 'var(--color-surface)' }}
+                    >
+                      <div className="flex flex-wrap items-center gap-3">
+                        <p className="min-w-0 flex-1 truncate text-[13px] font-medium text-tlw-navy-deep">
+                          {j.label}
+                        </p>
+                        {j.status === 'done' && j.reportId && (
+                          <Link
+                            href={`/practice/${j.reportId}`}
+                            className="text-[12px] font-medium text-tlw-signal-orange hover:underline"
+                          >
+                            view report →
+                          </Link>
+                        )}
+                        {j.status === 'error' && (
+                          <button
+                            onClick={() => retryScoring(j.transcriptId)}
+                            className="rounded-tlw-md border border-tlw-warm-gray/25 px-2.5 py-1 text-[12px] text-tlw-espresso transition-opacity duration-tlw-base hover:opacity-80"
+                          >
+                            retry
+                          </button>
+                        )}
+                        {j.status !== 'running' && (
+                          <button
+                            onClick={() => dismissScoringJob(j.transcriptId)}
+                            title="Dismiss"
+                            aria-label="Dismiss"
+                            className="rounded-md px-1.5 py-0.5 text-[13px] leading-none text-tlw-warm-gray transition-colors hover:bg-tlw-warm-gray/15 hover:text-tlw-espresso"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                      {j.status === 'error' ? (
+                        <p className="mt-1.5 text-[12px]" style={{ color: 'var(--color-danger)' }}>
+                          {j.error}
+                        </p>
+                      ) : (
+                        <div className="mt-2">
+                          <ScoringProgressBar job={j} />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ),
+          },
+        ]
+      : []),
     ...(needsReview.length > 0
       ? [
           {
@@ -693,19 +778,20 @@ export function ScorecardSpace() {
                       ))}
                     </select>
                     <button
-                      onClick={() => confirmClient(t.id, true)}
+                      onClick={() => confirmAndScore(t)}
                       disabled={!picked[t.id] || assigning === t.id}
+                      title="Scoring runs in the background (~2 min) — you can leave this page and check back"
                       className="rounded-tlw-md bg-tlw-navy-rich px-3 py-1.5 text-[12px] font-medium text-tlw-cream transition-opacity duration-tlw-base hover:opacity-90 disabled:opacity-40"
                     >
-                      {assigning === t.id && assignMode === 'score' ? `Analyzing… ${assigningElapsed}s` : 'confirm & score'}
+                      confirm &amp; score
                     </button>
                     <button
-                      onClick={() => confirmClient(t.id, false)}
+                      onClick={() => confirmClient(t.id)}
                       disabled={!picked[t.id] || assigning === t.id}
                       title="File this transcript on the client without scoring it — it can be scored later from their transcripts list"
                       className="rounded-tlw-md border border-tlw-warm-gray/25 px-2.5 py-1.5 text-[12px] text-tlw-espresso transition-opacity duration-tlw-base hover:opacity-80 disabled:opacity-40"
                     >
-                      {assigning === t.id && assignMode === 'add' ? 'adding…' : "add, don't score"}
+                      {assigning === t.id ? 'adding…' : "add, don't score"}
                     </button>
                   </div>
                   {assignError[t.id] && (
@@ -882,7 +968,7 @@ export function ScorecardSpace() {
       storageKey={STORAGE_KEY}
       panels={allPanels}
       columns={1}
-      defaultLayout={[['add-transcript', 'revenue', 'coaching-hours', 'headline', 'score-trend', 'needs-review', 'competencies', 'sessions', 'growth-areas']]}
+      defaultLayout={[['add-transcript', 'revenue', 'coaching-hours', 'headline', 'score-trend', 'scoring-jobs', 'needs-review', 'competencies', 'sessions', 'growth-areas']]}
     />
   )
 }

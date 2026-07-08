@@ -1,6 +1,8 @@
 'use client'
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useScoringJobs, startScoring, retryScoring, dismissScoringJob } from '@/lib/scoring-jobs'
+import { ScoringProgressBar } from '@/app/components/shared/ScoringProgress'
 
 interface Row {
   id: string
@@ -21,14 +23,15 @@ function fmtDate(d: string | null): string {
 export function TranscriptsList({ clientId }: { clientId: string }) {
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
-  const [scoring, setScoring] = useState<string | null>(null)
-  const [scoringElapsed, setScoringElapsed] = useState(0)
-  const [scoreError, setScoreError] = useState<Record<string, string>>({})
+  // Background scoring jobs (shared with the Practice review queue) — a score
+  // started on either page shows its progress bar here too.
+  const jobs = useScoringJobs()
 
   const load = useCallback(async () => {
     const r = await fetch(`/api/clients/${clientId}/transcripts`)
     const d = r.ok ? await r.json() : { transcripts: [] }
     setRows(d.transcripts || [])
+    return (d.transcripts || []) as Row[]
   }, [clientId])
 
   useEffect(() => {
@@ -39,34 +42,26 @@ export function TranscriptsList({ clientId }: { clientId: string }) {
     }
   }, [load])
 
+  // When a job for one of these rows completes, refresh so the row flips to
+  // "view report →", then clear the finished job.
   useEffect(() => {
-    if (!scoring) { setScoringElapsed(0); return }
-    const t = setInterval(() => setScoringElapsed((s) => s + 1), 1000)
-    return () => clearInterval(t)
-  }, [scoring])
+    const finished = jobs.filter(
+      (j) => j.status === 'done' && rows.some((r) => r.id === j.transcriptId && !r.reportId)
+    )
+    if (finished.length === 0) return
+    load().then(() => finished.forEach((j) => dismissScoringJob(j.transcriptId)))
+  }, [jobs, rows, load])
 
   // Score a filed-but-unscored transcript (e.g. one added via "add, don't
   // score" that turned out to be a real coaching conversation after all).
-  async function scoreNow(transcriptId: string) {
-    setScoring(transcriptId)
-    setScoreError((e) => ({ ...e, [transcriptId]: '' }))
-    try {
-      const res = await fetch(`/api/transcripts/${transcriptId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rescore: true }),
-      })
-      if (res.ok) {
-        await load()
-      } else {
-        const data = await res.json().catch(() => ({}))
-        setScoreError((e) => ({ ...e, [transcriptId]: data.error || 'Scoring failed. Please try again.' }))
-      }
-    } catch {
-      setScoreError((e) => ({ ...e, [transcriptId]: 'Network error while scoring. Please try again.' }))
-    } finally {
-      setScoring(null)
-    }
+  // Fire-and-forget: the score runs server-side (~2 min) — the button becomes
+  // a progress bar and the coach is free to leave the page meanwhile.
+  function scoreNow(t: Row) {
+    startScoring({
+      transcriptId: t.id,
+      label: t.title || t.filename || 'Transcript',
+      body: { rescore: true },
+    })
   }
 
   if (loading) {
@@ -90,6 +85,7 @@ export function TranscriptsList({ clientId }: { clientId: string }) {
   return (
     <div className="space-y-2">
       {rows.map((t) => {
+        const job = jobs.find((j) => j.transcriptId === t.id)
         const inner = (
           <div className="flex items-center justify-between gap-4 rounded-tlw-xl border border-tlw-warm-gray/15 bg-tlw-surface p-4 transition-colors duration-tlw-base hover:border-tlw-warm-gray/30">
             <div className="min-w-0">
@@ -97,9 +93,9 @@ export function TranscriptsList({ clientId }: { clientId: string }) {
               <p className="mt-0.5 text-[12px] text-tlw-warm-gray">
                 {fmtDate(t.session_date)} · {t.source}
               </p>
-              {scoreError[t.id] && (
+              {job?.status === 'error' && (
                 <p className="mt-0.5 text-[12px]" style={{ color: 'var(--color-danger)' }}>
-                  {scoreError[t.id]}
+                  {job.error}
                 </p>
               )}
             </div>
@@ -108,15 +104,34 @@ export function TranscriptsList({ clientId }: { clientId: string }) {
                 <span className="text-tlw-signal-orange">view report →</span>
               ) : t.match_status === 'needs_review' ? (
                 <span style={{ color: 'var(--color-warning)' }}>needs client</span>
+              ) : job && (job.status === 'running' || job.status === 'done') ? (
+                <ScoringProgressBar job={job} compact />
+              ) : job?.status === 'error' ? (
+                <>
+                  <button
+                    onClick={() => retryScoring(t.id)}
+                    className="rounded-tlw-md border border-tlw-warm-gray/25 px-2.5 py-1 text-[12px] text-tlw-espresso transition-opacity duration-tlw-base hover:opacity-80"
+                  >
+                    retry
+                  </button>
+                  <button
+                    onClick={() => dismissScoringJob(t.id)}
+                    title="Dismiss"
+                    aria-label="Dismiss"
+                    className="rounded-md px-1.5 py-0.5 text-[13px] leading-none text-tlw-warm-gray transition-colors hover:bg-tlw-warm-gray/15 hover:text-tlw-espresso"
+                  >
+                    ✕
+                  </button>
+                </>
               ) : (
                 <>
                   <span className="text-tlw-warm-gray">not scored</span>
                   <button
-                    onClick={() => scoreNow(t.id)}
-                    disabled={scoring === t.id}
-                    className="rounded-tlw-md border border-tlw-warm-gray/25 px-2.5 py-1 text-[12px] text-tlw-espresso transition-opacity duration-tlw-base hover:opacity-80 disabled:opacity-40"
+                    onClick={() => scoreNow(t)}
+                    title="Scoring runs in the background (~2 min) — you can leave this page and check back"
+                    className="rounded-tlw-md border border-tlw-warm-gray/25 px-2.5 py-1 text-[12px] text-tlw-espresso transition-opacity duration-tlw-base hover:opacity-80"
                   >
-                    {scoring === t.id ? `scoring… ${scoringElapsed}s` : 'score now'}
+                    score now
                   </button>
                 </>
               )}
