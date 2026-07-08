@@ -28,6 +28,9 @@ const SOURCE_LABEL: Record<string, string> = {
  * Appointment — or dismiss it. A "Sync now" button pulls the calendar on demand.
  */
 export function UnmatchedBookingsPanel({ clients, timeZone }: { clients: Client[]; timeZone: string }) {
+  // Assign only to working clients — same definition as the roster's Active tab
+  // (prospect counts; inactive/archived are hidden).
+  const assignable = clients.filter((c) => c.status !== 'inactive' && c.status !== 'archived')
   const [items, setItems] = useState<Booking[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
@@ -168,7 +171,7 @@ export function UnmatchedBookingsPanel({ clients, timeZone }: { clients: Client[
                   className="min-w-0 flex-1 rounded-tlw-lg border border-tlw-warm-gray/30 bg-tlw-surface px-2 py-1.5 text-[13px] text-tlw-espresso"
                 >
                   <option value="">Assign to client…</option>
-                  {clients.map((c) => (
+                  {assignable.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
                     </option>

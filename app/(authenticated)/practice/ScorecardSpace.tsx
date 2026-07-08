@@ -49,6 +49,13 @@ interface TranscriptRow {
 interface ClientRow {
   id: string
   name: string
+  status: string
+}
+
+// The assign-to-client pulldowns offer only working clients — same definition as
+// the roster's Active tab (prospect counts; inactive/archived are hidden).
+function isActiveClient(c: { status: string }): boolean {
+  return c.status !== 'inactive' && c.status !== 'archived'
 }
 
 function fmtDate(d: string | null): string {
@@ -345,7 +352,7 @@ export function ScorecardSpace() {
     setSummary(s?.summary || null)
     setReports(r?.reports || [])
     setNeedsReview(t?.transcripts || [])
-    setClients(c?.clients || [])
+    setClients((c?.clients || []).filter(isActiveClient))
     setRevenue(rev || null)
     setFocus(f?.focus || {})
     setLoading(false)
