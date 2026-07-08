@@ -21,10 +21,13 @@ export function EditClientModal({
   client,
   onClose,
   onSaved,
+  onIssueAgreement,
 }: {
   client: Client
   onClose: () => void
   onSaved: (c: Client) => void
+  /** Opens the issue-agreement flow (details → payment → review → send) after saving. */
+  onIssueAgreement?: () => void
 }) {
   const [form, setForm] = useState<Record<string, string>>(() => {
     const f: Record<string, string> = {
@@ -49,6 +52,12 @@ export function EditClientModal({
   const [error, setError] = useState('')
   // Favorite zones learned from the coach's existing clients (+ their own zone).
   const [favorites, setFavorites] = useState<string[]>([])
+  // Whether any agreement exists — issued through the platform (any state,
+  // including sent-awaiting-signature) or acknowledged on file externally.
+  // Only affects the issue button's label ("Issue" vs "Issue a new").
+  const [hasAgreement, setHasAgreement] = useState<boolean>(
+    !!(client.agreement_id || client.agreement_on_file)
+  )
 
   useEffect(() => {
     fetch('/api/clients/timezones')
@@ -57,11 +66,21 @@ export function EditClientModal({
       .catch(() => {})
   }, [])
 
+  useEffect(() => {
+    if (!onIssueAgreement) return
+    fetch(`/api/clients/${client.id}/agreements`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => Array.isArray(d?.agreements) && d.agreements.length > 0 && setHasAgreement(true))
+      .catch(() => {})
+  }, [client.id, onIssueAgreement])
+
   function set(key: string, val: string) {
     setForm((f) => ({ ...f, [key]: val }))
   }
 
-  async function save() {
+  // Persists the form; returns true on success so callers can chain (close /
+  // open the issue-agreement flow).
+  async function persist(): Promise<boolean> {
     setSaving(true)
     setError('')
     try {
@@ -89,12 +108,26 @@ export function EditClientModal({
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Save failed')
       onSaved(data.client)
-      onClose()
+      return true
     } catch (e: any) {
       setError(e.message)
       setSaving(false)
+      return false
     }
   }
+
+  async function save() {
+    if (await persist()) onClose()
+  }
+
+  // Save first so the issue flow prefills the just-edited name/email/phone.
+  async function saveAndIssue() {
+    if (await persist()) {
+      onClose()
+      onIssueAgreement?.()
+    }
+  }
+
 
   return (
     <Modal title="Edit client" onClose={onClose}>
@@ -221,6 +254,23 @@ export function EditClientModal({
               </p>
             )}
           </div>
+
+          {onIssueAgreement && (
+            <div className="mt-3 border-t border-tlw-warm-gray/15 pt-3">
+              <button
+                type="button"
+                onClick={saveAndIssue}
+                disabled={saving}
+                className="rounded-tlw-lg border border-tlw-navy-rich px-3 py-1.5 text-[12px] font-medium text-tlw-navy-rich transition-colors hover:bg-tlw-navy-rich hover:text-tlw-cream disabled:opacity-40"
+              >
+                {hasAgreement ? 'Issue a new agreement' : 'Issue coaching agreement'}
+              </button>
+              <p className="mt-1.5 text-[11px] leading-snug text-tlw-warm-gray">
+                Saves your edits, then opens the issue flow — confirm the details and the engagement&apos;s
+                payment terms, review the full document, and send it for e-signature.
+              </p>
+            </div>
+          )}
         </div>
 
         <label className="block">

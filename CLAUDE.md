@@ -320,7 +320,13 @@ the issue review, the signing page, and the signed snapshot can never drift.
 
 **Issue** (client workspace Agreement card → `IssueAgreementModal`: details →
 payment → review with a **scroll-to-bottom gate** → send; also the roster's
-"issue now?" prompt after creating a client, via `/clients/[id]?issue=1`).
+"issue now?" prompt after creating a client, via `/clients/[id]?issue=1`; also
+the client settings — the edit (gear) modal's Agreement & recording section has
+an **"Issue coaching agreement" / "Issue a new agreement"** button
+(`EditClientModal#saveAndIssue`) that saves the pending edits first (so the flow
+prefills the just-edited name/email/phone), closes the modal, and opens the same
+`IssueAgreementModal`; the label reads "new" when any agreement exists — a
+platform row in any state, or on-file external).
 `POST /api/agreements/issue` captures the per-client merge vars, snapshots the
 fully-rendered document into `agreements.body_html`, mints a 30-day magic-link
 token, and emails the client a **CTA delivery vehicle** (`buildAgreementEmailHTML`,
