@@ -138,6 +138,23 @@ session"** checkbox (`/api/transcripts/manual` `autoScore:false` →
 unscored rows as "not scored" with a **"score now"** button (`PATCH` with
 `{rescore:true}`) so an unscored transcript can always be scored later.
 
+**Background scoring + progress bar (`lib/scoring-jobs.ts`).** Scoring takes
+~120 s, so "confirm & score" (review queue) and "score now" (client transcripts
+list) are **fire-and-forget**: the click registers a job in a client-side store
+(persisted in `localStorage`, key `tlw-scoring-jobs`) and sends the PATCH
+without awaiting — the serverless function runs to completion even if the coach
+navigates away or closes the tab. The UI shows a **dark progress bar**
+(`ScoringProgress.tsx`, fill rate = `EXPECTED_SCORING_SECONDS` 120 s, holds at
+96% until the report actually lands) in a "Scoring in progress" panel on
+Practice (`scoring-jobs` panel id) and inline in place of the score-now button.
+If the in-page fetch was lost to a reload, a 10 s poller watches `/api/reports`
+(which now returns `transcript_id`) and resolves the job when the report
+appears; >5 min with no report → error state with **retry** (re-fires the job's
+stored PATCH body). A failed score is never lost — the transcript stays filed on
+the client as "not scored". Assign-to-client pulldowns (review queue, dashboard
+unmatched bookings, billing-account picker) list **working clients only** —
+the roster's Active-tab definition (not inactive/archived).
+
 ### Scoring engine (`lib/scoring/engine.ts`)
 Prompts Claude with the consolidated v0.4 rubric — the **per-competency band
 definitions** (rendered from `rubric.ts#COMPETENCY_BANDS`, all eight) and the

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { PageHeader } from '@/app/components/layout/PageHeader'
 import type { BillingAccount } from '@/lib/billing/types'
 
-type Client = { id: string; name: string; email: string | null }
+type Client = { id: string; name: string; email: string | null; status: string }
 type Coach = { id: string; name: string; email: string | null; client_type: string }
 
 type AccountSummary = {
@@ -36,7 +36,13 @@ function CreateAccountModal({ onCreated, onClose }: {
   useEffect(() => {
     fetch('/api/clients')
       .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((d) => setClients(d.clients ?? []))
+      // Working clients only — same definition as the roster's Active tab. A
+      // one-off for an inactive client can be created without linking a coachee.
+      .then((d) =>
+        setClients(
+          ((d.clients ?? []) as Client[]).filter((c) => c.status !== 'inactive' && c.status !== 'archived')
+        )
+      )
       .catch(() => {})
       .finally(() => setLoadingClients(false))
   }, [])
