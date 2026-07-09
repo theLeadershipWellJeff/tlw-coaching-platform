@@ -109,17 +109,25 @@ export const COMPETENCY_BANDS: Record<number, Partial<Record<Band, string>>> = {
   // means helping the client get to an agenda; if they already have one, clean
   // receipt is itself strong practice. Gate 2 unchanged: no named insight at close
   // AND no standing engagement → band 2.
+  // v0.5.3: C3 has TWO faces. The session-agenda face (3.06–3.08) governs in all
+  // sessions (unchanged). The engagement-contracting face (3.01–3.05) is in scope
+  // ONLY in sessions 1–2; when both faces are in scope they jointly inform the
+  // single C3 read and the weaker in-scope face governs the ceiling — a judgment
+  // read against the band definitions, no arithmetic sub-weighting. Session-1
+  // substantial ABSENCE of contracting caps C3 at band 3 (engine-enforced ceiling;
+  // waived on observed client understanding / explicit waiver, suppressed when
+  // session number is uncertain).
   3: {
     Emerging:
       'No session focus established; no engagement agreement referenced.',
     Developing:
       'Session focus emerges without coach invitation; no named insight at close; no standing engagement agreement (Gate 2).',
     Proficient:
-      'Client has an agenda; coach receives it cleanly and works it. A clear, self-evident agenda received well is a legitimate 3.',
+      'Session-agenda face: client has an agenda; coach receives it cleanly and works it. A clear, self-evident agenda received well is a legitimate 3. Engagement face (sessions 1–2 only): clearly explains what coaching is / is not, roles, confidentiality, and the engagement journey — focused, accurate, largely one-directional.',
     Strong:
-      'Coach helps refine the agenda when refinement adds value — asks around the items, sharpens outcomes, tests completeness. If the agenda already has clear outcomes and needs no refinement, clean receipt is itself band 4, not a capped 3. Coach tracks the agreement when the client shifts it mid-session. A client-generated recap/close satisfies the close at band 4 — explicit coach consolidation or coach-named closure of the loop is NOT required at band 4 and is a band-5 signal only.',
+      'Session-agenda face: coach helps refine the agenda when refinement adds value — asks around the items, sharpens outcomes, tests completeness. If the agenda already has clear outcomes and needs no refinement, clean receipt is itself band 4, not a capped 3. Coach tracks the agreement when the client shifts it mid-session. A client-generated recap/close satisfies the close at band 4 — explicit coach consolidation or coach-named closure of the loop is NOT required at band 4 and is a band-5 signal only. Engagement face (sessions 1–2 only): PARTNERED contracting — checks understanding, invites the client\'s questions, co-creates the agreement rather than presenting it (attunement standard: focused explanation is a 3; attuned, partnered contracting is a 4).',
     Masterful:
-      'Client manages agenda and focus largely themselves; coach nearly invisible (Invisibility Standard). Explicit coach-named closure of the agreement loop, where it serves the client, appears here (ICF 3.06, 3.08, 3.09).',
+      'Client manages agenda and focus largely themselves; coach nearly invisible (Invisibility Standard). Explicit coach-named closure of the agreement loop, where it serves the client, appears here (ICF 3.06, 3.08, 3.09). Engagement face (sessions 1–2 only): client CO-AUTHORS the agreement — articulates back what they want, partners on measures of success and on compatibility; the coach\'s framing is nearly invisible (enablement / invisibility standard).',
   },
   // 4 — Cultivates trust and safety. Single-instance standard for band 4.
   4: {

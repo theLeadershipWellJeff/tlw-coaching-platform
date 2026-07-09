@@ -14,8 +14,9 @@ A coaching platform for Dr. Jeff Holmes (theLeadershipWell). Two pillars:
    Competencies refined by theLeadershipWell's standards. The **consolidated
    spec `spec/theLeadershipWell_Session_Report_Spec_v0.4.md` is the base source
    of truth**, then apply the deltas **in order**: `..._v0.5.md` → `..._v0.5.1.md`
-   → **`..._v0.5.2.md` (latest — read this last)**. Read the base + all deltas
-   before touching scoring (the older `..._v0.3.md` is kept for history only).
+   → `..._v0.5.2.md` → **`..._v0.5.3.md` (latest — read this last)**. Read the
+   base + all deltas before touching scoring (the older `..._v0.3.md` is kept
+   for history only).
 
 Plus a **client workspace** (per-client hub) and **roster**.
 
@@ -198,6 +199,34 @@ verbal consent passes Gate 1 regardless of `recording_authorized`
 (`gate1 = !agreementOnFile && !verbalConsent`); but unconfirmed on-file
 infrastructure (not both `agreement_on_file` AND `recording_authorized===true`)
 caps C1 at **3.4** below band 4 (`c1_ceiling`).
+
+**v0.5.3 additions (contracting / agreement-setting).** (1) A fifth Layer-0
+utterance bucket, **contracting** (engagement-level agreement-setting — what
+coaching is/isn't, roles, confidentiality, journey, fees, compatibility; distinct
+from process/logistics housekeeping, unclear split → fail-loud flag
+`contracting_classification_unclear`), **active only in engagement sessions 1–2**
+(session 3+ it reads as normal content/possible drift). Contracting is
+**enveloped** (mirrors the consultant-move envelope; `metrics.contracting_envelope`
+with `present`/`substantial`/`client_waiver_detected`/`quality`/`envelopes`) and
+excluded from the drift denominators: **talk-time is a dual figure**
+(`coach_talk_time_pct` = coaching-body, what the 40% flag evaluates;
+`coach_talk_time_pct_raw` = all words, always shown), contracting leaves the Q:S
+statement denominator, and is never a consultant move — the carve-out is
+content-scoped, never session-scoped. (2) **C3 has two faces** (`faces` on the
+competency): session-agenda (all sessions, unchanged) + engagement-contracting
+(3.01–3.05, sessions 1–2; bands 3/4/5 = focused one-directional / partnered /
+client co-authors); the weaker in-scope face governs the ceiling. (3) The
+**absence asymmetry**: absence of contracting is upside-only except a **confirmed
+session 1**, where substantial absence caps C3 at **3.4** below band 4
+(`c3_contracting_cap`); substantial presence (scope, confidentiality, OR
+agreement-setting — not full coverage) clears it, an observed client
+waiver/understanding waives it (C1-precedence pattern), and an **uncertain
+session number suppresses it** + flags `session_number_uncertain` (a guess never
+moves a score). Session number is derived in `store.ts` when front matter lacks
+it: prior transcript count for the client + 1, `confirmed` only when prior notes
+don't outnumber prior transcripts (a CA-migrated history → `uncertain`).
+Contracting surfaces as a coach-facing QA line on the report (sessions 1–2 only,
+suppressed 3+).
 
 **Rescore.** `runAndStoreReport` upserts on `transcript_id`, so re-running it
 replaces the machine report in place (coach self-scores/notes live in separate

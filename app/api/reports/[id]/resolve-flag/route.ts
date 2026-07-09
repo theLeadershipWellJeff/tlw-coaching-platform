@@ -25,6 +25,9 @@ const KNOWN_FLAGS = new Set([
   'low_attribution_confidence',
   'likely_speaker_swap',
   'recording_consent_needs_confirmation',
+  // v0.5.3 contracting / session-number fail-loud flags
+  'session_number_uncertain',
+  'contracting_classification_unclear',
 ])
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
