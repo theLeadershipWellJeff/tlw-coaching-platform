@@ -19,13 +19,17 @@ export interface Attribution {
   likely_swap_flag: boolean
 }
 
-// v0.5 A2: four-bucket utterance taxonomy (Q:S denominator = consultative_telling only)
+// v0.5 A2: utterance taxonomy (Q:S denominator = consultative_telling only).
+// v0.5.3 adds the contracting bucket — engagement-level agreement-setting,
+// active only in sessions 1–2, excluded from the Q:S denominator and the
+// consultant-move count (null on pre-v0.5.3 reports / when the bucket is inactive).
 export interface UtteranceTaxonomy {
   questions: number | null
   evocative_reflections: number | null
   co_thinking: number | null
   consultative_telling: number | null
   process_logistics: number | null
+  contracting?: number | null
 }
 
 // v0.5 A3: fail-loud recording consent flag (agreement on file but recording_authorized = false)
@@ -88,6 +92,10 @@ export interface CompetencyScore {
   subcompetency_refs: string[] // e.g. ["6.04", "6.02"]
   gates_triggered?: string[] // gate ids that capped this competency, e.g. ["gate_3"]
   dimensions?: C6Dimensions // C6 only (v0.5 B3 dimensional split)
+  // v0.5.3, C3 only: which face(s) informed the read — session-agenda
+  // (3.06–3.08, all sessions) and/or engagement (3.01–3.05, sessions 1–2) — so
+  // Phase 2 never benchmarks a first-session C3 against a mid-engagement C3.
+  faces?: ('session_agenda' | 'engagement')[]
 }
 
 // v0.5.2 §7: a consultant move is a contiguous ENVELOPE (opens at a role-shift
@@ -106,6 +114,36 @@ export interface ConsultantMove {
   status: Flag
 }
 
+// v0.5.3 §Layer 0: a contracting envelope mirrors the consultant-move envelope —
+// opens when the coach shifts into engagement-agreement-setting (what coaching
+// is/isn't, roles, confidentiality, journey, fees, compatibility), closes on a
+// return to the client's agenda, a floor-returning question, or a pause the
+// client fills with reflection. Distinct from process/logistics (within-session
+// housekeeping), which routes to nothing special.
+export interface ContractingEnvelope {
+  opened_at?: string // e.g. "00:01:40"
+  closed_at?: string // e.g. "00:09:12"
+  covers: string[] // e.g. ["coaching_scope", "confidentiality", "journey", "compatibility"]
+  subcompetency_refs: string[] // 3.01–3.05, plus 1.06 where coaching-vs-consulting scope is drawn
+  quality: 'partnered' | 'one_directional'
+}
+
+// v0.5.3: the contracting block on metrics. Active only in engagement sessions
+// 1–2 (the engine derives `active` from the session number — never the model);
+// from session 3+ the bucket is inactive and contracting content reads as normal
+// content under the standing drift rules. Null on pre-v0.5.3 reports.
+export interface ContractingEnvelopeBlock {
+  active: boolean // false when session_number >= 3 (bucket inactive)
+  present: boolean // any contracting envelope observed
+  substantial: boolean // meaningful contracting (scope, confidentiality, OR agreement-setting) — clears the S1 absence cap
+  client_waiver_detected: boolean // client already understood / explicitly waived → cap suppressed regardless
+  // Fail-loud: the contracting vs process/logistics split was unclear somewhere —
+  // flag for manual confirmation rather than guess (Layer 0 principle).
+  classification_uncertain?: boolean
+  quality: 'partnered' | 'one_directional' | null
+  envelopes: ContractingEnvelope[]
+}
+
 export interface ConsultantMoves {
   count: number // envelope count (v0.5.2: once per envelope, not per advice-act)
   unit: 'envelope' // v0.5.2 §7: the counting unit is the envelope
@@ -117,7 +155,13 @@ export interface ConsultantMoves {
 }
 
 export interface Metrics {
+  // v0.5.3 dual talk-time: `coach_talk_time_pct` is the COACHING-BODY figure
+  // (contracting envelope excluded — what the 40% flag evaluates; same field
+  // name so existing readers keep working). `coach_talk_time_pct_raw` is all
+  // coach words, always displayed alongside so the exclusion is transparent.
+  // Outside sessions 1–2 (or pre-v0.5.3 reports) the two are equal / raw is null.
   coach_talk_time_pct: number | null
+  coach_talk_time_pct_raw?: number | null
   coach_talk_time_flag: Flag | null
   flagged_emotion_count: number | null
   flagged_emotion_flag: Flag | null
@@ -131,7 +175,10 @@ export interface Metrics {
   reflective_pauses: number | null
   role_shifts_flagged: number | null
   consultant_moves: ConsultantMoves | null
-  utterance_taxonomy: UtteranceTaxonomy | null // v0.5 A2 four-bucket taxonomy
+  // v0.5.3: contracting / agreement-setting envelopes (sessions 1–2 only —
+  // `active` false and the block suppressed from the scorecard session 3+).
+  contracting_envelope?: ContractingEnvelopeBlock | null
+  utterance_taxonomy: UtteranceTaxonomy | null // v0.5 A2 taxonomy (+ v0.5.3 contracting bucket)
   attribution?: Attribution // v0.5 A1 speaker-attribution confidence
   source: MetricSource
 }
@@ -155,6 +202,13 @@ export interface SessionMeta {
   type: string
   session_number: number | null
   engagement_total: number | null
+  // v0.5.3 fail-loud state: 'confirmed' = explicit front matter or a clean
+  // platform derivation; 'uncertain' = derived over incomplete history (or
+  // unknown). Uncertain SUPPRESSES the session-1 contracting absence cap —
+  // an attribution guess never moves a score.
+  session_number_confidence?: 'confirmed' | 'uncertain'
+  // v0.5.3 derived: session_number ∈ {1, 2} — the contracting bucket's window.
+  is_onboarding?: boolean
   date: string // YYYY-MM-DD
   standing_engagement?: boolean // an ongoing engagement is in place (spec §9 C3, gate 2)
   // Two-tier AI/recording disclosure (spec v0.4 §9 C1). agreement_on_file is set

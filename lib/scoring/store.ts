@@ -54,18 +54,59 @@ export async function runAndStoreReport(
   const rawInitials = transcript.client_initials || parsed.clientInitials
   const clientInitials = rawInitials || (clientName ? initialsFromName(clientName) : '—')
 
+  // Fall back to today *in the coach's timezone* — never the server's UTC date,
+  // which lands an evening Pacific session on the next day.
+  const sessionDate =
+    transcript.session_date ||
+    parsed.sessionDate ||
+    todayInTimeZone(coach.timezone || DEFAULT_TIMEZONE)
+
+  // v0.5.3 — engagement session number drives the contracting bucket (active
+  // sessions 1–2) and the session-1 C3 absence cap. Explicit front matter wins
+  // (confirmed). Otherwise derive from platform history: this client's prior
+  // transcripts with an earlier session date, +1. Confidence is 'confirmed'
+  // only when the client's prior notes don't outnumber their prior transcripts
+  // — more notes than transcripts (e.g. a CA-migrated client whose early
+  // sessions were never recorded) means the transcript count understates the
+  // engagement position, exactly the mislabeled-session-1 risk the spec's
+  // fail-loud rule guards: 'uncertain' suppresses the cap in the engine.
+  // Best-effort — a derivation failure must never fail scoring.
+  let sessionNumber = parsed.sessionNumber
+  let sessionNumberConfidence: 'confirmed' | 'uncertain' =
+    sessionNumber != null ? 'confirmed' : 'uncertain'
+  if (sessionNumber == null && transcript.client_id) {
+    try {
+      const [{ count: priorTranscripts }, { count: priorNotes }] = await Promise.all([
+        supabase
+          .from('transcripts')
+          .select('id', { count: 'exact', head: true })
+          .eq('client_id', transcript.client_id)
+          .neq('id', transcript.id)
+          .lt('session_date', sessionDate),
+        supabase
+          .from('notes')
+          .select('id', { count: 'exact', head: true })
+          .eq('client_id', transcript.client_id)
+          .lt('session_date', sessionDate),
+      ])
+      if (priorTranscripts != null) {
+        sessionNumber = priorTranscripts + 1
+        sessionNumberConfidence =
+          (priorNotes ?? 0) <= priorTranscripts ? 'confirmed' : 'uncertain'
+      }
+    } catch (e: any) {
+      console.error('Session-number derivation failed (scoring continues):', e?.message || e)
+    }
+  }
+
   const ctx: ScoringContext = {
     coachName: coach.name,
     clientInitials,
     sessionType: parsed.sessionType,
-    sessionNumber: parsed.sessionNumber,
+    sessionNumber,
+    sessionNumberConfidence,
     engagementTotal: parsed.engagementTotal,
-    // Fall back to today *in the coach's timezone* — never the server's UTC date,
-    // which lands an evening Pacific session on the next day.
-    sessionDate:
-      transcript.session_date ||
-      parsed.sessionDate ||
-      todayInTimeZone(coach.timezone || DEFAULT_TIMEZONE),
+    sessionDate,
     agreementOnFile,
     recordingAuthorized,
   }

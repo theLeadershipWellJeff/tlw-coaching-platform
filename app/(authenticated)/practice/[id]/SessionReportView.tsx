@@ -127,6 +127,9 @@ const GATE_LABELS: Record<string, string> = {
   // v0.5.2 C1 ceiling: verbal consent passes the gate, but the on-file consent
   // infrastructure (signed agreement + recorded authorization) isn't confirmed.
   c1_ceiling: 'consent infrastructure not confirmed on file — capped below strong (v0.5.2)',
+  // v0.5.3 session-1 contracting cap: a confirmed first session with no
+  // substantial engagement contracting (and no client waiver observed).
+  c3_contracting_cap: 'session 1 · no substantial engagement contracting — capped below strong (v0.5.3)',
 }
 
 /** Titles + fix-it guidance for the v0.5.2 Layer-0 manual-review flags. */
@@ -150,6 +153,14 @@ const REVIEW_FLAG_GUIDE: Record<string, { title: string; fix: string }> = {
   recording_consent_needs_confirmation: {
     title: 'Recording consent needs confirmation',
     fix: 'The client record shows an agreement on file but recording marked declined. Open the client record (edit → Agreement & recording) and confirm their actual choice — then rescore so the score picks it up. If “declined” is correct, mark it reviewed.',
+  },
+  session_number_uncertain: {
+    title: 'Session number uncertain — session-1 contracting cap withheld',
+    fix: 'This may be the client’s first session, and no substantial engagement contracting was observed — but the position in the engagement is a derivation, not a confirmed fact, so the v0.5.3 session-1 cap on Competency 3 was NOT applied (a guess never moves a score). If this really was session 1, note it and rescore with the session number in the transcript front matter; otherwise mark it reviewed.',
+  },
+  contracting_classification_unclear: {
+    title: 'Contracting vs. session housekeeping unclear',
+    fix: 'The engine couldn’t cleanly split engagement-level contracting (what coaching is, confidentiality, roles, fees) from ordinary within-session logistics somewhere in this transcript. Skim the opening — if the contracting read below looks right, mark it reviewed; if not, rescore.',
   },
 }
 
@@ -344,6 +355,14 @@ function ConversationMetrics({ m }: { m: Metrics }) {
   }
 
   const cm = m.consultant_moves
+  const ce = m.contracting_envelope
+  // v0.5.3 dual talk-time: the card shows the coaching-body figure (what the
+  // 40% flag evaluates); when a contracting envelope was excluded, the raw
+  // figure is surfaced alongside — always visible, never suppressed.
+  const talkDual =
+    m.coach_talk_time_pct_raw != null &&
+    m.coach_talk_time_pct != null &&
+    m.coach_talk_time_pct_raw !== m.coach_talk_time_pct
   return (
     <>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -352,7 +371,15 @@ function ConversationMetrics({ m }: { m: Metrics }) {
           value={m.coach_talk_time_pct ?? '—'}
           unit={m.coach_talk_time_pct != null ? '%' : undefined}
           flag={m.coach_talk_time_flag}
-          status={m.coach_talk_time_flag === 'red' ? 'over 40% — telling too much' : 'within range'}
+          status={
+            talkDual
+              ? `coaching body · ${m.coach_talk_time_pct_raw}% raw incl. contracting${
+                  m.coach_talk_time_flag === 'red' ? ' — over 40%' : ''
+                }`
+              : m.coach_talk_time_flag === 'red'
+              ? 'over 40% — telling too much'
+              : 'within range'
+          }
         />
         <MetricCard
           label="flagged emotion"
@@ -427,6 +454,45 @@ function ConversationMetrics({ m }: { m: Metrics }) {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {ce?.active && (
+        <div className="mt-4 space-y-2">
+          <p className="text-[12px] text-tlw-warm-gray">
+            contracting — engagement QA, sessions 1–2 (v0.5.3){' '}
+            <span style={{ color: ce.present ? 'var(--color-success)' : 'var(--color-danger)' }}>
+              · {ce.present ? 'present' : 'absent'}
+            </span>
+            {ce.present && ce.quality && (
+              <span style={{ color: ce.quality === 'partnered' ? 'var(--color-success)' : 'var(--color-warning, #b45309)' }}>
+                {' '}· {ce.quality === 'partnered' ? 'partnered' : 'one-directional'}
+              </span>
+            )}
+          </p>
+          <div className="rounded-tlw-lg p-3" style={{ backgroundColor: 'var(--color-surface)' }}>
+            <p className="text-[12px] leading-relaxed text-tlw-espresso">
+              {ce.present
+                ? ce.substantial
+                  ? 'Engagement contracting present and substantial — excluded from talk-time, question:statement, and the consultant-move count so onboarding behavior isn’t scored as drift.'
+                  : 'Some engagement contracting observed, but not substantial (coaching scope, confidentiality, or agreement-setting).'
+                : ce.client_waiver_detected
+                ? 'No engagement contracting — but the transcript shows the client already understood the coaching relationship or waived it, so no cap applies.'
+                : 'No engagement contracting observed in this session.'}
+            </p>
+            {ce.envelopes.length > 0 && (
+              <ul className="mt-2 space-y-1">
+                {ce.envelopes.map((env, i) => (
+                  <li key={i} className="text-[11px]" style={{ color: 'var(--color-muted)' }}>
+                    {env.opened_at && env.closed_at ? `${env.opened_at}–${env.closed_at}` : `envelope ${i + 1}`}
+                    {env.covers.length > 0 && <> · covers {env.covers.map((c) => c.replace(/_/g, ' ')).join(', ')}</>}
+                    {env.subcompetency_refs.length > 0 && <> · {env.subcompetency_refs.join(', ')}</>}
+                    {' '}· {env.quality === 'partnered' ? 'partnered' : 'one-directional'}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
       )}
 

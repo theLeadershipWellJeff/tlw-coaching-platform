@@ -1,9 +1,32 @@
 /**
- * The coaching evaluation engine — spec v0.5.2.
+ * The coaching evaluation engine — spec v0.5.3.
  *
  * Sends a speaker-separated transcript to Claude with the Session Report Spec
- * v0.5.2 encoded as instructions, gets back the §12 JSON, then enforces the
+ * v0.5.3 encoded as instructions, gets back the §12 JSON, then enforces the
  * mechanical rules deterministically in code so they can't drift.
+ *
+ * v0.5.3 changes from v0.5.2 (contracting / agreement-setting):
+ *   L0 — A fifth utterance bucket: CONTRACTING (engagement-level agreement-
+ *        setting — what coaching is/isn't, roles, confidentiality, journey,
+ *        fees, compatibility). Distinct from process/logistics (within-session
+ *        housekeeping); an unclear split flags for manual confirmation
+ *        (fail-loud). Active ONLY in engagement sessions 1–2; session 3+
+ *        contracting content reads as normal content (possible drift).
+ *   §7 — Contracting is ENVELOPED (mirrors the consultant-move envelope) and
+ *        excluded from the drift denominators: talk-time becomes a DUAL figure
+ *        (raw + coaching-body; the 40% flag evaluates coaching-body only, raw
+ *        always displayed), contracting statements leave the Q:S denominator,
+ *        and contracting is never a consultant move. The carve-out is
+ *        content-scoped (the envelope), never session-scoped.
+ *   C3 — Two faces: session-agenda (3.06–3.08, all sessions, unchanged) and
+ *        engagement-contracting (3.01–3.05, sessions 1–2 only; bands 3/4/5 =
+ *        focused one-directional / partnered / client co-authors). The weaker
+ *        in-scope face governs the ceiling. Absence of contracting is
+ *        upside-only EXCEPT session 1, where substantial absence caps C3 at
+ *        band 3 (ceiling 3.4, engine-enforced) — cleared by substantial
+ *        presence, waived on observed client understanding/explicit waiver
+ *        (C1-precedence pattern), and SUPPRESSED (+ manual-review flag) when
+ *        the session number is uncertain: a guess never moves a score.
  *
  * v0.5.2 changes from v0.5.1 (T.S. session calibration, July 2 2026):
  *   L0 — Data-integrity layer that runs BEFORE scoring, all fail-loud:
@@ -56,6 +79,8 @@ import type {
   C6Dimensions,
   CompetencyScore,
   ConsultantMove,
+  ContractingEnvelope,
+  ContractingEnvelopeBlock,
   Flag,
   IntegrityBlock,
   Metrics,
@@ -100,6 +125,11 @@ export interface ScoringContext {
   sessionType?: string | null
   sessionNumber?: number | null
   engagementTotal?: number | null
+  // v0.5.3 fail-loud state for the session number: 'confirmed' (explicit front
+  // matter, or a clean platform derivation) or 'uncertain' (derived over
+  // incomplete history / unknown). Uncertain suppresses the session-1
+  // contracting absence cap. Defaults to 'uncertain' when sessionNumber is null.
+  sessionNumberConfidence?: 'confirmed' | 'uncertain'
   sessionDate: string // YYYY-MM-DD
   // True when the platform finds a signed coaching agreement on file for this
   // client (spec v0.4 §9 C1, Tier 1). The agreement is the controlling document
@@ -141,6 +171,29 @@ function buildRubricBlock(): string {
     .join('\n\n')
 }
 
+/**
+ * v0.5.3 session-number state, shared by the prompt and enforceRules. The
+ * contracting bucket's window is OPEN for sessions 1–2 and for an unknown
+ * session number (fail-loud: detect and report, the engine decides); it is
+ * CLOSED only when the session is confirmed/known to be 3+.
+ */
+function sessionNumberState(ctx: ScoringContext): {
+  sessionNumber: number | null
+  confidence: 'confirmed' | 'uncertain'
+  isOnboarding: boolean
+  contractingWindowOpen: boolean
+} {
+  const n = ctx.sessionNumber ?? null
+  const confidence: 'confirmed' | 'uncertain' =
+    n == null ? 'uncertain' : ctx.sessionNumberConfidence ?? 'confirmed'
+  return {
+    sessionNumber: n,
+    confidence,
+    isOnboarding: n === 1 || n === 2,
+    contractingWindowOpen: n == null || n <= 2,
+  }
+}
+
 function buildPrompt(transcript: string, ctx: ScoringContext): string {
   const competencyList = COMPETENCIES.map(
     (c) => `  ${c.id}. ${c.name} (domain: ${c.domain})`
@@ -150,13 +203,17 @@ function buildPrompt(transcript: string, ctx: ScoringContext): string {
     (p) => `  - ${p.name}: ${p.text}`
   ).join('\n')
 
-  return `Score this coaching session against theLeadershipWell's Session Report Spec v0.5.2.
+  const sn = sessionNumberState(ctx)
+
+  return `Score this coaching session against theLeadershipWell's Session Report Spec v0.5.3.
 
 SESSION CONTEXT
   coach: ${ctx.coachName}
   client (initials only): ${ctx.clientInitials}
   type: ${ctx.sessionType || 'unspecified'}
   session number: ${ctx.sessionNumber ?? 'unknown'} of ${ctx.engagementTotal ?? 'unknown'}
+  session_number_confidence: ${sn.confidence} (platform-set fail-loud state — 'uncertain' means the position in the engagement is a derivation, not a confirmed fact)
+  is_onboarding: ${sn.isOnboarding}${sn.sessionNumber == null ? ' (session number unknown — treat the contracting window as OPEN and report what you observe)' : ''}
   date: ${ctx.sessionDate}
   agreement_on_file: ${ctx.agreementOnFile} (platform-set: a signed coaching agreement exists for this client)
   recording_authorized: ${ctx.recordingAuthorized === null || ctx.recordingAuthorized === undefined ? 'unknown' : ctx.recordingAuthorized} (platform-set: the client's signed recording/AI decision — false means they declined)
@@ -193,23 +250,37 @@ STEP 1 — SPEAKER ATTRIBUTION (v0.5 A1 — do this BEFORE computing any metrics
   If role-mapping confidence is low (you cannot reliably determine who is coach and who is client), set attribution.confidence = "low". The engine will not trust metrics from a low-confidence attribution — fail loud, do not guess.
   Record: attribution.method ("role-mapped" or "diarization-order"), attribution.source ("plaud-diarization" or "zoom-vtt"), attribution.confidence ("high"/"medium"/"low"), attribution.likely_swap_flag (boolean).
 
-STEP 2 — UTTERANCE TAXONOMY (v0.5 A2 — classify every coach utterance into exactly ONE of five buckets by FUNCTION, not grammatical form):
+STEP 2 — UTTERANCE TAXONOMY (v0.5 A2, extended v0.5.3 — classify every coach utterance into exactly ONE of six buckets by FUNCTION, not grammatical form):
   1. Question — interrogative that evokes client thinking (C7). Counts in Q:S numerator.
   2. Evocative reflection / observation — reflects, summarizes, reframes, or shares an observation to create insight (6.02, 7.10, 7.11). Credits C6/C7. EXCLUDED from Q:S denominator and consultant-move count.
   3. Co-thinking — builds on the client's own material, offered tentatively, WITHOUT ATTACHMENT to adoption (7.11). EXCLUDED from consultant-move count. Flagged for coach visibility.
   4. Consultative / telling — advice, framework, or answer the coach supplies and is invested in. THIS IS THE Q:S DENOMINATOR. Input to consultant-move count.
-  5. Process / logistics — scheduling, housekeeping, tech. Neutral; excluded everywhere.
-  Q:S REDEFINED (v0.5): question_to_statement = questions : consultative_telling. Evocative reflections, co-thinking, and process utterances are OUT of the denominator. "1:1.1" means 1 question per 1.1 consultative statements.
+  5. Process / logistics — WITHIN-SESSION housekeeping only: time checks, "where do you want to start today," session-agenda mechanics, scheduling, tech. Neutral; excluded everywhere.
+  6. Contracting / agreement-setting (v0.5.3 — ${sn.contractingWindowOpen ? 'ACTIVE for this session' : 'INACTIVE for this session (confirmed session 3+) — do NOT use this bucket; classify engagement-contracting content into the other buckets as normal content (it may read as drift under the standing rules)'}) — coach speech that establishes or re-establishes the coaching ENGAGEMENT itself: defining what coaching is and is not, explaining the engagement journey, setting confidentiality, roles, responsibilities, logistics of the engagement, fees, duration/termination, and determining coach–client compatibility. Routes to C3's engagement face (3.01–3.05) and, where coaching-vs-consulting scope is drawn, to 1.06. EXCLUDED from the Q:S denominator (same pattern as evocative reflection) and NEVER a consultant move. NOT the same as process/logistics: process/logistics is within-session housekeeping; contracting is engagement-level agreement-setting. When the split between the two is unclear, set contracting_envelope.classification_uncertain = true and flag for manual confirmation rather than guess (Layer 0 fail-loud principle). Mid-engagement re-contracting under 3.12 is ordinary C3 content, NOT this bucket.
+  Q:S REDEFINED (v0.5, extended v0.5.3): question_to_statement = questions : consultative_telling. Evocative reflections, co-thinking, process utterances, and contracting utterances are OUT of the denominator. "1:1.1" means 1 question per 1.1 consultative statements.
   CO-THINKING vs. CONSULTING boundary — ICF 7.11 "without attachment":
     - Built on the client's own prior material? → toward co-thinking
     - Offered tentatively, client explicitly invited to react/reshape/reject? → toward co-thinking
     - Coach signaled it ("I'm going to think alongside you here")? → toward co-thinking
     - Coach ATTACHED to the client adopting it? → CONSULTING regardless of framing
     When in doubt, default to consulting (conservative read) and flag.
-  Record utterance counts in metrics.utterance_taxonomy: {questions, evocative_reflections, co_thinking, consultative_telling, process_logistics}.
+  Record utterance counts in metrics.utterance_taxonomy: {questions, evocative_reflections, co_thinking, consultative_telling, process_logistics, contracting}.
+
+CONTRACTING ENVELOPE (v0.5.3 — ${sn.contractingWindowOpen ? 'the contracting window is OPEN for this session; apply these rules' : 'the contracting window is CLOSED (confirmed session 3+): return metrics.contracting_envelope = null and classify any engagement-contracting content as normal content'}):
+  - A contracting envelope mirrors the consultant-move envelope architecture: it OPENS when the coach shifts into engagement-agreement-setting and CLOSES on a return to the client's agenda, a floor-returning coaching question, or a pause after which the client resumes reflection unprompted. Utterances inside the envelope are tagged contracting.
+  - GUARDRAIL: the carve-out is CONTENT-SCOPED (the envelope), never session-scoped. Genuine consultant drift inside a first session still counts as consultant moves and consultative telling and flags normally.
+  - Report metrics.contracting_envelope:
+      · present — any contracting envelope observed.
+      · substantial — SOME meaningful engagement contracting occurred (coaching scope, confidentiality, OR agreement-setting). Completeness across 3.01–3.05 is NOT required for substantial — that separates band 3 from 4/5 on C3's engagement face. A first session covering scope and confidentiality but omitting fees is still substantial.
+      · client_waiver_detected — true when the transcript shows the client already understood the coaching relationship or explicitly waived contracting (an experienced coaching client, or a continuing relationship mislabeled as session 1). Observed evidence overrides the session-number boolean, exactly as observed verbal consent satisfies the C1 Tier-2 gate.
+      · classification_uncertain — true when the contracting vs process/logistics split was unclear anywhere (fail-loud; the engine flags for manual confirmation).
+      · quality — "partnered" (checks understanding, invites the client's questions, co-creates) or "one_directional" (focused, accurate, largely presented).
+      · envelopes — one entry per envelope: { opened_at, closed_at, covers (e.g. ["coaching_scope","confidentiality","journey","fees","compatibility"]), subcompetency_refs (3.01–3.05, plus 1.06 where coaching-vs-consulting scope is drawn), quality }.
+  - TALK-TIME DUAL FIGURE: report BOTH coach_talk_time_pct_raw (ALL coach words) and coach_talk_time_pct_coaching_body (contracting-enveloped words excluded). The 40% flag evaluates coaching-body only; the raw figure is always displayed, never suppressed. With no contracting present the two figures are equal.
+  - Do NOT apply the session-1 absence cap to C3 yourself — report the booleans above and the engine computes the cap deterministically.
 
 theLEADERSHIPWELL STANDARDS (apply these on top of ICF):
-  - Coach talk-time should be <= 40% of words. Above 40% is a red flag.
+  - Coach talk-time should be <= 40% of words. Above 40% is a red flag. v0.5.3: when contracting envelopes are present, the 40% threshold evaluates the COACHING-BODY figure (contracting excluded); report both figures per the CONTRACTING ENVELOPE section.
   - Flagged emotion (>= 2 per session): coach moves that tune into client emotion. See EMOTION MOVE CLASSIFICATION.
   - Feeling exploration (>= 1 per session): staying WITH a feeling and asking into its origin, meaning, function, or cost. ZERO explorations triggers Gate 3 on C6's EMOTIONAL DIMENSION (see GATE RULES and C6 DIMENSIONAL SCORING).
   - Q:S: questions:consultative-telling — parity (1:1) or statements-lead is red.
@@ -219,6 +290,7 @@ theLEADERSHIPWELL STANDARDS (apply these on top of ICF):
       · EVERYTHING between open and close is ONE move — regardless of how many sentences, distinct recommendations, or topic shifts occur inside the envelope. Increment the count ONCE per envelope. Do NOT count each discrete advice-act separately (that is the bug this rule fixes).
       · Score each ENVELOPE on the four criteria at envelope scope: Signaled (was the OPENING role-shift named?), Permissioned (did the client agree before the envelope proceeded?), Brief (is the WHOLE envelope terse, or does it crowd out client discovery? — long envelopes fail brief even when they pass the other three), Floor returned (did a close-signal a/b/c actually occur?). Record each move's approximate transcript span (e.g. "50:40-53:21").
       · Envelope count > 3 is a coach-facing advisory flag ("pattern to watch") — it does NOT cap C2 (v0.5 A4). Execution quality is judged per envelope regardless of the count.
+      · v0.5.3: a CONTRACTING envelope is NOT a consultant move — exclude contracting from the consultant-move count entirely (it has its own envelope object).
   - Attunement Standard (Competencies 5, 6, 8): focus earns a 3; reaching a 4 REQUIRES attunement — visible responsiveness to what is emerging beneath the content.
   - SINGLE-INSTANCE STANDARD: for C4, C5, C6, C7, ONE clear qualifying band-4 move is sufficient to reach band 4.
 
@@ -243,6 +315,13 @@ C8 OFFER vs. RECOMMENDATION (v0.5 B5 — the "without attachment" test):
   - Recommendation: coach authors the forward action, hands it over, client receives. Coach is invested in adoption. Caps at band 3 (does not meet authorship hinge).
   - Offer of the client's own insight: the client has already touched the action/insight; the coach crystallizes it into concrete form and hands it BACK for the client to accept, reject, or reshape. Coach is NOT attached. Authorship stays with the client. Meets the band-4 hinge (8.02, 8.03).
 
+C3 TWO FACES (v0.5.3):
+  - SESSION-AGENDA face (3.06–3.08) — governs C3 in ALL sessions, unchanged: clean receipt of a clear client agenda = band 4; band 5 requires the coach to reflect the agenda back and partner on completeness.
+  - ENGAGEMENT face (3.01–3.05) — assessed ONLY when in scope (sessions 1–2${sn.sessionNumber == null ? ', or session number unknown and the transcript reads as an onboarding session' : ''}). Band ladder: 3 Proficient = clearly explains what coaching is / is not, roles, confidentiality, and the engagement journey — focused, accurate, largely one-directional. 4 Strong = PARTNERED — checks understanding, invites the client's questions, co-creates the agreement rather than presenting it (attunement standard: focused explanation is a 3; attuned, partnered contracting is a 4). 5 Masterful = client CO-AUTHORS — articulates back what they want, partners on measures of success and on compatibility; the coach's framing is nearly invisible (enablement/invisibility standard).
+  - When BOTH faces are in scope, they jointly inform the single C3 read; the WEAKER in-scope required face governs the ceiling. No arithmetic sub-weighting — a judgment read against the band definitions.
+  - Return "faces" on competency 3 listing which face(s) you assessed, e.g. ["session_agenda","engagement"] (["session_agenda"] when the engagement face is out of scope).
+  - Do NOT apply the session-1 absence cap yourself — the engine computes it from contracting_envelope.
+
 AI / RECORDING DISCLOSURE — TWO-TIER STANDARD (spec §9 C1; drives Gate 1. v0.5.2 platform-boolean precedence):
   - ALWAYS scan the first ~5 minutes for explicit client consent to RECORD ("are you okay if I record our session?" → client affirms). ANY affirmative response = observed verbal consent. Set verbal_consent_to_record true if present, otherwise false — do this regardless of the platform booleans, because observed in-session consent PASSES the disclosure gate even when recording_authorized is unset or false (v0.5.2: observed evidence outranks an unset/false flag for the purpose of passing the gate).
   - The two-tier gate FAILS only when BOTH: (i) no signed agreement on file AND (ii) no verbal consent observed in-session. If either holds, the gate passes. The engine computes the Gate 1 decision — do not apply it yourself.
@@ -261,9 +340,9 @@ SET session.standing_engagement to true when the transcript shows an ongoing eng
 TRANSCRIPT REQUIREMENT
   You need a speaker-separated verbatim transcript to compute metrics. If NOT speaker-separated, set every metric field to null and set metrics.source to "unavailable". Otherwise set metrics.source to "parsed".
 
-Return EXACTLY this JSON shape (v0.5.2):
+Return EXACTLY this JSON shape (v0.5.3):
 {
-  "session": { "coach": "${ctx.coachName}", "client_initials": "${ctx.clientInitials}", "type": "${ctx.sessionType || ''}", "session_number": ${ctx.sessionNumber ?? 'null'}, "engagement_total": ${ctx.engagementTotal ?? 'null'}, "date": "${ctx.sessionDate}", "standing_engagement": false },
+  "session": { "coach": "${ctx.coachName}", "client_initials": "${ctx.clientInitials}", "type": "${ctx.sessionType || ''}", "session_number": ${ctx.sessionNumber ?? 'null'}, "engagement_total": ${ctx.engagementTotal ?? 'null'}, "session_number_confidence": "${sn.confidence}", "is_onboarding": ${sn.isOnboarding}, "date": "${ctx.sessionDate}", "standing_engagement": false },
   "overall_score": 0.0,
   "band": "Proficient",
   "integrity": { "speaker_reassignments": [ { "from": "Speaker 3", "to": "coach", "turns": ["48:45"], "confirmed": false } ] },
@@ -271,7 +350,7 @@ Return EXACTLY this JSON shape (v0.5.2):
   "competencies": [
     { "id": 1, "name": "Demonstrates ethical practice", "domain": "Foundation", "score": 3.0, "band": "Proficient", "evidence": "one line tied to a moment", "subcompetency_refs": ["1.01"], "gates_triggered": [] },
     { "id": 2, "name": "Embodies a coaching mindset", "domain": "Foundation", "score": 3.0, "band": "Proficient", "evidence": "...", "subcompetency_refs": ["2.04"], "gates_triggered": [] },
-    { "id": 3, "name": "Establishes and maintains agreements", "domain": "Co-creating the relationship", "score": 3.0, "band": "Proficient", "evidence": "...", "subcompetency_refs": ["3.06"], "gates_triggered": [] },
+    { "id": 3, "name": "Establishes and maintains agreements", "domain": "Co-creating the relationship", "score": 3.0, "band": "Proficient", "evidence": "...", "subcompetency_refs": ["3.06"], "gates_triggered": [], "faces": ["session_agenda"] },
     { "id": 4, "name": "Cultivates trust and safety", "domain": "Co-creating the relationship", "score": 3.0, "band": "Proficient", "evidence": "...", "subcompetency_refs": ["4.04"], "gates_triggered": [] },
     { "id": 5, "name": "Maintains presence", "domain": "Co-creating the relationship", "score": 3.0, "band": "Proficient", "evidence": "...", "subcompetency_refs": ["5.01"], "gates_triggered": [] },
     { "id": 6, "name": "Listens actively", "domain": "Communicating effectively", "score": 3.5, "band": "Proficient", "evidence": "...", "subcompetency_refs": ["6.02", "6.06"], "gates_triggered": [],
@@ -280,12 +359,13 @@ Return EXACTLY this JSON shape (v0.5.2):
     { "id": 8, "name": "Facilitates client growth", "domain": "Cultivating learning and growth", "score": 3.0, "band": "Proficient", "evidence": "...", "subcompetency_refs": ["8.01"], "gates_triggered": [] }
   ],
   "metrics": {
-    "coach_talk_time_pct": 0,
+    "coach_talk_time_pct_raw": 0,
+    "coach_talk_time_pct_coaching_body": 0,
     "flagged_emotion_count": 0,
     "feeling_explorations": 0,
     "question_to_statement": "1:1",
-    "question_to_statement_note": "telling_statements only; evocative_reflections excluded (L0.2)",
-    "utterance_taxonomy": { "questions": 0, "evocative_reflections": 0, "co_thinking": 0, "consultative_telling": 0, "process_logistics": 0 },
+    "question_to_statement_note": "telling_statements only; evocative_reflections and contracting excluded (L0.2, v0.5.3)",
+    "utterance_taxonomy": { "questions": 0, "evocative_reflections": 0, "co_thinking": 0, "consultative_telling": 0, "process_logistics": 0, "contracting": 0 },
     "reflective_pauses": 0,
     "role_shifts_flagged": 0,
     "consultant_moves": {
@@ -295,6 +375,17 @@ Return EXACTLY this JSON shape (v0.5.2):
         { "description": "...", "span": "50:40-53:21", "signaled": true, "permissioned": true, "brief": true, "floor_returned": true, "score": 4, "status": "green" }
       ]
     },
+    "contracting_envelope": ${sn.contractingWindowOpen ? `{
+      "active": true,
+      "present": false,
+      "substantial": false,
+      "client_waiver_detected": false,
+      "classification_uncertain": false,
+      "quality": null,
+      "envelopes": [
+        { "opened_at": "00:01:40", "closed_at": "00:09:12", "covers": ["coaching_scope", "confidentiality", "journey"], "subcompetency_refs": ["3.01", "3.03"], "quality": "partnered" }
+      ]
+    }` : 'null'},
     "source": "parsed"
   },
   "verbal_consent_to_record": false,
@@ -353,16 +444,72 @@ function moveStatus(score: number): Flag {
 }
 
 /**
+ * v0.5.3: parse the model's contracting_envelope block. The engine — never the
+ * model — decides `active`: true only while the contracting window is open
+ * (session 1–2, or unknown-with-observed-contracting); a confirmed session 3+
+ * returns null (the bucket is inactive and the block is suppressed from the
+ * scorecard entirely, spec §reporting).
+ */
+function parseContractingEnvelope(
+  raw: any,
+  sn: ReturnType<typeof sessionNumberState>
+): ContractingEnvelopeBlock | null {
+  if (!sn.contractingWindowOpen) return null
+  if (!raw || typeof raw !== 'object') {
+    // Window open but the model returned nothing (e.g. pre-v0.5.3 output): for a
+    // known onboarding session report an explicit absent block; for an unknown
+    // session number stay null (nothing observed, nothing to surface).
+    return sn.isOnboarding
+      ? {
+          active: true,
+          present: false,
+          substantial: false,
+          client_waiver_detected: false,
+          quality: null,
+          envelopes: [],
+        }
+      : null
+  }
+  const envelopes: ContractingEnvelope[] = (Array.isArray(raw.envelopes) ? raw.envelopes : []).map(
+    (e: any) => ({
+      opened_at: e?.opened_at ? String(e.opened_at) : undefined,
+      closed_at: e?.closed_at ? String(e.closed_at) : undefined,
+      covers: Array.isArray(e?.covers) ? e.covers.map(String) : [],
+      subcompetency_refs: Array.isArray(e?.subcompetency_refs)
+        ? e.subcompetency_refs.map(String)
+        : [],
+      quality: e?.quality === 'partnered' ? 'partnered' : 'one_directional',
+    })
+  )
+  const present = !!raw.present || envelopes.length > 0
+  // Unknown session number with no contracting observed: the window is only
+  // nominally open — don't surface an empty QA block on what is most likely a
+  // mid-engagement session.
+  if (!sn.isOnboarding && !present) return null
+  return {
+    active: true,
+    present,
+    substantial: !!raw.substantial && present,
+    client_waiver_detected: !!raw.client_waiver_detected,
+    ...(raw.classification_uncertain ? { classification_uncertain: true } : {}),
+    quality:
+      raw.quality === 'partnered' || raw.quality === 'one_directional' ? raw.quality : null,
+    envelopes,
+  }
+}
+
+/**
  * Recompute the mechanical parts of the metrics block so the spec's rules are
  * guaranteed, not merely requested. Leaves judgment-only fields (q:s flag,
  * counts without thresholds) as the model returned them.
  */
-function enforceMetrics(raw: any): Metrics {
+function enforceMetrics(raw: any, sn: ReturnType<typeof sessionNumberState>): Metrics {
   const source = raw?.source === 'unavailable' || raw?.source === 'estimated' ? raw.source : 'parsed'
 
   if (source === 'unavailable') {
     return {
       coach_talk_time_pct: null,
+      coach_talk_time_pct_raw: null,
       coach_talk_time_flag: null,
       flagged_emotion_count: null,
       flagged_emotion_flag: null,
@@ -373,13 +520,29 @@ function enforceMetrics(raw: any): Metrics {
       reflective_pauses: null,
       role_shifts_flagged: null,
       consultant_moves: null,
+      contracting_envelope: null,
       utterance_taxonomy: null,
       attribution: undefined,
       source: 'unavailable',
     }
   }
 
-  const talk = raw?.coach_talk_time_pct == null ? null : Number(raw.coach_talk_time_pct)
+  const contracting = parseContractingEnvelope(raw?.contracting_envelope, sn)
+
+  // v0.5.3 dual talk-time. Raw = all coach words (legacy coach_talk_time_pct is
+  // the raw figure on pre-v0.5.3 model output). Coaching-body = contracting
+  // envelope excluded — the figure the 40% flag evaluates. With no active
+  // contracting the two collapse to one.
+  const talkRaw =
+    raw?.coach_talk_time_pct_raw != null
+      ? Number(raw.coach_talk_time_pct_raw)
+      : raw?.coach_talk_time_pct == null
+      ? null
+      : Number(raw.coach_talk_time_pct)
+  const talkBody =
+    contracting?.present && raw?.coach_talk_time_pct_coaching_body != null
+      ? Number(raw.coach_talk_time_pct_coaching_body)
+      : talkRaw
   const emotion = raw?.flagged_emotion_count == null ? null : Number(raw.flagged_emotion_count)
   const explorations = raw?.feeling_explorations == null ? null : Number(raw.feeling_explorations)
 
@@ -411,7 +574,7 @@ function enforceMetrics(raw: any): Metrics {
   // v0.5 A4: amber (not red) for >3 — this is a coach development signal, not a cap.
   const countFlag: Flag = count > 3 ? 'amber' : 'green'
 
-  // v0.5 A2: four-bucket utterance taxonomy
+  // v0.5 A2: utterance taxonomy (+ v0.5.3 contracting bucket)
   const rawTaxonomy = raw?.utterance_taxonomy
   const utteranceTaxonomy: UtteranceTaxonomy | null = rawTaxonomy
     ? {
@@ -423,6 +586,7 @@ function enforceMetrics(raw: any): Metrics {
           rawTaxonomy.consultative_telling == null ? null : Number(rawTaxonomy.consultative_telling),
         process_logistics:
           rawTaxonomy.process_logistics == null ? null : Number(rawTaxonomy.process_logistics),
+        contracting: rawTaxonomy.contracting == null ? null : Number(rawTaxonomy.contracting),
       }
     : null
 
@@ -438,8 +602,11 @@ function enforceMetrics(raw: any): Metrics {
     : undefined
 
   return {
-    coach_talk_time_pct: talk,
-    coach_talk_time_flag: talkTimeFlag(talk),
+    // v0.5.3 §7: coach_talk_time_pct is the coaching-body figure (contracting
+    // excluded) — the 40% flag evaluates it; the raw figure rides alongside.
+    coach_talk_time_pct: talkBody,
+    coach_talk_time_pct_raw: talkRaw,
+    coach_talk_time_flag: talkTimeFlag(talkBody),
     flagged_emotion_count: emotion,
     flagged_emotion_flag: emotionFlag(emotion),
     feeling_explorations: explorations,
@@ -449,7 +616,7 @@ function enforceMetrics(raw: any): Metrics {
     question_to_statement_note:
       typeof raw?.question_to_statement_note === 'string' && raw.question_to_statement_note.trim()
         ? raw.question_to_statement_note.trim()
-        : 'telling_statements only; evocative_reflections excluded (L0.2)',
+        : 'telling_statements only; evocative_reflections and contracting excluded (L0.2, v0.5.3)',
     reflective_pauses: raw?.reflective_pauses == null ? null : Number(raw.reflective_pauses),
     role_shifts_flagged: raw?.role_shifts_flagged == null ? null : Number(raw.role_shifts_flagged),
     consultant_moves: {
@@ -461,6 +628,7 @@ function enforceMetrics(raw: any): Metrics {
       note: count > 3 ? 'pattern to watch — count no longer scores C2 down' : '',
       moves,
     },
+    contracting_envelope: contracting,
     utterance_taxonomy: utteranceTaxonomy,
     attribution,
     source,
@@ -534,6 +702,13 @@ function verifyEvidenceVerbatim(
 // by itself, reach band 4). 3.4 keeps C1 in the Proficient band, below Strong.
 const C1_INFRASTRUCTURE_CEILING = 3.4
 
+// v0.5.3 — the top score C3 may reach when a CONFIRMED session 1 shows
+// substantial absence of engagement contracting (no substantial presence, no
+// client waiver). "Caps C3 at band 3" implemented as a ceiling at 3.4 — the top
+// of the Proficient band, same semantics as the C1 infrastructure ceiling
+// (cannot reach band 4), not a punitive reset to 3.0.
+const C3_S1_CONTRACTING_CEILING = 3.4
+
 /**
  * Enforce the deterministic scoring rules (spec v0.4 §10 gates + §6.4 average):
  *   - Gate 3: zero feeling explorations caps Competency 6 at band 3 (recomputed
@@ -557,8 +732,32 @@ export function enforceRules(
     if (c && typeof c.id === 'number') byId.set(c.id, c)
   }
 
-  const metrics = enforceMetrics(raw?.metrics)
+  const sn = sessionNumberState(ctx)
+  const metrics = enforceMetrics(raw?.metrics, sn)
   const explorations = metrics.feeling_explorations
+
+  // v0.5.3 — the session-1 contracting absence cap. The absence bites ONLY in
+  // session 1 and ONLY on C3: no substantial contracting presence AND no
+  // observed client waiver. Fail-loud: an uncertain session number SUPPRESSES
+  // the cap (an attribution guess never moves a score) and instead surfaces a
+  // manual-review flag when the cap would otherwise have fired.
+  const contracting = metrics.contracting_envelope ?? null
+  const contractingAbsent = !contracting?.present || !contracting?.substantial
+  const contractingWaived = !!contracting?.client_waiver_detected
+  const c3S1Cap =
+    sn.sessionNumber === 1 &&
+    sn.confidence === 'confirmed' &&
+    contracting?.active === true &&
+    contractingAbsent &&
+    !contractingWaived
+  // The cap would have fired but the session number is only a derivation —
+  // possibly session 1 (derived 1, or unknown with onboarding content observed).
+  const c3S1CapSuppressed =
+    !c3S1Cap &&
+    sn.confidence === 'uncertain' &&
+    (sn.sessionNumber === 1 || (sn.sessionNumber == null && contracting?.active === true)) &&
+    contractingAbsent &&
+    !contractingWaived
 
   // Resolve the three gates. Gate 3 is arithmetic (authoritative); Gate 2 is a
   // model judgment that only fires when there's no standing engagement.
@@ -602,6 +801,15 @@ export function enforceRules(
     // Gate 1 → C1 ≤ 2; Gate 2 → C3 ≤ 2.
     if (def.id === 1 && gate1 && score > 2) { score = 2; gates.push('gate_1') }
     if (def.id === 3 && gate2 && score > 2) { score = 2; gates.push('gate_2') }
+
+    // v0.5.3 session-1 contracting absence cap: a CONFIRMED first session with
+    // substantial absence of engagement contracting (and no observed client
+    // waiver) caps C3 at band 3 — a ceiling below band 4, like c1_ceiling.
+    // Skip when Gate 2 already capped harder at band 2.
+    if (def.id === 3 && c3S1Cap && !gates.includes('gate_2') && score > C3_S1_CONTRACTING_CEILING) {
+      score = C3_S1_CONTRACTING_CEILING
+      gates.push('c3_contracting_cap')
+    }
 
     // v0.5.2 C1 infrastructure ceiling: when the on-file consent infrastructure
     // is not confirmed (verbal consent may pass the gate, but the signed agreement
@@ -648,6 +856,19 @@ export function enforceRules(
       }
     }
 
+    // v0.5.3, C3 only: which face(s) informed the read (validated against the
+    // two allowed values) so Phase 2 never benchmarks a first-session C3
+    // against a mid-engagement C3. Defaults to session_agenda when the model
+    // omitted it — that face governs in all sessions.
+    let faces: ('session_agenda' | 'engagement')[] | undefined
+    if (def.id === 3) {
+      const rawFaces = (Array.isArray(c.faces) ? c.faces : []).filter(
+        (f: any): f is 'session_agenda' | 'engagement' =>
+          f === 'session_agenda' || f === 'engagement'
+      )
+      faces = rawFaces.length > 0 ? rawFaces : ['session_agenda']
+    }
+
     return {
       id: def.id,
       name: def.name,
@@ -660,6 +881,7 @@ export function enforceRules(
         : [],
       gates_triggered: gates,
       dimensions,
+      faces,
     }
   })
 
@@ -696,6 +918,12 @@ export function enforceRules(
   if (metrics.attribution?.confidence === 'low') manualReviewFlags.push('low_attribution_confidence')
   if (metrics.attribution?.likely_swap_flag) manualReviewFlags.push('likely_speaker_swap')
   if (recordingConsentNeedsConfirmation) manualReviewFlags.push('recording_consent_needs_confirmation')
+  // v0.5.3 fail-loud: the session-1 contracting cap would have fired but the
+  // session number is only a derivation — a human confirms the position in the
+  // engagement instead of a guess moving the score.
+  if (c3S1CapSuppressed) manualReviewFlags.push('session_number_uncertain')
+  // v0.5.3 fail-loud: the contracting vs process/logistics split was unclear.
+  if (contracting?.classification_uncertain) manualReviewFlags.push('contracting_classification_unclear')
   if (verbatim.misses.length > 0) {
     console.warn(
       `v0.5.2 L0.3: ${verbatim.misses.length} quoted evidence string(s) not found verbatim in the transcript — flagged for manual review.`
@@ -714,6 +942,8 @@ export function enforceRules(
       type: ctx.sessionType || '',
       session_number: ctx.sessionNumber ?? null,
       engagement_total: ctx.engagementTotal ?? null,
+      session_number_confidence: sn.confidence,
+      is_onboarding: sn.isOnboarding,
       date: ctx.sessionDate,
       standing_engagement: standingEngagement,
       agreement_on_file: agreementOnFile,
