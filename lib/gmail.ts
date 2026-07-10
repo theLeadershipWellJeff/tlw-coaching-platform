@@ -12,16 +12,49 @@ import { google } from 'googleapis'
 import type { Coach } from './supabase/types'
 import { headerSafe, encodeHeaderValue } from './email-mime'
 
-function makeRawHtmlEmail(opts: { from: string; to: string; cc?: string; subject: string; html: string }): string {
+export type EmailAttachment = {
+  filename: string
+  contentType: string // e.g. 'application/pdf'
+  content: Buffer
+}
+
+function makeRawHtmlEmail(opts: {
+  from: string
+  to: string
+  cc?: string
+  subject: string
+  html: string
+  attachments?: EmailAttachment[]
+}): string {
   const lines = [`From: ${process.env.DEFAULT_COACH_NAME || 'Jeff Holmes'} <${opts.from}>`, `To: ${headerSafe(opts.to)}`]
   if (opts.cc) lines.push(`Cc: ${headerSafe(opts.cc)}`)
-  lines.push(
-    `Subject: ${encodeHeaderValue(opts.subject)}`,
-    'MIME-Version: 1.0',
-    'Content-Type: text/html; charset=UTF-8',
-    '',
-    opts.html
-  )
+  lines.push(`Subject: ${encodeHeaderValue(opts.subject)}`, 'MIME-Version: 1.0')
+
+  const attachments = opts.attachments || []
+  if (attachments.length === 0) {
+    lines.push('Content-Type: text/html; charset=UTF-8', '', opts.html)
+    return Buffer.from(lines.join('\r\n')).toString('base64url')
+  }
+
+  // multipart/mixed: the HTML body part followed by each attachment, base64,
+  // wrapped at 76 chars per RFC 2045.
+  const boundary = 'tlw_' + Math.random().toString(36).slice(2) + Date.now().toString(36)
+  lines.push(`Content-Type: multipart/mixed; boundary="${boundary}"`, '')
+  lines.push(`--${boundary}`, 'Content-Type: text/html; charset=UTF-8', '', opts.html)
+  for (const att of attachments) {
+    // Header-safe filename: strip quotes/CR/LF so a hostile name can't break MIME.
+    const safeName = att.filename.replace(/["\r\n]/g, '').slice(0, 180) || 'attachment'
+    const b64 = att.content.toString('base64').replace(/(.{76})/g, '$1\r\n')
+    lines.push(
+      `--${boundary}`,
+      `Content-Type: ${att.contentType}; name="${safeName}"`,
+      'Content-Transfer-Encoding: base64',
+      `Content-Disposition: attachment; filename="${safeName}"`,
+      '',
+      b64
+    )
+  }
+  lines.push(`--${boundary}--`)
   return Buffer.from(lines.join('\r\n')).toString('base64url')
 }
 
@@ -33,7 +66,7 @@ function makeRawHtmlEmail(opts: { from: string; to: string; cc?: string; subject
  */
 export async function sendCoachHtmlEmail(
   coach: Coach,
-  opts: { to: string; cc?: string; subject: string; html: string }
+  opts: { to: string; cc?: string; subject: string; html: string; attachments?: EmailAttachment[] }
 ): Promise<boolean> {
   if (!coach.google_refresh_token) {
     throw new Error('Coach has no Google refresh token — sign out and back in to grant email access.')
@@ -49,6 +82,7 @@ export async function sendCoachHtmlEmail(
       cc: opts.cc,
       subject: opts.subject,
       html: opts.html,
+      attachments: opts.attachments,
     })
     await gmail.users.messages.send({ userId: 'me', requestBody: { raw } })
     return true

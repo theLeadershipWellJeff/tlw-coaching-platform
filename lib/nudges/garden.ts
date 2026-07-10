@@ -32,6 +32,8 @@ export type FrameworkDraftContext = {
   summary: string | null
   // Live note body pulled from the vault at draft time (null if unreadable).
   content: string | null
+  // The leaf's standing PDF attachment (migration 035) — new nudges default to it.
+  pdfResourceId: string | null
   // 1-hop related leaves, themselves surfaceable — for the bridge + linked resource.
   related: { id: string; title: string; summary: string | null }[]
 }
@@ -93,7 +95,7 @@ export async function loadFrameworkContext(
 ): Promise<FrameworkDraftContext | null> {
   const { data: leaf } = await supabase
     .from('garden_notes')
-    .select('id, title, summary, vault_path, nudge_eligible')
+    .select('id, title, summary, vault_path, nudge_eligible, pdf_resource_id')
     .eq('coach_id', coachId)
     .eq('id', leafId)
     .maybeSingle()
@@ -128,5 +130,12 @@ export async function loadFrameworkContext(
     related = (neighbours || []).map((n) => ({ id: n.id, title: n.title, summary: n.summary }))
   }
 
-  return { id: leaf.id, title: leaf.title, summary: leaf.summary, content, related }
+  return {
+    id: leaf.id,
+    title: leaf.title,
+    summary: leaf.summary,
+    content,
+    pdfResourceId: leaf.pdf_resource_id ?? null,
+    related,
+  }
 }

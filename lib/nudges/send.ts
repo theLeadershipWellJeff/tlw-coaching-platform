@@ -12,7 +12,8 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Coach, Database, Nudge } from '@/lib/supabase/types'
-import { sendCoachHtmlEmail } from '@/lib/gmail'
+import { sendCoachHtmlEmail, type EmailAttachment } from '@/lib/gmail'
+import { PDF_BUCKET } from '@/lib/library-storage'
 import { getActiveSignatureHtml } from '@/lib/signature'
 import { logCommunication, htmlToPreview } from '@/lib/communications'
 import { nudgeBodyToHtml } from './email'
@@ -55,12 +56,37 @@ export async function sendNudge(
     }
   }
 
+  // Framework PDF attachment (migration 035). Fail-loud: if the coach attached
+  // a PDF, the nudge never quietly sends without it — a broken attachment
+  // refuses the send with a reason (the coach can detach it and retry).
+  const attachments: EmailAttachment[] = []
+  if (nudge.pdf_resource_id) {
+    const { data: pdf } = await supabase
+      .from('pdf_resources')
+      .select('name, storage_path')
+      .eq('id', nudge.pdf_resource_id)
+      .eq('coach_id', coach.id)
+      .maybeSingle()
+    if (!pdf) {
+      return { ok: false, reason: 'The attached PDF is no longer in your Library. Remove the attachment and try again.' }
+    }
+    const { data: blob, error: dlErr } = await supabase.storage.from(PDF_BUCKET).download(pdf.storage_path)
+    if (dlErr || !blob) {
+      return { ok: false, reason: 'Could not read the attached PDF from storage. Remove the attachment and try again.' }
+    }
+    attachments.push({
+      filename: pdf.name.toLowerCase().endsWith('.pdf') ? pdf.name : `${pdf.name}.pdf`,
+      contentType: 'application/pdf',
+      content: Buffer.from(await blob.arrayBuffer()),
+    })
+  }
+
   const subject = nudge.draft_subject?.trim() || 'A quick note'
   const bodyHtml = nudgeBodyToHtml(nudge.draft_body)
   const signature = await getActiveSignatureHtml(supabase, coach.id)
   const html = bodyHtml + signature
 
-  const ok = await sendCoachHtmlEmail(coach, { to: client.email, subject, html }).catch(() => false)
+  const ok = await sendCoachHtmlEmail(coach, { to: client.email, subject, html, attachments }).catch(() => false)
 
   // Log every attempt — success or failure — so a send is never silently dropped.
   const comm = await logCommunication(supabase, {

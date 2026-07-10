@@ -285,6 +285,9 @@ export type Nudge = {
   draft_subject: string | null
   draft_body: string | null
   coach_note: string | null
+  // Library PDF attached to the email when this nudge sends (migration 035;
+  // framework nudges in the UI). Defaults from the leaf's garden_notes link.
+  pdf_resource_id: string | null
   status: string // draft | approved | scheduled | sent | skipped | snoozed
   scheduled_for: Timestamp | null
   sent_at: Timestamp | null
@@ -307,6 +310,10 @@ export type GardenNote = {
   aliases: string[]
   vault_path: string
   blob_sha: string | null
+  // The leaf's standing framework PDF (migration 035) — new framework nudges for
+  // this leaf default to it. Set by attaching a PDF on a nudge (write-through);
+  // survives vault syncs (the sync upsert doesn't touch this column).
+  pdf_resource_id: string | null
   last_synced_at: Timestamp
   created_at: Timestamp
   updated_at: Timestamp

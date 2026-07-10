@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 export interface NudgeRow {
   id: string
@@ -13,9 +13,14 @@ export interface NudgeRow {
   draft_subject: string | null
   draft_body: string | null
   coach_note?: string | null
+  pdf_resource_id?: string | null
+  pdf_name?: string | null
   scheduled_for: string | null
   sent_at?: string | null
   created_at: string
+  // Session rhythm context (from the enriched nudge APIs).
+  last_appointment_at?: string | null
+  next_appointment_at?: string | null
 }
 
 const TYPE_LABEL: Record<string, string> = {
@@ -45,10 +50,40 @@ function whenLabel(iso: string | null): string {
   })
 }
 
+function apptLabel(iso: string | null | undefined, withTime = false): string | null {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return null
+  return d.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    ...(withTime ? { hour: 'numeric', minute: '2-digit' } : {}),
+  })
+}
+
+// ---- Library PDFs for the attachment picker -------------------------------
+// One fetch per page lifetime, shared by every NudgeItem on the screen.
+type PdfOption = { id: string; name: string }
+let pdfListPromise: Promise<PdfOption[]> | null = null
+function loadPdfOptions(): Promise<PdfOption[]> {
+  if (!pdfListPromise) {
+    pdfListPromise = fetch('/api/library/pdfs')
+      .then((r) => (r.ok ? r.json() : { pdfs: [] }))
+      .then((d) => (d.pdfs || []).map((p: any) => ({ id: p.id, name: p.name })))
+      .catch(() => {
+        pdfListPromise = null
+        return []
+      })
+  }
+  return pdfListPromise
+}
+
 /**
- * One reviewable nudge: the AI draft (editable), why it was proposed, and the
- * review actions. Every path PATCHes /api/nudges/[id]; the parent refetches via
- * onChanged. Nothing sends without the coach pressing Send or Schedule.
+ * One reviewable nudge: the AI draft (editable), why it was proposed, the client's
+ * session rhythm (last/next appointment), and the review actions. Framework nudges
+ * can carry a Library PDF of the framework, attached to the email on send. Every
+ * path PATCHes /api/nudges/[id]; the parent refetches via onChanged. Nothing sends
+ * without the coach pressing Send or Schedule.
  */
 export function NudgeItem({
   nudge,
@@ -62,14 +97,30 @@ export function NudgeItem({
   const [subject, setSubject] = useState(nudge.draft_subject || '')
   const [bodyText, setBodyText] = useState(nudge.draft_body || '')
   const [coachNote, setCoachNote] = useState(nudge.coach_note || '')
+  const [pdfId, setPdfId] = useState<string>(nudge.pdf_resource_id || '')
+  const [pdfOptions, setPdfOptions] = useState<PdfOption[] | null>(null)
   const [when, setWhen] = useState(toLocalInput(nudge.scheduled_for))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
+  const isFramework = nudge.type === 'framework'
+  const editable = nudge.status !== 'sent'
+
+  useEffect(() => {
+    if (!isFramework || !editable) return
+    let cancelled = false
+    loadPdfOptions().then((opts) => !cancelled && setPdfOptions(opts))
+    return () => {
+      cancelled = true
+    }
+  }, [isFramework, editable])
+
+  const pdfDirty = pdfId !== (nudge.pdf_resource_id || '')
   const dirty =
     subject !== (nudge.draft_subject || '') ||
     bodyText !== (nudge.draft_body || '') ||
     coachNote !== (nudge.coach_note || '') ||
+    pdfDirty ||
     when !== toLocalInput(nudge.scheduled_for)
 
   async function patch(payload: Record<string, unknown>) {
@@ -92,10 +143,25 @@ export function NudgeItem({
   }
 
   // Bundle any unsaved edits into the action call so it acts on the latest text.
+  // The attachment is only included when it actually changed — setting it writes
+  // through to the framework leaf as the standing default, so an unrelated save
+  // must not touch it.
   function edits(): Record<string, unknown> {
     const whenIso = when ? new Date(when).toISOString() : null
-    return { draft_subject: subject, draft_body: bodyText, coach_note: coachNote || null, scheduled_for: whenIso }
+    const base: Record<string, unknown> = {
+      draft_subject: subject,
+      draft_body: bodyText,
+      coach_note: coachNote || null,
+      scheduled_for: whenIso,
+    }
+    if (pdfDirty) base.pdf_resource_id = pdfId || null
+    return base
   }
+
+  const lastLabel = apptLabel(nudge.last_appointment_at)
+  const nextLabel = apptLabel(nudge.next_appointment_at, true)
+  const attachedName =
+    nudge.pdf_name || (pdfOptions || []).find((p) => p.id === (nudge.pdf_resource_id || ''))?.name || null
 
   return (
     <div className="rounded-tlw-lg border border-tlw-warm-gray/20 bg-tlw-canvas/40 p-4">
@@ -123,6 +189,19 @@ export function NudgeItem({
         )}
       </div>
 
+      {/* Session rhythm — where this nudge lands between appointments. Only
+          rendered when the API supplied the context fields. */}
+      {(nudge.last_appointment_at !== undefined || nudge.next_appointment_at !== undefined) && (
+        <p className="mb-2 text-[12px] text-tlw-warm-gray">
+          <span>Last session: {lastLabel || 'none on record'}</span>
+          <span className="mx-1.5 text-tlw-warm-gray/50">·</span>
+          <span>
+            Next session:{' '}
+            {nextLabel || <span className="text-tlw-signal-orange">none booked</span>}
+          </span>
+        </p>
+      )}
+
       {nudge.rationale && (
         <p className="mb-2 text-[12px] italic text-tlw-warm-gray">Why: {nudge.rationale}</p>
       )}
@@ -136,6 +215,9 @@ export function NudgeItem({
         <div className="space-y-1">
           {subject && <p className="text-[13px] font-medium text-tlw-espresso">{subject}</p>}
           <p className="whitespace-pre-wrap text-[13px] text-tlw-espresso">{bodyText}</p>
+          {attachedName && (
+            <p className="text-[12px] text-tlw-warm-gray">📎 {attachedName}</p>
+          )}
           {nudge.coach_note && (
             <div className="mt-2 rounded-tlw-md border border-tlw-warm-gray/20 bg-tlw-canvas/60 px-3 py-2">
               <p className="mb-1 text-[10px] font-medium uppercase tracking-[1.5px] text-tlw-warm-gray">
@@ -160,6 +242,41 @@ export function NudgeItem({
             placeholder="Message"
             className="mb-2 w-full resize-y rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-surface px-3 py-2 text-[13px] leading-relaxed text-tlw-espresso focus:border-tlw-navy-rich focus:outline-none"
           />
+
+          {/* Framework PDF attachment (migration 035) — sent with the email. */}
+          {isFramework && (
+            <div className="mb-2">
+              <label className="mb-1 block text-[11px] font-medium uppercase tracking-[1.5px] text-tlw-warm-gray">
+                Framework PDF (attached to the email)
+              </label>
+              {pdfOptions === null ? (
+                <div className="h-8 w-64 animate-pulse rounded-tlw-md bg-tlw-canvas" />
+              ) : pdfOptions.length === 0 ? (
+                <p className="text-[12px] text-tlw-warm-gray">
+                  No PDFs in your Library yet — upload one under Library → PDF Resources to attach it here.
+                </p>
+              ) : (
+                <select
+                  value={pdfId}
+                  onChange={(e) => setPdfId(e.target.value)}
+                  className="w-full max-w-md rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-surface px-2 py-1.5 text-[12px] text-tlw-espresso focus:border-tlw-navy-rich focus:outline-none"
+                >
+                  <option value="">No attachment</option>
+                  {pdfOptions.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {pdfDirty && (
+                <p className="mt-1 text-[11px] text-tlw-warm-gray">
+                  Saved as this framework&apos;s standing PDF — future nudges for it attach automatically.
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="mb-2">
             <label className="mb-1 block text-[11px] font-medium uppercase tracking-[1.5px] text-tlw-warm-gray">
               Private note (not sent)

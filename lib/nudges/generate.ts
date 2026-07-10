@@ -127,6 +127,8 @@ export async function generateNudgesForClient(
         rationale: candidate.rationale || null,
         framework_slug: candidate.framework_slug || null,
         linked_resource_slug: linkedResourceSlug,
+        // A framework nudge inherits the leaf's standing PDF attachment (035).
+        pdf_resource_id: frameworkContext?.pdfResourceId ?? null,
         draft_subject: draft.subject,
         draft_body: draft.body,
         status: 'draft',

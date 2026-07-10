@@ -15,6 +15,8 @@ const PatchSchema = z.object({
   draft_body: z.string().max(8000).optional(),
   coach_note: z.string().max(2000).nullable().optional(),
   scheduled_for: z.string().datetime().nullable().optional(),
+  // Library PDF attached to the email on send (framework nudges; migration 035).
+  pdf_resource_id: z.string().uuid().nullable().optional(),
   // A queue action to take after applying any edits.
   action: z.enum(['schedule', 'send', 'skip', 'snooze']).optional(),
 })
@@ -43,10 +45,34 @@ export async function PATCH(req: NextRequest, { params }: { params: { nudgeId: s
     if (body.draft_body !== undefined) edits.draft_body = body.draft_body
     if (body.coach_note !== undefined) edits.coach_note = body.coach_note
     if (body.scheduled_for !== undefined) edits.scheduled_for = body.scheduled_for
+    if (body.pdf_resource_id !== undefined) {
+      // The attachment must be one of THIS coach's Library PDFs.
+      if (body.pdf_resource_id) {
+        const { data: pdf } = await supabase
+          .from('pdf_resources')
+          .select('id')
+          .eq('id', body.pdf_resource_id)
+          .eq('coach_id', coach.id)
+          .maybeSingle()
+        if (!pdf) throw new ApiError(400, 'That PDF is not in your Library.')
+      }
+      edits.pdf_resource_id = body.pdf_resource_id
+    }
     if (Object.keys(edits).length) {
       edits.updated_at = new Date().toISOString()
       await supabase.from('nudges').update(edits).eq('id', nudge.id)
       Object.assign(nudge, edits)
+    }
+
+    // Write the attachment through to the framework leaf so future nudges for
+    // that framework default to the same PDF ("attach as they get made").
+    // Clearing it on a nudge clears the standing default too — coach intent.
+    if (body.pdf_resource_id !== undefined && nudge.framework_slug) {
+      await supabase
+        .from('garden_notes')
+        .update({ pdf_resource_id: body.pdf_resource_id, updated_at: new Date().toISOString() })
+        .eq('coach_id', coach.id)
+        .eq('id', nudge.framework_slug)
     }
 
     // Send now: refused if outside the spacing window (sendNudge enforces §3.4).
