@@ -6,7 +6,6 @@ import type { Client } from '@/lib/supabase/types'
 import { NameCard } from './NameCard'
 import { IssueAgreementModal } from './IssueAgreementModal'
 import { EmailModal } from './EmailModal'
-import { ImportTranscriptsModal } from './ImportTranscriptsModal'
 import { WorkspaceProvider } from '@/components/workspace/WorkspaceContext'
 import { WorkspaceSurface } from '@/components/workspace/WorkspaceSurface'
 
@@ -16,7 +15,6 @@ export function ClientDetail({ clientId }: { clientId: string }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [emailing, setEmailing] = useState(false)
-  const [importing, setImporting] = useState(false)
   const [issuing, setIssuing] = useState(false)
   const [txReload, setTxReload] = useState(0)
   const [apptReload, setApptReload] = useState(0)
@@ -107,12 +105,6 @@ export function ClientDetail({ clientId }: { clientId: string }) {
         >
           Compose Email
         </button>
-        <button
-          onClick={() => setImporting(true)}
-          className="rounded-tlw-lg border border-tlw-warm-gray/30 px-4 py-2 text-[13px] font-medium text-tlw-espresso transition-colors hover:border-tlw-warm-gray/50"
-        >
-          Import transcripts from Plaud
-        </button>
         <Link
           href="/business-center/run"
           className="rounded-tlw-lg border border-tlw-warm-gray/30 px-4 py-2 text-[13px] font-medium text-tlw-espresso transition-colors hover:border-tlw-warm-gray/50"
@@ -160,14 +152,6 @@ export function ClientDetail({ clientId }: { clientId: string }) {
         />
       )}
 
-      {importing && (
-        <ImportTranscriptsModal
-          clientId={clientId}
-          clientName={client.name}
-          onClose={() => setImporting(false)}
-          onImported={() => setTxReload((n) => n + 1)}
-        />
-      )}
     </div>
   )
 }

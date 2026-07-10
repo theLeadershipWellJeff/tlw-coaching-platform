@@ -26,11 +26,14 @@ export function IssueAgreementModal({
   const [error, setError] = useState('')
   const [sent, setSent] = useState(false)
 
-  // Step 1 — confirmable details.
+  // Step 1 — confirmable details. Zoom link + coach phone prefill from the
+  // most recently issued agreement (returned alongside the template) so the
+  // coach's standard contact details don't need pasting in every time —
+  // still editable per client.
   const [clientName, setClientName] = useState(client.name || '')
   const [clientEmail, setClientEmail] = useState(client.email || '')
   const [zoomLink, setZoomLink] = useState('')
-  const [phone, setPhone] = useState(client.phone || '')
+  const [phone, setPhone] = useState('')
   // Step 2 — payment terms (default from template once loaded).
   const [paymentTerms, setPaymentTerms] = useState('')
   const [paymentTouched, setPaymentTouched] = useState(false)
@@ -47,6 +50,9 @@ export function IssueAgreementModal({
         if (cancelled) return
         setTemplate(d.template)
         if (!paymentTouched) setPaymentTerms(d.template?.payment_terms || '')
+        // Prefill only what the coach hasn't already typed.
+        if (d.lastIssued?.zoomLink) setZoomLink((v) => v || d.lastIssued.zoomLink)
+        if (d.lastIssued?.phone) setPhone((v) => v || d.lastIssued.phone)
       })
       .catch((e) => !cancelled && setError(e.message))
     return () => {
@@ -133,6 +139,7 @@ export function IssueAgreementModal({
               </Field>
               <Field label="Coach phone">
                 <input value={phone} onChange={(e) => setPhone(e.target.value)} className={inputCls} />
+                <p className="mt-1 text-[12px] text-tlw-warm-gray">Zoom link and phone prefill from your last issued agreement — adjust for this client if needed.</p>
               </Field>
             </div>
           )}

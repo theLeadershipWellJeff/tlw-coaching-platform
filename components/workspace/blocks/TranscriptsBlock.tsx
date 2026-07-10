@@ -28,7 +28,14 @@ function TranscriptsCompact({ clientId }: { clientId: string }) {
 }
 
 export function TranscriptsBlock({ size }: { size: CardSize }) {
-  const { clientId, txReload } = useWorkspaceCtx()
+  const { clientId, client, txReload, bumpTxReload } = useWorkspaceCtx()
   if (size === 'compact') return <TranscriptsCompact clientId={clientId} />
-  return <TranscriptsCard clientId={clientId} reloadKey={txReload} />
+  return (
+    <TranscriptsCard
+      clientId={clientId}
+      clientName={client?.name}
+      reloadKey={txReload}
+      onImported={bumpTxReload}
+    />
+  )
 }

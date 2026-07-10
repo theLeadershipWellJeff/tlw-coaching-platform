@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { MiniListCard, type MiniItem } from './MiniListCard'
+import { ImportTranscriptModal } from './ImportTranscriptModal'
 
 function fmtDate(d: string | null): string {
   if (!d) return ''
@@ -8,9 +9,20 @@ function fmtDate(d: string | null): string {
   return new Date(y, m - 1, day).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-export function TranscriptsCard({ clientId, reloadKey = 0 }: { clientId: string; reloadKey?: number }) {
+export function TranscriptsCard({
+  clientId,
+  clientName,
+  reloadKey = 0,
+  onImported,
+}: {
+  clientId: string
+  clientName?: string
+  reloadKey?: number
+  onImported?: () => void
+}) {
   const [items, setItems] = useState<MiniItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [importing, setImporting] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -35,13 +47,32 @@ export function TranscriptsCard({ clientId, reloadKey = 0 }: { clientId: string;
   }, [clientId, reloadKey])
 
   return (
-    <MiniListCard
-      title="Transcripts"
-      href={`/clients/${clientId}/transcripts`}
-      items={items}
-      loading={loading}
-      emptyText="No transcripts yet."
-    />
+    <>
+      <MiniListCard
+        title="Transcripts"
+        href={`/clients/${clientId}/transcripts`}
+        items={items}
+        loading={loading}
+        emptyText="No transcripts yet."
+        action={
+          <button
+            onClick={() => setImporting(true)}
+            title="Import a transcript file (md, txt, vtt, srt, docx, pdf)"
+            className="rounded-tlw-md border border-tlw-warm-gray/25 px-2.5 py-1 text-[12px] font-medium text-tlw-espresso transition-colors hover:border-tlw-warm-gray/50"
+          >
+            + Import
+          </button>
+        }
+      />
+      {importing && (
+        <ImportTranscriptModal
+          clientId={clientId}
+          clientName={clientName || 'this client'}
+          onClose={() => setImporting(false)}
+          onImported={() => onImported?.()}
+        />
+      )}
+    </>
   )
 }
 

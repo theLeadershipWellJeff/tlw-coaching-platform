@@ -7,28 +7,37 @@ export interface MiniItem {
   sub?: string
 }
 
-/** A small "title + three most recent" card that links to a fuller list page. */
+/**
+ * A small "title + three most recent" card that links to a fuller list page.
+ * The whole card is clickable via a stretched link (not a wrapping <a>), so an
+ * optional `action` button can live in the header without nesting interactive
+ * elements.
+ */
 export function MiniListCard({
   title,
   href,
   items,
   loading,
   emptyText,
+  action,
 }: {
   title: string
   href: string
   items: MiniItem[]
   loading: boolean
   emptyText: string
+  action?: React.ReactNode
 }) {
   return (
-    <Link
-      href={href}
-      className="block rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface p-5 transition-colors duration-tlw-base hover:border-tlw-warm-gray/30"
-    >
-      <div className="mb-3 flex items-center justify-between">
+    <div className="relative rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface p-5 transition-colors duration-tlw-base hover:border-tlw-warm-gray/30">
+      <Link href={href} className="absolute inset-0 rounded-tlw-2xl" aria-label={`View all ${title.toLowerCase()}`} />
+
+      <div className="mb-3 flex items-center justify-between gap-3">
         <p className="text-[11px] font-medium uppercase tracking-[2px] text-tlw-warm-gray">{title}</p>
-        <span className="text-[12px] font-medium text-tlw-signal-orange">view all →</span>
+        <span className="flex items-center gap-3">
+          {action && <span className="relative z-10">{action}</span>}
+          <span className="text-[12px] font-medium text-tlw-signal-orange">view all →</span>
+        </span>
       </div>
 
       {loading ? (
@@ -49,6 +58,6 @@ export function MiniListCard({
           ))}
         </ul>
       )}
-    </Link>
+    </div>
   )
 }
