@@ -7,12 +7,27 @@ import { getOrCreateAgreementTemplate } from '@/lib/agreement-store'
 export const runtime = 'nodejs'
 
 // GET — the coach's master agreement template (get-or-create, seeded on first use).
+// Also returns `lastIssued` — the coach's Zoom link and phone from the most
+// recently issued agreement, so the issue modal can prefill them (the coach's
+// "standard" contact details are whatever they sent last, no migration needed).
 export async function GET() {
   try {
     const supabase = getSupabaseAdmin()
     const coach = await requireCoach(supabase)
     const template = await getOrCreateAgreementTemplate(supabase, coach)
-    return NextResponse.json({ template })
+
+    const { data: recent } = await supabase
+      .from('agreements')
+      .select('zoom_link, phone')
+      .eq('coach_id', coach.id)
+      .order('created_at', { ascending: false })
+      .limit(25)
+    const lastIssued = {
+      zoomLink: recent?.find((a) => a.zoom_link)?.zoom_link || null,
+      phone: recent?.find((a) => a.phone)?.phone || null,
+    }
+
+    return NextResponse.json({ template, lastIssued })
   } catch (e) {
     return toErrorResponse(e)
   }

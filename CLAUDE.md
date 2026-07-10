@@ -274,11 +274,19 @@ with "Retry failed". Gmail's own daily send limits apply (~500/day consumer,
 
 ### Client workspace (`app/(authenticated)/clients/[id]`)
 Name card (gear → edit), Transcripts + Notes summary cards, New note / Send
-email / Import-from-Plaud actions, Coaching goals card (generate from notes via
+email actions, Coaching goals card (generate from notes via
 `/api/clients/[id]/goals/generate`, or edit by hand). Email composes+sends via
-Gmail (`/api/email/send`). Plaud import: `/api/drive/transcripts` lists the
-Drive folder; `/api/clients/[id]/import-transcripts` imports picks (forced to
-that client), then the UI scores each.
+Gmail (`/api/email/send`). **Transcript file import** lives on the Transcripts
+card (a "+ Import" button → `ImportTranscriptModal`): the coach picks local
+file(s) — md/txt/vtt/srt/docx/pdf — which `POST /api/clients/[id]/import-file`
+(multipart, 4 MB/file) extracts to text (`lib/transcripts/extract.ts` — caption
+formats flatten to "Speaker: text" lines; docx via mammoth, pdf via unpdf) and
+feeds through `ingestMarkdown` forced onto that client, unscored; the modal then
+fires the background scoring jobs (`lib/scoring-jobs.ts`) unless the "Score this
+session" box is unchecked. This replaced the old Drive-folder "Import from
+Plaud" picker (`/api/drive/transcripts` + `/api/clients/[id]/import-transcripts`
+and `lib/drive.ts` were removed; the Zapier ingest webhook and its Drive archive
+are unaffected).
 
 ### Session-notes panel (`clients/[id]/NotesPanel.tsx`)
 The right-hand rail carries the live ACTION/INSIGHT capture (`CaptureGroup` —
@@ -372,7 +380,10 @@ an **"Issue coaching agreement" / "Issue a new agreement"** button
 (`EditClientModal#saveAndIssue`) that saves the pending edits first (so the flow
 prefills the just-edited name/email/phone), closes the modal, and opens the same
 `IssueAgreementModal`; the label reads "new" when any agreement exists — a
-platform row in any state, or on-file external).
+platform row in any state, or on-file external). The details step **prefills the
+coach's Zoom link + phone from the most recently issued agreement** (`GET
+/api/agreements/template` returns `lastIssued` — latest non-null `zoom_link`/
+`phone` off the coach's `agreements` rows; no migration, editable per client).
 `POST /api/agreements/issue` captures the per-client merge vars, snapshots the
 fully-rendered document into `agreements.body_html`, mints a 30-day magic-link
 token, and emails the client a **CTA delivery vehicle** (`buildAgreementEmailHTML`,
