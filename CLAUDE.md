@@ -603,17 +603,38 @@ lists surfaceable leaves (`/nudges/context` → `frameworks`), AI-drafts via
 /api/clients/[id]/nudges/generate` (the workspace card's "Draft nudges" button).
 
 **Review + send.** Two surfaces: the cross-client **Nudge Queue** screen
-(`/nudges`, `GET /api/nudges` coach-scoped, grouped Needs review / Scheduled) and
-the per-client workspace **`NudgesCard`** (`GET /api/clients/[id]/nudges`). Both use
+(`/nudges`, `GET /api/nudges` coach-scoped, grouped Needs review / Scheduled +
+a read-only **Sent** panel of the last 50 sent nudges, compact expandable rows)
+and the per-client workspace **`NudgesCard`** (`GET /api/clients/[id]/nudges`).
+Both GETs are **enriched** (`lib/nudges/enrich.ts`) with the client's **session
+rhythm** — `last_appointment_at` (most recent past scheduled/completed
+appointment) and `next_appointment_at` (soonest upcoming `scheduled`) — shown as
+a context line on every `NudgeItem`, plus the attached-PDF name. Both use
 the shared `NudgeItem` (edit subject/body/time; **Send now / Schedule / Snooze /
 Skip**). `PATCH /api/nudges/[nudgeId]` applies edits + the action (coach-scoped to
-the nudge's `coach_id`). `send.ts#sendNudge` is the one send path: enforces the
+the nudge's `coach_id`). The queue also has **"+ Create nudge"**
+(`CreateNudgeButton` — working-clients picker → the same `CreateNudgeModal` the
+workspace card uses). `send.ts#sendNudge` is the one send path: enforces the
 **spacing rule** (§3.4 — refuses if the client got any outbound communication
 within `nudge_settings.nudge_spacing_days`, default 4), appends the signature
 server-side, sends via the coach's Gmail (`sendCoachHtmlEmail`, unattended-capable),
 logs to `communications`, and sets the nudge `sent` + `communication_id` (shows up
 in the Recent Communication card). Settings defaults are in `settings.ts`
 (dependency-free, mirrors `lib/scheduling.ts`); `coaches.nudge_settings` NULL = defaults.
+
+**Framework PDF attachment (migration 035).** A framework nudge can carry a
+Library PDF of the framework, attached to the email at send.
+`nudges.pdf_resource_id` = this nudge's attachment; `garden_notes.pdf_resource_id`
+= the leaf's **standing** PDF, which new framework nudges (pipeline, manual
+create, draft-one) default to. Attaching/clearing a PDF on a nudge (`NudgeItem`
+select, framework type only — options from `GET /api/library/pdfs` with **no
+folderId = all the coach's PDFs**) **writes through** to the leaf, so future
+nudges for that framework auto-attach ("attach as they get made"); the PATCH is
+sent only when the value changed, and the vault-sync upsert never touches the
+column. `sendNudge` is **fail-loud**: a missing/unreadable attachment refuses
+the send with a reason rather than quietly sending without it.
+`lib/gmail.ts#sendCoachHtmlEmail` accepts `attachments` (multipart/mixed MIME,
+base64). Needs `035_nudge_pdf_attachment.sql` applied.
 
 **Dispatch cron.** `GET /api/cron/nudges` (hourly in `vercel.json`, `CRON_SECRET`
 Bearer) sends every coach-approved nudge whose `scheduled_for` has passed (`status
@@ -895,7 +916,10 @@ FK; `billing_run_warnings` table for calendar cross-check and subscription no-se
 033 billing settings (`coaches.billing_settings` jsonb — preview_before_approve, auto_send_on_approve,
 cc_self_on_send; additive, NULL = defaults) · 034 transcript title (`transcripts.title` — human-readable
 title proposed at ingest from the calendar-slot match / Plaud summary / non-timestamp filename, coach-editable
-in the review queue; additive, nullable, NULL = UI falls back to filename/"Untitled"; **applied**).
+in the review queue; additive, nullable, NULL = UI falls back to filename/"Untitled"; **applied**) ·
+035 nudge PDF attachment (`nudges.pdf_resource_id` + `garden_notes.pdf_resource_id`
+— framework nudges attach a Library PDF to the email; additive, nullable; **apply
+before the Nudges pages are used — the nudge routes now select/insert the column**).
 
 **Tenant scoping (015).** `coach_clients` (coach_id, client_id, role) is the
 ownership link. Client access is enforced **server-side** by the session coach,
@@ -923,7 +947,9 @@ jsonb — additive; **apply before the Nudge Queue is used**), and `024_garden.s
 sync is used; if 023 was already applied, 024 cleans it up), and
 `025_external_booking_capture.sql` (extends `appointments` + `coaches` for the
 Calendly/HubSpot calendar-watch capture — additive; **apply before the calendar-sync
-cron / Unmatched bookings panel are used**). ⚠️ **015 must be run BEFORE
+cron / Unmatched bookings panel are used**), and `035_nudge_pdf_attachment.sql`
+(nudge/garden PDF-attachment columns — **apply before deploying the nudge changes;
+the nudge list/create routes now reference the columns**). ⚠️ **015 must be run BEFORE
 the tenant-scoping code is deployed to `main`** — until the table exists and is
 backfilled, the roster would filter to zero clients. Read the backfill comment in
 015 first (it assumes all current coach logins are the same person). **016 must be

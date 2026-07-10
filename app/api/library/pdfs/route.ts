@@ -8,7 +8,9 @@ export const runtime = 'nodejs'
 
 const MAX_BYTES = 4 * 1024 * 1024 // 4 MB (serverless request-body ceiling)
 
-// List PDFs in a folder (?folderId=…), newest first.
+// List PDFs in a folder (?folderId=…), newest first — or, with no folderId, ALL
+// of the coach's Library PDFs by name (used by pickers, e.g. the nudge
+// framework-PDF attachment).
 export async function GET(req: NextRequest) {
   let supabase: ReturnType<typeof getSupabaseAdmin>
   try {
@@ -20,14 +22,15 @@ export async function GET(req: NextRequest) {
   if (!coach) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const folderId = req.nextUrl.searchParams.get('folderId')
-  if (!folderId) return NextResponse.json({ error: 'A folder is required.' }, { status: 400 })
-
-  const { data, error } = await supabase
+  let query = supabase
     .from('pdf_resources')
     .select('id, name, size_bytes, created_at')
     .eq('coach_id', coach.id)
-    .eq('folder_id', folderId)
-    .order('created_at', { ascending: false })
+  query = folderId
+    ? query.eq('folder_id', folderId).order('created_at', { ascending: false })
+    : query.order('name', { ascending: true })
+
+  const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   return NextResponse.json({ pdfs: data || [] })
