@@ -10,7 +10,10 @@ import { EditClientModal } from './[id]/EditClientModal'
 const STATUSES = ['active', 'prospect', 'inactive'] as const
 
 type NextAppointment = { scheduled_at: string; duration_minutes: number }
-type EngagementProgress = { used: number; total: number }
+// From lib/billing/engagement-progress.ts: label = engagement type ("6-Month
+// Engagement" / "Monthly Subscription" / …); a subscription's used/total is
+// sessions this calendar year vs. sessions per year; total null = no bar.
+type EngagementProgress = { label: string; mode: string; used: number; total: number | null }
 
 type RosterView = 'active' | 'inactive' | 'archived'
 
@@ -344,9 +347,10 @@ function ClientCard({
   /** Opens the client-settings (edit) modal from the card's gear. */
   onEdit?: (c: Client) => void
 }) {
-  const pct = progress
-    ? Math.min(100, progress.total > 0 ? Math.round((progress.used / progress.total) * 100) : 0)
-    : 0
+  const pct =
+    progress && progress.total != null && progress.total > 0
+      ? Math.min(100, Math.round((progress.used / progress.total) * 100))
+      : 0
   return (
     <Link
       href={`/clients/${c.id}`}
@@ -391,19 +395,36 @@ function ClientCard({
         </div>
 
         {progress && (
-          <div className="hidden w-44 shrink-0 sm:block">
-            <div className="mb-0.5 flex items-center justify-between">
-              <span className="text-[11px] text-tlw-warm-gray">
-                Sessions: {progress.used} / {progress.total}
+          <div
+            className="hidden w-48 shrink-0 sm:block"
+            title={
+              progress.total != null
+                ? progress.mode === 'subscription'
+                  ? `${progress.used} of ${progress.total} sessions this year (${pct}%)`
+                  : `${progress.used} of ${progress.total} sessions (${pct}%)`
+                : `${progress.used} session${progress.used === 1 ? '' : 's'} ${
+                    progress.mode === 'subscription' ? 'this year' : 'to date'
+                  }`
+            }
+          >
+            <div className="mb-0.5 flex items-center justify-between gap-2">
+              <span className="truncate text-[11px] font-medium text-tlw-espresso">{progress.label}</span>
+              <span className="shrink-0 text-[11px] text-tlw-warm-gray">
+                {progress.total != null
+                  ? `${progress.used} / ${progress.total}${progress.mode === 'subscription' ? ' this yr' : ''}`
+                  : `${progress.used} ${progress.mode === 'subscription' ? 'this yr' : 'to date'}`}
               </span>
-              <span className="text-[11px] text-tlw-warm-gray">{pct}%</span>
             </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-tlw-warm-gray/20">
-              <div
-                className="h-full rounded-full bg-tlw-navy-deep transition-all"
-                style={{ width: `${pct}%` }}
-              />
-            </div>
+            {progress.total != null ? (
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-tlw-warm-gray/20">
+                <div
+                  className="h-full rounded-full bg-tlw-navy-deep transition-all"
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            ) : (
+              <div className="h-1.5 w-full rounded-full bg-tlw-warm-gray/10" />
+            )}
           </div>
         )}
 

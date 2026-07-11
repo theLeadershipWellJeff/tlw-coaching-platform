@@ -56,9 +56,14 @@ export type Engagement = {
   engagement_total: number | null
   installment_count: number | null
   installment_schedule: InstallmentScheduleEntry[] | null
-  // Planned number of sessions in the engagement (migration 029) — drives the
-  // sessions-used progress bars (workspace name card + roster cards).
+  // Planned number of sessions (migration 029) — drives the sessions-used
+  // progress bars (roster cards, workspace name card, Billing block). For a
+  // subscription this means sessions PER YEAR; otherwise sessions in the
+  // engagement. See lib/billing/engagement-progress.ts.
   session_count: number | null
+  // Engagement length in months (migration 036) — the "6-Month" in the
+  // engagement label. NULL = label falls back to the billing mode.
+  length_months: number | null
   // shared
   description_template: string | null
   created_at: Timestamp
