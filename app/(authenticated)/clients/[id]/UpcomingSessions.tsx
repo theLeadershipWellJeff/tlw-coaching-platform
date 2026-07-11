@@ -9,6 +9,65 @@ export interface Appointment {
   status: string
 }
 
+// ---------------------------------------------------------------------------
+// Shared appointments cache. The endpoint can be slow the first time (it may
+// run a Google Calendar sync), and this component mounts twice per workspace
+// (name card + Sessions card) — so:
+// - in-flight requests are deduped (both instances share one fetch);
+// - results are kept in a module cache + sessionStorage, so revisiting the
+//   page paints the last-known list instantly and refreshes in the background
+//   instead of showing a loading skeleton every time.
+// ---------------------------------------------------------------------------
+const apptCache = new Map<string, Appointment[]>()
+const inflight = new Map<string, Promise<Appointment[] | null>>()
+
+function storageKey(clientId: string) {
+  return `tlw-appts-${clientId}`
+}
+
+function readCached(clientId: string): Appointment[] | null {
+  const inMemory = apptCache.get(clientId)
+  if (inMemory) return inMemory
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = sessionStorage.getItem(storageKey(clientId))
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? (parsed as Appointment[]) : null
+  } catch {
+    return null
+  }
+}
+
+function writeCached(clientId: string, appts: Appointment[]) {
+  apptCache.set(clientId, appts)
+  try {
+    sessionStorage.setItem(storageKey(clientId), JSON.stringify(appts))
+  } catch {
+    // storage full/unavailable — the in-memory cache still works
+  }
+}
+
+/** `force` skips joining an already-running request — used after a mutation
+ *  (book/cancel), where an in-flight response could predate the change. */
+function fetchAppointments(clientId: string, force = false): Promise<Appointment[] | null> {
+  if (!force) {
+    const existing = inflight.get(clientId)
+    if (existing) return existing
+  }
+  const p = fetch(`/api/clients/${clientId}/appointments`)
+    .then(async (res) => {
+      const data = await res.json()
+      return res.ok ? ((data.appointments || []) as Appointment[]) : null
+    })
+    .catch(() => null)
+    .finally(() => {
+      if (inflight.get(clientId) === p) inflight.delete(clientId)
+    })
+  inflight.set(clientId, p)
+  return p
+}
+
 /** Format an instant for display. When the coach's `timeZone` is known we render
  *  in it (so an evening Pacific session never reads as the next morning); without
  *  it we fall back to the browser's locale/zone. */
@@ -42,24 +101,27 @@ export function UpcomingSessions({
   onChanged?: () => void
   timeZone?: string
 }) {
-  const [appts, setAppts] = useState<Appointment[]>([])
-  const [loading, setLoading] = useState(true)
+  // Start from the cached list when we have one — no skeleton, and the fetch
+  // below just refreshes quietly in the background.
+  const [appts, setAppts] = useState<Appointment[]>(() => readCached(clientId) ?? [])
+  const [loading, setLoading] = useState(() => readCached(clientId) === null)
   const [cancelling, setCancelling] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    try {
-      const res = await fetch(`/api/clients/${clientId}/appointments`)
-      const data = await res.json()
-      if (res.ok) setAppts(data.appointments || [])
-    } finally {
-      setLoading(false)
+  const load = useCallback(async (force = false) => {
+    if (readCached(clientId) === null) setLoading(true)
+    const data = await fetchAppointments(clientId, force)
+    if (data) {
+      writeCached(clientId, data)
+      setAppts(data)
     }
+    setLoading(false)
   }, [clientId])
 
   useEffect(() => {
-    load()
+    // reloadKey bumps follow a mutation (a booked session) — force past the
+    // in-flight dedup so we never re-adopt a response from before the change.
+    load(reloadKey > 0)
   }, [load, reloadKey])
 
   async function cancel(id: string) {
@@ -68,7 +130,7 @@ export function UpcomingSessions({
       const res = await fetch(`/api/clients/${clientId}/appointments/${id}`, { method: 'DELETE' })
       if (res.ok) {
         setCancelling(null)
-        await load()
+        await load(true)
         onChanged?.()
       }
     } finally {

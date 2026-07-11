@@ -3,9 +3,14 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import type { Client } from '@/lib/supabase/types'
+import { formatWhenShort } from '@/lib/datetime'
 import { BulkEmailModal } from './BulkEmailModal'
+import { EditClientModal } from './[id]/EditClientModal'
 
 const STATUSES = ['active', 'prospect', 'inactive'] as const
+
+type NextAppointment = { scheduled_at: string; duration_minutes: number }
+type EngagementProgress = { used: number; total: number }
 
 type RosterView = 'active' | 'inactive' | 'archived'
 
@@ -20,10 +25,16 @@ export function ClientsRoster() {
   const [clients, setClients] = useState<Client[]>([])
   const [teamClients, setTeamClients] = useState<Client[]>([])
   const [pendingAgreements, setPendingAgreements] = useState<Record<string, number>>({})
+  const [nextAppointments, setNextAppointments] = useState<Record<string, NextAppointment>>({})
+  const [engagementProgress, setEngagementProgress] = useState<Record<string, EngagementProgress>>({})
+  const [coachTimezone, setCoachTimezone] = useState<string | undefined>(undefined)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [filter, setFilter] = useState('')
   const [showAdd, setShowAdd] = useState(false)
+  // Client being edited via a card's settings gear (the same modal as the
+  // workspace name card's gear).
+  const [editing, setEditing] = useState<Client | null>(null)
   // After creating a client, offer to issue the coaching agreement now.
   const [justCreated, setJustCreated] = useState<{ id: string; name: string } | null>(null)
   // Active roster / the inactive list / the long-term archive. Clients keep all
@@ -43,6 +54,9 @@ export function ClientsRoster() {
       if (!res.ok) throw new Error(data.error || 'Failed to load')
       setClients(data.clients || [])
       setPendingAgreements(data.pendingAgreements || {})
+      setNextAppointments(data.nextAppointments || {})
+      setEngagementProgress(data.engagementProgress || {})
+      if (data.coachTimezone) setCoachTimezone(data.coachTimezone)
       if (teamRes.ok) {
         const teamData = await teamRes.json()
         setTeamClients(teamData.clients || [])
@@ -232,6 +246,10 @@ export function ClientsRoster() {
                 key={c.id}
                 c={c}
                 pendingAgreements={pendingAgreements}
+                nextAppointment={nextAppointments[c.id]}
+                progress={engagementProgress[c.id]}
+                coachTimezone={coachTimezone}
+                onEdit={setEditing}
                 quickActions={
                   view === 'inactive'
                     ? [
@@ -257,7 +275,7 @@ export function ClientsRoster() {
               </p>
               <div className="space-y-2">
                 {visibleTeam.map((c) => (
-                  <ClientCard key={c.id} c={c} pendingAgreements={{}} isTeam />
+                  <ClientCard key={c.id} c={c} pendingAgreements={{}} isTeam onEdit={setEditing} />
                 ))}
               </div>
             </div>
@@ -270,6 +288,20 @@ export function ClientsRoster() {
           listLabel={VIEW_LABELS[view]}
           recipients={visible.map((c) => ({ id: c.id, name: c.name, email: c.email }))}
           onClose={() => setShowBulkEmail(false)}
+        />
+      )}
+
+      {editing && (
+        <EditClientModal
+          client={editing}
+          onClose={() => setEditing(null)}
+          onSaved={(u) => {
+            // Update whichever list the client lives on; a client_type change is
+            // rare enough that the next full load sorts the lists out.
+            setClients((cs) => cs.map((c) => (c.id === u.id ? u : c)))
+            setTeamClients((cs) => cs.map((c) => (c.id === u.id ? u : c)))
+          }}
+          onIssueAgreement={() => router.push(`/clients/${editing.id}?issue=1`)}
         />
       )}
 
@@ -287,14 +319,34 @@ export function ClientsRoster() {
   )
 }
 
-function ClientCard({ c, pendingAgreements, isTeam = false, quickActions, onSetStatus }: {
+function ClientCard({
+  c,
+  pendingAgreements,
+  isTeam = false,
+  nextAppointment,
+  progress,
+  coachTimezone,
+  quickActions,
+  onSetStatus,
+  onEdit,
+}: {
   c: Client
   pendingAgreements: Record<string, number>
   isTeam?: boolean
+  /** The client's soonest upcoming session (from the roster payload). */
+  nextAppointment?: NextAppointment
+  /** Sessions used / session count on the active engagement, when one is set. */
+  progress?: EngagementProgress
+  coachTimezone?: string
   /** One-click moves between lists (Activate/Archive on the Inactive tab, Activate/Restore on Archived). */
   quickActions?: { label: string; title: string; to: string }[]
   onSetStatus?: (id: string, status: string) => void
+  /** Opens the client-settings (edit) modal from the card's gear. */
+  onEdit?: (c: Client) => void
 }) {
+  const pct = progress
+    ? Math.min(100, progress.total > 0 ? Math.round((progress.used / progress.total) * 100) : 0)
+    : 0
   return (
     <Link
       href={`/clients/${c.id}`}
@@ -305,7 +357,7 @@ function ClientCard({ c, pendingAgreements, isTeam = false, quickActions, onSetS
       }`}
     >
       <div className="flex items-center justify-between gap-4">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="flex items-center gap-1.5 font-medium text-tlw-navy-deep">
             {c.name}
             {isTeam && (
@@ -324,7 +376,37 @@ function ClientCard({ c, pendingAgreements, isTeam = false, quickActions, onSetS
           <p className="mt-0.5 truncate text-[12px] text-tlw-warm-gray">
             {[c.title, c.company].filter(Boolean).join(' · ') || c.email || '—'}
           </p>
+          {!isTeam && (
+            <p className="mt-1.5 flex items-center gap-1.5 text-[12px]">
+              <CalIcon />
+              {nextAppointment ? (
+                <span className="truncate text-tlw-espresso">
+                  {formatNext(nextAppointment.scheduled_at, coachTimezone)}
+                </span>
+              ) : (
+                <span className="text-tlw-warm-gray">No upcoming session</span>
+              )}
+            </p>
+          )}
         </div>
+
+        {progress && (
+          <div className="hidden w-44 shrink-0 sm:block">
+            <div className="mb-0.5 flex items-center justify-between">
+              <span className="text-[11px] text-tlw-warm-gray">
+                Sessions: {progress.used} / {progress.total}
+              </span>
+              <span className="text-[11px] text-tlw-warm-gray">{pct}%</span>
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-tlw-warm-gray/20">
+              <div
+                className="h-full rounded-full bg-tlw-navy-deep transition-all"
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+          </div>
+        )}
+
         <div className="flex shrink-0 items-center gap-2">
           {onSetStatus &&
             quickActions?.map((a) => (
@@ -350,9 +432,60 @@ function ClientCard({ c, pendingAgreements, isTeam = false, quickActions, onSetS
           >
             {c.status}
           </span>
+          {onEdit && (
+            <button
+              title="Client settings"
+              aria-label={`Client settings — ${c.name}`}
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                onEdit(c)
+              }}
+              className="rounded-tlw-md p-1.5 text-tlw-warm-gray transition-colors hover:bg-tlw-canvas hover:text-tlw-espresso"
+            >
+              <GearIcon />
+            </button>
+          )}
         </div>
       </div>
     </Link>
+  )
+}
+
+/** "Wed, Jul 15 · 2:00 PM" in the coach's zone; browser locale/zone without one. */
+function formatNext(iso: string, timeZone?: string): string {
+  const at = new Date(iso)
+  if (timeZone) {
+    try {
+      return formatWhenShort(at, timeZone)
+    } catch {
+      // fall through to the browser's zone on a bad timezone value
+    }
+  }
+  return at.toLocaleString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
+
+function CalIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.7" className="shrink-0 text-tlw-warm-gray">
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <path d="M16 2v4M8 2v4M3 10h18" />
+    </svg>
+  )
+}
+
+function GearIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
   )
 }
 

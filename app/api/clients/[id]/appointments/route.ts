@@ -7,6 +7,13 @@ import { syncExternalBookings } from '@/lib/booking-sync'
 
 export const runtime = 'nodejs'
 
+// The calendar work below (delta sync + per-row reconcile) round-trips Google
+// and is what made this endpoint slow. Skip it when the coach's calendar was
+// synced recently — the hourly cron, other page views, and `?sync=1` keep it
+// fresh, and a native booking/cancel writes the row directly so it never needs
+// a sync to show up.
+const CALENDAR_FRESH_MS = 10 * 60 * 1000
+
 // The client's upcoming (future, still-scheduled) sessions, soonest first.
 // Drives the workspace Sessions card and the compact list on the name card.
 //
@@ -16,13 +23,18 @@ export const runtime = 'nodejs'
 //    immediately, without waiting for the hourly cron.
 // 2. Reconcile each existing row with its calendar event so a dragged/deleted
 //    session shows its current time.
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+// Both are skipped while the last sync is fresh (see CALENDAR_FRESH_MS).
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const supabase = getSupabaseAdmin()
     const coach = await requireClientCoach(supabase, params.id)
 
+    const forceSync = new URL(req.url).searchParams.get('sync') === '1'
+    const syncedAt = coach.calendar_synced_at ? new Date(coach.calendar_synced_at).getTime() : 0
+    const calendarFresh = !forceSync && Date.now() - syncedAt < CALENDAR_FRESH_MS
+
     // 1. Discover new calendar events (incremental delta — fast when up to date).
-    if (coach.google_refresh_token) {
+    if (coach.google_refresh_token && !calendarFresh) {
       await syncExternalBookings(supabase, coach).catch(() => {})
 
       // 1b. Rescue previously-unmatched rows whose attendee_email matches this
@@ -46,16 +58,18 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     }
 
     // 2. Reconcile existing rows for this client with their calendar events.
-    const { data: own } = await supabase
-      .from('appointments')
-      .select('id, scheduled_at, google_event_id, status')
-      .eq('client_id', params.id)
-      .eq('coach_id', coach.id)
-      .eq('status', 'scheduled')
-      .not('google_event_id', 'is', null)
-      .gte('scheduled_at', new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString())
-    for (const appt of own || []) {
-      await syncAppointmentFromCalendar(supabase, coach, appt)
+    if (coach.google_refresh_token && !calendarFresh) {
+      const { data: own } = await supabase
+        .from('appointments')
+        .select('id, scheduled_at, google_event_id, status')
+        .eq('client_id', params.id)
+        .eq('coach_id', coach.id)
+        .eq('status', 'scheduled')
+        .not('google_event_id', 'is', null)
+        .gte('scheduled_at', new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString())
+      for (const appt of own || []) {
+        await syncAppointmentFromCalendar(supabase, coach, appt)
+      }
     }
 
     const { data, error } = await supabase
