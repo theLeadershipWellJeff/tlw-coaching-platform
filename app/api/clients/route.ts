@@ -50,7 +50,79 @@ export async function GET(req: NextRequest) {
       )
     }
 
-    return NextResponse.json({ clients: data, pendingAgreements })
+    const listedIds = (data || []).map((c) => c.id)
+
+    // Next appointment per client — one straight DB read (no calendar round-trip;
+    // the hourly cron + workspace views keep `appointments` fresh). Soonest
+    // future scheduled session wins.
+    const nextAppointments: Record<string, { scheduled_at: string; duration_minutes: number }> = {}
+    if (listedIds.length > 0) {
+      const { data: appts } = await supabase
+        .from('appointments')
+        .select('client_id, scheduled_at, duration_minutes')
+        .in('client_id', listedIds)
+        .eq('coach_id', coach.id)
+        .eq('status', 'scheduled')
+        .gte('scheduled_at', new Date().toISOString())
+        .order('scheduled_at', { ascending: true })
+      for (const a of appts || []) {
+        if (!a.client_id || a.client_id in nextAppointments) continue // keep the soonest
+        nextAppointments[a.client_id] = {
+          scheduled_at: a.scheduled_at,
+          duration_minutes: a.duration_minutes,
+        }
+      }
+    }
+
+    // Engagement progress per client — same math as the workspace name card's
+    // SessionsProgress (`/api/clients/[id]/billing/sessions`): notes logged so
+    // far vs. the active engagement's session_count. Only clients with an
+    // active session-counted engagement get an entry.
+    const engagementProgress: Record<string, { used: number; total: number }> = {}
+    if (listedIds.length > 0) {
+      const { data: coachees } = await supabase
+        .from('coachees')
+        .select('id, client_id')
+        .eq('coach_id', coach.id)
+        .in('client_id', listedIds)
+      const coacheeToClient = new Map((coachees || []).map((c) => [c.id, c.client_id]))
+      if (coacheeToClient.size > 0) {
+        const { data: engagements } = await supabase
+          .from('engagements')
+          .select('coachee_id, session_count')
+          .eq('coach_id', coach.id)
+          .eq('status', 'active')
+          .not('session_count', 'is', null)
+          .in('coachee_id', Array.from(coacheeToClient.keys()))
+        const totals = new Map<string, number>()
+        for (const e of engagements || []) {
+          const clientId = coacheeToClient.get(e.coachee_id)
+          if (clientId && e.session_count != null && !totals.has(clientId)) {
+            totals.set(clientId, e.session_count)
+          }
+        }
+        if (totals.size > 0) {
+          const { data: noteRows } = await supabase
+            .from('notes')
+            .select('client_id')
+            .in('client_id', Array.from(totals.keys()))
+          const used = new Map<string, number>()
+          for (const n of noteRows || []) used.set(n.client_id, (used.get(n.client_id) || 0) + 1)
+          totals.forEach((total, clientId) => {
+            engagementProgress[clientId] = { used: used.get(clientId) || 0, total }
+          })
+        }
+      }
+    }
+
+    return NextResponse.json({
+      clients: data,
+      pendingAgreements,
+      nextAppointments,
+      engagementProgress,
+      // For rendering appointment times in the coach's zone on the roster.
+      coachTimezone: coach.timezone || null,
+    })
   } catch (e) {
     return toErrorResponse(e)
   }

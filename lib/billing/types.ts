@@ -56,6 +56,9 @@ export type Engagement = {
   engagement_total: number | null
   installment_count: number | null
   installment_schedule: InstallmentScheduleEntry[] | null
+  // Planned number of sessions in the engagement (migration 029) — drives the
+  // sessions-used progress bars (workspace name card + roster cards).
+  session_count: number | null
   // shared
   description_template: string | null
   created_at: Timestamp
