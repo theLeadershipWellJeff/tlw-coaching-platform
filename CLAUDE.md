@@ -919,7 +919,13 @@ title proposed at ingest from the calendar-slot match / Plaud summary / non-time
 in the review queue; additive, nullable, NULL = UI falls back to filename/"Untitled"; **applied**) ·
 035 nudge PDF attachment (`nudges.pdf_resource_id` + `garden_notes.pdf_resource_id`
 — framework nudges attach a Library PDF to the email; additive, nullable; **apply
-before the Nudges pages are used — the nudge routes now select/insert the column**).
+before the Nudges pages are used — the nudge routes now select/insert the column**) ·
+036 engagement length (`engagements.length_months` — the "6-Month Engagement" label
+on the roster-card / workspace engagement bars; additive, nullable — the label falls
+back to the billing mode until set. Note: for a **subscription** engagement,
+`engagements.session_count` means **sessions per year** and the bar tracks sessions
+received this calendar year; for other modes it stays total sessions in the
+engagement — shared math in `lib/billing/engagement-progress.ts`; **applied**).
 
 **Tenant scoping (015).** `coach_clients` (coach_id, client_id, role) is the
 ownership link. Client access is enforced **server-side** by the session coach,
@@ -949,7 +955,8 @@ sync is used; if 023 was already applied, 024 cleans it up), and
 Calendly/HubSpot calendar-watch capture — additive; **apply before the calendar-sync
 cron / Unmatched bookings panel are used**), and `035_nudge_pdf_attachment.sql`
 (nudge/garden PDF-attachment columns — **apply before deploying the nudge changes;
-the nudge list/create routes now reference the columns**). ⚠️ **015 must be run BEFORE
+the nudge list/create routes now reference the columns**). `036_engagement_length.sql`
+is **applied** (confirmed July 11 2026). ⚠️ **015 must be run BEFORE
 the tenant-scoping code is deployed to `main`** — until the table exists and is
 backfilled, the roster would filter to zero clients. Read the backfill comment in
 015 first (it assumes all current coach logins are the same person). **016 must be

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { requireCoach, toErrorResponse } from '@/lib/api-handler'
 import { accessibleClientIds, linkCoachToClient } from '@/lib/client-access'
+import { getEngagementProgress } from '@/lib/billing/engagement-progress'
 
 // List the signed-in coach's clients (optionally filtered by status), by name.
 export async function GET(req: NextRequest) {
@@ -74,46 +75,9 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Engagement progress per client — same math as the workspace name card's
-    // SessionsProgress (`/api/clients/[id]/billing/sessions`): notes logged so
-    // far vs. the active engagement's session_count. Only clients with an
-    // active session-counted engagement get an entry.
-    const engagementProgress: Record<string, { used: number; total: number }> = {}
-    if (listedIds.length > 0) {
-      const { data: coachees } = await supabase
-        .from('coachees')
-        .select('id, client_id')
-        .eq('coach_id', coach.id)
-        .in('client_id', listedIds)
-      const coacheeToClient = new Map((coachees || []).map((c) => [c.id, c.client_id]))
-      if (coacheeToClient.size > 0) {
-        const { data: engagements } = await supabase
-          .from('engagements')
-          .select('coachee_id, session_count')
-          .eq('coach_id', coach.id)
-          .eq('status', 'active')
-          .not('session_count', 'is', null)
-          .in('coachee_id', Array.from(coacheeToClient.keys()))
-        const totals = new Map<string, number>()
-        for (const e of engagements || []) {
-          const clientId = coacheeToClient.get(e.coachee_id)
-          if (clientId && e.session_count != null && !totals.has(clientId)) {
-            totals.set(clientId, e.session_count)
-          }
-        }
-        if (totals.size > 0) {
-          const { data: noteRows } = await supabase
-            .from('notes')
-            .select('client_id')
-            .in('client_id', Array.from(totals.keys()))
-          const used = new Map<string, number>()
-          for (const n of noteRows || []) used.set(n.client_id, (used.get(n.client_id) || 0) + 1)
-          totals.forEach((total, clientId) => {
-            engagementProgress[clientId] = { used: used.get(clientId) || 0, total }
-          })
-        }
-      }
-    }
+    // Engagement type + sessions progress per client (shared with the
+    // workspace name card / Billing block — see lib/billing/engagement-progress.ts).
+    const engagementProgress = await getEngagementProgress(supabase, coach.id, listedIds)
 
     return NextResponse.json({
       clients: data,

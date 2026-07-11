@@ -40,6 +40,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const body = await req.json().catch(() => ({}))
   const allowed = [
     'status',
+    'billing_mode',
     'billing_owner',
     'rate_hourly',
     'monthly_amount',
@@ -49,6 +50,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     'installment_schedule',
     'description_template',
     'session_count',
+    'length_months',
     'skip_billing',
   ] as const
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
@@ -58,6 +60,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
   if (updates.status && !['active','paused','ended'].includes(updates.status as string))
     return NextResponse.json({ error: 'invalid status' }, { status: 400 })
+  if (updates.billing_mode && !['arrears','subscription','per_engagement'].includes(updates.billing_mode as string))
+    return NextResponse.json({ error: 'invalid billing_mode' }, { status: 400 })
 
   const { data, error } = await supabase
     .from('engagements')

@@ -51,10 +51,12 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const coachee = coachees[0] as any
   const account = coachee.billing_accounts
 
-  // Load engagements for this coachee.
+  // Load engagements for this coachee. select('*') so the edit-client modal's
+  // engagement section gets session_count/length_months too (and a not-yet-
+  // applied migration 036 can't break the query).
   const { data: engagements } = await supabase
     .from('engagements')
-    .select('id, billing_mode, billing_owner, status, rate_hourly, monthly_amount, engagement_total, installment_count')
+    .select('*')
     .eq('coachee_id', coachee.id)
     .eq('coach_id', coach.id)
     .order('created_at', { ascending: true })

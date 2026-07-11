@@ -31,9 +31,12 @@ type BillingData =
 
 type SessionEntry = {
   engagementId: string
-  sessionCount: number
+  // Null = no session count set on the engagement (label + count, no bar).
+  sessionCount: number | null
   sessionsUsed: number
   billingMode: string
+  // Engagement type — "6-Month Engagement", "Monthly Subscription", …
+  label: string
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -72,21 +75,29 @@ function SessionsProgressBar({ clientId }: { clientId: string }) {
   return (
     <div className="mt-2 space-y-1.5">
       {sessions.map((s) => {
-        const pct = Math.min(100, s.sessionCount > 0 ? Math.round((s.sessionsUsed / s.sessionCount) * 100) : 0)
+        const subscription = s.billingMode === 'subscription'
+        const pct =
+          s.sessionCount != null && s.sessionCount > 0
+            ? Math.min(100, Math.round((s.sessionsUsed / s.sessionCount) * 100))
+            : 0
         return (
           <div key={s.engagementId}>
-            <div className="mb-0.5 flex items-center justify-between">
-              <span className="text-[11px] text-tlw-warm-gray">
-                Sessions: {s.sessionsUsed} / {s.sessionCount}
+            <div className="mb-0.5 flex items-center justify-between gap-2">
+              <span className="truncate text-[11px] font-medium text-tlw-espresso">{s.label}</span>
+              <span className="shrink-0 text-[11px] text-tlw-warm-gray">
+                {s.sessionCount != null
+                  ? `${s.sessionsUsed} / ${s.sessionCount}${subscription ? ' this yr' : ''} · ${pct}%`
+                  : `${s.sessionsUsed} session${s.sessionsUsed === 1 ? '' : 's'} ${subscription ? 'this year' : 'to date'}`}
               </span>
-              <span className="text-[11px] text-tlw-warm-gray">{pct}%</span>
             </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-tlw-warm-gray/20">
-              <div
-                className="h-full rounded-full bg-tlw-navy-deep transition-all"
-                style={{ width: `${pct}%` }}
-              />
-            </div>
+            {s.sessionCount != null && (
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-tlw-warm-gray/20">
+                <div
+                  className="h-full rounded-full bg-tlw-navy-deep transition-all"
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            )}
           </div>
         )
       })}
