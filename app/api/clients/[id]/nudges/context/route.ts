@@ -59,9 +59,18 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     const frameworks = leaves.map((l) => ({ id: l.id, title: l.title, summary: l.summary }))
 
     // The client's engagement goals — the anchor options for a goals nudge.
-    const goals = ((client?.coaching_goals ?? []) as { title?: string; description?: string }[])
+    // Metrics ride along so the modal can build the verbatim reference list.
+    const goals = ((client?.coaching_goals ?? []) as {
+      title?: string
+      description?: string
+      metrics?: string[]
+    }[])
       .filter((g) => g?.title)
-      .map((g) => ({ title: g.title as string, description: g.description || '' }))
+      .map((g) => ({
+        title: g.title as string,
+        description: g.description || '',
+        metrics: Array.isArray(g.metrics) ? g.metrics.filter(Boolean) : [],
+      }))
 
     return NextResponse.json({ openActions, recentInsights, frameworks, goals })
   } catch (e) {

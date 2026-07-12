@@ -1,6 +1,7 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Modal } from '@/app/components/shared/Modal'
+import { formatGoalListForEmail } from '@/lib/nudges/goal-list'
 
 type NudgeType = 'action_checkin' | 'insight' | 'framework' | 'goals'
 type GoalAngle = 'reminder' | 'assessment' | 'win'
@@ -28,7 +29,7 @@ const GOAL_ANGLES: { value: GoalAngle; label: string; blurb: string }[] = [
  * surfaceable leaves yet, framework falls back to a hand-written draft.
  */
 type FrameworkOption = { id: string; title: string; summary: string | null }
-type GoalOption = { title: string; description: string }
+type GoalOption = { title: string; description: string; metrics?: string[] }
 export function CreateNudgeModal({
   clientId,
   clientName,
@@ -74,6 +75,34 @@ export function CreateNudgeModal({
   useEffect(() => {
     setAnchor('')
   }, [type])
+
+  // Goals nudge: the selected goal(s) go into the body verbatim — bulleted, with
+  // metrics beneath — so the client gets a quick reference even on a hand-written
+  // nudge. The block is tracked so switching the selection replaces it instead of
+  // stacking; the AI draft path returns the body with the same block already
+  // appended (draftNudge), which keeps the tracking consistent.
+  const goalBlockRef = useRef('')
+  useEffect(() => {
+    const selected =
+      type === 'goals' && anchor
+        ? anchor === '__all__'
+          ? goals
+          : goals.filter((g) => g.title === anchor)
+        : []
+    setBodyText((cur) => {
+      let next = cur
+      if (goalBlockRef.current && next.includes(goalBlockRef.current)) {
+        next = next.replace(goalBlockRef.current, '').replace(/\n{3,}/g, '\n\n').trim()
+      }
+      if (selected.length === 0) {
+        goalBlockRef.current = ''
+        return next
+      }
+      const block = formatGoalListForEmail(selected)
+      goalBlockRef.current = block
+      return next ? `${next.replace(/\s+$/, '')}\n\n${block}` : block
+    })
+  }, [type, anchor, goals])
 
   const anchorOptions = type === 'action_checkin' ? openActions : type === 'insight' ? recentInsights : []
   const canAiDraft = !!anchor
