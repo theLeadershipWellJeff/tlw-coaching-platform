@@ -1,8 +1,9 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { Client } from '@/lib/supabase/types'
 import { GoalRows, type GoalDraft, toDrafts, cleanGoals, emptyGoal, untitledGoals } from './GoalRows'
+import { useGoalJobs, startGoalGeneration, retryGoalGeneration, dismissGoalJob } from '@/lib/goal-jobs'
 
 /**
  * Compact engagement-goals card for the session-notes panel. It shows the same
@@ -19,6 +20,16 @@ export function EngagementGoalsCard({
 }) {
   const goals = client.coaching_goals || []
   const [open, setOpen] = useState(false)
+
+  // Resolve a finished fire-and-forget generation here (this card is always
+  // mounted in the rail — the modal may be closed when the goals land).
+  const job = useGoalJobs().find((j) => j.clientId === client.id)
+  useEffect(() => {
+    if (job?.status !== 'done') return
+    if (job.goals) onUpdated({ ...client, coaching_goals: job.goals })
+    dismissGoalJob(client.id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [job?.status])
 
   return (
     <div className="rounded-tlw-lg border border-tlw-warm-gray/15 bg-tlw-surface p-3">
@@ -61,10 +72,25 @@ function ClientGoalsModal({
 }) {
   const goals = client.coaching_goals || []
   const [draft, setDraft] = useState<GoalDraft[]>(goals.length ? toDrafts(goals) : [emptyGoal()])
-  const [busy, setBusy] = useState<'generate' | 'save' | null>(null)
+  const [busy, setBusy] = useState<'save' | null>(null)
   const [error, setError] = useState('')
 
-  async function generate() {
+  // Generation is fire-and-forget (lib/goal-jobs.ts) — the outer card applies
+  // the result to the client; here we track the running state and refresh the
+  // draft rows when the goals land while the panel is open.
+  const job = useGoalJobs().find((j) => j.clientId === client.id)
+  const generating = job?.status === 'running'
+  const goalsJson = JSON.stringify(client.coaching_goals || [])
+  const lastGoalsRef = useRef(goalsJson)
+  useEffect(() => {
+    if (goalsJson === lastGoalsRef.current) return
+    lastGoalsRef.current = goalsJson
+    const next = client.coaching_goals || []
+    setDraft(next.length ? toDrafts(next) : [emptyGoal()])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [goalsJson])
+
+  function generate() {
     // Hand-written/edited goals are protected server-side; warn so the coach
     // knows the suggestions are added below them, not a replacement.
     const hasProtected = (client.coaching_goals || []).some((g) => g.source !== 'generated')
@@ -76,19 +102,8 @@ function ClientGoalsModal({
     ) {
       return
     }
-    setBusy('generate')
     setError('')
-    try {
-      const res = await fetch(`/api/clients/${client.id}/goals/generate`, { method: 'POST' })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Could not generate goals')
-      onUpdated({ ...client, coaching_goals: data.goals })
-      setDraft(toDrafts(data.goals))
-    } catch (e: any) {
-      setError(e.message)
-    } finally {
-      setBusy(null)
-    }
+    startGoalGeneration(client.id, client.coaching_goals)
   }
 
   async function save() {
@@ -137,12 +152,31 @@ function ClientGoalsModal({
           </div>
           <button
             onClick={generate}
-            disabled={busy !== null}
+            disabled={busy !== null || generating}
             className="text-[12px] font-medium text-tlw-signal-orange hover:underline disabled:opacity-40"
           >
-            {busy === 'generate' ? 'generating…' : 'generate from notes'}
+            {generating ? 'generating…' : 'generate from notes'}
           </button>
         </div>
+
+        {generating && (
+          <p className="mb-3 text-[12px] text-tlw-warm-gray">
+            Drafting goals from this client&apos;s notes — you can close this panel or leave the page;
+            they&apos;ll appear when ready.
+          </p>
+        )}
+
+        {job?.status === 'error' && (
+          <p className="mb-3 text-[12px] text-tlw-signal-orange">
+            {job.error}{' '}
+            <button onClick={() => retryGoalGeneration(client.id)} className="font-medium underline">
+              retry
+            </button>{' '}
+            <button onClick={() => dismissGoalJob(client.id)} className="text-tlw-warm-gray underline">
+              dismiss
+            </button>
+          </p>
+        )}
 
         {error && <p className="mb-3 text-[12px] text-tlw-signal-orange">{error}</p>}
 

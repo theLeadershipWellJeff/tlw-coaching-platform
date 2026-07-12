@@ -26,7 +26,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     const supabase = getSupabaseAdmin()
     const coach = await requireClientCoach(supabase, params.id)
 
-    const [{ data: actions }, { data: notes }, leaves] = await Promise.all([
+    const [{ data: actions }, { data: notes }, leaves, { data: client }] = await Promise.all([
       supabase
         .from('actions')
         .select('description')
@@ -42,6 +42,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
         .order('created_at', { ascending: false })
         .limit(5),
       loadSurfaceableLeaves(supabase, coach.id),
+      supabase.from('clients').select('coaching_goals').eq('id', params.id).maybeSingle(),
     ])
 
     const openActions = Array.from(
@@ -57,7 +58,12 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
     const frameworks = leaves.map((l) => ({ id: l.id, title: l.title, summary: l.summary }))
 
-    return NextResponse.json({ openActions, recentInsights, frameworks })
+    // The client's engagement goals — the anchor options for a goals nudge.
+    const goals = ((client?.coaching_goals ?? []) as { title?: string; description?: string }[])
+      .filter((g) => g?.title)
+      .map((g) => ({ title: g.title as string, description: g.description || '' }))
+
+    return NextResponse.json({ openActions, recentInsights, frameworks, goals })
   } catch (e) {
     return toErrorResponse(e)
   }

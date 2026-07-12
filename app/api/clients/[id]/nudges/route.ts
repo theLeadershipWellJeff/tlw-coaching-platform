@@ -45,7 +45,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 }
 
 const CreateSchema = z.object({
-  type: z.enum(['action_checkin', 'insight', 'framework']),
+  type: z.enum(['action_checkin', 'insight', 'framework', 'goals']),
   draft_subject: z.string().max(300).optional(),
   draft_body: z.string().max(8000).optional(),
   trigger_excerpt: z.string().max(2000).optional(),

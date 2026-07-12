@@ -100,14 +100,21 @@ const MAPS: CoachingMap[] = [
   },
 ]
 
+/** The pulldown registry's names — reused by the edit-client modal's map select. */
+export const COACHING_MAP_NAMES = MAPS.map((m) => m.name)
+
 type Size = 'small' | 'medium' | 'large'
 
 export function CoachingMapCard({
   client,
   onUpdated,
+  chrome = 'rail',
 }: {
   client: Client
   onUpdated: (c: Client) => void
+  /** 'rail' = the tight session-notes-panel styling (default); 'card' = the
+   *  workspace card-grid styling (used by the ws-coaching-map block). */
+  chrome?: 'rail' | 'card'
 }) {
   const value = client.coaching_map || ''
   const [editing, setEditing] = useState(false)
@@ -161,10 +168,24 @@ export function CoachingMapCard({
   }
 
   return (
-    <div className="rounded-tlw-lg border border-tlw-warm-gray/15 bg-tlw-surface p-3">
+    <div
+      className={
+        chrome === 'card'
+          ? 'rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface p-6'
+          : 'rounded-tlw-lg border border-tlw-warm-gray/15 bg-tlw-surface p-3'
+      }
+    >
       {/* Header row */}
-      <div className="mb-2 flex items-center justify-between">
-        <p className="text-[11px] font-semibold uppercase tracking-[1.5px] text-tlw-navy-deep">Coaching map</p>
+      <div className={`flex items-center justify-between ${chrome === 'card' ? 'mb-4' : 'mb-2'}`}>
+        <p
+          className={
+            chrome === 'card'
+              ? 'text-[11px] font-medium uppercase tracking-[2px] text-tlw-warm-gray'
+              : 'text-[11px] font-semibold uppercase tracking-[1.5px] text-tlw-navy-deep'
+          }
+        >
+          Coaching map
+        </p>
         <div className="flex items-center gap-2">
           {!editing && value && (
             <div className="flex items-center gap-0.5 rounded border border-tlw-warm-gray/20 bg-tlw-cream/60 px-1 py-0.5">

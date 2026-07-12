@@ -5,10 +5,23 @@
  * storage.
  */
 
-// Phase A produces only these two. framework / reengagement arrive in later phases.
-export type NudgeType = 'action_checkin' | 'insight' | 'framework' | 'reengagement'
+// Phase A produces action_checkin + insight; framework arrived in Phase B.
+// 'goals' is a manual-only type (created from the Create Nudge modal around the
+// client's engagement goals); reengagement is reserved for a later phase.
+export type NudgeType = 'action_checkin' | 'insight' | 'framework' | 'goals' | 'reengagement'
 export type NudgeOrigin = 'mentioned' | 'suggested' | 'auto' | 'manual'
 export type NudgeStatus = 'draft' | 'approved' | 'scheduled' | 'sent' | 'skipped' | 'snoozed'
+
+/** The three flavors of a goals nudge — see lib/nudges/draft.ts voice rules. */
+export type GoalsNudgeAngle = 'reminder' | 'assessment' | 'win'
+
+/** Context handed to drafting for a goals nudge: the angle + the goal(s) in focus. */
+export type GoalsDraftContext = {
+  angle: GoalsNudgeAngle
+  /** The selected goal, or every goal when the coach picked "All goals". */
+  goals: { title: string; description?: string; metrics?: string[] }[]
+  allGoals: boolean
+}
 
 /**
  * One nudge candidate from extraction, before dedup/cap and before drafting.

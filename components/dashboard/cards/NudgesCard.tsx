@@ -21,6 +21,7 @@ const TYPE_LABEL: Record<string, string> = {
   action_checkin: 'Action check-in',
   insight: 'Insight',
   framework: 'Framework',
+  goals: 'Goals',
   reengagement: 'Re-engagement',
 }
 

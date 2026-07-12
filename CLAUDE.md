@@ -275,8 +275,18 @@ with "Retry failed". Gmail's own daily send limits apply (~500/day consumer,
 ### Client workspace (`app/(authenticated)/clients/[id]`)
 Name card (gear → edit), Transcripts + Notes summary cards, New note / Send
 email actions, Coaching goals card (generate from notes via
-`/api/clients/[id]/goals/generate`, or edit by hand). Email composes+sends via
-Gmail (`/api/email/send`). **Transcript file import** lives on the Transcripts
+`/api/clients/[id]/goals/generate`, or edit by hand). **Goal generation is
+fire-and-forget** (`lib/goal-jobs.ts`, mirrors `lib/scoring-jobs.ts`): the click
+registers a localStorage job (`tlw-goal-jobs`) and returns immediately — the
+route persists the merged goals itself, so the coach can leave the page; the
+goals cards (workspace `GoalsCard` + notes-panel `EngagementGoalsCard`) show a
+"generating…" state, resolve via the in-page fetch or an 8 s poller comparing
+`coaching_goals` to the job's baseline, and surface a retry on timeout (3 min).
+The **Coaching map** is also a workspace block (`ws-coaching-map` → reuses
+`CoachingMapCard` with `chrome="card"`; compact = the map name) and selectable
+in the edit-client modal (a "Coaching map" pulldown of
+`CoachingMapCard#COACHING_MAP_NAMES` — same `clients.coaching_map` column as the
+notes-rail card). Email composes+sends via Gmail (`/api/email/send`). **Transcript file import** lives on the Transcripts
 card (a "+ Import" button → `ImportTranscriptModal`): the coach picks local
 file(s) — md/txt/vtt/srt/docx/pdf — which `POST /api/clients/[id]/import-file`
 (multipart, 4 MB/file) extracts to text (`lib/transcripts/extract.ts` — caption
@@ -614,7 +624,16 @@ the shared `NudgeItem` (edit subject/body/time; **Send now / Schedule / Snooze /
 Skip**). `PATCH /api/nudges/[nudgeId]` applies edits + the action (coach-scoped to
 the nudge's `coach_id`). The queue also has **"+ Create nudge"**
 (`CreateNudgeButton` — working-clients picker → the same `CreateNudgeModal` the
-workspace card uses). `send.ts#sendNudge` is the one send path: enforces the
+workspace card uses). **Goals nudges (manual-only type `goals`).** The modal's
+fourth tile checks in on the client's engagement goals: pick ONE goal or "All
+goals" (options = `clients.coaching_goals` via `/nudges/context` → `goals`) and
+an **angle** — `reminder` (bring the goal back with one small step), `assessment`
+(how are the goals sitting? invite adjusting them), or `win` (name a recent win
+on the goal). AI-drafts via `/nudges/draft-one` (`{type:'goals', goal_focus:
+'<title>'|'__all__', goal_angle}` → `draft.ts` `goalsContext` voice rules);
+`trigger_excerpt` stores a readable "Goal: X · Win check" line. The automatic
+pipeline never proposes `goals` nudges — no migration needed (`nudges.type` is
+unconstrained text). `send.ts#sendNudge` is the one send path: enforces the
 **spacing rule** (§3.4 — refuses if the client got any outbound communication
 within `nudge_settings.nudge_spacing_days`, default 4), appends the signature
 server-side, sends via the coach's Gmail (`sendCoachHtmlEmail`, unattended-capable),
