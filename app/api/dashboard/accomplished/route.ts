@@ -125,6 +125,7 @@ export async function GET() {
       action_checkin: 'action check-in nudge',
       insight: 'insight nudge',
       framework: 'framework nudge',
+      goals: 'goals nudge',
       reengagement: 're-engagement nudge',
     }
 

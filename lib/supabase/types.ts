@@ -276,7 +276,7 @@ export type Nudge = {
   coach_id: string
   client_id: string
   source_session_id: string | null
-  type: string // action_checkin | insight | framework | reengagement
+  type: string // action_checkin | insight | framework | goals | reengagement
   origin: string // mentioned | suggested | auto | manual
   trigger_excerpt: string | null
   rationale: string | null

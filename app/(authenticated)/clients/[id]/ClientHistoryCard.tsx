@@ -82,6 +82,7 @@ function HistoryRow({ item, clientId }: RowProps) {
       action_checkin: 'Action check-in',
       insight: 'Insight nudge',
       framework: 'Framework nudge',
+      goals: 'Goals nudge',
       reengagement: 'Re-engagement',
     }
     return (

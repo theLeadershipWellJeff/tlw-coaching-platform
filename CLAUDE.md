@@ -624,7 +624,16 @@ the shared `NudgeItem` (edit subject/body/time; **Send now / Schedule / Snooze /
 Skip**). `PATCH /api/nudges/[nudgeId]` applies edits + the action (coach-scoped to
 the nudge's `coach_id`). The queue also has **"+ Create nudge"**
 (`CreateNudgeButton` — working-clients picker → the same `CreateNudgeModal` the
-workspace card uses). `send.ts#sendNudge` is the one send path: enforces the
+workspace card uses). **Goals nudges (manual-only type `goals`).** The modal's
+fourth tile checks in on the client's engagement goals: pick ONE goal or "All
+goals" (options = `clients.coaching_goals` via `/nudges/context` → `goals`) and
+an **angle** — `reminder` (bring the goal back with one small step), `assessment`
+(how are the goals sitting? invite adjusting them), or `win` (name a recent win
+on the goal). AI-drafts via `/nudges/draft-one` (`{type:'goals', goal_focus:
+'<title>'|'__all__', goal_angle}` → `draft.ts` `goalsContext` voice rules);
+`trigger_excerpt` stores a readable "Goal: X · Win check" line. The automatic
+pipeline never proposes `goals` nudges — no migration needed (`nudges.type` is
+unconstrained text). `send.ts#sendNudge` is the one send path: enforces the
 **spacing rule** (§3.4 — refuses if the client got any outbound communication
 within `nudge_settings.nudge_spacing_days`, default 4), appends the signature
 server-side, sends via the coach's Gmail (`sendCoachHtmlEmail`, unattended-capable),

@@ -2,12 +2,20 @@
 import { useEffect, useState } from 'react'
 import { Modal } from '@/app/components/shared/Modal'
 
-type NudgeType = 'action_checkin' | 'insight' | 'framework'
+type NudgeType = 'action_checkin' | 'insight' | 'framework' | 'goals'
+type GoalAngle = 'reminder' | 'assessment' | 'win'
 
 const TYPES: { value: NudgeType; label: string; blurb: string }[] = [
   { value: 'action_checkin', label: 'Action nudge', blurb: 'Follow up on a commitment, framed as an experiment.' },
   { value: 'insight', label: 'Insight nudge', blurb: 'Re-surface a meaningful insight from a session.' },
   { value: 'framework', label: 'Framework nudge', blurb: 'Remind them of a framework you named in session.' },
+  { value: 'goals', label: 'Goals nudge', blurb: 'Check in on their engagement goals — one goal or all of them.' },
+]
+
+const GOAL_ANGLES: { value: GoalAngle; label: string; blurb: string }[] = [
+  { value: 'reminder', label: 'Action reminder', blurb: 'Bring the goal back into view with one small step to try this week.' },
+  { value: 'assessment', label: 'Goals assessment', blurb: 'Ask how the goals are sitting and invite them to adjust.' },
+  { value: 'win', label: 'Win check', blurb: 'Invite them to name a recent win connected to the goal.' },
 ]
 
 /**
@@ -20,6 +28,7 @@ const TYPES: { value: NudgeType; label: string; blurb: string }[] = [
  * surfaceable leaves yet, framework falls back to a hand-written draft.
  */
 type FrameworkOption = { id: string; title: string; summary: string | null }
+type GoalOption = { title: string; description: string }
 export function CreateNudgeModal({
   clientId,
   clientName,
@@ -35,7 +44,9 @@ export function CreateNudgeModal({
   const [openActions, setOpenActions] = useState<string[]>([])
   const [recentInsights, setRecentInsights] = useState<string[]>([])
   const [frameworks, setFrameworks] = useState<FrameworkOption[]>([])
+  const [goals, setGoals] = useState<GoalOption[]>([])
   const [anchor, setAnchor] = useState('')
+  const [goalAngle, setGoalAngle] = useState<GoalAngle>('reminder')
   const [subject, setSubject] = useState('')
   const [bodyText, setBodyText] = useState('')
   const [drafting, setDrafting] = useState(false)
@@ -51,6 +62,7 @@ export function CreateNudgeModal({
         setOpenActions(d.openActions || [])
         setRecentInsights(d.recentInsights || [])
         setFrameworks(d.frameworks || [])
+        setGoals(d.goals || [])
       })
       .catch(() => {})
     return () => {
@@ -64,8 +76,14 @@ export function CreateNudgeModal({
   }, [type])
 
   const anchorOptions = type === 'action_checkin' ? openActions : type === 'insight' ? recentInsights : []
-  const canAiDraft = !!anchor && (type === 'action_checkin' || type === 'insight' || type === 'framework')
+  const canAiDraft = !!anchor
   const canCreate = !!bodyText.trim() && !saving
+
+  // Human-readable line for the queue's "grounded in" display (trigger_excerpt).
+  const goalAnchorLabel =
+    anchor === '__all__'
+      ? `All goals · ${GOAL_ANGLES.find((a) => a.value === goalAngle)?.label ?? goalAngle}`
+      : `Goal: ${anchor} · ${GOAL_ANGLES.find((a) => a.value === goalAngle)?.label ?? goalAngle}`
 
   async function aiDraft() {
     if (!canAiDraft) return
@@ -75,6 +93,8 @@ export function CreateNudgeModal({
       const payload =
         type === 'framework'
           ? { type, framework_slug: anchor }
+          : type === 'goals'
+          ? { type, goal_focus: anchor, goal_angle: goalAngle }
           : { type, trigger_excerpt: anchor }
       const res = await fetch(`/api/clients/${clientId}/nudges/draft-one`, {
         method: 'POST',
@@ -103,7 +123,12 @@ export function CreateNudgeModal({
           type,
           draft_subject: subject,
           draft_body: bodyText,
-          trigger_excerpt: type === 'framework' ? undefined : anchor || undefined,
+          trigger_excerpt:
+            type === 'framework'
+              ? undefined
+              : type === 'goals'
+              ? (anchor ? goalAnchorLabel : undefined)
+              : anchor || undefined,
           framework_slug: type === 'framework' ? anchor || undefined : undefined,
         }),
       })
@@ -121,7 +146,7 @@ export function CreateNudgeModal({
     <Modal title={`Create nudge · ${clientName}`} onClose={onClose}>
       <div className="space-y-4">
         {/* Type */}
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           {TYPES.map((t) => (
             <button
               key={t.value}
@@ -164,6 +189,66 @@ export function CreateNudgeModal({
                 ))}
               </select>
             )}
+            <button
+              onClick={aiDraft}
+              disabled={!canAiDraft || drafting}
+              className="rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-1.5 text-[12px] font-medium text-tlw-espresso transition-colors hover:border-tlw-warm-gray/50 disabled:opacity-40"
+            >
+              {drafting ? 'Drafting…' : '✨ Draft with AI'}
+            </button>
+          </div>
+        )}
+
+        {type === 'goals' && (
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <label className="text-[11px] uppercase tracking-[1.5px] text-tlw-warm-gray">
+                Goal to nudge around
+              </label>
+              {goals.length === 0 ? (
+                <p className="text-[12px] text-tlw-warm-gray">
+                  No engagement goals on file for this client — set their goals on the workspace
+                  Goals card first, or write the nudge by hand below.
+                </p>
+              ) : (
+                <select
+                  value={anchor}
+                  onChange={(e) => setAnchor(e.target.value)}
+                  className="w-full rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-surface px-3 py-2 text-[13px] text-tlw-espresso outline-none focus:border-tlw-navy-rich"
+                >
+                  <option value="">Choose one…</option>
+                  <option value="__all__">All goals ({goals.length})</option>
+                  {goals.map((g) => (
+                    <option key={g.title} value={g.title}>
+                      {g.title.length > 90 ? `${g.title.slice(0, 90)}…` : g.title}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[11px] uppercase tracking-[1.5px] text-tlw-warm-gray">Angle</label>
+              <div className="grid grid-cols-3 gap-2">
+                {GOAL_ANGLES.map((a) => (
+                  <button
+                    key={a.value}
+                    onClick={() => setGoalAngle(a.value)}
+                    className={`rounded-tlw-lg border px-3 py-2 text-left transition-colors ${
+                      goalAngle === a.value
+                        ? 'border-tlw-navy-rich bg-tlw-navy-rich/5'
+                        : 'border-tlw-warm-gray/25 hover:border-tlw-warm-gray/50'
+                    }`}
+                  >
+                    <div className="text-[12px] font-medium text-tlw-espresso">{a.label}</div>
+                  </button>
+                ))}
+              </div>
+              <p className="text-[12px] text-tlw-warm-gray">
+                {GOAL_ANGLES.find((a) => a.value === goalAngle)?.blurb}
+              </p>
+            </div>
+
             <button
               onClick={aiDraft}
               disabled={!canAiDraft || drafting}
