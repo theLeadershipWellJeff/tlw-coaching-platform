@@ -631,9 +631,15 @@ an **angle** — `reminder` (bring the goal back with one small step), `assessme
 (how are the goals sitting? invite adjusting them), or `win` (name a recent win
 on the goal). AI-drafts via `/nudges/draft-one` (`{type:'goals', goal_focus:
 '<title>'|'__all__', goal_angle}` → `draft.ts` `goalsContext` voice rules);
-`trigger_excerpt` stores a readable "Goal: X · Win check" line. The automatic
-pipeline never proposes `goals` nudges — no migration needed (`nudges.type` is
-unconstrained text). `send.ts#sendNudge` is the one send path: enforces the
+`trigger_excerpt` stores a readable "Goal: X · Win check" line. The selected
+goal(s) are ALWAYS listed verbatim in the email body — bulleted, metrics beneath
+— via `lib/nudges/goal-list.ts#formatGoalListForEmail` (metric lines indented
+with em-spaces, since plain leading spaces collapse in the HTML render):
+`draftNudge` appends the block to every AI draft (the prompt tells the model not
+to enumerate the goals itself) and `CreateNudgeModal` inserts/replaces it in the
+body when the coach picks a goal, so hand-written nudges carry it too. The
+automatic pipeline never proposes `goals` nudges — no migration needed
+(`nudges.type` is unconstrained text). `send.ts#sendNudge` is the one send path: enforces the
 **spacing rule** (§3.4 — refuses if the client got any outbound communication
 within `nudge_settings.nudge_spacing_days`, default 4), appends the signature
 server-side, sends via the coach's Gmail (`sendCoachHtmlEmail`, unattended-capable),

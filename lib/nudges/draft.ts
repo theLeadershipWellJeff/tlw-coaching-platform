@@ -13,6 +13,7 @@
 import { complete, parseJsonFrom } from './llm'
 import type { NudgeCandidate, NudgeDraft, GoalsDraftContext } from './types'
 import type { FrameworkDraftContext } from './garden'
+import { formatGoalListForEmail } from './goal-list'
 
 const SYSTEM = `You write a single short, warm, between-session email from an executive coach to their client. It must sound like the coach, not like software.
 
@@ -27,6 +28,9 @@ Voice rules:
   - "assessment": reflect their current goal(s) back in a sentence or two, ask how the goals are sitting with them — still the right ones? too easy, too hard, or pointed at the wrong thing? — and invite them to adjust the goals together with you (a reply or the next session both work).
   - "win": invite them to name one recent win — however small — connected to the goal(s), and celebrate the progress that's already happening. The point is noticing movement, not measuring it.
   With several goals, weave them together briefly — never a numbered recitation of the whole list.
+  Do NOT paste the goal list into your message: a verbatim, bulleted reference list of the goal(s)
+  (with their metrics) is appended below your message automatically. Write the message so it flows
+  naturally into that list (e.g. end near "…here they are for quick reference:").
 - End encouraging.
 - Plain, natural language. No corporate stiffness. No bullet lists unless it truly helps.
 - Do NOT include a signature, sign-off block, or "[Your name]" — a signature is added automatically. A short closing line like "Talk soon!" is fine.
@@ -101,7 +105,10 @@ export async function draftNudge(opts: {
     return null
   }
   const subject = typeof parsed.subject === 'string' ? parsed.subject.trim() : ''
-  const body = typeof parsed.body === 'string' ? parsed.body.trim() : ''
+  let body = typeof parsed.body === 'string' ? parsed.body.trim() : ''
   if (!body) return null
+  // Goals nudge: the reference list is appended in code, never left to the
+  // model, so the goal titles + metrics in the email are always verbatim.
+  if (goalsContext) body = `${body}\n\n${formatGoalListForEmail(goalsContext.goals)}`
   return { subject: subject || 'A quick note', body }
 }
