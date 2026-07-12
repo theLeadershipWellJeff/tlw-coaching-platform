@@ -1,7 +1,8 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Client } from '@/lib/supabase/types'
 import { GoalRows, type GoalDraft, toDrafts, cleanGoals, emptyGoal, untitledGoals } from './GoalRows'
+import { useGoalJobs, startGoalGeneration, retryGoalGeneration, dismissGoalJob } from '@/lib/goal-jobs'
 
 export function GoalsCard({
   client,
@@ -13,10 +14,26 @@ export function GoalsCard({
   const goals = client.coaching_goals || []
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState<GoalDraft[]>(toDrafts(goals))
-  const [busy, setBusy] = useState<'generate' | 'save' | null>(null)
+  const [busy, setBusy] = useState<'save' | null>(null)
   const [error, setError] = useState('')
 
-  async function generate() {
+  // Fire-and-forget generation (lib/goal-jobs.ts): the click registers a job
+  // and returns immediately — the server persists the goals even if the coach
+  // leaves the page, and the card resolves the job when they come back.
+  const job = useGoalJobs().find((j) => j.clientId === client.id)
+  const generating = job?.status === 'running'
+
+  useEffect(() => {
+    if (job?.status !== 'done') return
+    if (job.goals) {
+      onUpdated({ ...client, coaching_goals: job.goals })
+      if (!editing) setDraft(toDrafts(job.goals))
+    }
+    dismissGoalJob(client.id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [job?.status])
+
+  function generate() {
     // Hand-written/edited goals are protected server-side; warn so the coach
     // knows the suggestions are added below them, not a replacement.
     const hasProtected = goals.some((g) => g.source !== 'generated')
@@ -28,20 +45,8 @@ export function GoalsCard({
     ) {
       return
     }
-    setBusy('generate')
     setError('')
-    try {
-      const res = await fetch(`/api/clients/${client.id}/goals/generate`, { method: 'POST' })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Could not generate goals')
-      onUpdated({ ...client, coaching_goals: data.goals })
-      setDraft(toDrafts(data.goals))
-      setEditing(false)
-    } catch (e: any) {
-      setError(e.message)
-    } finally {
-      setBusy(null)
-    }
+    startGoalGeneration(client.id, client.coaching_goals)
   }
 
   async function save() {
@@ -83,10 +88,10 @@ export function GoalsCard({
         <div className="flex items-center gap-3">
           <button
             onClick={generate}
-            disabled={busy !== null}
+            disabled={busy !== null || generating}
             className="text-[12px] font-medium text-tlw-signal-orange hover:underline disabled:opacity-40"
           >
-            {busy === 'generate' ? 'generating…' : 'generate from notes'}
+            {generating ? 'generating…' : 'generate from notes'}
           </button>
           {!editing && (
             <button onClick={edit} className="text-[12px] font-medium text-tlw-warm-gray hover:text-tlw-espresso">
@@ -95,6 +100,25 @@ export function GoalsCard({
           )}
         </div>
       </div>
+
+      {generating && (
+        <p className="mb-3 text-[12px] text-tlw-warm-gray">
+          Drafting goals from this client&apos;s notes — feel free to keep working or leave the page;
+          they&apos;ll appear here when ready.
+        </p>
+      )}
+
+      {job?.status === 'error' && (
+        <p className="mb-3 text-[12px] text-tlw-signal-orange">
+          {job.error}{' '}
+          <button onClick={() => retryGoalGeneration(client.id)} className="font-medium underline">
+            retry
+          </button>{' '}
+          <button onClick={() => dismissGoalJob(client.id)} className="text-tlw-warm-gray underline">
+            dismiss
+          </button>
+        </p>
+      )}
 
       {error && <p className="mb-3 text-[12px] text-tlw-signal-orange">{error}</p>}
 

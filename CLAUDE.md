@@ -275,8 +275,18 @@ with "Retry failed". Gmail's own daily send limits apply (~500/day consumer,
 ### Client workspace (`app/(authenticated)/clients/[id]`)
 Name card (gear → edit), Transcripts + Notes summary cards, New note / Send
 email actions, Coaching goals card (generate from notes via
-`/api/clients/[id]/goals/generate`, or edit by hand). Email composes+sends via
-Gmail (`/api/email/send`). **Transcript file import** lives on the Transcripts
+`/api/clients/[id]/goals/generate`, or edit by hand). **Goal generation is
+fire-and-forget** (`lib/goal-jobs.ts`, mirrors `lib/scoring-jobs.ts`): the click
+registers a localStorage job (`tlw-goal-jobs`) and returns immediately — the
+route persists the merged goals itself, so the coach can leave the page; the
+goals cards (workspace `GoalsCard` + notes-panel `EngagementGoalsCard`) show a
+"generating…" state, resolve via the in-page fetch or an 8 s poller comparing
+`coaching_goals` to the job's baseline, and surface a retry on timeout (3 min).
+The **Coaching map** is also a workspace block (`ws-coaching-map` → reuses
+`CoachingMapCard` with `chrome="card"`; compact = the map name) and selectable
+in the edit-client modal (a "Coaching map" pulldown of
+`CoachingMapCard#COACHING_MAP_NAMES` — same `clients.coaching_map` column as the
+notes-rail card). Email composes+sends via Gmail (`/api/email/send`). **Transcript file import** lives on the Transcripts
 card (a "+ Import" button → `ImportTranscriptModal`): the coach picks local
 file(s) — md/txt/vtt/srt/docx/pdf — which `POST /api/clients/[id]/import-file`
 (multipart, 4 MB/file) extracts to text (`lib/transcripts/extract.ts` — caption

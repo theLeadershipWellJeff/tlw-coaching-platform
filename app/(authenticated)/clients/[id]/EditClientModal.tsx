@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import type { Client } from '@/lib/supabase/types'
 import { Modal } from '@/app/components/shared/Modal'
 import { TimezoneCombobox } from '@/app/components/shared/TimezoneCombobox'
+import { COACHING_MAP_NAMES } from './CoachingMapCard'
 
 const FIELDS: { key: keyof Client; label: string; type?: string; placeholder?: string }[] = [
   { key: 'name', label: 'Name' },
@@ -58,6 +59,7 @@ export function EditClientModal({
       timezone: client.timezone || '',
       timezone_label: client.timezone_label || '',
       client_type: (client as any).client_type || 'client',
+      coaching_map: client.coaching_map || '',
     }
     for (const { key } of FIELDS) f[key] = (client[key] as string) || ''
     return f
@@ -194,6 +196,7 @@ export function EditClientModal({
         timezone: form.timezone.trim() || null,
         timezone_label: form.timezone.trim() ? form.timezone_label.trim() || null : null,
         client_type: form.client_type,
+        coaching_map: form.coaching_map.trim() || null,
         agreement_on_file: agreementOnFile,
         recording_authorized: recording === 'yes' ? true : recording === 'no' ? false : null,
       }
@@ -319,6 +322,29 @@ export function EditClientModal({
               </option>
             ))}
           </select>
+        </label>
+
+        <label className="block">
+          <span className="text-[11px] font-medium uppercase tracking-[1.5px] text-tlw-warm-gray">Coaching map</span>
+          <select
+            value={form.coaching_map}
+            onChange={(e) => set('coaching_map', e.target.value)}
+            className="mt-1 w-full rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-surface px-3 py-2 text-[13px] text-tlw-espresso outline-none focus:border-tlw-signal-orange"
+          >
+            <option value="">— no map —</option>
+            {(COACHING_MAP_NAMES.includes(form.coaching_map) || !form.coaching_map
+              ? COACHING_MAP_NAMES
+              : [...COACHING_MAP_NAMES, form.coaching_map]
+            ).map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+          <span className="mt-1 block text-[11px] text-tlw-warm-gray">
+            Shown on the workspace Coaching map card and the session-notes rail; the structure is
+            drawn live from the vault.
+          </span>
         </label>
 
         <div className="block rounded-tlw-md border border-tlw-warm-gray/20 bg-tlw-canvas/60 p-3">
