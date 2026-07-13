@@ -136,7 +136,6 @@ function LineRow({
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
           type="number"
-          min="0"
           step="0.01"
         />
         <button onClick={save} disabled={saving} className="shrink-0 text-[12px] font-medium text-tlw-navy-deep hover:underline disabled:opacity-50">
@@ -338,7 +337,6 @@ function AddLineForm({
         />
         <input
           type="number"
-          min="0"
           step="0.01"
           placeholder="0.00"
           value={amount}
@@ -719,8 +717,11 @@ function CreateInvoiceModal({
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
-    const validLines = lines.filter((l) => l.description.trim() && parseFloat(l.amount) > 0)
+    // Negative amounts are valid discount lines; only zero/blank lines are dropped.
+    const validLines = lines.filter((l) => l.description.trim() && !isNaN(parseFloat(l.amount)) && parseFloat(l.amount) !== 0)
     if (validLines.length === 0) { setError('Add at least one line with a description and amount.'); return }
+    const validTotal = validLines.reduce((s, l) => s + parseFloat(l.amount), 0)
+    if (validTotal <= 0) { setError('Invoice total must be greater than zero after discounts.'); return }
     setSaving(true)
     setError('')
 
@@ -864,7 +865,6 @@ function CreateInvoiceModal({
                       className="w-28 rounded-tlw-lg border border-tlw-warm-gray/30 bg-tlw-canvas px-3 py-1.5 text-right text-[13px] text-tlw-espresso focus:outline-none focus:ring-1 focus:ring-tlw-navy-deep/30"
                       placeholder="0.00"
                       type="number"
-                      min="0"
                       step="0.01"
                       value={line.amount}
                       onChange={(e) => updateLine(i, 'amount', e.target.value)}
@@ -879,6 +879,7 @@ function CreateInvoiceModal({
               <button type="button" onClick={addLine} className="mt-2 text-[12px] font-medium text-tlw-navy-deep hover:underline">
                 + Add line
               </button>
+              <p className="mt-1 text-[11px] text-tlw-warm-gray">Use a negative amount for a discount line (e.g. −200).</p>
             </div>
 
             <div className="flex items-center justify-between border-t border-tlw-warm-gray/10 pt-3">

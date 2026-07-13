@@ -53,7 +53,11 @@ function formatPeriod(start: string | null, end: string | null): string {
 
 // ── Create Invoice Modal ───────────────────────────────────────────────────────
 
-function CreateInvoiceModal({ onCreated, onClose }: { onCreated: () => void; onClose: () => void }) {
+function CreateInvoiceModal({ prefillClientId, onCreated, onClose }: {
+  prefillClientId?: string | null
+  onCreated: () => void
+  onClose: () => void
+}) {
   const [accounts, setAccounts] = useState<BillingAccount[]>([])
   const [mode, setMode] = useState<'account' | 'oneoff'>('account')
   const [accountId, setAccountId] = useState('')
@@ -66,14 +70,29 @@ function CreateInvoiceModal({ onCreated, onClose }: { onCreated: () => void; onC
   const [error, setError] = useState('')
 
   useEffect(() => {
-    fetch('/api/billing/accounts')
+    const url = prefillClientId
+      ? `/api/billing/accounts?clientId=${encodeURIComponent(prefillClientId)}`
+      : '/api/billing/accounts'
+    fetch(url)
       .then((r) => r.ok ? r.json() : Promise.reject())
       .then((d) => {
         setAccounts(d.accounts ?? [])
-        if (d.accounts?.[0]) setAccountId(d.accounts[0].id)
+        // Coming from a client workspace: preselect the client's billing
+        // account, or prefill a one-off with their name/email if they have none.
+        const match = d.clientMatch as { accountId: string | null; name: string | null; email: string | null } | undefined
+        if (match?.accountId && d.accounts?.some((a: BillingAccount) => a.id === match.accountId)) {
+          setAccountId(match.accountId)
+        } else if (match?.name) {
+          setMode('oneoff')
+          setOneoffName(match.name)
+          setOneoffEmail(match.email ?? '')
+          if (d.accounts?.[0]) setAccountId(d.accounts[0].id)
+        } else if (d.accounts?.[0]) {
+          setAccountId(d.accounts[0].id)
+        }
       })
       .catch(() => {})
-  }, [])
+  }, [prefillClientId])
 
   const total = lines.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0)
 
@@ -85,8 +104,11 @@ function CreateInvoiceModal({ onCreated, onClose }: { onCreated: () => void; onC
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
-    const validLines = lines.filter((l) => l.description.trim() && parseFloat(l.amount) > 0)
+    // Negative amounts are valid discount lines; only zero/blank lines are dropped.
+    const validLines = lines.filter((l) => l.description.trim() && !isNaN(parseFloat(l.amount)) && parseFloat(l.amount) !== 0)
     if (validLines.length === 0) { setError('Add at least one line with a description and amount.'); return }
+    const validTotal = validLines.reduce((s, l) => s + parseFloat(l.amount), 0)
+    if (validTotal <= 0) { setError('Invoice total must be greater than zero after discounts.'); return }
     setSaving(true); setError('')
 
     let billingAccountId = accountId
@@ -210,7 +232,7 @@ function CreateInvoiceModal({ onCreated, onClose }: { onCreated: () => void; onC
                       className="min-w-0 flex-1 rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-canvas px-3 py-1.5 text-[13px] text-tlw-espresso outline-none focus:border-tlw-signal-orange"
                     />
                     <input
-                      type="number" min="0" step="any"
+                      type="number" step="any"
                       value={l.amount}
                       onChange={(e) => updateLine(i, 'amount', e.target.value)}
                       placeholder="$0"
@@ -225,6 +247,7 @@ function CreateInvoiceModal({ onCreated, onClose }: { onCreated: () => void; onC
               <button type="button" onClick={addLine} className="mt-2 text-[12px] text-tlw-navy-deep hover:underline">
                 + Add line
               </button>
+              <p className="mt-1 text-[11px] text-tlw-warm-gray">Use a negative amount for a discount line (e.g. −200).</p>
             </div>
 
             <div className="flex justify-between text-[13px] font-semibold text-tlw-navy-deep">
@@ -261,7 +284,16 @@ function InvoicesContent() {
   const [search, setSearch] = useState('')
   const initialStatus = (searchParams.get('status') ?? 'all') as StatusFilter
   const [status, setStatus] = useState<StatusFilter>(STATUS_OPTIONS.includes(initialStatus) ? initialStatus : 'all')
-  const [showCreate, setShowCreate] = useState(false)
+  // ?new=1[&client=<id>] — arriving from a client workspace opens the create
+  // modal immediately, preselecting that client's billing account.
+  const [showCreate, setShowCreate] = useState(searchParams.get('new') === '1')
+  const [prefillClientId] = useState<string | null>(searchParams.get('client'))
+
+  // Strip the one-shot params so a refresh doesn't reopen the modal.
+  function closeCreate() {
+    setShowCreate(false)
+    if (searchParams.get('new')) router.replace('/business-center/invoices')
+  }
 
   const loadInvoices = useCallback(async () => {
     setLoading(true)
@@ -392,8 +424,9 @@ function InvoicesContent() {
 
       {showCreate && (
         <CreateInvoiceModal
-          onCreated={() => { setShowCreate(false); loadInvoices() }}
-          onClose={() => setShowCreate(false)}
+          prefillClientId={prefillClientId}
+          onCreated={() => { closeCreate(); loadInvoices() }}
+          onClose={closeCreate}
         />
       )}
     </>

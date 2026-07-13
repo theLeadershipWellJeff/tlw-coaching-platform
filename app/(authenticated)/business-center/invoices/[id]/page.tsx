@@ -31,7 +31,7 @@ function AddLineForm({ invoiceId, onAdded }: { invoiceId: string; onAdded: (line
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
-    if (!desc.trim() || !amount) return
+    if (!desc.trim() || !amount || Number(amount) === 0) return
     setSaving(true)
     setErr('')
     const res = await fetch(`/api/billing/invoices/${invoiceId}/lines`, {
@@ -65,7 +65,6 @@ function AddLineForm({ invoiceId, onAdded }: { invoiceId: string; onAdded: (line
           <label className="mb-1 block text-[11px] text-tlw-warm-gray">Amount ($)</label>
           <input
             type="number"
-            min="0"
             step="any"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
@@ -82,6 +81,7 @@ function AddLineForm({ invoiceId, onAdded }: { invoiceId: string; onAdded: (line
           {saving ? 'Adding…' : 'Add'}
         </button>
       </div>
+      <p className="mt-2 text-[11px] text-tlw-warm-gray">Use a negative amount for a discount line (e.g. −200).</p>
       {err && <p className="mt-2 text-[12px] text-red-600">{err}</p>}
     </form>
   )
@@ -143,7 +143,6 @@ function EditLineModal({ line, invoiceId, onSaved, onDeleted, onClose }: {
             <span className="text-[11px] font-medium uppercase tracking-[1.5px] text-tlw-warm-gray">Amount ($)</span>
             <input
               type="number"
-              min="0"
               step="any"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}

@@ -106,7 +106,7 @@ export function ClientDetail({ clientId }: { clientId: string }) {
           Compose Email
         </button>
         <Link
-          href="/business-center/run"
+          href={`/business-center/invoices?new=1&client=${clientId}`}
           className="rounded-tlw-lg border border-tlw-warm-gray/30 px-4 py-2 text-[13px] font-medium text-tlw-espresso transition-colors hover:border-tlw-warm-gray/50"
         >
           Create invoice

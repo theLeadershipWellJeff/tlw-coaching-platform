@@ -21,7 +21,7 @@ export async function POST(_req: NextRequest, { params }: Params) {
 
   const { data: invoice, error: fetchErr } = await supabase
     .from('invoices')
-    .select('id, status')
+    .select('id, status, total')
     .eq('id', params.id)
     .eq('coach_id', coach.id)
     .maybeSingle()
@@ -30,6 +30,9 @@ export async function POST(_req: NextRequest, { params }: Params) {
   if (!invoice) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   if (invoice.status !== 'draft')
     return NextResponse.json({ error: `Cannot approve an invoice with status '${invoice.status}'` }, { status: 409 })
+  // Discount lines can drag a draft to zero or below — Stripe can't charge that.
+  if (!((invoice as any).total > 0))
+    return NextResponse.json({ error: 'Invoice total must be greater than zero after discounts' }, { status: 409 })
 
   const now = new Date().toISOString()
   const { data, error } = await supabase
