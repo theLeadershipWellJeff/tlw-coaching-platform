@@ -107,6 +107,21 @@ export async function GET() {
     .gte('session_date', notesStart)
     .lt('session_date', ymdStr(thisMonday))
 
+  // Per-client roll-ups for the breakdown pies (client · sessions · amount),
+  // one map per period. Same amounts the totals are built from — no new math.
+  type ClientAgg = { client: string; sessions: number; amount: number }
+  const pastByClient = new Map<string, ClientAgg>()
+  const projectedByClient = new Map<string, ClientAgg>()
+  const annualByClient = new Map<string, ClientAgg>()
+  const bump = (map: Map<string, ClientAgg>, clientId: string, amount: number) => {
+    const cur = map.get(clientId) ?? { client: nameById.get(clientId) || '—', sessions: 0, amount: 0 }
+    cur.sessions++
+    cur.amount += amount
+    map.set(clientId, cur)
+  }
+  const byClientList = (map: Map<string, ClientAgg>) =>
+    Array.from(map.values()).sort((a, b) => b.amount - a.amount)
+
   let pastTotal = 0
   let pastHours = 0
   let pastSessions = 0
@@ -125,12 +140,14 @@ export async function GET() {
       pastTotal += amount
       pastSessions++
       pastLines.push({ client: nameById.get(n.client_id) || '—', minutes, amount })
+      bump(pastByClient, n.client_id, amount)
     } else if (sd >= priorMondayStr) {
       priorTotal += amount
     }
     if (sd >= yearStartStr) {
       actualsYtd += amount
       monthlyActual[+sd.slice(5, 7)] += amount
+      bump(annualByClient, n.client_id, amount)
     }
   }
 
@@ -154,12 +171,14 @@ export async function GET() {
         const amount = sessionRevenue(feeById.get(ev.clientId), ev.durationMinutes)
         projectedRemainder += amount
         monthlyProjected[ch.start.m] += amount // chunk is within one calendar month
+        bump(annualByClient, ev.clientId, amount) // annual = actuals YTD + this projection
         // The current week is the existing "this week projected" figure.
         const evMs = ev.start ? Date.parse(ev.start) : NaN
         if (Number.isFinite(evMs) && evMs < nextMondayMs) {
           projectedSessions++
           projectedHours += billedHours(ev.durationMinutes)
           projectedTotal += amount
+          bump(projectedByClient, ev.clientId, amount)
         }
       }
     }
@@ -182,6 +201,12 @@ export async function GET() {
         actual: monthlyActual[i + 1],
         projected: monthlyProjected[i + 1],
       })),
+    },
+    // Per-client roll-ups for the revenue-card breakdown pies.
+    byClient: {
+      past: byClientList(pastByClient),
+      projected: byClientList(projectedByClient),
+      annual: byClientList(annualByClient),
     },
   })
 }

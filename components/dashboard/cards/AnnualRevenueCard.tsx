@@ -7,8 +7,10 @@
  *   standard  → $ + YTD-vs-projected split
  *   expanded  → $ + monthly trend (actual vs projected) + split
  */
+import { useState } from 'react'
 import { CARD_META } from '@/lib/dashboard/cards'
 import { useRevenueData, type RevenueData } from '@/lib/dashboard/useRevenueData'
+import { RevenueBreakdownModal } from '@/components/dashboard/RevenueBreakdownModal'
 import type { CardSize, DashboardCard } from '@/lib/dashboard/types'
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -70,24 +72,64 @@ function MonthlyTrend({ data }: { data: RevenueData }) {
 }
 
 function AnnualRevenue({ size, data }: { size: CardSize; data: RevenueData }) {
+  const [showBreakdown, setShowBreakdown] = useState(false)
   if (data.loading) return <div className="h-16 animate-pulse rounded-tlw-lg bg-tlw-canvas/70" />
   if (data.error || !data.revenue) return <p className="text-[13px] text-tlw-warm-gray">Couldn&apos;t load revenue.</p>
 
   const a = data.revenue.annual
+  const byClient = data.revenue.byClient
+
+  const modal = showBreakdown && (
+    <RevenueBreakdownModal
+      title="Annual revenue · by client"
+      subtitle={`${a.year} actual + projected — each slice is one client's share of ${money(a.total)}`}
+      total={a.total}
+      items={byClient?.annual ?? []}
+      onClose={() => setShowBreakdown(false)}
+    />
+  )
+
   const Amount = (
     <div>
-      <p className="text-[30px] font-medium leading-none text-tlw-navy-deep">{money(a.total)}</p>
+      <button
+        onClick={() => setShowBreakdown(true)}
+        title="See the by-client breakdown"
+        className="block text-left"
+      >
+        <p className="text-[30px] font-medium leading-none text-tlw-navy-deep transition-colors hover:text-tlw-navy-rich hover:underline">
+          {money(a.total)}
+        </p>
+      </button>
       <p className="mt-2 text-[11px] text-tlw-warm-gray">{a.year} full-year</p>
     </div>
   )
 
-  if (size === 'compact') return Amount
+  const ByClient = (
+    <button
+      onClick={() => setShowBreakdown(true)}
+      className="mt-1.5 text-[12px] font-medium text-tlw-signal-orange hover:underline"
+    >
+      By client →
+    </button>
+  )
+
+  if (size === 'compact') {
+    return (
+      <div>
+        {Amount}
+        {ByClient}
+        {modal}
+      </div>
+    )
+  }
 
   if (size === 'standard') {
     return (
       <div>
         {Amount}
         <Split data={data} />
+        {ByClient}
+        {modal}
       </div>
     )
   }
@@ -97,10 +139,12 @@ function AnnualRevenue({ size, data }: { size: CardSize; data: RevenueData }) {
     <div>
       {Amount}
       <Split data={data} />
+      {ByClient}
       <div className="mt-4 border-t border-tlw-warm-gray/15 pt-3">
         <p className="mb-2 text-[11px] font-medium uppercase tracking-[2px] text-tlw-warm-gray">Monthly trend</p>
         <MonthlyTrend data={data} />
       </div>
+      {modal}
     </div>
   )
 }

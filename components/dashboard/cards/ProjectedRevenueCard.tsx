@@ -7,8 +7,10 @@
  *   standard  → $ + basis (scheduled sessions on the calendar)
  *   expanded  → $ + basis + a forward projection chart (remaining months)
  */
+import { useState } from 'react'
 import { CARD_META } from '@/lib/dashboard/cards'
 import { useRevenueData, type RevenueData } from '@/lib/dashboard/useRevenueData'
+import { RevenueBreakdownModal } from '@/components/dashboard/RevenueBreakdownModal'
 import type { CardSize, DashboardCard } from '@/lib/dashboard/types'
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -57,11 +59,41 @@ function ForwardChart({ data }: { data: RevenueData }) {
 }
 
 function ProjectedRevenue({ size, data }: { size: CardSize; data: RevenueData }) {
+  const [showBreakdown, setShowBreakdown] = useState(false)
   if (data.loading) return <div className="h-16 animate-pulse rounded-tlw-lg bg-tlw-canvas/70" />
   if (data.error || !data.revenue) return <p className="text-[13px] text-tlw-warm-gray">Couldn&apos;t load revenue.</p>
 
+  const { projected, byClient } = data.revenue
+
+  const modal = showBreakdown && (
+    <RevenueBreakdownModal
+      title="Projected revenue · by client"
+      subtitle={`This week's scheduled sessions — each slice is one client's share of ${money(projected.total)}`}
+      total={projected.total}
+      items={byClient?.projected ?? []}
+      onClose={() => setShowBreakdown(false)}
+    />
+  )
+
   const Amount = (
-    <p className="text-[30px] font-medium leading-none text-tlw-navy-deep">{money(data.revenue.projected.total)}</p>
+    <button
+      onClick={() => setShowBreakdown(true)}
+      title="See the by-client breakdown"
+      className="block text-left"
+    >
+      <p className="text-[30px] font-medium leading-none text-tlw-navy-deep transition-colors hover:text-tlw-navy-rich hover:underline">
+        {money(projected.total)}
+      </p>
+    </button>
+  )
+
+  const ByClient = (
+    <button
+      onClick={() => setShowBreakdown(true)}
+      className="mt-1.5 text-[12px] font-medium text-tlw-signal-orange hover:underline"
+    >
+      By client →
+    </button>
   )
 
   if (size === 'compact') {
@@ -69,6 +101,8 @@ function ProjectedRevenue({ size, data }: { size: CardSize; data: RevenueData })
       <div>
         {Amount}
         <p className="mt-2 text-[11px] text-tlw-warm-gray">this week projected</p>
+        {ByClient}
+        {modal}
       </div>
     )
   }
@@ -78,6 +112,8 @@ function ProjectedRevenue({ size, data }: { size: CardSize; data: RevenueData })
       <div>
         {Amount}
         <Basis data={data} />
+        {ByClient}
+        {modal}
       </div>
     )
   }
@@ -87,12 +123,14 @@ function ProjectedRevenue({ size, data }: { size: CardSize; data: RevenueData })
     <div>
       {Amount}
       <Basis data={data} />
+      {ByClient}
       <div className="mt-4 border-t border-tlw-warm-gray/15 pt-3">
         <p className="mb-2 text-[11px] font-medium uppercase tracking-[2px] text-tlw-warm-gray">
           Projected through year-end
         </p>
         <ForwardChart data={data} />
       </div>
+      {modal}
     </div>
   )
 }
