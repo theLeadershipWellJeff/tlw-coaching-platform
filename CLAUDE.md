@@ -959,7 +959,9 @@ index over the vault repo; **superseded by 024**) · 024 garden (`garden_notes` 
 unique index, and `coaches.calendar_sync_token`/`calendar_synced_at` — the Calendly/
 HubSpot → Next Appointment calendar-watch pipeline; additive) · 031 billing CC +
 invoice message (`billing_accounts.billing_cc` optional CC email; `invoices.client_message`
-free-text note shown to the client at the top of the invoice; both additive/nullable) ·
+free-text note shown to the client at the top of the invoice; both additive/nullable;
+**applied** — confirmed July 13 2026, after a live "column billing_accounts_1.billing_cc
+does not exist" send failure showed it had been missed) ·
 032 billing skip + warnings (`engagements.skip_billing` boolean; `billable_sessions.appointment_id`
 FK; `billing_run_warnings` table for calendar cross-check and subscription no-sessions warnings) ·
 033 billing settings (`coaches.billing_settings` jsonb — preview_before_approve, auto_send_on_approve,
@@ -977,8 +979,8 @@ received this calendar year; for other modes it stays total sessions in the
 engagement — shared math in `lib/billing/engagement-progress.ts`; **applied**) ·
 037 invoice re-send + receipt (`invoices.receipt_token`/`received_at`/
 `last_resent_at` — tracked "View & pay" link marks an invoice received on first
-open; `last_resent_at` audits re-sends; additive, nullable; **apply before
-deploying the invoice resend/receipt code**).
+open; `last_resent_at` audits re-sends; additive, nullable; **applied** —
+confirmed July 13 2026, run together with 031).
 
 **Tenant scoping (015).** `coach_clients` (coach_id, client_id, role) is the
 ownership link. Client access is enforced **server-side** by the session coach,
@@ -1009,10 +1011,10 @@ Calendly/HubSpot calendar-watch capture — additive; **apply before the calenda
 cron / Unmatched bookings panel are used**), and `035_nudge_pdf_attachment.sql`
 (nudge/garden PDF-attachment columns — **apply before deploying the nudge changes;
 the nudge list/create routes now reference the columns**). `036_engagement_length.sql`
-is **applied** (confirmed July 11 2026). `037_invoice_resend_receipt.sql`
-(`invoices.receipt_token`/`received_at`/`last_resent_at` — invoice re-send +
-receipt tracking; additive/nullable; **apply before deploying — the invoice send
-path, resend route, and billing-reminders cron reference the columns**).
+is **applied** (confirmed July 11 2026). `031_billing_cc_invoice_message.sql` and
+`037_invoice_resend_receipt.sql` are **applied** (confirmed July 13 2026 — 031 had
+been missed, surfacing as a "column billing_accounts_1.billing_cc does not exist"
+error on invoice send; both were run together in the SQL editor).
 ⚠️ **015 must be run BEFORE
 the tenant-scoping code is deployed to `main`** — until the table exists and is
 backfilled, the roster would filter to zero clients. Read the backfill comment in
