@@ -190,6 +190,9 @@ export default function InvoiceDetailPage() {
   const [markPaidErr, setMarkPaidErr] = useState('')
   const [approving, setApproving] = useState(false)
   const [sending, setSending] = useState(false)
+  const [resending, setResending] = useState(false)
+  const [resendDone, setResendDone] = useState(false)
+  const [resendErr, setResendErr] = useState('')
   const [actionErr, setActionErr] = useState('')
 
   useEffect(() => {
@@ -261,6 +264,9 @@ export default function InvoiceDetailPage() {
     if (!invoice) return
     setSending(true)
     setActionErr('')
+    // The note is editable through 'approved' and rides along with the send —
+    // persist a typed-but-unsaved note before sending so it isn't lost.
+    await persistMessage()
     const res = await fetch(`/api/billing/invoices/${invoice.id}/send`, { method: 'POST' })
     const data = await res.json()
     if (res.ok && data.ok) {
@@ -278,6 +284,24 @@ export default function InvoiceDetailPage() {
   async function approveAndSend() {
     const ok = await approve()
     if (ok) await send()
+  }
+
+  // Re-delivers a sent/overdue/failed invoice: Stripe re-emails the hosted
+  // invoice and the cover email (with the note) goes out again.
+  async function resend() {
+    if (!invoice) return
+    setResending(true)
+    setResendErr('')
+    setResendDone(false)
+    const res = await fetch(`/api/billing/invoices/${invoice.id}/resend`, { method: 'POST' })
+    const data = await res.json()
+    if (res.ok && data.ok) {
+      setInvoice((inv) => inv ? { ...inv, last_resent_at: data.resentAt ?? new Date().toISOString() } : inv)
+      setResendDone(true)
+    } else {
+      setResendErr(data.error ?? 'Failed to re-send invoice')
+    }
+    setResending(false)
   }
 
   function addLine(line: InvoiceLine) {
@@ -318,6 +342,14 @@ export default function InvoiceDetailPage() {
                 {invoice.status}
               </span>
             )}
+            {invoice?.received_at && ['sent', 'overdue'].includes(invoice.status) && (
+              <span
+                className="rounded-full bg-emerald-50 px-3 py-1 text-[12px] font-medium text-emerald-700"
+                title={`Client opened the invoice ${new Date(invoice.received_at).toLocaleString()}`}
+              >
+                received ✓
+              </span>
+            )}
             <Link
               href="/business-center/invoices"
               className="rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-1.5 text-[13px] text-tlw-espresso transition-colors hover:bg-tlw-canvas"
@@ -336,8 +368,8 @@ export default function InvoiceDetailPage() {
           {/* Client message */}
           <section className="rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface px-5 py-4">
             <p className="mb-2 text-[13px] font-semibold text-tlw-navy-deep">Message to client</p>
-            <p className="mb-2 text-[11px] text-tlw-warm-gray">This appears at the top of the invoice when the client views it.</p>
-            {invoice.status === 'draft' ? (
+            <p className="mb-2 text-[11px] text-tlw-warm-gray">Sent with the invoice — it appears in the email to the client and as the memo on the Stripe invoice. Editable until the invoice is sent.</p>
+            {['draft', 'approved'].includes(invoice.status) ? (
               <div className="space-y-2">
                 <textarea
                   value={message}
@@ -416,6 +448,8 @@ export default function InvoiceDetailPage() {
                   <p>Approved by {invoice.approved_by ?? '—'} · {new Date(invoice.approved_at).toLocaleString()}</p>
                 )}
                 {invoice.sent_at && <p>Sent · {new Date(invoice.sent_at).toLocaleString()}</p>}
+                {invoice.last_resent_at && <p>Re-sent · {new Date(invoice.last_resent_at).toLocaleString()}</p>}
+                {invoice.received_at && <p>Received (client opened the invoice) · {new Date(invoice.received_at).toLocaleString()}</p>}
                 {invoice.paid_at && <p>Paid · {new Date(invoice.paid_at).toLocaleString()}</p>}
               </div>
             </section>
@@ -429,7 +463,7 @@ export default function InvoiceDetailPage() {
               </p>
               <p className="mb-3 text-[12px] text-tlw-warm-gray">
                 {invoice.status === 'draft'
-                  ? 'Approving locks the line items and message. Sending emails the client a Stripe-hosted invoice they can pay by card or bank transfer.'
+                  ? 'Approving locks the line items (the message stays editable until sending). Sending emails the client a Stripe-hosted invoice they can pay by card or bank transfer.'
                   : 'This invoice is approved. Sending emails the client a Stripe-hosted invoice they can pay by card or bank transfer.'}
               </p>
               <div className="flex flex-wrap items-center gap-2">
@@ -462,11 +496,14 @@ export default function InvoiceDetailPage() {
                 )}
                 {invoice.status === 'failed' && (
                   <button
-                    onClick={send}
-                    disabled={sending}
+                    // A 'failed' invoice was already delivered to Stripe (the payment
+                    // failed after sending), so retry = re-send the existing Stripe
+                    // invoice email; a fresh /send would be rejected (not 'approved').
+                    onClick={invoice.stripe_invoice_id ? resend : send}
+                    disabled={sending || resending}
                     className="rounded-tlw-lg border border-red-300 bg-red-50 px-4 py-2 text-[13px] font-medium text-red-700 transition-colors hover:bg-red-100 disabled:opacity-50"
                   >
-                    {sending ? 'Retrying…' : 'Retry send'}
+                    {sending || resending ? 'Retrying…' : 'Re-send payment link'}
                   </button>
                 )}
               </div>
@@ -476,6 +513,37 @@ export default function InvoiceDetailPage() {
               {(actionErr || invoice.stripe_error) && (
                 <p className="mt-3 rounded-tlw-lg border border-red-100 bg-red-50 px-3 py-2 text-[12px] text-red-700">
                   <strong>Stripe error:</strong> {actionErr || invoice.stripe_error}
+                </p>
+              )}
+              {invoice.status === 'failed' && resendErr && (
+                <p className="mt-3 rounded-tlw-lg border border-red-100 bg-red-50 px-3 py-2 text-[12px] text-red-700">
+                  <strong>Re-send error:</strong> {resendErr}
+                </p>
+              )}
+            </section>
+          )}
+
+          {/* Re-send */}
+          {['sent', 'overdue'].includes(invoice.status) && invoice.stripe_invoice_id && (
+            <section className="rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface px-5 py-4">
+              <p className="mb-1 text-[13px] font-semibold text-tlw-navy-deep">Re-send invoice</p>
+              <p className="mb-3 text-[12px] text-tlw-warm-gray">
+                Emails the client the Stripe invoice again{invoice.client_message ? ', along with your message' : ''} —
+                useful if it was missed or lost. The invoice itself is unchanged.
+              </p>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={resend}
+                  disabled={resending}
+                  className="rounded-tlw-lg border border-tlw-warm-gray/30 px-4 py-2 text-[13px] font-medium text-tlw-espresso transition-colors hover:bg-tlw-canvas disabled:opacity-50"
+                >
+                  {resending ? 'Re-sending…' : 'Re-send invoice email'}
+                </button>
+                {resendDone && <span className="text-[12px] font-medium text-emerald-700">Re-sent ✓</span>}
+              </div>
+              {resendErr && (
+                <p className="mt-3 rounded-tlw-lg border border-red-100 bg-red-50 px-3 py-2 text-[12px] text-red-700">
+                  {resendErr}
                 </p>
               )}
             </section>

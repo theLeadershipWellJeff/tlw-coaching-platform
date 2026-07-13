@@ -15,6 +15,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { sendCoachHtmlEmail } from '@/lib/gmail'
+import { getBaseUrl } from '@/lib/url'
 
 const REMINDER_DAYS = 14
 
@@ -87,6 +88,7 @@ export async function sendDueReminders(supabase: SupabaseClient): Promise<{ sent
         period_start,
         period_end,
         status,
+        receipt_token,
         billing_accounts ( name, billing_email )
       )
     `)
@@ -142,6 +144,11 @@ export async function sendDueReminders(supabase: SupabaseClient): Promise<{ sent
       billingEmail: account?.billing_email ?? '',
       period,
       total: totalFormatted,
+      // Tracked view link (marks the invoice received, then redirects to the
+      // Stripe hosted payment page). Absent for pre-037 invoices.
+      viewUrl: invoice.receipt_token
+        ? `${getBaseUrl()}/api/billing/invoices/receipt/${invoice.receipt_token}`
+        : null,
     })
 
     try {
@@ -182,6 +189,7 @@ function buildReminderEmail(opts: {
   billingEmail: string
   period: string
   total: string
+  viewUrl?: string | null
 }): string {
   return `
 <!DOCTYPE html>
@@ -207,6 +215,9 @@ function buildReminderEmail(opts: {
               This is a friendly reminder that your invoice${opts.period ? ` for <strong>${opts.period}</strong>` : ''}
               in the amount of <strong>${opts.total}</strong> remains outstanding.
             </p>
+            ${opts.viewUrl ? `<p style="margin:0 0 24px;">
+              <a href="${opts.viewUrl}" style="display:inline-block;background:#111226;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:6px;font-size:14px;">View &amp; pay invoice</a>
+            </p>` : ''}
             <p style="margin:0 0 24px;color:#3d2b1f;font-size:15px;line-height:1.6;">
               If you have any questions about this invoice or have already arranged payment,
               please disregard this message. We appreciate your continued partnership.
