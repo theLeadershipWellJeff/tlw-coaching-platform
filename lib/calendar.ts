@@ -179,6 +179,9 @@ export async function createClientEvent(
     durationMinutes: number
     attendeeEmail?: string | null
     description?: string
+    /** Zoom (or other) join link — written as the event's location and appended
+     *  to the description, so the invite the client receives carries it. */
+    meetingLink?: string | null
   }
 ): Promise<string | null> {
   if (!coach.google_refresh_token) return null
@@ -189,6 +192,9 @@ export async function createClientEvent(
 
   const end = new Date(opts.startsAt.getTime() + opts.durationMinutes * 60 * 1000)
   const attendees = opts.attendeeEmail ? [{ email: opts.attendeeEmail }] : undefined
+  const description = opts.meetingLink
+    ? `${opts.description || ''}${opts.description ? '\n\n' : ''}Join the meeting:\n${opts.meetingLink}`
+    : opts.description
 
   try {
     const res = await calendar.events.insert({
@@ -196,7 +202,8 @@ export async function createClientEvent(
       sendUpdates: 'all',
       requestBody: {
         summary: opts.summary,
-        description: opts.description,
+        description,
+        location: opts.meetingLink || undefined,
         start: { dateTime: opts.startsAt.toISOString(), timeZone: coach.timezone },
         end: { dateTime: end.toISOString(), timeZone: coach.timezone },
         attendees,
@@ -207,6 +214,32 @@ export async function createClientEvent(
     console.error('Calendar event create failed:', e)
     return null
   }
+}
+
+// Matches the first meeting URL in free text (Zoom / Meet / Teams / Webex /
+// GoToMeeting). Deliberately provider-scoped so we never mistake an ordinary
+// link in an event description for the join link.
+const MEETING_URL_RE =
+  /https?:\/\/[^\s<>"']*(?:zoom\.us|meet\.google\.com|teams\.microsoft\.com|teams\.live\.com|webex\.com|gotomeeting\.com)[^\s<>"']*/i
+
+/**
+ * Best-effort join link off a calendar event: Google conferenceData first (a
+ * real video entry point), then a meeting URL in the location, then one in the
+ * description. Used by the external-booking sync so Calendly/HubSpot bookings —
+ * which embed the Zoom link in the event — carry it into reminder emails.
+ */
+export function extractEventMeetingLink(event: any): string | null {
+  const video = (event?.conferenceData?.entryPoints || []).find(
+    (p: any) => p?.entryPointType === 'video' && p?.uri
+  )
+  if (video?.uri) return video.uri as string
+
+  for (const text of [event?.location, event?.description]) {
+    if (typeof text !== 'string') continue
+    const m = text.match(MEETING_URL_RE)
+    if (m) return m[0]
+  }
+  return null
 }
 
 export interface EventState {

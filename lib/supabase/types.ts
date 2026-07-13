@@ -247,6 +247,10 @@ export type Appointment = {
   scheduled_at: Timestamp
   duration_minutes: number
   google_event_id: string | null
+  // Zoom (or other) join link for the session (migration 038). Native bookings
+  // set it from the schedule form; the external-booking sync fills it from the
+  // event's conference data. Rendered in the calendar event + reminder emails.
+  meeting_link: string | null
   status: string // scheduled | cancelled | completed | ignored
   // External booking capture (migration 025). source is best-effort/cosmetic.
   source: string // native | calendly | hubspot | external

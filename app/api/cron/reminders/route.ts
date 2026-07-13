@@ -59,7 +59,7 @@ export async function GET(req: NextRequest) {
   // claims its own (appointment_id, kind) slot, so re-running hourly is safe.
   const { data: due, error } = await supabase
     .from('appointments')
-    .select('id, coach_id, client_id, scheduled_at')
+    .select('id, coach_id, client_id, scheduled_at, meeting_link')
     .eq('status', 'scheduled')
     .not('client_id', 'is', null) // skip unmatched external bookings (no client to remind)
     .gte('scheduled_at', new Date(now).toISOString())

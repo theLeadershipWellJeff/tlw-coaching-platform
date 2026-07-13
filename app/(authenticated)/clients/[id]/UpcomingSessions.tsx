@@ -6,6 +6,7 @@ export interface Appointment {
   id: string
   scheduled_at: string
   duration_minutes: number
+  meeting_link?: string | null
   status: string
 }
 
@@ -177,6 +178,17 @@ export function UpcomingSessions({
             <span className="text-[12px] text-tlw-warm-gray">· {a.duration_minutes} min</span>
           </span>
           <div className="flex shrink-0 items-center gap-2 text-[12px] font-medium">
+            {a.meeting_link && (
+              <a
+                href={a.meeting_link}
+                target="_blank"
+                rel="noreferrer"
+                title={a.meeting_link}
+                className="flex items-center gap-1 text-blue-600 hover:underline"
+              >
+                <VideoIcon /> Join
+              </a>
+            )}
             {cancelling === a.id ? (
               <>
                 <button onClick={() => cancel(a.id)} disabled={busy} className="text-red-600 hover:underline disabled:opacity-40">
@@ -195,6 +207,15 @@ export function UpcomingSessions({
         </li>
       ))}
     </ul>
+  )
+}
+
+function VideoIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.7" className="shrink-0">
+      <rect x="2" y="6" width="13" height="12" rx="2" />
+      <path d="M15 10.5 22 7v10l-7-3.5" />
+    </svg>
   )
 }
 

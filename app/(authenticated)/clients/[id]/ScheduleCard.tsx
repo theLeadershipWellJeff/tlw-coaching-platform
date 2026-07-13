@@ -43,11 +43,32 @@ export function ScheduleCard({
   const [date, setDate] = useState('')
   const [time, setTime] = useState('')
   const [duration, setDuration] = useState(60)
+  const [meetingLink, setMeetingLink] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [check, setCheck] = useState<Check | null>(null)
   const [checking, setChecking] = useState(false)
   const reqId = useRef(0)
+  const linkTouched = useRef(false)
+
+  // Prefill the meeting link when the form opens — the last link used for this
+  // client (else the coach's usual one), from GET /schedule. Never overwrites
+  // something the coach has already typed.
+  useEffect(() => {
+    if (!open || linkTouched.current) return
+    let stale = false
+    fetch(`/api/clients/${clientId}/schedule`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!stale && !linkTouched.current && data?.defaultMeetingLink) {
+          setMeetingLink(data.defaultMeetingLink)
+        }
+      })
+      .catch(() => {})
+    return () => {
+      stale = true
+    }
+  }, [open, clientId])
 
   // Live pre-flight, debounced, whenever the picked slot changes.
   useEffect(() => {
@@ -97,7 +118,7 @@ export function ScheduleCard({
       const res = await fetch(`/api/clients/${clientId}/schedule`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date, time, durationMinutes: duration }),
+        body: JSON.stringify({ date, time, durationMinutes: duration, meetingLink: meetingLink.trim() || undefined }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Could not schedule the session.')
@@ -184,6 +205,24 @@ export function ScheduleCard({
             </div>
           </div>
 
+          {/* Zoom (or other) meeting link — goes into the calendar invite and
+              the confirmation/reminder emails. Prefilled with the last one used. */}
+          <label className="mt-3 flex flex-col gap-1">
+            <span className="text-[11px] font-medium uppercase tracking-[1px] text-tlw-warm-gray">
+              Meeting link <span className="normal-case tracking-normal">(optional)</span>
+            </span>
+            <input
+              type="url"
+              value={meetingLink}
+              onChange={(e) => {
+                linkTouched.current = true
+                setMeetingLink(e.target.value)
+              }}
+              placeholder="https://zoom.us/j/…"
+              className="w-full max-w-md rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-surface px-2.5 py-1.5 text-[13px] text-tlw-espresso outline-none focus:border-tlw-signal-orange"
+            />
+          </label>
+
           {/* Live read-out of the picked slot. */}
           {date && time && (
             <div className="mt-3 space-y-1.5 border-t border-tlw-warm-gray/15 pt-3 text-[13px]">
@@ -247,7 +286,7 @@ export function ScheduleCard({
 
           <p className="mt-3 text-[11px] text-tlw-warm-gray">
             Times you pick are in your coaching timezone. We&apos;ll add the session to your calendar and email a
-            confirmation.
+            confirmation — the meeting link rides along in the invite and every reminder.
           </p>
           {error && <p className="mt-2 text-[13px] text-tlw-signal-orange">{error}</p>}
         </div>

@@ -74,7 +74,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
     const { data, error } = await supabase
       .from('appointments')
-      .select('id, scheduled_at, duration_minutes, status')
+      .select('id, scheduled_at, duration_minutes, meeting_link, status')
       .eq('client_id', params.id)
       .eq('status', 'scheduled')
       .gte('scheduled_at', new Date().toISOString())

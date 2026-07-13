@@ -500,6 +500,22 @@ row, and emails a **confirmation** (`lib/appointment-email.ts` →
 token so the same path works unattended). Calendar/email are best-effort — a
 hiccup never loses the booking.
 
+**Meeting link (migration 038).** The schedule form carries an optional **Meeting
+link** field (`appointments.meeting_link`), prefilled with the last link used —
+this client's last booking, else the coach's most recent booking, else the Zoom
+link off the last-issued agreement (`GET /api/clients/[id]/schedule`); a typed
+value is never overwritten by the prefill. The link is written into the Google
+Calendar event (**location + appended to the description**, so the invite the
+client receives carries it), rendered as an orange **"Join the meeting"** button
++ plain URL in the confirmation email and **every reminder nudge**
+(`buildAppointmentEmailHTML#meetingLink`; the reminders cron selects the column),
+and shown as a blue "Join" link on the Sessions-card upcoming list. The
+external-booking sync also captures a join link off Calendly/HubSpot/GCal events
+(`lib/calendar.ts#extractEventMeetingLink` — conferenceData video entry point →
+meeting-provider URL in location → in description; provider-scoped regex so an
+ordinary link never counts), so reminders for external bookings carry it too — a
+previously stored link survives an event edit that drops it.
+
 **Conflict-aware picker + dual-timezone read-out (migration 020).** As the coach
 picks a slot, `ScheduleCard` calls `POST /api/clients/[id]/schedule/check`
 (debounced) and shows it in **both** the coach's and the **client's** timezone
@@ -1013,6 +1029,10 @@ is **applied** (confirmed July 11 2026). `037_invoice_resend_receipt.sql`
 (`invoices.receipt_token`/`received_at`/`last_resent_at` — invoice re-send +
 receipt tracking; additive/nullable; **apply before deploying — the invoice send
 path, resend route, and billing-reminders cron reference the columns**).
+`038_appointment_meeting_link.sql` (`appointments.meeting_link` — the Zoom/meeting
+link on a booked session, rendered into the calendar invite + confirmation/reminder
+emails; additive/nullable; **apply before deploying — the schedule route, reminders
+cron, booking sync, and workspace appointments list select/insert the column**).
 ⚠️ **015 must be run BEFORE
 the tenant-scoping code is deployed to `main`** — until the table exists and is
 backfilled, the roster would filter to zero clients. Read the backfill comment in

@@ -20,6 +20,7 @@ import {
   listCalendarDelta,
   matchEventToClient,
   detectBookingSource,
+  extractEventMeetingLink,
   type RosterClientWithEmail,
 } from './calendar'
 
@@ -32,7 +33,7 @@ export interface BookingSyncResult {
   fullResync: boolean
 }
 
-type ExistingRow = Pick<Appointment, 'id' | 'client_id' | 'status' | 'source' | 'google_event_id'>
+type ExistingRow = Pick<Appointment, 'id' | 'client_id' | 'status' | 'source' | 'google_event_id' | 'meeting_link'>
 
 const ZERO = (coachId: string, fullResync = false): BookingSyncResult => ({
   coachId,
@@ -76,7 +77,7 @@ export async function syncExternalBookings(
     if (eventIds.length > 0) {
       const { data: rows } = await supabase
         .from('appointments')
-        .select('id, client_id, status, source, google_event_id')
+        .select('id, client_id, status, source, google_event_id, meeting_link')
         .eq('coach_id', coach.id)
         .in('google_event_id', eventIds)
       for (const r of rows || []) if (r.google_event_id) existing.set(r.google_event_id, r as ExistingRow)
@@ -131,6 +132,10 @@ export async function syncExternalBookings(
         scheduled_at: new Date(startIso).toISOString(),
         duration_minutes: durationMinutes,
         title: event.summary || null,
+        // Join link off the event (conferenceData/location/description) — how a
+        // Calendly/HubSpot booking's Zoom link reaches the reminder emails. Keep
+        // a previously stored link when the event doesn't carry one.
+        meeting_link: extractEventMeetingLink(event) ?? prior?.meeting_link ?? null,
         attendee_email: match.guestEmail,
         source,
         status,

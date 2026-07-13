@@ -19,8 +19,10 @@ export function buildAppointmentEmailHTML(opts: {
   clientName: string
   coachName: string
   whenLabel: string
+  /** Zoom (or other) join link — rendered as a button + plain URL when set. */
+  meetingLink?: string | null
 }): string {
-  const { kind, clientName, coachName, whenLabel } = opts
+  const { kind, clientName, coachName, whenLabel, meetingLink } = opts
   const first = clientName.split(' ')[0] || 'there'
 
   const heading = kind === 'confirmation' ? 'Your next session is booked' : 'A reminder about our session'
@@ -52,6 +54,14 @@ export function buildAppointmentEmailHTML(opts: {
       <div style="border:1px solid #e5e0d8;border-radius:8px;padding:18px 20px;margin-bottom:8px;">
         <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:${WARM};font-weight:700;margin-bottom:6px;">Session</div>
         <div style="font-size:17px;color:${NAVY};font-weight:600;line-height:1.5;">${esc(whenLabel)}</div>
+        ${
+          meetingLink
+            ? `<div style="margin-top:14px;padding-top:14px;border-top:1px solid #e5e0d8;">
+          <a href="${esc(meetingLink)}" target="_blank" style="display:inline-block;background:${ORANGE};color:#ffffff;text-decoration:none;font-size:13px;font-weight:700;letter-spacing:1px;padding:10px 22px;border-radius:6px;">Join the meeting</a>
+          <div style="margin-top:8px;font-size:12px;line-height:1.6;word-break:break-all;"><a href="${esc(meetingLink)}" target="_blank" style="color:${NAVY};text-decoration:underline;">${esc(meetingLink)}</a></div>
+        </div>`
+            : ''
+        }
       </div>
     </div>
 

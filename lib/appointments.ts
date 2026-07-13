@@ -71,7 +71,7 @@ type ClientLite = { name: string; email: string | null; timezone: string | null 
 export async function sendAppointmentReminder(
   supabase: SupabaseClient<Database>,
   coach: Coach,
-  appointment: Pick<Appointment, 'id' | 'scheduled_at'>,
+  appointment: Pick<Appointment, 'id' | 'scheduled_at'> & Partial<Pick<Appointment, 'meeting_link'>>,
   client: ClientLite,
   kind: ReminderKind
 ): Promise<boolean> {
@@ -91,6 +91,7 @@ export async function sendAppointmentReminder(
     clientName: client.name,
     coachName: coach.name,
     whenLabel,
+    meetingLink: appointment.meeting_link || null,
   })
   const subject =
     kind === 'confirmation' ? `Our next session — ${whenLabel}` : `Reminder: our session — ${whenLabel}`
