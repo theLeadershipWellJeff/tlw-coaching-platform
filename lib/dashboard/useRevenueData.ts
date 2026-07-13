@@ -30,6 +30,12 @@ export interface AnnualRevenue {
   monthly: MonthRevenue[]
 }
 
+export interface ClientRevenue {
+  client: string
+  sessions: number
+  amount: number
+}
+
 export interface RevenuePayload {
   calendarConnected: boolean
   past: RevenueWeek
@@ -37,6 +43,13 @@ export interface RevenuePayload {
   pastSessions: { client: string; minutes: number; amount: number }[]
   projected: RevenueWeek
   annual: AnnualRevenue
+  // Per-client roll-ups for the breakdown pies. Optional so a stale cached
+  // payload (pre-upgrade) can't crash the cards.
+  byClient?: {
+    past: ClientRevenue[]
+    projected: ClientRevenue[]
+    annual: ClientRevenue[]
+  }
 }
 
 export interface RevenueData {

@@ -1076,6 +1076,15 @@ and back in** to grant calendar-write + populate the refresh token with it;
 - **Skip on session-prep cards.** Each "Up next" card has a Skip button that
   hides that calendar session from the dashboard (persisted in `localStorage`,
   `tlw-dashboard-skipped`, pruned to live event ids).
+- **Revenue cards click into a by-client pie.** The dashboard Past / Projected /
+  Annual revenue cards are clickable (the $ figure + a "By client →" link) and
+  open `components/dashboard/RevenueBreakdownModal.tsx` — a donut of that
+  period's total split by client (hover highlights a slice and swaps the center
+  total for that client's figure) with a legend of sessions · amount · share
+  per client. Top 8 clients get fixed palette slots (CVD-validated categorical
+  set); the rest fold into a gray "Other". Data = new `byClient.{past,projected,
+  annual}` roll-ups on `/api/practice/revenue` (same amounts the card totals are
+  built from — no new revenue math; no migration).
 - **Session-notes panel** — Key info (private), Coaching map pulldown, Engagement
   goals; default note titles; in-app full client names; browser app icon.
 - **Coaching goals** carry metrics and feed the session-prep coaching plan.
