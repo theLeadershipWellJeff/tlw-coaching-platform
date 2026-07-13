@@ -870,6 +870,30 @@ All Stripe interaction is in `lib/billing/stripe.ts` (singleton + helpers) and
   per `billing_accounts` row on first send; persists `stripe_customer_id` back to
   the row so subsequent sends reuse it.
 - **Days until due:** hosted invoices are set to `days_until_due: 30`.
+- **Client note rides with the send.** `invoices.client_message` (migration 031)
+  is passed to Stripe as the invoice `description` (the memo shown on the hosted
+  page, the emailed invoice, and the PDF) and appears in the branded cover email.
+  Editable on the invoice page while status is `draft` OR `approved` (the send
+  persists a typed-but-unsaved note first); locked once sent.
+- **Cover email + receipt tracking (migration 037).** On send (and re-send),
+  `lib/billing/send.ts#sendClientCoverEmail` emails the client a branded note
+  from the coach's Gmail (best-effort — a Gmail hiccup never fails the send;
+  logged to `communications` as `type='email'`, Cc `billing_accounts.billing_cc`)
+  containing the coach's `client_message` and a tracked **"View & pay invoice"**
+  button → public `GET /api/billing/invoices/receipt/[token]`
+  (`invoices.receipt_token`, token = credential), which stamps
+  `invoices.received_at` on first open and 302-redirects to the live Stripe
+  hosted URL (fetched fresh from Stripe, never stored). The Business Center
+  shows a **"received ✓"** chip next to `sent`/`overdue` (invoice list + detail +
+  audit trail). Same link-scanner false-positive caveat as action-complete links.
+  The 14-day reminder email carries the same tracked button.
+- **Re-send.** `POST /api/billing/invoices/[id]/resend` (invoice page "Re-send
+  invoice email" button; status `sent`/`overdue`/`failed` with a
+  `stripe_invoice_id`) calls `stripe.invoices.sendInvoice` on the existing
+  Stripe invoice + re-sends the cover email; stamps `invoices.last_resent_at`,
+  status unchanged. The `failed`-status "Re-send payment link" button routes
+  here too (the old "Retry send" hit `/send`, which 409s on non-approved
+  invoices).
 
 ### Stripe go-live checklist
 1. Add `STRIPE_SECRET_KEY` (live) and `STRIPE_WEBHOOK_SECRET` to Vercel env vars.
@@ -950,7 +974,11 @@ on the roster-card / workspace engagement bars; additive, nullable — the label
 back to the billing mode until set. Note: for a **subscription** engagement,
 `engagements.session_count` means **sessions per year** and the bar tracks sessions
 received this calendar year; for other modes it stays total sessions in the
-engagement — shared math in `lib/billing/engagement-progress.ts`; **applied**).
+engagement — shared math in `lib/billing/engagement-progress.ts`; **applied**) ·
+037 invoice re-send + receipt (`invoices.receipt_token`/`received_at`/
+`last_resent_at` — tracked "View & pay" link marks an invoice received on first
+open; `last_resent_at` audits re-sends; additive, nullable; **apply before
+deploying the invoice resend/receipt code**).
 
 **Tenant scoping (015).** `coach_clients` (coach_id, client_id, role) is the
 ownership link. Client access is enforced **server-side** by the session coach,
@@ -981,7 +1009,11 @@ Calendly/HubSpot calendar-watch capture — additive; **apply before the calenda
 cron / Unmatched bookings panel are used**), and `035_nudge_pdf_attachment.sql`
 (nudge/garden PDF-attachment columns — **apply before deploying the nudge changes;
 the nudge list/create routes now reference the columns**). `036_engagement_length.sql`
-is **applied** (confirmed July 11 2026). ⚠️ **015 must be run BEFORE
+is **applied** (confirmed July 11 2026). `037_invoice_resend_receipt.sql`
+(`invoices.receipt_token`/`received_at`/`last_resent_at` — invoice re-send +
+receipt tracking; additive/nullable; **apply before deploying — the invoice send
+path, resend route, and billing-reminders cron reference the columns**).
+⚠️ **015 must be run BEFORE
 the tenant-scoping code is deployed to `main`** — until the table exists and is
 backfilled, the roster would filter to zero clients. Read the backfill comment in
 015 first (it assumes all current coach logins are the same person). **016 must be

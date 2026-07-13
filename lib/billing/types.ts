@@ -97,6 +97,10 @@ export type Invoice = {
   stripe_payment_intent_id: string | null
   stripe_error: string | null
   client_message: string | null
+  // Receipt tracking + re-send audit (migration 037).
+  receipt_token: string | null
+  received_at: Timestamp | null
+  last_resent_at: Timestamp | null
   approved_by: string | null
   approved_at: Timestamp | null
   sent_at: Timestamp | null

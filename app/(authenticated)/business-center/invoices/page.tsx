@@ -10,6 +10,7 @@ type Invoice = {
   period_start: string | null
   period_end: string | null
   total: number
+  received_at: string | null
   billing_accounts: {
     id: string
     name: string
@@ -372,6 +373,14 @@ function InvoicesContent() {
                 <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium capitalize ${STATUS_STYLES[inv.status] ?? 'bg-tlw-canvas text-tlw-warm-gray'}`}>
                   {inv.status}
                 </span>
+                {inv.received_at && ['sent', 'overdue'].includes(inv.status) && (
+                  <span
+                    className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700"
+                    title={`Client opened the invoice ${new Date(inv.received_at).toLocaleString()}`}
+                  >
+                    received ✓
+                  </span>
+                )}
                 <span className="text-[13px] font-medium text-tlw-navy-deep">
                   {(inv.total ?? 0).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })}
                 </span>
