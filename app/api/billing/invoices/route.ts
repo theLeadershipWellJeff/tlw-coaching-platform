@@ -78,6 +78,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'billing_account_id is required' }, { status: 400 })
   if (!body.lines || body.lines.length === 0)
     return NextResponse.json({ error: 'At least one line is required' }, { status: 400 })
+  // Negative amounts are valid (discount lines); zero/non-numeric are not, and
+  // the invoice must still net out to a positive charge.
+  if (body.lines.some((l) => !Number.isFinite(l.amount) || l.amount === 0))
+    return NextResponse.json({ error: 'Every line needs a non-zero amount' }, { status: 400 })
+  if (body.lines.reduce((s, l) => s + l.amount, 0) <= 0)
+    return NextResponse.json({ error: 'Invoice total must be greater than zero after discounts' }, { status: 400 })
 
   // Verify the account belongs to this coach.
   const { data: account } = await supabase

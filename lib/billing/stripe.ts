@@ -66,6 +66,21 @@ export async function createAndSendStripeInvoice(opts: {
 }): Promise<Stripe.Invoice> {
   const stripe = getStripe()
 
+  // Validate line amounts before creating anything in Stripe. Negative amounts
+  // are valid (discount/credit lines) — zero amounts are not, and the invoice
+  // must net out to a positive charge or Stripe can't finalize/collect it.
+  const lineCents = opts.lines.map((line) => {
+    const amountCents = Math.round(line.amount * 100)
+    if (amountCents === 0) {
+      throw new Error(`Invoice line "${line.description}" has a zero amount (${line.amount}). Check that invoice_lines.amount is in dollars.`)
+    }
+    return amountCents
+  })
+  const totalCents = lineCents.reduce((s, c) => s + c, 0)
+  if (totalCents <= 0) {
+    throw new Error('Invoice total must be greater than zero after discounts.')
+  }
+
   // Create the invoice first so we can attach items to it explicitly.
   // This avoids any ambiguity about which pending items Stripe collects.
   const invoice = await stripe.invoices.create({
@@ -78,17 +93,14 @@ export async function createAndSendStripeInvoice(opts: {
   })
 
   // Attach each line item directly to this invoice via the `invoice` param.
-  for (const line of opts.lines) {
-    const amountCents = Math.round(line.amount * 100)
-    if (amountCents <= 0) {
-      throw new Error(`Invoice line "${line.description}" has zero or negative amount (${line.amount}). Check that invoice_lines.amount is in dollars.`)
-    }
+  // Negative amounts render as discount/credit lines on the hosted invoice.
+  for (let i = 0; i < opts.lines.length; i++) {
     await stripe.invoiceItems.create({
       customer: opts.customerId,
       invoice: invoice.id,
-      amount: amountCents,
+      amount: lineCents[i],
       currency: opts.currency,
-      description: line.description,
+      description: opts.lines[i].description,
     })
   }
 

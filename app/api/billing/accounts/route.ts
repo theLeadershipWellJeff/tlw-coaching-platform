@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { getSessionCoach } from '@/lib/coach'
+import { coachCanAccessClient } from '@/lib/client-access'
 import type { BillingAccountType } from '@/lib/billing/types'
 
 export const runtime = 'nodejs'
@@ -57,6 +58,37 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await (query as any)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // ?clientId=<uuid> — resolve the client's billing account (via coachees) so
+  // the Create-invoice modal can preselect it; falls back to the client's
+  // name/email for a one-off prefill when they have no billing account yet.
+  const clientId = req.nextUrl.searchParams.get('clientId')
+  if (clientId && await coachCanAccessClient(supabase, coach.id, clientId)) {
+    const [{ data: coachee }, { data: client }] = await Promise.all([
+      supabase
+        .from('coachees')
+        .select('billing_account_id, created_at')
+        .eq('coach_id', coach.id)
+        .eq('client_id', clientId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from('clients')
+        .select('id, name, email')
+        .eq('id', clientId)
+        .maybeSingle(),
+    ])
+    return NextResponse.json({
+      accounts: data,
+      clientMatch: {
+        accountId: (coachee as any)?.billing_account_id ?? null,
+        name: (client as any)?.name ?? null,
+        email: (client as any)?.email ?? null,
+      },
+    })
+  }
+
   return NextResponse.json({ accounts: data })
 }
 
