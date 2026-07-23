@@ -6,6 +6,7 @@ import type { Client } from '@/lib/supabase/types'
 import { NameCard } from './NameCard'
 import { IssueAgreementModal } from './IssueAgreementModal'
 import { EmailModal } from './EmailModal'
+import { PlanSessionModal } from './PlanSessionModal'
 import { WorkspaceProvider } from '@/components/workspace/WorkspaceContext'
 import { WorkspaceSurface } from '@/components/workspace/WorkspaceSurface'
 
@@ -16,6 +17,7 @@ export function ClientDetail({ clientId }: { clientId: string }) {
   const [error, setError] = useState('')
   const [emailing, setEmailing] = useState(false)
   const [issuing, setIssuing] = useState(false)
+  const [planning, setPlanning] = useState(false)
   const [txReload, setTxReload] = useState(0)
   const [apptReload, setApptReload] = useState(0)
   const [commReload, setCommReload] = useState(0)
@@ -93,6 +95,13 @@ export function ClientDetail({ clientId }: { clientId: string }) {
 
       {/* Fixed action bar — stays outside the card grid. */}
       <div className="flex flex-wrap gap-3">
+        <button
+          onClick={() => setPlanning(true)}
+          className="inline-flex items-center gap-1.5 rounded-tlw-lg px-4 py-2 text-[13px] font-medium text-tlw-cream transition-opacity hover:opacity-90"
+          style={{ background: '#E8650A' }}
+        >
+          <span aria-hidden>✦</span> Plan next session
+        </button>
         <Link
           href={`/clients/${clientId}/notes?new=1`}
           className="rounded-tlw-lg bg-tlw-navy-rich px-4 py-2 text-[13px] font-medium text-tlw-cream transition-opacity hover:opacity-90"
@@ -150,6 +159,10 @@ export function ClientDetail({ clientId }: { clientId: string }) {
           onClose={() => setEmailing(false)}
           onSent={() => setCommReload((n) => n + 1)}
         />
+      )}
+
+      {planning && (
+        <PlanSessionModal clientId={clientId} clientName={client.name} onClose={() => setPlanning(false)} />
       )}
 
     </div>

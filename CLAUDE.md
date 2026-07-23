@@ -298,6 +298,21 @@ Plaud" picker (`/api/drive/transcripts` + `/api/clients/[id]/import-transcripts`
 and `lib/drive.ts` were removed; the Zapier ingest webhook and its Drive archive
 are unaffected).
 
+**Plan next session (`PlanSessionModal`).** An action-bar button (orange, first
+in the bar in `ClientDetail`) opens a prep card **over** the workspace. On open it
+POSTs `/api/clients/[id]/plan-session`, which pulls the client's goals, still-open
+actions, recent `INSIGHT:` lines, and — surfaced **at the front** — any
+`NEXT TIME` / `NEXT SESSION` flags left in prior notes (parsed by
+`lib/notes/extract.ts#extractCaptures`, which now returns a third `nextSession`
+bucket alongside `actions`/`insights`; a bare `NEXT:` needs a delimiter so prose
+isn't captured). Those lists are computed deterministically and always returned;
+Claude (`PLAN_SESSION_MODEL` env or a sonnet default) then synthesizes a **quick
+summary** and **three opening questions**. The card leads with the next-time
+callout, then summary, then the numbered questions, with goals/actions/insights in
+a collapsible "supporting context". Fully **ephemeral** — nothing is persisted, no
+migration; if the AI call fails the lists still render (graceful `aiError`). A
+client with no goals/actions/insights/notes shows an empty-state hint.
+
 ### Session-notes panel (`clients/[id]/NotesPanel.tsx`)
 The right-hand rail carries the live ACTION/INSIGHT capture (`CaptureGroup` —
 newest-first, 5 visible with a "Show all" expander; the notes list does the same)
@@ -854,7 +869,7 @@ value in Vercel), `DEFAULT_COACH_EMAIL` (= `jeff@jeffkholmes.com`),
 `DEFAULT_COACH_NAME`. Vault (framework nudges): `VAULT_GITHUB_TOKEN` (read-only
 fine-grained PAT on the vault repo), optional `VAULT_REPO` (default
 `theLeadershipWellJeff/TheLeadershipWell-Vault`), `VAULT_BRANCH` (default `main`).
-Optional: `SCORING_MODEL`, `GOALS_MODEL`, `NUDGE_MODEL`,
+Optional: `SCORING_MODEL`, `GOALS_MODEL`, `NUDGE_MODEL`, `PLAN_SESSION_MODEL`,
 `AUTO_SCORE`, `DEFAULT_TIMEZONE`, `PLAUD_DRIVE_FOLDER` (default `Plaud-Transcripts`),
 `COACH_ZOOM_LINK` (default meeting link for invites/reminders when a coach hasn't
 set one in Account → Scheduling; falls back to `DEFAULT_MEETING_LINK` in code).
