@@ -110,11 +110,36 @@ export type ReminderSettings = {
   confirmation: boolean
   /** Pre-session nudges, each at its own lead time. */
   reminders: ReminderRule[]
+  /** The video meeting (Zoom) link the coach uses for sessions. Included in the
+   *  calendar invite and every reminder email so clients can join in one tap.
+   *  Empty/unset falls back to the COACH_ZOOM_LINK env var, then the built-in
+   *  default — see getMeetingLink. */
+  meetingLink?: string
 }
 
 /** Confirmation on + a single 24h nudge — matches the original behavior. */
 export function defaultReminderSettings(): ReminderSettings {
   return { confirmation: true, reminders: [{ hoursBefore: 24, enabled: true }] }
+}
+
+/** The firm's standing Zoom room — used when no per-coach/env link is set, so
+ *  meeting links work out of the box. */
+export const DEFAULT_MEETING_LINK = 'https://us02web.zoom.us/j/5351319810'
+
+const URL_RE = /^https?:\/\/\S+$/i
+
+/**
+ * The meeting link to put in invites and reminders. A per-coach link (set in
+ * Account → Scheduling, stored on reminder_settings) wins; then the
+ * COACH_ZOOM_LINK env var; then the built-in default. Always returns a usable
+ * URL, so clients always get a one-tap way into the room.
+ */
+export function getMeetingLink(settings?: ReminderSettings | null): string {
+  const fromSettings = settings?.meetingLink?.trim()
+  if (fromSettings && URL_RE.test(fromSettings)) return fromSettings
+  const fromEnv = (process.env.COACH_ZOOM_LINK || '').trim()
+  if (fromEnv && URL_RE.test(fromEnv)) return fromEnv
+  return DEFAULT_MEETING_LINK
 }
 
 // Lead times a coach may choose from in the UI (hours before the session).
@@ -139,7 +164,9 @@ export function normalizeReminderSettings(raw: unknown): ReminderSettings {
     reminders.push({ hoursBefore, enabled: Boolean(r.enabled) })
   }
   reminders.sort((a, b) => a.hoursBefore - b.hoursBefore)
-  return { confirmation, reminders }
+  const linkRaw = typeof src.meetingLink === 'string' ? src.meetingLink.trim() : ''
+  const meetingLink = URL_RE.test(linkRaw) ? linkRaw : undefined
+  return { confirmation, reminders, ...(meetingLink ? { meetingLink } : {}) }
 }
 
 /**

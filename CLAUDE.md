@@ -500,6 +500,17 @@ row, and emails a **confirmation** (`lib/appointment-email.ts` →
 token so the same path works unattended). Calendar/email are best-effort — a
 hiccup never loses the booking.
 
+**Meeting (Zoom) link on invites + reminders.** So clients can join in one tap,
+the coach's Zoom link is written to the calendar event (as the event **location**
+— Google renders a clickable join affordance — and at the top of the description)
+and rendered as a big **"Join the Zoom room"** button + plain link in the
+confirmation and every reminder email (`buildAppointmentEmailHTML`, `meetingLink`
+arg). Single source of truth = `lib/scheduling.ts#getMeetingLink`: the per-coach
+link (`reminder_settings.meetingLink`, set in Account → Scheduling) wins, then the
+`COACH_ZOOM_LINK` env var, then `DEFAULT_MEETING_LINK` (the firm's standing room),
+so links always work out of the box. Stored in the existing `reminder_settings`
+jsonb — **no migration**; round-trips through the `reminderSettings` PATCH.
+
 **Conflict-aware picker + dual-timezone read-out (migration 020).** As the coach
 picks a slot, `ScheduleCard` calls `POST /api/clients/[id]/schedule/check`
 (debounced) and shows it in **both** the coach's and the **client's** timezone
@@ -522,7 +533,8 @@ Canonical shapes, defaults (Mon–Fri 9–5; confirmation + a single 24h nudge),
 pure helpers live in **`lib/scheduling.ts`** (dependency-free, shared by the
 settings UI, scheduler, schedule API, and cron). NULL columns = defaults, so
 existing coaches are unchanged. Read/written via `GET`/`PATCH /api/coach`
-(`availability`, `reminderSettings`); the GET always returns a normalized total
+(`availability`, `reminderSettings` — which also carries the optional
+`meetingLink`); the GET always returns a normalized total
 shape. `lib/scheduling.ts` also centralizes the shared timezone option list
 (`orderedTimeZones`) reused by the timezone, client-edit, and scheduling UIs.
 
@@ -843,7 +855,9 @@ value in Vercel), `DEFAULT_COACH_EMAIL` (= `jeff@jeffkholmes.com`),
 fine-grained PAT on the vault repo), optional `VAULT_REPO` (default
 `theLeadershipWellJeff/TheLeadershipWell-Vault`), `VAULT_BRANCH` (default `main`).
 Optional: `SCORING_MODEL`, `GOALS_MODEL`, `NUDGE_MODEL`,
-`AUTO_SCORE`, `DEFAULT_TIMEZONE`, `PLAUD_DRIVE_FOLDER` (default `Plaud-Transcripts`).
+`AUTO_SCORE`, `DEFAULT_TIMEZONE`, `PLAUD_DRIVE_FOLDER` (default `Plaud-Transcripts`),
+`COACH_ZOOM_LINK` (default meeting link for invites/reminders when a coach hasn't
+set one in Account → Scheduling; falls back to `DEFAULT_MEETING_LINK` in code).
 Stripe (billing): `STRIPE_SECRET_KEY` (from Stripe Dashboard → Developers → API keys;
 use the test key `sk_test_…` in dev, live key `sk_live_…` in production),
 `STRIPE_WEBHOOK_SECRET` (from Stripe Dashboard → Developers → Webhooks → signing

@@ -19,8 +19,11 @@ export function buildAppointmentEmailHTML(opts: {
   clientName: string
   coachName: string
   whenLabel: string
+  /** The Zoom (video) join link. When present, the email shows a big one-tap
+   *  "Join the Zoom room" button plus the plain link. */
+  meetingLink?: string | null
 }): string {
-  const { kind, clientName, coachName, whenLabel } = opts
+  const { kind, clientName, coachName, whenLabel, meetingLink } = opts
   const first = clientName.split(' ')[0] || 'there'
 
   const heading = kind === 'confirmation' ? 'Your next session is booked' : 'A reminder about our session'
@@ -28,6 +31,19 @@ export function buildAppointmentEmailHTML(opts: {
     kind === 'confirmation'
       ? `Thanks for our time today. I've scheduled our next session — you'll find it on your calendar, and the details are below.`
       : `Looking forward to our session coming up. Here are the details so it's easy to find.`
+
+  // One-tap join button + the plain link (some clients strip buttons). Only
+  // rendered when we have a link.
+  const join = meetingLink
+    ? `
+      <div style="text-align:center;margin:18px 0 6px;">
+        <a href="${esc(meetingLink)}" style="display:inline-block;background:${ORANGE};color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;padding:14px 34px;border-radius:8px;letter-spacing:.3px;">Join the Zoom room</a>
+      </div>
+      <p style="margin:0 0 4px;text-align:center;font-size:12px;color:${WARM};line-height:1.6;">
+        or paste this link into your browser:<br/>
+        <a href="${esc(meetingLink)}" style="color:${NAVY};word-break:break-all;">${esc(meetingLink)}</a>
+      </p>`
+    : ''
 
   const logo = `<svg width="44" height="44" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
     <polyline points="62,10 10,10 10,90 90,90 90,46" stroke="${CREAM}" stroke-width="7" fill="none" stroke-linecap="square" stroke-opacity=".92"/>
@@ -53,6 +69,7 @@ export function buildAppointmentEmailHTML(opts: {
         <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:${WARM};font-weight:700;margin-bottom:6px;">Session</div>
         <div style="font-size:17px;color:${NAVY};font-weight:600;line-height:1.5;">${esc(whenLabel)}</div>
       </div>
+      ${join}
     </div>
 
     <div style="padding:8px 44px 22px;">

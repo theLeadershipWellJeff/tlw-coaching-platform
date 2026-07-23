@@ -13,6 +13,7 @@ import { formatWhenInTimeZone } from './datetime'
 import { buildAppointmentEmailHTML } from './appointment-email'
 import { sendCoachHtmlEmail } from './gmail'
 import { getClientEventState } from './calendar'
+import { normalizeReminderSettings, getMeetingLink } from './scheduling'
 
 // 'confirmation' = the booking email; any other value is a pre-session nudge
 // slot name (e.g. 'nudge_24h', 'nudge_1h' — see lib/scheduling.ts#reminderKind).
@@ -86,11 +87,13 @@ export async function sendAppointmentReminder(
 
   const tz = client.timezone || coach.timezone
   const whenLabel = formatWhenInTimeZone(new Date(appointment.scheduled_at), tz)
+  const meetingLink = getMeetingLink(normalizeReminderSettings(coach.reminder_settings))
   const html = buildAppointmentEmailHTML({
     kind: kind === 'confirmation' ? 'confirmation' : 'nudge',
     clientName: client.name,
     coachName: coach.name,
     whenLabel,
+    meetingLink,
   })
   const subject =
     kind === 'confirmation' ? `Our next session — ${whenLabel}` : `Reminder: our session — ${whenLabel}`

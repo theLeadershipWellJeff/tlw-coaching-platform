@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import {
   WEEKDAY_LABELS,
   REMINDER_LEAD_OPTIONS,
+  DEFAULT_MEETING_LINK,
   defaultAvailability,
   defaultReminderSettings,
   normalizeAvailability,
@@ -134,6 +135,22 @@ export function SchedulingSettings() {
           )
         })}
       </div>
+
+      {/* Meeting link */}
+      <p className="mb-1 mt-6 text-[12px] font-medium text-tlw-espresso">Meeting link</p>
+      <p className="mb-2 text-[12px] text-tlw-warm-gray">
+        The Zoom link added to every calendar invite and reminder email, so clients can join in one tap.
+      </p>
+      <input
+        type="url"
+        inputMode="url"
+        value={reminders.meetingLink ?? ''}
+        disabled={!loaded}
+        placeholder={DEFAULT_MEETING_LINK}
+        onChange={(e) => setReminders((r) => ({ ...r, meetingLink: e.target.value }))}
+        className="w-full rounded-tlw-md border border-tlw-warm-gray/25 bg-white px-3 py-2 text-[13px] text-tlw-espresso outline-none focus:border-tlw-signal-orange"
+      />
+      <p className="mt-1 text-[11px] text-tlw-warm-gray">Leave blank to use the default room ({DEFAULT_MEETING_LINK}).</p>
 
       {/* Reminders */}
       <p className="mb-3 mt-6 text-[12px] font-medium text-tlw-espresso">Session reminders</p>

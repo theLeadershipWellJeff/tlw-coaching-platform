@@ -5,7 +5,7 @@ import { readJson, toErrorResponse } from '@/lib/api-handler'
 import { requireClientCoach } from '@/lib/client-access'
 import { zonedWallClockToUtc, createClientEvent } from '@/lib/calendar'
 import { sendAppointmentReminder } from '@/lib/appointments'
-import { normalizeReminderSettings } from '@/lib/scheduling'
+import { normalizeReminderSettings, getMeetingLink } from '@/lib/scheduling'
 
 export const runtime = 'nodejs'
 
@@ -43,12 +43,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if (cErr) return NextResponse.json({ error: cErr.message }, { status: 500 })
     if (!client) return NextResponse.json({ error: 'Client not found.' }, { status: 404 })
 
+    const reminderSettings = normalizeReminderSettings(coach.reminder_settings)
+    const meetingLink = getMeetingLink(reminderSettings)
     const eventId = await createClientEvent(coach, {
       summary: `Coaching — ${client.name}`,
       startsAt,
       durationMinutes: duration,
       attendeeEmail: client.email,
-      description: 'theLeadershipWell coaching session.',
+      location: meetingLink,
+      description: `Join the Zoom room:\n${meetingLink}\n\ntheLeadershipWell coaching session.`,
     })
 
     const { data: appointment, error: insErr } = await supabase
@@ -70,7 +73,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     // Confirmation email — best-effort, and only if the coach has it enabled.
     // The booking stands regardless.
-    const wantsConfirmation = normalizeReminderSettings(coach.reminder_settings).confirmation
+    const wantsConfirmation = reminderSettings.confirmation
     const emailed = wantsConfirmation
       ? await sendAppointmentReminder(supabase, coach, appointment, client, 'confirmation').catch(() => false)
       : false
