@@ -8,6 +8,7 @@ import { EngagementGoalsCard } from './EngagementGoalsCard'
 import { SendToClientModal } from './SendToClientModal'
 import { ScheduleSessionModal } from './ScheduleSessionModal'
 import { PrepSheetCard } from './PrepSheetCard'
+import { PlanSessionCard } from './PlanSessionCard'
 import { extractCaptures } from '@/lib/notes/extract'
 import { billedHours } from '@/lib/billing'
 
@@ -180,6 +181,9 @@ export function NotesPanel({ clientId, autoNew = false }: { clientId: string; au
           ) : (
             <p className="text-[13px] text-tlw-warm-gray">Select a note below to edit.</p>
           )}
+
+          {/* Plan next session — same prep card as the workspace action bar. */}
+          <PlanSessionCard clientId={clientId} clientName={client?.name || ''} />
 
           {/* Most recent session notes (5), with the rest a click away. */}
           <RecentNotes notes={notes} activeId={activeId} onSelect={setActiveId} />
