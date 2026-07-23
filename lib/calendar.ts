@@ -179,6 +179,9 @@ export async function createClientEvent(
     durationMinutes: number
     attendeeEmail?: string | null
     description?: string
+    /** The join link (Zoom). Set as the event location so Google surfaces a
+     *  clickable "join" affordance on the client's invite and calendar entry. */
+    location?: string | null
   }
 ): Promise<string | null> {
   if (!coach.google_refresh_token) return null
@@ -197,6 +200,7 @@ export async function createClientEvent(
       requestBody: {
         summary: opts.summary,
         description: opts.description,
+        location: opts.location || undefined,
         start: { dateTime: opts.startsAt.toISOString(), timeZone: coach.timezone },
         end: { dateTime: end.toISOString(), timeZone: coach.timezone },
         attendees,
