@@ -380,6 +380,102 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;')
 }
 
+// ── Client payment thank-you ────────────────────────────────────────────────────
+
+/**
+ * Branded "thank you for your payment" email to the client, sent from the coach's
+ * Gmail and logged to communications. One shared path for both ways an invoice
+ * gets paid — the coach marking it paid in the app (offline payment) and the
+ * Stripe webhook when the client pays online — so the client always gets exactly
+ * one warm confirmation in the coach's voice. Best-effort: returns whether it
+ * sent; a Gmail hiccup never blocks the paid transition.
+ */
+export async function sendPaymentThankYou(
+  supabase: SupabaseClient,
+  coach: CoachRow,
+  coachId: string,
+  account: { name: string; billing_email: string; billing_cc?: string | null },
+  invoice: { total: number; currency: string; period_start?: string | null; period_end?: string | null },
+): Promise<boolean> {
+  if (!coach.google_refresh_token || !account?.billing_email) return false
+
+  const period = invoice.period_end
+    ? new Date(invoice.period_end + 'T12:00:00Z').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+    : ''
+  const total = (invoice.total ?? 0).toLocaleString('en-US', {
+    style: 'currency',
+    currency: invoice.currency?.toUpperCase() ?? 'USD',
+  })
+
+  const subject = `Thank you — payment received${period ? ` for ${period}` : ''} (${total})`
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8" /></head>
+<body style="margin:0;padding:0;background:#f9f7f4;font-family:Georgia,serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9f7f4;padding:40px 0;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;">
+        <tr>
+          <td style="background:#111226;padding:24px 32px;">
+            <p style="margin:0;color:#ffffff;font-family:Georgia,serif;font-size:18px;letter-spacing:1px;">
+              THE LEADERSHIP WELL
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:32px;">
+            <p style="margin:0 0 4px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:#7a6e6a;">Payment received</p>
+            <h2 style="margin:0 0 16px;font-size:22px;color:#111226;">Thank you</h2>
+            <p style="margin:0 0 16px;color:#3d2b1f;font-size:15px;line-height:1.6;">
+              Dear ${escapeHtml(account.name)},
+            </p>
+            <p style="margin:0 0 24px;color:#3d2b1f;font-size:15px;line-height:1.6;">
+              We've received your payment of <strong>${total}</strong>${period ? ` for <strong>${period}</strong>` : ''}.
+              Thank you — it's a genuine pleasure to do this work with you. No further action is needed;
+              this email is your confirmation.
+            </p>
+            <p style="margin:0;color:#3d2b1f;font-size:15px;line-height:1.6;">
+              Warmly,<br />
+              <strong>${escapeHtml(coach.name || 'Dr. Jeff Holmes')}</strong><br />
+              <span style="color:#7a6e6a;font-size:13px;">theLeadershipWell</span>
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#f9f7f4;padding:16px 32px;border-top:1px solid #e8e0d8;">
+            <p style="margin:0;color:#7a6e6a;font-size:11px;text-align:center;">
+              theLeadershipWell · jeff@theleadershipwell.com
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`
+
+  const sent = await sendCoachHtmlEmail(coach as any, {
+    to: account.billing_email,
+    cc: account.billing_cc ?? undefined,
+    subject,
+    html,
+  }).catch(() => false)
+
+  // Log to communications (client_id null — billed at the account level).
+  await supabase.from('communications').insert({
+    coach_id: coachId,
+    client_id: null,
+    type: 'email',
+    direction: 'outbound',
+    subject,
+    status: sent ? 'sent' : 'failed',
+  }).then(() => {}, () => {})
+
+  return sent
+}
+
 // ── Coach copy email ──────────────────────────────────────────────────────────
 
 async function sendCoachCopy(

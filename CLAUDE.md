@@ -893,8 +893,29 @@ All Stripe interaction is in `lib/billing/stripe.ts` (singleton + helpers) and
   is missing, `getStripe()` throws at send time, surfaced as a Stripe error on the
   invoice card.
 - **Webhook endpoint:** `POST /api/billing/webhooks/stripe` — handles
-  `invoice.paid` (marks invoice `paid` in Supabase). Must be registered in the
-  Stripe Dashboard pointing at `https://theleadershipwell.online/api/billing/webhooks/stripe`.
+  `invoice.paid` / `payment_intent.succeeded` (paid) + the failure/SCA events.
+  Must be registered in the Stripe Dashboard pointing at
+  `https://theleadershipwell.online/api/billing/webhooks/stripe`.
+- **Paid transition fires once — client thank-you + coach notice.** Both the
+  online path (Stripe fires `invoice.paid` AND `payment_intent.succeeded` for one
+  payment) and the coach's manual **Mark paid** converge on a single guarded
+  transition (`handlePaidTransition`): the `paid` update is filtered
+  `.in('status', ['sent','overdue','failed'])` and `.select()`ed, so the FIRST
+  event/path that flips the row is the only one that cancels reminders and sends
+  emails — every later echo matches zero rows and no-ops. On the transition the
+  client gets a **branded "thank you for your payment"** (`lib/billing/send.ts#sendPaymentThankYou`,
+  coach's Gmail, logged to `communications`) and the coach gets the "payment
+  received" note.
+- **Manual mark-paid reconciles Stripe.** `POST /api/billing/invoices/[id]/mark-paid`
+  (offline payments — bank transfer/check) flips our status to `paid` **first**,
+  then calls `stripe.invoices.pay(id, { paid_out_of_band: true })`
+  (`lib/billing/stripe.ts#markStripeInvoicePaidOutOfBand`) so the invoice reads
+  Paid in the Stripe Dashboard, the customer's history, and exports — no card is
+  charged. Setting our status first means the `invoice.paid` webhook that
+  `paid_out_of_band` triggers sees us already-paid and skips its own emails (the
+  route sends the thank-you). Stripe reconcile is best-effort (already-paid /
+  void handled) — a failure returns `stripeWarning` but never blocks the paid
+  state. The invoice page surfaces the outcome (thank-you sent / Stripe updated).
 - **Customer creation:** `getOrCreateStripeCustomer` creates one Stripe customer
   per `billing_accounts` row on first send; persists `stripe_customer_id` back to
   the row so subsequent sends reuse it.
@@ -928,7 +949,10 @@ All Stripe interaction is in `lib/billing/stripe.ts` (singleton + helpers) and
 1. Add `STRIPE_SECRET_KEY` (live) and `STRIPE_WEBHOOK_SECRET` to Vercel env vars.
 2. In Stripe Dashboard → Developers → Webhooks, add endpoint:
    `https://theleadershipwell.online/api/billing/webhooks/stripe`
-   Events to listen for: `invoice.paid`, `invoice.payment_failed`.
+   Events to listen for: `invoice.paid`, `payment_intent.succeeded`,
+   `invoice.payment_failed`, `invoice.payment_action_required`,
+   `payment_intent.payment_failed` (the paid transition is idempotent, so
+   registering both `invoice.paid` and `payment_intent.succeeded` is safe).
 3. Copy the webhook signing secret → `STRIPE_WEBHOOK_SECRET` in Vercel.
 4. Deploy (merge to `main`) — Vercel picks up the new env vars on next deploy.
 5. Test with a real billing account: assemble a run → approve → send. The client

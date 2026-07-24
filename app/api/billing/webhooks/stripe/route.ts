@@ -5,11 +5,16 @@
  * then syncs invoice/payment-intent state back into the invoices table.
  *
  * Events handled:
- *   invoice.paid                      → status = 'paid', paid_at = event time
+ *   invoice.paid                      → paid (once) + client thank-you + coach notice
  *   invoice.payment_failed            → status = 'failed', stripe_error set
  *   invoice.payment_action_required   → stripe_error set (SCA required)
- *   payment_intent.succeeded          → status = 'paid', paid_at = event time
+ *   payment_intent.succeeded          → paid (once) + client thank-you + coach notice
  *   payment_intent.payment_failed     → status = 'failed', stripe_error set
+ *
+ * The paid transition is idempotent across events AND the coach's manual
+ * mark-paid: handlePaidTransition guards the update on the prior status and only
+ * the row-flipping call sends emails (see the fn comment), so a payment yields
+ * exactly one client thank-you.
  *
  * All events are matched to our invoice via metadata.tlw_invoice_id.
  * Unknown / unhandled event types return 200 immediately.
@@ -24,6 +29,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { constructWebhookEvent } from '@/lib/billing/stripe'
 import { cancelReminders } from '@/lib/billing/reminders'
+import { sendPaymentThankYou } from '@/lib/billing/send'
 import { sendCoachHtmlEmail } from '@/lib/gmail'
 import type Stripe from 'stripe'
 
@@ -62,22 +68,7 @@ export async function POST(req: NextRequest) {
         const stripeInv = event.data.object as Stripe.Invoice
         const tlwId = stripeInv.metadata?.tlw_invoice_id
         if (tlwId) {
-          await supabase
-            .from('invoices')
-            .update({
-              status: 'paid',
-              paid_at: now,
-              stripe_error: null,
-              updated_at: now,
-            })
-            .eq('id', tlwId)
-            .in('status', ['sent', 'overdue', 'failed'])
-          // Cancel any pending reminders now that it's paid.
-          await cancelReminders(supabase, tlwId).catch((e: any) => {
-            console.error('cancelReminders failed (non-fatal):', e?.message)
-          })
-          // Notify the coach by email — best-effort, never blocks the webhook response.
-          sendPaidNotification(supabase, tlwId, stripeInv).catch(() => {})
+          await handlePaidTransition(supabase, tlwId, now, (stripeInv as any).hosted_invoice_url ?? null)
         }
         break
       }
@@ -121,19 +112,7 @@ export async function POST(req: NextRequest) {
         // fall back to looking up our invoice via the Stripe invoice ID.
         const tlwId = pi.metadata?.tlw_invoice_id ?? await resolveTlwIdFromStripeInvoice(supabase, (pi as any).invoice)
         if (tlwId) {
-          await supabase
-            .from('invoices')
-            .update({
-              status: 'paid',
-              paid_at: now,
-              stripe_error: null,
-              updated_at: now,
-            })
-            .eq('id', tlwId)
-            .in('status', ['sent', 'overdue', 'failed'])
-          await cancelReminders(supabase, tlwId).catch((e: any) => {
-            console.error('cancelReminders failed (non-fatal):', e?.message)
-          })
+          await handlePaidTransition(supabase, tlwId, now, null)
         }
         break
       }
@@ -188,29 +167,79 @@ async function resolveTlwIdFromStripeInvoice(
   return data?.id ?? null
 }
 
-async function sendPaidNotification(
+/**
+ * Transition an invoice to paid exactly once, then fire notifications.
+ *
+ * The `.in('status', ['sent','overdue','failed'])` guard + `.select()` means the
+ * FIRST event to arrive (invoice.paid vs payment_intent.succeeded — Stripe fires
+ * both for one payment) makes the transition and returns the row; every later
+ * event (and the echo from a coach's manual `paid_out_of_band`) matches zero rows
+ * and returns null, so reminders are cancelled and the emails are sent once.
+ */
+async function handlePaidTransition(
   supabase: ReturnType<typeof getSupabaseAdmin>,
   tlwInvoiceId: string,
-  stripeInv: Stripe.Invoice,
+  now: string,
+  hostedUrl: string | null,
 ) {
-  const { data: inv } = await supabase
+  const { data: updated } = await supabase
     .from('invoices')
-    .select('coach_id, total, currency, billing_accounts ( name, billing_email )')
+    .update({ status: 'paid', paid_at: now, stripe_error: null, updated_at: now })
     .eq('id', tlwInvoiceId)
-    .maybeSingle() as { data: { coach_id: string; total: number; currency: string; billing_accounts: { name: string; billing_email: string } | null } | null }
-  if (!inv) return
+    .in('status', ['sent', 'overdue', 'failed'])
+    .select('coach_id, total, currency, period_start, period_end, billing_accounts ( name, billing_email, billing_cc )')
+    .maybeSingle() as {
+      data:
+        | {
+            coach_id: string
+            total: number
+            currency: string
+            period_start: string | null
+            period_end: string | null
+            billing_accounts: { name: string; billing_email: string; billing_cc: string | null } | null
+          }
+        | null
+    }
+  // Null = already paid (a prior event or the manual mark-paid handled it). Skip
+  // so reminders and emails only ever fire on the real transition.
+  if (!updated) return
+
+  await cancelReminders(supabase, tlwInvoiceId).catch((e: any) => {
+    console.error('cancelReminders failed (non-fatal):', e?.message)
+  })
 
   const { data: coach } = await supabase
     .from('coaches')
-    .select('email, name, google_refresh_token')
-    .eq('id', inv.coach_id)
-    .maybeSingle() as { data: { email: string; name: string; google_refresh_token: string | null } | null }
-  if (!coach?.email) return
+    .select('email, name, google_refresh_token, billing_settings')
+    .eq('id', updated.coach_id)
+    .maybeSingle() as { data: { email: string; name: string; google_refresh_token: string | null; billing_settings: any } | null }
+  if (!coach) return
 
-  const account = (inv as any).billing_accounts
-  const total = (inv.total ?? 0).toLocaleString('en-US', { style: 'currency', currency: (inv.currency ?? 'usd').toUpperCase() })
-  const hostedUrl = (stripeInv as any).hosted_invoice_url ?? null
+  const account = updated.billing_accounts
 
+  // Branded thank-you to the client — best-effort, logged to communications.
+  if (account) {
+    sendPaymentThankYou(supabase, coach as any, updated.coach_id, account, {
+      total: updated.total,
+      currency: updated.currency,
+      period_start: updated.period_start,
+      period_end: updated.period_end,
+    }).catch(() => {})
+  }
+
+  // "Payment received" note to the coach — best-effort.
+  sendPaidNotificationToCoach(coach, account, updated.total, updated.currency, hostedUrl).catch(() => {})
+}
+
+async function sendPaidNotificationToCoach(
+  coach: { email: string; name: string; google_refresh_token: string | null },
+  account: { name: string; billing_email: string } | null,
+  totalNum: number,
+  currency: string,
+  hostedUrl: string | null,
+) {
+  if (!coach.email) return
+  const total = (totalNum ?? 0).toLocaleString('en-US', { style: 'currency', currency: (currency ?? 'usd').toUpperCase() })
   const html = `
 <div style="font-family:sans-serif;max-width:540px;margin:0 auto;padding:24px;">
   <p style="margin:0 0 4px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:#8a7f78;">Payment received</p>

@@ -187,6 +187,7 @@ export default function InvoiceDetailPage() {
   const [savingMessage, setSavingMessage] = useState(false)
   const [markingPaid, setMarkingPaid] = useState(false)
   const [markPaidErr, setMarkPaidErr] = useState('')
+  const [markPaidNote, setMarkPaidNote] = useState('')
   const [approving, setApproving] = useState(false)
   const [sending, setSending] = useState(false)
   const [resending, setResending] = useState(false)
@@ -205,9 +206,10 @@ export default function InvoiceDetailPage() {
 
   async function markPaid() {
     if (!invoice) return
-    if (!confirm('Mark this invoice as paid via bank transfer / manual payment?')) return
+    if (!confirm('Mark this invoice as paid? This records it as Paid in Stripe and emails the client a thank-you.')) return
     setMarkingPaid(true)
     setMarkPaidErr('')
+    setMarkPaidNote('')
     const res = await fetch(`/api/billing/invoices/${invoice.id}/mark-paid`, { method: 'POST' })
     const data = await res.json()
     if (!res.ok) {
@@ -215,7 +217,13 @@ export default function InvoiceDetailPage() {
       setMarkingPaid(false)
       return
     }
-    setInvoice((inv) => inv ? { ...inv, status: 'paid', paid_at: data.invoice.paid_at } : inv)
+    setInvoice((inv) => inv ? { ...inv, status: 'paid', paid_at: data.invoice?.paid_at } : inv)
+    // Summarize what happened alongside the state change.
+    const bits: string[] = ['Marked paid.']
+    bits.push(data.emailed ? 'Thank-you emailed to the client.' : 'Thank-you email not sent (no client email on file).')
+    if (data.stripeWarning) bits.push(`Stripe not updated: ${data.stripeWarning}.`)
+    else if (data.stripeSynced) bits.push('Stripe updated to Paid.')
+    setMarkPaidNote(bits.join(' '))
     setMarkingPaid(false)
   }
 
@@ -553,7 +561,8 @@ export default function InvoiceDetailPage() {
             <section className="rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface px-5 py-4">
               <p className="mb-1 text-[13px] font-semibold text-tlw-navy-deep">Register payment</p>
               <p className="mb-3 text-[12px] text-tlw-warm-gray">
-                Use this if the client paid by bank transfer or another method that doesn&apos;t go through Stripe.
+                Use this if the client paid by bank transfer or another method that doesn&apos;t go through Stripe. It
+                also records the invoice as Paid in Stripe and emails the client a thank-you.
               </p>
               <button
                 onClick={markPaid}
@@ -563,6 +572,7 @@ export default function InvoiceDetailPage() {
                 {markingPaid ? 'Saving…' : 'Mark as paid (manual / bank transfer)'}
               </button>
               {markPaidErr && <p className="mt-2 text-[12px] text-red-600">{markPaidErr}</p>}
+              {markPaidNote && <p className="mt-2 text-[12px] text-green-700">{markPaidNote}</p>}
             </section>
           )}
 

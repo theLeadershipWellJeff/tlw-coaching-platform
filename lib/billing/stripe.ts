@@ -110,6 +110,40 @@ export async function createAndSendStripeInvoice(opts: {
   return sent
 }
 
+/**
+ * Mark a finalized Stripe invoice as paid OUTSIDE Stripe (cash, check, bank
+ * transfer) via `paid_out_of_band`. This records the invoice as Paid without
+ * attempting a card charge, so it's registered everywhere the invoice lives
+ * (Dashboard, the customer's history, reports, the PDF). Used when the coach
+ * marks an invoice paid in the app.
+ *
+ * Returns { synced } — synced:true if Stripe now shows it paid (including the
+ * "already paid" case, which is success for our purposes), false + reason if the
+ * reconcile couldn't complete. Never throws: reconciling Stripe is best-effort
+ * and must not block marking the invoice paid in the app.
+ */
+export async function markStripeInvoicePaidOutOfBand(
+  stripeInvoiceId: string,
+): Promise<{ synced: boolean; reason?: string }> {
+  try {
+    const stripe = getStripe()
+    const inv = await stripe.invoices.retrieve(stripeInvoiceId)
+    // Already settled — nothing to do, and calling pay() would throw.
+    if (inv.status === 'paid') return { synced: true }
+    if (inv.status === 'void' || inv.status === 'uncollectible') {
+      return { synced: false, reason: `Stripe invoice is ${inv.status}` }
+    }
+    await stripe.invoices.pay(stripeInvoiceId, { paid_out_of_band: true })
+    return { synced: true }
+  } catch (e: any) {
+    // A concurrent online payment may have already paid it — treat as synced.
+    if (typeof e?.message === 'string' && /already\s+paid/i.test(e.message)) {
+      return { synced: true }
+    }
+    return { synced: false, reason: e?.message ?? 'Stripe reconcile failed' }
+  }
+}
+
 // ── PaymentIntent (off-session, subscriptions) ────────────────────────────────
 
 /**
