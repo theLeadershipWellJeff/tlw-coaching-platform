@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
 
   let query = supabase
     .from('invoices')
-    .select('*, billing_accounts ( id, name, type, billing_email ), invoice_lines ( *, coachees ( id, clients ( id, name ) ) )')
+    .select('*, billing_accounts ( id, name, type, billing_email, payment_method_status, payment_method_brand, payment_method_last4 ), invoice_lines ( *, coachees ( id, clients ( id, name ) ) )')
     .eq('coach_id', coach.id)
     .order('created_at', { ascending: false })
     .limit(limit)

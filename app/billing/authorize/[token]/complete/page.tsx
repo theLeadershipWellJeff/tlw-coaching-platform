@@ -43,11 +43,11 @@ export default async function AuthorizeCompletePage({ params }: { params: { toke
     <Shell>
       <div style={{ fontSize: 40, marginBottom: 8 }}>✓</div>
       <h1 style={{ fontFamily: "'Cormorant Garamond',Georgia,serif", fontSize: 28, color: '#111226', margin: '0 0 10px' }}>
-        Thank you — you're all set
+        Thank you — you&apos;re all set
       </h1>
       <p style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 15, color: '#403832', lineHeight: 1.6, margin: 0 }}>
         Your card has been stored securely and future coaching fees will be paid automatically as they
-        come due.{cardLine} You'll receive a receipt each time a payment is made. You can close this page.
+        come due.{cardLine} You&apos;ll receive a receipt each time a payment is made. You can close this page.
       </p>
     </Shell>
   )

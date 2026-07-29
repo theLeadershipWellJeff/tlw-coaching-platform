@@ -40,6 +40,13 @@ type Account = {
   status: string
   closed_at: string | null
   stripe_customer_id: string | null
+  // Payment on File (migration 038)
+  payment_method_status: string | null
+  payment_method_brand: string | null
+  payment_method_last4: string | null
+  payment_method_exp_month: number | null
+  payment_method_exp_year: number | null
+  authorized_at: string | null
   coachees: Coachee[]
   engagements: Engagement[]
 }
@@ -849,6 +856,132 @@ function AccountInvoices({ accountId }: { accountId: string }) {
   )
 }
 
+// ── Payment method panel (Payment on File) ──────────────────────────────────────
+
+const PM_BADGE: Record<string, string> = {
+  active: 'bg-green-50 text-green-700',
+  dormant: 'bg-amber-50 text-amber-700',
+  expired: 'bg-red-50 text-red-700',
+  removed: 'bg-tlw-canvas text-tlw-warm-gray',
+  none: 'bg-tlw-canvas text-tlw-warm-gray',
+}
+const PM_LABEL: Record<string, string> = {
+  active: 'Card on file',
+  dormant: 'Dormant',
+  expired: 'Card expired',
+  removed: 'Removed',
+  none: 'No card on file',
+}
+
+function PaymentMethodPanel({ account, onChange }: { account: Account; onChange: () => void }) {
+  const [busy, setBusy] = useState<string | null>(null)
+  const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string; missing?: string[] } | null>(null)
+  const [confirmRemove, setConfirmRemove] = useState(false)
+
+  const status = account.payment_method_status ?? 'none'
+  const hasCard = status === 'active' || status === 'dormant'
+
+  async function call(action: string, url: string, body?: any) {
+    setBusy(action)
+    setMsg(null)
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: body ? JSON.stringify(body) : undefined,
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setMsg({ kind: 'err', text: d.error || 'Something went wrong.', missing: d.missing })
+      } else {
+        const okText: Record<string, string> = {
+          send: 'Authorization link sent.',
+          resend: 'Authorization link re-sent.',
+          remove: 'Card removed.',
+          reconfirm: 'Card re-confirmed — ready to charge.',
+        }
+        setMsg({ kind: 'ok', text: okText[action] ?? 'Done.' })
+        onChange()
+      }
+    } catch {
+      setMsg({ kind: 'err', text: 'Network error — try again.' })
+    } finally {
+      setBusy(null)
+      setConfirmRemove(false)
+    }
+  }
+
+  const sendUrl = `/api/billing/accounts/${account.id}/authorization/send`
+  const authorizedDate = account.authorized_at
+    ? new Date(account.authorized_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : null
+
+  return (
+    <section className="rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface px-5 py-4">
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-[13px] font-semibold uppercase tracking-wider text-tlw-warm-gray">Payment method</h2>
+        <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${PM_BADGE[status] ?? PM_BADGE.none}`}>
+          {PM_LABEL[status] ?? status}
+        </span>
+      </div>
+
+      {hasCard ? (
+        <div className="mb-3 text-[13px] text-tlw-espresso">
+          <span className="font-medium capitalize">{account.payment_method_brand ?? 'Card'}</span>
+          {account.payment_method_last4 ? <span> ending {account.payment_method_last4}</span> : null}
+          {account.payment_method_exp_month && account.payment_method_exp_year ? (
+            <span className="text-tlw-warm-gray"> · exp {String(account.payment_method_exp_month).padStart(2, '0')}/{String(account.payment_method_exp_year).slice(-2)}</span>
+          ) : null}
+          {authorizedDate ? <span className="text-tlw-warm-gray"> · authorized {authorizedDate}</span> : null}
+          {status === 'dormant' && <p className="mt-1 text-[12px] text-amber-700">Retained from a prior engagement — re-confirm before the first charge of a new one.</p>}
+        </div>
+      ) : (
+        <p className="mb-3 text-[13px] text-tlw-warm-gray">
+          No card is stored. Send the client an authorization link so future invoices can be charged automatically. A signed agreement must be on file for every client on this account first.
+        </p>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        {status === 'active' && (
+          confirmRemove ? (
+            <>
+              <span className="text-[12px] text-tlw-warm-gray">Remove the stored card?</span>
+              <button onClick={() => call('remove', `/api/billing/accounts/${account.id}/payment-method/remove`)} disabled={!!busy} className="rounded-tlw-lg bg-red-600 px-3 py-1.5 text-[12px] font-medium text-white disabled:opacity-50">
+                {busy === 'remove' ? 'Removing…' : 'Yes, remove'}
+              </button>
+              <button onClick={() => setConfirmRemove(false)} className="px-2 py-1 text-[12px] text-tlw-warm-gray hover:text-tlw-espresso">Cancel</button>
+            </>
+          ) : (
+            <button onClick={() => setConfirmRemove(true)} className="rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-1.5 text-[12px] font-medium text-tlw-espresso hover:bg-tlw-canvas">Remove card</button>
+          )
+        )}
+        {status === 'dormant' && (
+          <>
+            <button onClick={() => call('reconfirm', `/api/billing/accounts/${account.id}/payment-method/reconfirm`)} disabled={!!busy} className="rounded-tlw-lg bg-tlw-navy-deep px-3 py-1.5 text-[12px] font-medium text-white disabled:opacity-50">
+              {busy === 'reconfirm' ? 'Re-confirming…' : 'Re-confirm card'}
+            </button>
+            <button onClick={() => call('remove', `/api/billing/accounts/${account.id}/payment-method/remove`)} disabled={!!busy} className="rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-1.5 text-[12px] font-medium text-tlw-espresso hover:bg-tlw-canvas">Remove</button>
+          </>
+        )}
+        {!hasCard && (
+          <button onClick={() => call(status === 'none' ? 'send' : 'resend', sendUrl)} disabled={!!busy} className="rounded-tlw-lg bg-tlw-navy-deep px-3 py-1.5 text-[12px] font-medium text-white disabled:opacity-50">
+            {busy ? 'Sending…' : status === 'none' ? 'Send authorization link' : 'Resend authorization link'}
+          </button>
+        )}
+      </div>
+
+      {msg && (
+        <div className={`mt-3 text-[12px] ${msg.kind === 'ok' ? 'text-green-700' : 'text-red-600'}`}>
+          <p>{msg.text}</p>
+          {msg.missing && msg.missing.length > 0 && (
+            <ul className="mt-1 list-disc pl-4">{msg.missing.map((m) => <li key={m}>{m}</li>)}</ul>
+          )}
+        </div>
+      )}
+    </section>
+  )
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function AccountDetailPage() {
@@ -864,6 +997,14 @@ export default function AccountDetailPage() {
   const [editingCc, setEditingCc] = useState(false)
   const [ccDraft, setCcDraft] = useState('')
   const [savingCc, setSavingCc] = useState(false)
+
+  function reload() {
+    if (!id) return
+    fetch(`/api/billing/accounts/${id}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d) => setAccount(d.account))
+      .catch(() => {})
+  }
 
   useEffect(() => {
     if (!id) return
@@ -1040,6 +1181,9 @@ export default function AccountDetailPage() {
               </div>
             </div>
           </section>
+
+          {/* Payment method (Payment on File) */}
+          <PaymentMethodPanel account={account} onChange={reload} />
 
           {/* Coachees */}
           <section>

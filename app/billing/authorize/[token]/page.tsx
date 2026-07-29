@@ -82,7 +82,7 @@ export default async function AuthorizePage({ params }: { params: { token: strin
         </p>
       </div>
       <p style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: '#8B8680', lineHeight: 1.6, margin: '12px 0 0' }}>
-        Your card details are entered on Stripe's secure, PCI-compliant page. theLeadershipWell never
+        Your card details are entered on Stripe&apos;s secure, PCI-compliant page. theLeadershipWell never
         sees or stores your full card number. You can remove your card at any time by contacting your coach.
       </p>
 
