@@ -961,6 +961,77 @@ All Stripe interaction is in `lib/billing/stripe.ts` (singleton + helpers) and
 6. To verify the webhook is firing: Stripe Dashboard → Developers → Webhooks →
    select the endpoint → Recent deliveries.
 
+## Payment on File & charge-on-run (migration 038)
+
+Lets a client authorize theLeadershipWell to store a card and charge it
+off-session from the billing run, plus a refund/credit/void adjustment path.
+Build brief "Payment on File & Charge-on-Run v3". **All card entry happens on
+Stripe hosted Checkout (`setup` mode) — never on a TLW page (PCI SAQ-A).**
+
+- **The mandate.** A stored card is a *mandate* (recorded permission to be
+  charged), collected via a Stripe SetupIntent through hosted Checkout and set as
+  the customer's `invoice_settings.default_payment_method`. Lives on
+  `billing_accounts` (`payment_method_status` = `none|active|dormant|expired|removed`
+  + brand/last4/exp + `authorized_*` snapshot + `authorization_text` verbatim).
+- **Agreement gate (§4.2).** An authorization link cannot be sent unless **every**
+  client on the account has `agreement_on_file = true` — enforced server-side in
+  `lib/billing/payment-methods.ts#accountPassesAgreementGate` (also a charge-time
+  backstop in `charge.ts` that refuses + sends the normal invoice instead). Sends
+  are rate-limited to 5/account/hour.
+- **Authorization flow.** `POST /api/billing/accounts/[id]/authorization/send`
+  (agreement gate + CA-exclusion for the Phase-6 announcement) emails the client
+  a link to the **public** page `app/billing/authorize/[token]` (token = single-
+  purpose credential). "Add card" → `POST .../authorize/[token]/session` creates
+  the Checkout setup session; on completion `setup_intent.succeeded` attaches the
+  card + flips status → `active`. Remove/reconfirm at
+  `.../payment-method/remove|reconfirm`. Every step logs to
+  `billing_authorization_events` (append-only audit).
+- **Charge path (`lib/billing/charge.ts`) — the ONE money path.** `POST
+  /api/billing/invoices/[id]/charge`. **Draft-until-charge (§4.5):** the Stripe
+  invoice is created `charge_automatically` + finalized only at charge. Two
+  idempotency guards (§4.8): a **claim** row in `invoice_charge_attempts` (unique
+  `(invoice_id, attempt_number)`) before any Stripe call, plus a Stripe
+  idempotency key derived from `invoice_id + attempt_number`. On success →
+  branded **receipt** with the paid invoice PDF attached (`receipt.ts`). 3DS/SCA
+  → **auto-fallback** to the hosted invoice (`charge_status='action_required'`),
+  no coach action.
+- **Decline handling (Phase 4).** Failed charge surfaces in the run with a plain-
+  language reason + **Retry in 3 days** (`.../retry`, sets `charge_retry_at`) and
+  **Send note** (`.../decline-note`). The hourly cron `GET /api/cron/billing-retries`
+  (`lib/billing/retries.ts`) fires due retries (hard stop after 2 auto-retries →
+  "Needs attention"), marks dormancy (active card, no active engagement → dormant;
+  re-confirm before the next charge), and auto-detaches cards untouched 24 months.
+- **Adjustments (`lib/billing/adjustments.ts`) — the ONE adjustment path.** `POST
+  /api/billing/invoices/[id]/adjust`. **Credit notes first** (§4.7): `refund`
+  (credit note + refund to card), `credit_to_balance` (credit note, applies to
+  next invoice), `void` (finalized-but-unpaid only). Reason required; over-refund
+  guarded arithmetically against Stripe's `amount_captured` minus prior succeeded
+  adjustments; idempotency key per adjustment. `invoice_adjustments` is the source
+  of truth (append-only); `invoices.refunded_cents/credited_cents` are denormalized
+  for the run UI.
+- **Webhook** (`/api/billing/webhooks/stripe`, extended): `setup_intent.succeeded`/
+  `.setup_failed`, `payment_method.automatically_updated` (card updater refresh),
+  `invoice.payment_action_required` (auto-fallback), `credit_note.created` +
+  `charge.refunded` (adjustment reconcile), `charge.dispute.created` (logs
+  `charge_disputed` with the authorization snapshot + alerts the coach). The
+  paid-transition guard was relaxed to any non-`paid`/non-`void` status so a
+  card-on-file charge (`approved → paid`) is covered; the card path sends the
+  **receipt** (PDF), the hosted path keeps the **thank-you**.
+- **Role seam (§10 / §12.3).** New billing money routes read the actor through
+  `lib/billing/access.ts#getBillingActor` (`canWrite` flag) so a read-only
+  `bookkeeper` role can be added later without touching every route.
+- **Phase 6.** Accounts list "Announce card-on-file" bulk-select (excludes
+  CA-owned + agreement-less), and a persistent "save a card" block on invoice
+  cover emails for accounts without an active card.
+- **`communications.type`** gains `receipt` / `billing_authorization` /
+  `billing_adjustment` (column is unconstrained text — no DDL).
+- **Manual Stripe Dashboard prerequisites** (not code): configure invoice
+  branding (logo/colors/address); turn OFF Stripe's own payment-receipt emails
+  and credit-note emails (else clients get duplicates). Run Phases 1–5 in Stripe
+  **test mode** against a separate test webhook before any live charge. Register
+  the new webhook events (setup_intent.*, payment_method.automatically_updated,
+  credit_note.created, charge.refunded, charge.dispute.created).
+
 ## Operational notes
 
 - **Google Cloud APIs** must be enabled in the OAuth project: Gmail, Calendar,
@@ -1031,7 +1102,13 @@ engagement — shared math in `lib/billing/engagement-progress.ts`; **applied**)
 037 invoice re-send + receipt (`invoices.receipt_token`/`received_at`/
 `last_resent_at` — tracked "View & pay" link marks an invoice received on first
 open; `last_resent_at` audits re-sends; additive, nullable; **apply before
-deploying the invoice resend/receipt code**).
+deploying the invoice resend/receipt code**) · 038 payment on file
+(`billing_accounts` stored-mandate columns + `invoices` charge-state columns +
+`invoice_charge_attempts` idempotency claim + `invoice_adjustments` +
+`billing_authorization_events`; relaxes `billing_run_warnings.engagement_id` NOT
+NULL; additive; **apply before deploying the Payment-on-File code — the charge/
+adjust/authorization routes reference these columns**. NOTE: the build brief calls
+this "migration 035"; it lands as 038 since 035–037 already exist).
 
 **Tenant scoping (015).** `coach_clients` (coach_id, client_id, role) is the
 ownership link. Client access is enforced **server-side** by the session coach,
@@ -1066,6 +1143,11 @@ is **applied** (confirmed July 11 2026). `037_invoice_resend_receipt.sql`
 (`invoices.receipt_token`/`received_at`/`last_resent_at` — invoice re-send +
 receipt tracking; additive/nullable; **apply before deploying — the invoice send
 path, resend route, and billing-reminders cron reference the columns**).
+`038_payment_on_file.sql` (Payment on File — stored-mandate + charge-state
+columns, `invoice_charge_attempts`, `invoice_adjustments`,
+`billing_authorization_events`; additive; **apply before deploying the
+Payment-on-File code**; also register the new Stripe webhook events + set the
+`billing-retries` cron — see the Payment on File section above).
 ⚠️ **015 must be run BEFORE
 the tenant-scoping code is deployed to `main`** — until the table exists and is
 backfilled, the roster would filter to zero clients. Read the backfill comment in

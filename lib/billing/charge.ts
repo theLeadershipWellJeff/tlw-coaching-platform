@@ -149,16 +149,19 @@ export async function chargeInvoice(
       )
     }
 
-    await stripe.invoices.finalizeInvoice(stripeInvoice.id, undefined, { idempotencyKey: `${idempotencyKey}_final` })
+    const finalized = await stripe.invoices.finalizeInvoice(stripeInvoice.id, undefined, { idempotencyKey: `${idempotencyKey}_final` })
 
     await supabase.from('invoices').update({ stripe_invoice_id: stripeInvoice.id, updated_at: new Date().toISOString() } as any).eq('id', invoiceId)
 
-    // 4. Charge off-session.
-    const paid = await stripe.invoices.pay(
-      stripeInvoice.id,
-      { off_session: true },
-      { idempotencyKey: `${idempotencyKey}_pay` },
-    )
+    // 4. Charge off-session. A charge_automatically invoice may already be paid
+    // from finalization — don't call pay() on an already-paid invoice (it throws).
+    const paid = finalized.status === 'paid'
+      ? finalized
+      : await stripe.invoices.pay(
+          stripeInvoice.id,
+          { off_session: true },
+          { idempotencyKey: `${idempotencyKey}_pay` },
+        )
 
     if (paid.status === 'paid') {
       await resolveAttempt(supabase, invoiceId, attemptNumber, 'succeeded', { stripePaymentIntentId: piId(paid) })
@@ -172,6 +175,13 @@ export async function chargeInvoice(
     return { ok: false, status: 'action_required', message: 'Authentication required — invoice sent for the client to complete payment.' }
   } catch (e: any) {
     const code = e?.code ?? e?.decline_code ?? null
+
+    // A concurrent finalize-triggered charge may have already paid it.
+    if (typeof e?.message === 'string' && /already\s+paid/i.test(e.message)) {
+      await resolveAttempt(supabase, invoiceId, attemptNumber, 'succeeded')
+      await markPaid(supabase, coachId, invoiceId, account, inv, coach)
+      return { ok: true, status: 'paid' }
+    }
 
     // 3DS / SCA → auto-fallback to the hosted invoice, no coach action (§4.6).
     if (code === 'authentication_required') {
