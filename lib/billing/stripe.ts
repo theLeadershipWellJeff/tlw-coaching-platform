@@ -193,6 +193,165 @@ export async function createSubscriptionPaymentIntent(opts: {
   })
 }
 
+// ── Payment on File: setup mandates (migration 038) ─────────────────────────────
+
+/**
+ * Create a Stripe Checkout session in `setup` mode. This collects a card on
+ * Stripe's hosted page (PCI SAQ-A — card entry never touches a TLW page) and
+ * produces a SetupIntent whose payment method attaches to the customer.
+ *
+ * The setup_intent_data metadata carries our billing-account + coach ids so the
+ * `setup_intent.succeeded` webhook can resolve the account without a lookup.
+ */
+export async function createSetupCheckoutSession(opts: {
+  customerId: string
+  billingAccountId: string
+  coachId: string
+  successUrl: string
+  cancelUrl: string
+}): Promise<Stripe.Checkout.Session> {
+  const stripe = getStripe()
+  return stripe.checkout.sessions.create({
+    mode: 'setup',
+    customer: opts.customerId,
+    payment_method_types: ['card'],
+    success_url: opts.successUrl,
+    cancel_url: opts.cancelUrl,
+    setup_intent_data: {
+      metadata: {
+        tlw_billing_account_id: opts.billingAccountId,
+        coach_id: opts.coachId,
+      },
+    },
+    metadata: {
+      tlw_billing_account_id: opts.billingAccountId,
+      coach_id: opts.coachId,
+    },
+  })
+}
+
+export async function retrieveSetupIntent(setupIntentId: string): Promise<Stripe.SetupIntent> {
+  return getStripe().setupIntents.retrieve(setupIntentId)
+}
+
+export async function retrievePaymentMethod(paymentMethodId: string): Promise<Stripe.PaymentMethod> {
+  return getStripe().paymentMethods.retrieve(paymentMethodId)
+}
+
+/**
+ * Attach a payment method to a customer and set it as the invoice default so an
+ * invoice created `charge_automatically` draws on it. Idempotent — re-attaching
+ * an already-attached method is a no-op that still updates the default.
+ */
+export async function attachPaymentMethodAsDefault(
+  customerId: string,
+  paymentMethodId: string,
+): Promise<void> {
+  const stripe = getStripe()
+  try {
+    await stripe.paymentMethods.attach(paymentMethodId, { customer: customerId })
+  } catch (e: any) {
+    // Already attached to this customer → fine; anything else re-throws.
+    if (!/already been attached/i.test(e?.message ?? '')) throw e
+  }
+  await stripe.customers.update(customerId, {
+    invoice_settings: { default_payment_method: paymentMethodId },
+  })
+}
+
+/** Detach a stored card. Best-effort: an already-detached method resolves ok. */
+export async function detachPaymentMethod(paymentMethodId: string): Promise<void> {
+  try {
+    await getStripe().paymentMethods.detach(paymentMethodId)
+  } catch (e: any) {
+    if (/already been detached|No such PaymentMethod/i.test(e?.message ?? '')) return
+    throw e
+  }
+}
+
+/** Card display fields off a Stripe PaymentMethod, for the stored mandate. */
+export function cardDisplayFields(pm: Stripe.PaymentMethod): {
+  brand: string | null
+  last4: string | null
+  exp_month: number | null
+  exp_year: number | null
+} {
+  const card = pm.card
+  return {
+    brand: card?.brand ?? null,
+    last4: card?.last4 ?? null,
+    exp_month: card?.exp_month ?? null,
+    exp_year: card?.exp_year ?? null,
+  }
+}
+
+// ── Payment on File: adjustments (credit notes / refunds / void) ────────────────
+
+/**
+ * Retrieve a finalized invoice's captured amount in cents — the arithmetic
+ * ceiling for a refund/credit (never trust the UI). Returns 0 if unknown.
+ */
+export async function invoiceAmountCaptured(stripeInvoiceId: string): Promise<number> {
+  const inv = await getStripe().invoices.retrieve(stripeInvoiceId)
+  // amount_paid is the settled amount in cents on a paid invoice.
+  return (inv as any).amount_paid ?? 0
+}
+
+/**
+ * Create a Stripe credit note against a paid invoice. A refund credit note moves
+ * money back to the card; a credit_to_balance note posts a customer-balance
+ * credit that auto-applies to the next invoice. Passing an idempotency key
+ * collapses duplicate requests.
+ */
+export async function createCreditNote(opts: {
+  stripeInvoiceId: string
+  amountCents: number
+  kind: 'refund' | 'credit_to_balance'
+  memo: string
+  idempotencyKey: string
+}): Promise<Stripe.CreditNote> {
+  const stripe = getStripe()
+  const params: Stripe.CreditNoteCreateParams = {
+    invoice: opts.stripeInvoiceId,
+    memo: opts.memo,
+  }
+  if (opts.kind === 'refund') {
+    params.refund_amount = opts.amountCents
+  } else {
+    params.credit_amount = opts.amountCents
+  }
+  return stripe.creditNotes.create(params, { idempotencyKey: opts.idempotencyKey })
+}
+
+/** Void a finalized-but-unpaid Stripe invoice. */
+export async function voidStripeInvoice(
+  stripeInvoiceId: string,
+  idempotencyKey: string,
+): Promise<Stripe.Invoice> {
+  return getStripe().invoices.voidInvoice(stripeInvoiceId, undefined, { idempotencyKey })
+}
+
+/** Fetch a finalized invoice's PDF bytes for the branded receipt attachment. */
+export async function fetchInvoicePdf(stripeInvoiceId: string): Promise<Buffer | null> {
+  const inv = await getStripe().invoices.retrieve(stripeInvoiceId)
+  const url = (inv as any).invoice_pdf as string | undefined
+  if (!url) return null
+  const res = await fetch(url)
+  if (!res.ok) return null
+  const arr = await res.arrayBuffer()
+  return Buffer.from(arr)
+}
+
+/** Live hosted-invoice URL (never stored — can't go stale). */
+export async function hostedInvoiceUrl(stripeInvoiceId: string): Promise<string | null> {
+  try {
+    const inv = await getStripe().invoices.retrieve(stripeInvoiceId)
+    return (inv as any).hosted_invoice_url ?? null
+  } catch {
+    return null
+  }
+}
+
 // ── Webhook signature verification ───────────────────────────────────────────
 
 export function constructWebhookEvent(
