@@ -1025,12 +1025,31 @@ Stripe hosted Checkout (`setup` mode) — never on a TLW page (PCI SAQ-A).**
   cover emails for accounts without an active card.
 - **`communications.type`** gains `receipt` / `billing_authorization` /
   `billing_adjustment` (column is unconstrained text — no DDL).
-- **Manual Stripe Dashboard prerequisites** (not code): configure invoice
-  branding (logo/colors/address); turn OFF Stripe's own payment-receipt emails
-  and credit-note emails (else clients get duplicates). Run Phases 1–5 in Stripe
-  **test mode** against a separate test webhook before any live charge. Register
-  the new webhook events (setup_intent.*, payment_method.automatically_updated,
-  credit_note.created, charge.refunded, charge.dispute.created).
+- **Manual Stripe Dashboard prerequisites** (not code). **Live config as of
+  2026-07-31 — all set, don't redo:**
+  - **Invoice branding — DONE.** Logo/colors/business address configured in
+    Settings → Branding/Invoices, so the receipt PDF reads as theLeadershipWell.
+    (If the receipt PDF ever looks unbranded, re-check here — but it's set.)
+  - **Payment-receipt emails — OFF** (so Stripe's receipt doesn't duplicate our
+    branded receipt).
+  - **Invoice + credit-note emails — LEFT ON** (Stripe bundles them into one
+    toggle, "Send finalized invoices and credit notes to customers"). Invoice
+    emails MUST stay on — the hosted-invoice path and the 3DS/SCA auto-fallback
+    depend on them. Cost: on a refund/credit the client gets Stripe's plain
+    credit-note email **in addition to** our branded adjustment notice. Accepted
+    trade-off (rare event). To kill the duplicate, drop our own adjustment notice
+    in `lib/billing/adjustments.ts` rather than turning the bundled toggle off.
+  - **Webhook (live) — DONE.** Endpoint "TLW Strip Connection" →
+    `https://tlw-prep-app.vercel.app/api/billing/webhooks/stripe` (note: the
+    Vercel URL, NOT the `theleadershipwell.online` apex), listening to **all 11**
+    events (the 5 original + `setup_intent.succeeded`/`.setup_failed`,
+    `payment_method.automatically_updated`, `credit_note.created`,
+    `charge.refunded`, `charge.dispute.created`). Signing secret unchanged →
+    `STRIPE_WEBHOOK_SECRET` is still valid. Account default API version is the old
+    **2020-08-27**; the webhook handler reads fields defensively, so this is fine.
+  - **Test mode:** not exercised — this account went straight to live. If you ever
+    want a test pass, add a SEPARATE test-mode webhook destination (test webhooks
+    carry their own signing secret) and use Stripe test cards.
 
 ## Operational notes
 
