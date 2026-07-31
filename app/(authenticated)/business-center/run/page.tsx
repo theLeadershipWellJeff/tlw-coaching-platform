@@ -72,7 +72,23 @@ type DraftInvoice = {
   paid_at: string | null
   period_start: string | null
   period_end: string | null
-  billing_accounts: { id: string; name: string; type: string; billing_email: string }
+  // Payment on File (migration 038)
+  collection_method: string | null
+  charge_status: string | null
+  charge_failure_message: string | null
+  charge_retry_at: string | null
+  fallback_invoice_sent_at: string | null
+  refunded_cents: number | null
+  credited_cents: number | null
+  billing_accounts: {
+    id: string
+    name: string
+    type: string
+    billing_email: string
+    payment_method_status?: string | null
+    payment_method_brand?: string | null
+    payment_method_last4?: string | null
+  }
   invoice_lines: InvoiceLine[]
 }
 
@@ -357,9 +373,196 @@ function AddLineForm({
 
 // ── Invoice card ───────────────────────────────────────────────────────────────
 
+// ── Adjustment modal (refund / credit / void) ──────────────────────────────────
+
+function AdjustModal({ invoice, onClose, onDone }: { invoice: DraftInvoice; onClose: () => void; onDone: () => void }) {
+  const isPaid = invoice.status === 'paid'
+  const [type, setType] = useState<'refund' | 'credit_to_balance' | 'void'>(isPaid ? 'credit_to_balance' : 'void')
+  const [amount, setAmount] = useState(String(invoice.total))
+  const [reason, setReason] = useState('')
+  const [confirming, setConfirming] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const brandLast4 = invoice.billing_accounts.payment_method_brand && invoice.billing_accounts.payment_method_last4
+    ? `${invoice.billing_accounts.payment_method_brand} ending ${invoice.billing_accounts.payment_method_last4}`
+    : 'the card on file'
+  const amountCents = Math.round((parseFloat(amount) || 0) * 100)
+
+  const confirmLine =
+    type === 'void'
+      ? `Cancel this invoice (${money(invoice.total)}). No money moves.`
+      : type === 'refund'
+      ? `${money(amountCents / 100)} back to ${brandLast4}, arriving in 5–10 business days.`
+      : `${money(amountCents / 100)} credited to the account balance — applied to the next invoice automatically.`
+
+  async function submit() {
+    setSubmitting(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/billing/invoices/${invoice.id}/adjust`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, amountCents: type === 'void' ? undefined : amountCents, reason }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok || !d.ok) {
+        setError(d.error || 'Could not complete the adjustment.')
+        setSubmitting(false)
+        setConfirming(false)
+        return
+      }
+      onDone()
+    } catch {
+      setError('Network error — try again.')
+      setSubmitting(false)
+      setConfirming(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-tlw-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="border-b border-tlw-warm-gray/10 px-5 py-3">
+          <h3 className="text-[15px] font-semibold text-tlw-navy-deep">Adjust invoice — {invoice.billing_accounts.name}</h3>
+        </div>
+        <div className="space-y-4 px-5 py-4">
+          <div>
+            <label className="mb-1 block text-[11px] font-medium uppercase tracking-wider text-tlw-warm-gray">Type</label>
+            <div className="flex flex-wrap gap-2">
+              {isPaid && (
+                <>
+                  <TypeBtn active={type === 'credit_to_balance'} onClick={() => setType('credit_to_balance')} label="Credit to balance" />
+                  <TypeBtn active={type === 'refund'} onClick={() => setType('refund')} label="Refund to card" />
+                </>
+              )}
+              {!isPaid && <TypeBtn active={type === 'void'} onClick={() => setType('void')} label="Void invoice" />}
+            </div>
+          </div>
+          {type !== 'void' && (
+            <div>
+              <label className="mb-1 block text-[11px] font-medium uppercase tracking-wider text-tlw-warm-gray">Amount (USD)</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className="w-full rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-canvas px-2 py-1.5 text-[13px] text-tlw-espresso outline-none focus:border-tlw-signal-orange"
+              />
+              <p className="mt-1 text-[11px] text-tlw-warm-gray">Defaults to the full amount. Partial adjustments are allowed until the total is reached.</p>
+            </div>
+          )}
+          <div>
+            <label className="mb-1 block text-[11px] font-medium uppercase tracking-wider text-tlw-warm-gray">Reason (required)</label>
+            <textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={2}
+              placeholder="Why is this adjustment being made?"
+              className="w-full rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-canvas px-2 py-1.5 text-[13px] text-tlw-espresso outline-none focus:border-tlw-signal-orange"
+            />
+          </div>
+          {confirming && (
+            <div className="rounded-tlw-md border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800">{confirmLine}</div>
+          )}
+          {error && <p className="text-[12px] text-red-600">{error}</p>}
+        </div>
+        <div className="flex items-center justify-end gap-2 border-t border-tlw-warm-gray/10 px-5 py-3">
+          <button onClick={onClose} className="px-3 py-1.5 text-[13px] text-tlw-warm-gray hover:text-tlw-espresso">Cancel</button>
+          {!confirming ? (
+            <button
+              onClick={() => setConfirming(true)}
+              disabled={!reason.trim() || (type !== 'void' && amountCents <= 0)}
+              className="rounded-tlw-lg bg-tlw-navy-deep px-3 py-1.5 text-[13px] font-medium text-white disabled:opacity-40"
+            >
+              Review
+            </button>
+          ) : (
+            <button onClick={submit} disabled={submitting} className="rounded-tlw-lg bg-red-600 px-3 py-1.5 text-[13px] font-medium text-white disabled:opacity-50">
+              {submitting ? 'Processing…' : 'Confirm'}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function TypeBtn({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-tlw-lg border px-3 py-1.5 text-[12px] font-medium ${active ? 'border-tlw-navy-deep bg-tlw-navy-deep text-white' : 'border-tlw-warm-gray/30 text-tlw-espresso hover:bg-tlw-canvas'}`}
+    >
+      {label}
+    </button>
+  )
+}
+
+// ── Decline-note modal (failed charge) ──────────────────────────────────────────
+
+function DeclineNoteModal({ invoiceId, onClose, onSent }: { invoiceId: string; onClose: () => void; onSent: () => void }) {
+  const [subject, setSubject] = useState('')
+  const [body, setBody] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetch(`/api/billing/invoices/${invoiceId}/decline-note`)
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d) => { setSubject(d.draft.subject); setBody(d.draft.body) })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [invoiceId])
+
+  async function send() {
+    setSending(true)
+    setError(null)
+    const res = await fetch(`/api/billing/invoices/${invoiceId}/decline-note`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subject, body }),
+    })
+    const d = await res.json().catch(() => ({}))
+    if (res.ok && d.ok) { onSent(); return }
+    setError(d.error || 'Could not send the note.')
+    setSending(false)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="w-full max-w-lg rounded-tlw-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="border-b border-tlw-warm-gray/10 px-5 py-3">
+          <h3 className="text-[15px] font-semibold text-tlw-navy-deep">Note to client — payment didn&apos;t go through</h3>
+        </div>
+        <div className="space-y-3 px-5 py-4">
+          {loading ? (
+            <div className="h-24 animate-pulse rounded bg-tlw-canvas" />
+          ) : (
+            <>
+              <input value={subject} onChange={(e) => setSubject(e.target.value)} className="w-full rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-canvas px-2 py-1.5 text-[13px] text-tlw-espresso outline-none focus:border-tlw-signal-orange" />
+              <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={8} className="w-full rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-canvas px-2 py-1.5 text-[13px] text-tlw-espresso outline-none focus:border-tlw-signal-orange" />
+              {error && <p className="text-[12px] text-red-600">{error}</p>}
+            </>
+          )}
+        </div>
+        <div className="flex items-center justify-end gap-2 border-t border-tlw-warm-gray/10 px-5 py-3">
+          <button onClick={onClose} className="px-3 py-1.5 text-[13px] text-tlw-warm-gray hover:text-tlw-espresso">Cancel</button>
+          <button onClick={send} disabled={sending || loading} className="rounded-tlw-lg bg-tlw-navy-deep px-3 py-1.5 text-[13px] font-medium text-white disabled:opacity-50">
+            {sending ? 'Sending…' : 'Send note'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function InvoiceCard({
   invoice,
   billingSettings,
+  reload,
   onApproved,
   onSent,
   onSkipped,
@@ -369,6 +572,7 @@ function InvoiceCard({
 }: {
   invoice: DraftInvoice
   billingSettings: BillingSettings
+  reload: () => void
   onApproved: (id: string) => void
   onSent: (id: string, updates: Partial<DraftInvoice>) => void
   onSkipped: (id: string) => void
@@ -376,6 +580,11 @@ function InvoiceCard({
   onLineDeleted: (invoiceId: string, lineId: string) => void
   onLineAdded: (invoiceId: string, line: InvoiceLine) => void
 }) {
+  const [charging, setCharging] = useState(false)
+  const [chargeMsg, setChargeMsg] = useState<string | null>(null)
+  const [retrying, setRetrying] = useState(false)
+  const [showAdjust, setShowAdjust] = useState(false)
+  const [showNote, setShowNote] = useState(false)
   const [approving, setApproving] = useState(false)
   const [sending, setSending] = useState(false)
   const [skipping, setSkipping] = useState(false)
@@ -454,8 +663,50 @@ function InvoiceCard({
     setSending(false)
   }
 
+  async function doCharge() {
+    setCharging(true)
+    setChargeMsg(null)
+    try {
+      const res = await fetch(`/api/billing/invoices/${invoice.id}/charge`, { method: 'POST' })
+      const d = await res.json().catch(() => ({}))
+      if (d.ok) {
+        setChargeMsg(d.alreadyCharged ? 'Already paid.' : 'Charged — receipt sent.')
+      } else if (d.status === 'action_required') {
+        setChargeMsg('Authentication required — invoice sent for the client to complete.')
+      } else if (d.status === 'no_agreement') {
+        setChargeMsg(d.message ?? 'No agreement on file — invoice sent instead.')
+      } else {
+        setChargeMsg(d.message || d.error || 'The charge failed.')
+      }
+      reload()
+    } catch {
+      setChargeMsg('Network error — try again.')
+    } finally {
+      setCharging(false)
+    }
+  }
+
+  async function doRetry() {
+    setRetrying(true)
+    await fetch(`/api/billing/invoices/${invoice.id}/retry`, { method: 'POST' }).catch(() => {})
+    setRetrying(false)
+    reload()
+  }
+
+  const acctPmStatus = invoice.billing_accounts.payment_method_status
+  const hasActiveCard = acctPmStatus === 'active'
+  const chargeFailed = invoice.charge_status === 'failed'
+  const actionRequired = invoice.charge_status === 'action_required'
+  // Charge is offered on a draft/approved/failed invoice with a live card that
+  // hasn't already succeeded (§3 primary surface).
+  const canCharge = hasActiveCard && (isDraft || isApproved || (isFailed && invoice.charge_status === 'failed'))
+  // Adjustments: refund/credit on a paid invoice, void on a finalized-unpaid one.
+  const canAdjust = isPaid || ((isSent || isFailed) && !!invoice.stripe_invoice_id)
+
   return (
     <>
+    {showAdjust && <AdjustModal invoice={invoice} onClose={() => setShowAdjust(false)} onDone={() => { setShowAdjust(false); reload() }} />}
+    {showNote && <DeclineNoteModal invoiceId={invoice.id} onClose={() => setShowNote(false)} onSent={() => { setShowNote(false); setChargeMsg('Note sent to client.') }} />}
     {showPreview && (
       <InvoicePreviewModal
         invoice={invoice}
@@ -490,6 +741,20 @@ function InvoiceCard({
         </div>
         <div className="flex items-center gap-2">
           <StatusChip status={invoice.status} />
+          {hasActiveCard && !isPaid && (
+            <span className="rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-medium text-green-700" title={`${invoice.billing_accounts.payment_method_brand ?? 'Card'}${invoice.billing_accounts.payment_method_last4 ? ` ····${invoice.billing_accounts.payment_method_last4}` : ''}`}>
+              💳 Card on file
+            </span>
+          )}
+          {canCharge && (
+            <button
+              onClick={doCharge}
+              disabled={charging}
+              className="rounded-tlw-lg bg-tlw-signal-orange px-3 py-1.5 text-[13px] font-medium text-white transition-colors hover:opacity-90 disabled:opacity-50"
+            >
+              {charging ? 'Charging…' : 'Charge card'}
+            </button>
+          )}
           {isDraft && (
             <button
               onClick={handleApproveClick}
@@ -503,9 +768,17 @@ function InvoiceCard({
             <button
               onClick={send}
               disabled={sending}
-              className="rounded-tlw-lg bg-tlw-signal-orange px-3 py-1.5 text-[13px] font-medium text-white transition-colors hover:opacity-90 disabled:opacity-50"
+              className="rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-1.5 text-[13px] font-medium text-tlw-espresso transition-colors hover:bg-tlw-canvas disabled:opacity-50"
             >
-              {sending ? 'Sending…' : 'Send via Stripe'}
+              {sending ? 'Sending…' : 'Send invoice'}
+            </button>
+          )}
+          {canAdjust && (
+            <button
+              onClick={() => setShowAdjust(true)}
+              className="rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-1.5 text-[13px] text-tlw-espresso transition-colors hover:bg-tlw-canvas"
+            >
+              Adjust
             </button>
           )}
           {isFailed && (
@@ -530,10 +803,53 @@ function InvoiceCard({
       </div>
 
       {/* Stripe error banner */}
-      {(sendError || invoice.stripe_error) && (
+      {(sendError || invoice.stripe_error) && !chargeFailed && (
         <div className="border-b border-red-100 bg-red-50 px-4 py-2.5">
           <p className="text-[12px] text-red-700">
             <strong>Stripe error:</strong> {sendError ?? invoice.stripe_error}
+          </p>
+        </div>
+      )}
+
+      {/* Charge failed — reason + retry / note (Phase 4) */}
+      {chargeFailed && (
+        <div className="flex flex-wrap items-center gap-3 border-b border-red-100 bg-red-50 px-4 py-2.5">
+          <p className="flex-1 text-[12px] text-red-700">
+            <strong>Charge failed:</strong> {invoice.charge_failure_message ?? 'The card was declined.'}
+            {invoice.charge_retry_at && <span className="text-red-600"> · retry scheduled {new Date(invoice.charge_retry_at).toLocaleDateString()}</span>}
+          </p>
+          {!invoice.charge_retry_at && (
+            <button onClick={doRetry} disabled={retrying} className="rounded-tlw-md border border-red-300 bg-white px-2.5 py-1 text-[12px] font-medium text-red-700 hover:bg-red-100 disabled:opacity-50">
+              {retrying ? 'Scheduling…' : 'Retry in 3 days'}
+            </button>
+          )}
+          <button onClick={() => setShowNote(true)} className="rounded-tlw-md border border-red-300 bg-white px-2.5 py-1 text-[12px] font-medium text-red-700 hover:bg-red-100">
+            Send note to client
+          </button>
+        </div>
+      )}
+
+      {/* Authentication required — invoice auto-sent (§4.6) */}
+      {actionRequired && (
+        <div className="border-b border-amber-100 bg-amber-50 px-4 py-2.5">
+          <p className="text-[12px] text-amber-800">Authentication required — invoice sent for the client to complete payment.</p>
+        </div>
+      )}
+
+      {/* Transient charge feedback */}
+      {chargeMsg && (
+        <div className="border-b border-tlw-warm-gray/10 bg-tlw-canvas px-4 py-2">
+          <p className="text-[12px] text-tlw-espresso">{chargeMsg}</p>
+        </div>
+      )}
+
+      {/* Adjustment totals (denormalized) */}
+      {((invoice.refunded_cents ?? 0) > 0 || (invoice.credited_cents ?? 0) > 0) && (
+        <div className="border-b border-tlw-warm-gray/10 bg-tlw-canvas px-4 py-2">
+          <p className="text-[12px] text-tlw-warm-gray">
+            {(invoice.refunded_cents ?? 0) > 0 && <span>Refunded {money((invoice.refunded_cents ?? 0) / 100)}</span>}
+            {(invoice.refunded_cents ?? 0) > 0 && (invoice.credited_cents ?? 0) > 0 && ' · '}
+            {(invoice.credited_cents ?? 0) > 0 && <span>Credited {money((invoice.credited_cents ?? 0) / 100)}</span>}
           </p>
         </div>
       )}
@@ -1360,6 +1676,7 @@ export default function BillingRunPage() {
                   key={inv.id}
                   invoice={inv}
                   billingSettings={billingSettings}
+                  reload={() => loadInvoices(periodStart, periodEnd)}
                   onApproved={handleApproved}
                   onSent={handleSent}
                   onSkipped={handleSkipped}
@@ -1386,6 +1703,7 @@ export default function BillingRunPage() {
                     key={inv.id}
                     invoice={inv}
                     billingSettings={billingSettings}
+                  reload={() => loadInvoices(periodStart, periodEnd)}
                     onApproved={handleApproved}
                     onSent={handleSent}
                     onSkipped={handleSkipped}

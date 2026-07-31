@@ -338,6 +338,90 @@ function ClosedAccountRow({ acct, onReopen }: { acct: AccountSummary; onReopen: 
   )
 }
 
+// ── Authorization announcement modal (Phase 6) ──────────────────────────────────
+
+function AnnounceModal({ accounts, onClose }: { accounts: AccountSummary[]; onClose: () => void }) {
+  const [selected, setSelected] = useState<Set<string>>(new Set(accounts.map((a) => a.id)))
+  const [sending, setSending] = useState(false)
+  const [results, setResults] = useState<{ id: string; name: string; ok: boolean; reason?: string }[] | null>(null)
+
+  function toggle(id: string) {
+    setSelected((cur) => {
+      const next = new Set(cur)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  async function send() {
+    setSending(true)
+    const out: { id: string; name: string; ok: boolean; reason?: string }[] = []
+    // Sequential to respect the per-account rate limit and keep it gentle.
+    for (const acct of accounts.filter((a) => selected.has(a.id))) {
+      try {
+        const res = await fetch(`/api/billing/accounts/${acct.id}/authorization/send`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ announcement: true }),
+        })
+        const d = await res.json().catch(() => ({}))
+        out.push({ id: acct.id, name: acct.name, ok: res.ok && d.ok, reason: res.ok ? undefined : (d.error ?? 'Failed') })
+      } catch {
+        out.push({ id: acct.id, name: acct.name, ok: false, reason: 'Network error' })
+      }
+    }
+    setResults(out)
+    setSending(false)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="w-full max-w-lg rounded-tlw-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="border-b border-tlw-warm-gray/10 px-5 py-3">
+          <h3 className="text-[15px] font-semibold text-tlw-navy-deep">Announce card-on-file</h3>
+          <p className="mt-0.5 text-[12px] text-tlw-warm-gray">
+            Emails each selected account a link to store a card. Accounts still billed through Coach
+            Accountable, or without a signed agreement on file, are skipped automatically.
+          </p>
+        </div>
+        <div className="max-h-[50vh] overflow-y-auto px-5 py-3">
+          {!results ? (
+            accounts.length === 0 ? (
+              <p className="text-[13px] text-tlw-warm-gray">No active accounts.</p>
+            ) : (
+              accounts.map((a) => (
+                <label key={a.id} className="flex items-center gap-2 py-1.5 text-[13px] text-tlw-espresso">
+                  <input type="checkbox" checked={selected.has(a.id)} onChange={() => toggle(a.id)} />
+                  <span className="font-medium">{a.name}</span>
+                  <span className="text-tlw-warm-gray">{a.billing_email}</span>
+                </label>
+              ))
+            )
+          ) : (
+            <ul className="space-y-1">
+              {results.map((r) => (
+                <li key={r.id} className={`text-[13px] ${r.ok ? 'text-green-700' : 'text-tlw-warm-gray'}`}>
+                  {r.ok ? '✓' : '—'} {r.name}{r.reason ? ` · ${r.reason}` : ''}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div className="flex items-center justify-end gap-2 border-t border-tlw-warm-gray/10 px-5 py-3">
+          <button onClick={onClose} className="px-3 py-1.5 text-[13px] text-tlw-warm-gray hover:text-tlw-espresso">
+            {results ? 'Close' : 'Cancel'}
+          </button>
+          {!results && (
+            <button onClick={send} disabled={sending || selected.size === 0} className="rounded-tlw-lg bg-tlw-navy-deep px-3 py-1.5 text-[13px] font-medium text-white disabled:opacity-40">
+              {sending ? 'Sending…' : `Send to ${selected.size}`}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function AccountsPage() {
@@ -348,6 +432,7 @@ export default function AccountsPage() {
   const [error, setError] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [showSetupAll, setShowSetupAll] = useState(false)
+  const [showAnnounce, setShowAnnounce] = useState(false)
   const [closedOpen, setClosedOpen] = useState(false)
 
   async function loadAccounts() {
@@ -387,6 +472,12 @@ export default function AccountsPage() {
               className="rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-1.5 text-[13px] text-tlw-espresso transition-colors hover:bg-tlw-canvas"
             >
               Set up all clients
+            </button>
+            <button
+              onClick={() => setShowAnnounce(true)}
+              className="rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-1.5 text-[13px] text-tlw-espresso transition-colors hover:bg-tlw-canvas"
+            >
+              Announce card-on-file
             </button>
             <button
               onClick={() => setShowCreate(true)}
@@ -510,6 +601,12 @@ export default function AccountsPage() {
         <SetupAllModal
           onDone={loadAccounts}
           onClose={() => setShowSetupAll(false)}
+        />
+      )}
+      {showAnnounce && (
+        <AnnounceModal
+          accounts={activeAccounts}
+          onClose={() => setShowAnnounce(false)}
         />
       )}
     </>

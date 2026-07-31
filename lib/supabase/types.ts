@@ -22,6 +22,9 @@ import type {
   Invoice,
   InvoiceLine,
   InvoiceReminder,
+  InvoiceChargeAttempt,
+  InvoiceAdjustment,
+  BillingAuthorizationEvent,
 } from '@/lib/billing/types'
 
 type Timestamp = string // ISO 8601
@@ -350,8 +353,8 @@ export type EmailSignature = {
 export type Communication = {
   id: string
   coach_id: string | null
-  client_id: string
-  type: string // 'email' | 'reminder' | 'prep_sheet'
+  client_id: string | null // null = account-level billing comm (no single client)
+  type: string // 'email' | 'reminder' | 'prep_sheet' | 'receipt' | 'billing_authorization' | 'billing_adjustment'
   direction: string // 'outbound' | 'inbound'
   subject: string | null
   preview: string | null
@@ -660,6 +663,24 @@ export type Database = {
         Row: InvoiceReminder
         Insert: Insertable<InvoiceReminder>
         Update: Updatable<InvoiceReminder>
+        Relationships: []
+      }
+      invoice_charge_attempts: {
+        Row: InvoiceChargeAttempt
+        Insert: Insertable<InvoiceChargeAttempt>
+        Update: Updatable<InvoiceChargeAttempt>
+        Relationships: []
+      }
+      invoice_adjustments: {
+        Row: InvoiceAdjustment
+        Insert: Insertable<InvoiceAdjustment>
+        Update: Updatable<InvoiceAdjustment>
+        Relationships: []
+      }
+      billing_authorization_events: {
+        Row: BillingAuthorizationEvent
+        Insert: Insertable<BillingAuthorizationEvent>
+        Update: Updatable<BillingAuthorizationEvent>
         Relationships: []
       }
     }

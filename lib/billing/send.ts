@@ -62,7 +62,7 @@ export async function sendInvoice(
     .from('invoices')
     .select(`
       *,
-      billing_accounts ( id, name, type, billing_email, billing_cc, stripe_customer_id ),
+      billing_accounts ( id, name, type, billing_email, billing_cc, stripe_customer_id, payment_method_status, authorization_token ),
       invoice_lines ( id, description, quantity, unit_amount, amount, source, coachee_id )
     `)
     .eq('id', invoiceId)
@@ -193,7 +193,7 @@ export async function resendInvoice(
 ): Promise<SendResult> {
   const { data: invoice, error: fetchErr } = await supabase
     .from('invoices')
-    .select('*, billing_accounts ( id, name, type, billing_email, billing_cc, stripe_customer_id )')
+    .select('*, billing_accounts ( id, name, type, billing_email, billing_cc, stripe_customer_id, payment_method_status, authorization_token )')
     .eq('id', invoiceId)
     .eq('coach_id', coachId)
     .maybeSingle()
@@ -276,7 +276,7 @@ async function sendClientCoverEmail(
   supabase: SupabaseClient,
   coach: CoachRow,
   coachId: string,
-  account: { name: string; billing_email: string; billing_cc?: string | null },
+  account: { name: string; billing_email: string; billing_cc?: string | null; payment_method_status?: string | null; authorization_token?: string | null },
   invoice: { id: string; total: number; currency: string; period_start?: string | null; period_end?: string | null; client_message?: string | null },
   opts: { receiptToken: string | null; hostedUrl: string | null; resend: boolean },
 ) {
@@ -307,6 +307,19 @@ async function sendClientCoverEmail(
        </p>`
     : ''
 
+  // Persistent "save a card" block (Phase 6) — shown to accounts without an
+  // active card that already have an authorization token minted. Accounts with
+  // an active card on file never see it.
+  const noActiveCard = !account.payment_method_status || account.payment_method_status !== 'active'
+  const authBlock = noActiveCard && account.authorization_token
+    ? `<table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;background:#f7f5f1;border-radius:8px;">
+         <tr><td style="padding:16px 20px;">
+           <p style="margin:0 0 8px;color:#3d2b1f;font-size:14px;line-height:1.5;"><strong>Tired of paying each invoice by hand?</strong> Securely save a card and future coaching fees are handled automatically.</p>
+           <p style="margin:0;"><a href="${getBaseUrl()}/billing/authorize/${account.authorization_token}" style="color:#111226;font-size:14px;font-weight:600;">Save a card for automatic billing →</a></p>
+         </td></tr>
+       </table>`
+    : ''
+
   const html = `
 <!DOCTYPE html>
 <html>
@@ -334,6 +347,7 @@ async function sendClientCoverEmail(
               securely online${viewUrl ? ' using the button below' : ' via the Stripe invoice email'}.
             </p>
             ${buttonBlock}
+            ${authBlock}
             <p style="margin:0;color:#3d2b1f;font-size:15px;line-height:1.6;">
               Warmly,<br />
               <strong>${escapeHtml(coach.name || 'Dr. Jeff Holmes')}</strong><br />
