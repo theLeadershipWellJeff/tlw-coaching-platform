@@ -3,30 +3,16 @@ import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { requireCoach, toErrorResponse } from '@/lib/api-handler'
 import { accessibleClientIds, linkCoachToClient } from '@/lib/client-access'
 import { getEngagementProgress } from '@/lib/billing/engagement-progress'
-import { syncExternalBookings } from '@/lib/booking-sync'
-
-export const runtime = 'nodejs'
-
-// Skip the calendar round-trip when the coach's calendar was synced recently
-// (the hourly cron and workspace views also keep `appointments` fresh).
-const CALENDAR_FRESH_MS = 10 * 60 * 1000
 
 // List the signed-in coach's clients (optionally filtered by status), by name.
+// This endpoint stays a pure DB read — it must never block on a calendar
+// round-trip. External bookings are pulled into `appointments` by the hourly
+// cron, each client-workspace view, and the on-demand "Sync now"; the roster's
+// "next appointment" reads whatever those have captured.
 export async function GET(req: NextRequest) {
   try {
     const supabase = getSupabaseAdmin()
     const coach = await requireCoach(supabase)
-
-    // Self-heal: pull external bookings (Calendly/HubSpot/GCal-added) so the
-    // roster's "next appointment" reflects them without waiting for the hourly
-    // cron. Throttled by calendar_synced_at and best-effort — a hiccup never
-    // blocks the roster. The sync now includes a forward-window reconcile
-    // (lib/booking-sync.ts), so a booking the incremental delta missed is
-    // repaired here too.
-    const syncedAt = coach.calendar_synced_at ? new Date(coach.calendar_synced_at).getTime() : 0
-    if (coach.google_refresh_token && Date.now() - syncedAt >= CALENDAR_FRESH_MS) {
-      await syncExternalBookings(supabase, coach).catch(() => {})
-    }
 
     const params = new URL(req.url).searchParams
     const status = params.get('status')
