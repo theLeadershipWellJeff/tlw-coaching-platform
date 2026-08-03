@@ -144,9 +144,11 @@ export function UpcomingSessions({
     if (loading || appts.length === 0) return null
     return (
       <div className="mt-3 border-t border-tlw-warm-gray/15 pt-3">
-        <p className="mb-1.5 text-[11px] font-medium uppercase tracking-[1.5px] text-tlw-warm-gray">Upcoming sessions</p>
+        <p className="mb-1.5 text-[11px] font-medium uppercase tracking-[1.5px] text-tlw-warm-gray">
+          Upcoming sessions{appts.length > 1 ? ` · ${appts.length}` : ''}
+        </p>
         <ul className="space-y-1">
-          {appts.slice(0, 3).map((a) => (
+          {appts.map((a) => (
             <li key={a.id} className="flex items-center gap-2 text-[13px] text-tlw-espresso">
               <CalIcon />
               <span>{fmtLong(a.scheduled_at, timeZone)}</span>

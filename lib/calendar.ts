@@ -525,6 +525,49 @@ export async function listCalendarDelta(coach: Coach, syncToken: string | null):
   }
 }
 
+/**
+ * Full (non-incremental) read of the coach's timed events in a forward window,
+ * returning the raw event resources. This is the **safety net** for external
+ * booking capture: the incremental delta (listCalendarDelta) only returns events
+ * that changed since the stored token, so if a booking was ever missed — a failed
+ * upsert, cron downtime, a token advanced past it — the delta will never re-return
+ * that (now-unchanged) event and it's lost until a full resync. Re-reading the
+ * whole forward window every sync guarantees any upcoming booking is (re)captured
+ * regardless of the token's history. Bounded to one window, paginated to be safe.
+ *
+ * Does not pass `showDeleted` — cancellations are handled by the delta path and
+ * the per-appointment reconcile, so this sweep is purely additive/repairing.
+ */
+export async function listUpcomingEvents(coach: Coach, timeMin: Date, timeMax: Date): Promise<any[]> {
+  if (!coach.google_refresh_token) return []
+
+  const auth = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET)
+  auth.setCredentials({ refresh_token: coach.google_refresh_token })
+  const calendar = google.calendar({ version: 'v3', auth })
+
+  const events: any[] = []
+  let pageToken: string | undefined
+  try {
+    do {
+      const res = await calendar.events.list({
+        calendarId: 'primary',
+        singleEvents: true,
+        orderBy: 'startTime',
+        maxResults: 250,
+        timeMin: timeMin.toISOString(),
+        timeMax: timeMax.toISOString(),
+        ...(pageToken ? { pageToken } : {}),
+      })
+      events.push(...(res.data.items || []))
+      pageToken = res.data.nextPageToken || undefined
+    } while (pageToken)
+  } catch (e) {
+    console.error('Calendar forward reconcile list failed:', e)
+    return []
+  }
+  return events
+}
+
 export interface EventClientMatch {
   clientId: string | null
   via: 'attendee_email' | 'attendee_name' | 'event_title' | 'none'

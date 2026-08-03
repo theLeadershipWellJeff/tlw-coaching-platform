@@ -18,10 +18,19 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Appointment, Coach, Database } from './supabase/types'
 import {
   listCalendarDelta,
+  listUpcomingEvents,
   matchEventToClient,
   detectBookingSource,
   type RosterClientWithEmail,
 } from './calendar'
+
+// How far ahead the forward reconcile sweep looks. Long enough to cover a booking
+// made well in advance (Calendly/HubSpot links often book weeks out), bounded so
+// the read stays a page or two.
+const RECONCILE_FORWARD_DAYS = 120
+// A small backward floor so a session that was just dragged a little earlier is
+// still inside the sweep window.
+const RECONCILE_BACK_DAYS = 2
 
 export interface BookingSyncResult {
   coachId: string
@@ -64,13 +73,31 @@ export async function syncExternalBookings(
   const delta = await listCalendarDelta(coach, coach.calendar_sync_token)
   const result = ZERO(coach.id, delta.fullResync)
 
-  if (delta.events.length > 0) {
+  // Safety net: a full forward-window read, merged with the incremental delta. The
+  // delta alone permanently loses any event that was missed once (failed upsert,
+  // cron gap, token advanced past it) — an unchanged event never reappears in a
+  // later delta. Re-reading the forward window every run repairs those misses and
+  // guarantees an upcoming booking is captured no matter the token's history. The
+  // delta still carries cancellations (showDeleted), which the sweep omits, so the
+  // delta version of an event wins on merge.
+  const now = Date.now()
+  const forwardEvents = await listUpcomingEvents(
+    coach,
+    new Date(now - RECONCILE_BACK_DAYS * 24 * 60 * 60 * 1000),
+    new Date(now + RECONCILE_FORWARD_DAYS * 24 * 60 * 60 * 1000)
+  )
+  const mergedById = new Map<string, any>()
+  for (const e of forwardEvents) if (e?.id) mergedById.set(e.id, e)
+  for (const e of delta.events) if (e?.id) mergedById.set(e.id, e) // delta wins (cancellations)
+  const allEvents = Array.from(mergedById.values())
+
+  if (allEvents.length > 0) {
     const roster = await loadRoster(supabase, coach.id)
 
-    // Pull the existing rows for the events in this delta in one query, so we can
-    // tell new bookings from updates and preserve a native row's identity.
+    // Pull the existing rows for these events in one query, so we can tell new
+    // bookings from updates and preserve a native row's identity.
     const eventIds = Array.from(
-      new Set(delta.events.map((e: any) => e.id).filter(Boolean) as string[])
+      new Set(allEvents.map((e: any) => e.id).filter(Boolean) as string[])
     )
     const existing = new Map<string, ExistingRow>()
     if (eventIds.length > 0) {
@@ -84,7 +111,7 @@ export async function syncExternalBookings(
 
     const toWrite: Record<string, unknown>[] = []
     const cancelledIds: string[] = [] // updated directly by id (no scheduled_at to upsert)
-    for (const event of delta.events) {
+    for (const event of allEvents) {
       const eventId: string = event.id || ''
       if (!eventId) continue
       const prior = existing.get(eventId)

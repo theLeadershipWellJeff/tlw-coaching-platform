@@ -9,6 +9,7 @@ import { EmailModal } from './EmailModal'
 import { PlanSessionModal } from './PlanSessionModal'
 import { WorkspaceProvider } from '@/components/workspace/WorkspaceContext'
 import { WorkspaceSurface } from '@/components/workspace/WorkspaceSurface'
+import { clientToCsv, clientCsvFilename } from '@/lib/client-csv'
 
 export function ClientDetail({ clientId }: { clientId: string }) {
   const [client, setClient] = useState<Client | null>(null)
@@ -47,6 +48,19 @@ export function ClientDetail({ clientId }: { clientId: string }) {
       .then((d) => d?.coach?.timezone && setCoachTimezone(d.coach.timezone))
       .catch(() => {})
   }, [])
+
+  const exportCsv = useCallback(() => {
+    if (!client) return
+    const blob = new Blob([clientToCsv(client)], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = clientCsvFilename(client)
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }, [client])
 
   // Opened from the roster's "issue agreement now?" prompt.
   const searchParams = useSearchParams()
@@ -120,6 +134,12 @@ export function ClientDetail({ clientId }: { clientId: string }) {
         >
           Create invoice
         </Link>
+        <button
+          onClick={exportCsv}
+          className="inline-flex items-center gap-1.5 rounded-tlw-lg border border-tlw-warm-gray/30 px-4 py-2 text-[13px] font-medium text-tlw-espresso transition-colors hover:border-tlw-warm-gray/50"
+        >
+          <span aria-hidden>↓</span> Export CSV
+        </button>
       </div>
 
       {/* Card grid — coach-global layout, per-client data via WorkspaceContext. */}
