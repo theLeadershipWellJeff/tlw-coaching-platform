@@ -79,6 +79,13 @@ const icons = {
       <path d="M13.7 21a2 2 0 0 1-3.4 0" />
     </svg>
   ),
+  prep: (
+    <svg viewBox="0 0 24 24" width="18" height="18" {...stroke}>
+      <path d="M8 3h6l4 4v13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
+      <path d="M14 3v4h4" />
+      <path d="M9.5 13l1.5 1.5 3-3.5" />
+    </svg>
+  ),
   business: (
     <svg viewBox="0 0 24 24" width="18" height="18" {...stroke}>
       <rect x="3" y="7" width="18" height="13" rx="2" />
@@ -92,6 +99,7 @@ const destinations: NavDestination[] = [
   { href: '/practice', label: 'Practice', icon: icons.practice },
   { href: '/clients', label: 'Clients', icon: icons.clients },
   { href: '/nudges', label: 'Nudges', icon: icons.nudges },
+  { href: '/prep', label: 'Prep Sheets', icon: icons.prep },
   { href: '/groups', label: 'Groups', icon: icons.groups },
   { href: '/library', label: 'Library', icon: icons.library },
   { href: '/business-center', label: 'Business Center', icon: icons.business },

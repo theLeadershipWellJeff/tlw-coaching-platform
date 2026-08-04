@@ -8,6 +8,7 @@ import { EngagementGoalsCard } from './EngagementGoalsCard'
 import { SendToClientModal } from './SendToClientModal'
 import { ScheduleSessionModal } from './ScheduleSessionModal'
 import { PrepSheetCard } from './PrepSheetCard'
+import { PrepPipelineCard } from './PrepPipelineCard'
 import { PlanSessionCard } from './PlanSessionCard'
 import { extractCaptures } from '@/lib/notes/extract'
 import { billedHours } from '@/lib/billing'
@@ -185,10 +186,13 @@ export function NotesPanel({ clientId, autoNew = false }: { clientId: string; au
           {/* Plan next session — same prep card as the workspace action bar. */}
           <PlanSessionCard clientId={clientId} clientName={client?.name || ''} />
 
+          {/* Pipeline prep sheet for the upcoming session (review/approve/skip). */}
+          <PrepPipelineCard clientId={clientId} />
+
           {/* Most recent session notes (5), with the rest a click away. */}
           <RecentNotes notes={notes} activeId={activeId} onSelect={setActiveId} />
 
-          {/* The prep sheet we send out, alongside the notes. */}
+          {/* The prep sheets we've sent out, alongside the notes. */}
           <PrepSheetCard clientId={clientId} />
         </div>
       )}

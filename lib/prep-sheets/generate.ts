@@ -272,6 +272,79 @@ async function runForCoach(
 }
 
 /**
+ * Regenerate one prep sheet in place (the /prep "Regenerate" action). Re-gathers
+ * history, re-runs the generator, and resets the row to `draft` — clearing any
+ * approval/skip/error state (an edited or refreshed sheet must be re-approved).
+ * Returns a reason when there's no history to generate from.
+ */
+export async function regeneratePrepSheet(
+  supabase: SupabaseClient<Database>,
+  coach: Coach,
+  sheet: { id: string; client_id: string; appointment_id: string; skip_token: string | null }
+): Promise<{ ok: boolean; reason?: string }> {
+  const settings = normalizePrepSheetSettings(coach.reminder_settings)
+  const coachTz = coach.timezone || FALLBACK_TZ
+  const now = new Date().toISOString()
+
+  const { data: appt } = await supabase
+    .from('appointments')
+    .select('scheduled_at')
+    .eq('id', sheet.appointment_id)
+    .maybeSingle()
+  if (!appt) return { ok: false, reason: 'The session for this prep sheet no longer exists.' }
+
+  const { data: client } = await supabase
+    .from('clients')
+    .select('id, name, timezone')
+    .eq('id', sheet.client_id)
+    .maybeSingle()
+  if (!client) return { ok: false, reason: 'Client not found.' }
+
+  const history = await gatherClientHistory(supabase, client.id, settings.history_window_days)
+  if (!history.eligible) {
+    return { ok: false, reason: 'No recent notes or transcripts to generate from.' }
+  }
+
+  let content
+  let model: string
+  try {
+    const res = await generatePrepContent({ clientName: client.name, clientId: client.id, notes: history.notes })
+    content = res.content
+    model = res.model
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : String(e)
+    return { ok: false, reason: `Generation failed: ${detail}`.slice(0, 300) }
+  }
+
+  const clientTz = client.timezone || coachTz
+  const plan = computeDeliveryPlan(new Date(appt.scheduled_at), settings, clientTz)
+  const bodyHtml = buildClientEmailHTML(client.name, content)
+
+  const { error } = await supabase
+    .from('prep_sheet_pipeline')
+    .update({
+      status: 'draft',
+      subject: PREP_SUBJECT,
+      body_html: bodyHtml,
+      generated_at: now,
+      generation_model: model,
+      eligibility: history.eligibility,
+      scheduled_send_at: plan.at.toISOString(),
+      // Refreshed content must be re-approved; clear any prior terminal state.
+      approved_at: null,
+      skipped_at: null,
+      skip_reason: null,
+      error_detail: null,
+      skip_token: sheet.skip_token || randomUUID(),
+      updated_at: now,
+    })
+    .eq('id', sheet.id)
+    .eq('coach_id', coach.id)
+  if (error) return { ok: false, reason: error.message }
+  return { ok: true }
+}
+
+/**
  * Entry point (called from the reminders cron). Iterates coaches whose prep
  * pipeline is enabled and whose local hour matches their review_hour.
  */
