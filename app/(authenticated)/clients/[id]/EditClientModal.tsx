@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import type { Client } from '@/lib/supabase/types'
 import { Modal } from '@/app/components/shared/Modal'
 import { TimezoneCombobox } from '@/app/components/shared/TimezoneCombobox'
@@ -51,6 +52,7 @@ export function EditClientModal({
   /** Opens the issue-agreement flow (details → payment → review → send) after saving. */
   onIssueAgreement?: () => void
 }) {
+  const router = useRouter()
   const [form, setForm] = useState<Record<string, string>>(() => {
     const f: Record<string, string> = {
       status: client.status || 'active',
@@ -92,6 +94,12 @@ export function EditClientModal({
   // Engagement & billing — load the client's active engagement so its type,
   // session count, and length are adjustable right here.
   const [engagement, setEngagement] = useState<EngagementRow | null>(null)
+  // The billing account this client is linked to (via its coachee row), so the
+  // settings can deep-link straight to the full engagement/account management
+  // page — no longer only reachable through the Business Center. `null` while
+  // loading; `linked === false` once we know the client has no account yet.
+  const [account, setAccount] = useState<{ id: string; name: string; type: string } | null>(null)
+  const [billingLinked, setBillingLinked] = useState<boolean | null>(null)
   const [engForm, setEngForm] = useState({
     mode: '',
     rate: '',
@@ -106,7 +114,11 @@ export function EditClientModal({
     fetch(`/api/clients/${client.id}/billing`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        if (!d?.linked || !Array.isArray(d.engagements)) return
+        if (!d) return
+        setBillingLinked(!!d.linked)
+        if (!d.linked) return
+        if (d.account?.id) setAccount({ id: d.account.id, name: d.account.name, type: d.account.type })
+        if (!Array.isArray(d.engagements)) return
         const eng: EngagementRow | undefined =
           d.engagements.find((e: EngagementRow) => e.status === 'active') ?? d.engagements[0]
         if (!eng) return
@@ -245,6 +257,15 @@ export function EditClientModal({
     if (await persist()) {
       onClose()
       onIssueAgreement?.()
+    }
+  }
+
+  // Save the client edits, then navigate to the account/engagement page — so a
+  // jump to the full billing management doesn't drop unsaved changes.
+  async function saveAndNavigate(href: string) {
+    if (await persist()) {
+      onClose()
+      router.push(href)
     }
   }
 
@@ -416,13 +437,49 @@ export function EditClientModal({
           )}
         </div>
 
-        {engagement && (
+        {(account || engagement || billingLinked === false) && (
           <div className="block rounded-tlw-md border border-tlw-warm-gray/20 bg-tlw-canvas/60 p-3">
             <span className="text-[11px] font-medium uppercase tracking-[1.5px] text-tlw-warm-gray">
-              Engagement &amp; billing
+              Engagement &amp; account
             </span>
 
-            <div className="mt-2">
+            {/* Deep link to the full account/engagement management — reachable
+                here from the client's settings (roster gear or workspace gear),
+                not only through the Business Center. */}
+            {account ? (
+              <div className="mt-2 flex items-center justify-between gap-3 rounded-tlw-md border border-tlw-warm-gray/20 bg-tlw-surface px-3 py-2">
+                <div className="min-w-0">
+                  <span className="block truncate text-[13px] font-medium text-tlw-espresso">{account.name}</span>
+                  <span className="text-[11px] capitalize text-tlw-warm-gray">{account.type} account</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => saveAndNavigate(`/business-center/accounts/${account.id}`)}
+                  disabled={saving}
+                  className="shrink-0 rounded-tlw-md border border-tlw-navy-rich px-2.5 py-1.5 text-[12px] font-medium text-tlw-navy-rich transition-colors hover:bg-tlw-navy-rich hover:text-tlw-cream disabled:opacity-40"
+                >
+                  Manage account &amp; engagements →
+                </button>
+              </div>
+            ) : billingLinked === false ? (
+              <div className="mt-2 rounded-tlw-md border border-dashed border-tlw-warm-gray/30 bg-tlw-surface px-3 py-2.5">
+                <p className="text-[12px] leading-snug text-tlw-warm-gray">
+                  No billing account is linked to this client yet.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => saveAndNavigate('/business-center/accounts')}
+                  disabled={saving}
+                  className="mt-2 inline-block rounded-tlw-md border border-tlw-navy-rich px-2.5 py-1.5 text-[12px] font-medium text-tlw-navy-rich transition-colors hover:bg-tlw-navy-rich hover:text-tlw-cream disabled:opacity-40"
+                >
+                  Set up billing in the Business Center →
+                </button>
+              </div>
+            ) : null}
+
+            {engagement && (
+            <>
+            <div className="mt-3">
               <span className="text-[11px] text-tlw-warm-gray">Type</span>
               <div className="mt-1 flex gap-2">
                 {ENGAGEMENT_MODES.map(({ val, label }) => (
@@ -539,6 +596,8 @@ export function EditClientModal({
               received this year against sessions per year; other engagements track total sessions.
               The length shows as e.g. &ldquo;6-Month Engagement&rdquo;.
             </p>
+            </>
+            )}
           </div>
         )}
 
