@@ -1100,13 +1100,24 @@ index over the vault repo; **superseded by 024**) · 024 garden (`garden_notes` 
 025 external booking capture (extends `appointments` with `source`/`attendee_email`/
 `title`/`raw_event`, makes `client_id` nullable, adds the `(coach_id, google_event_id)`
 unique index, and `coaches.calendar_sync_token`/`calendar_synced_at` — the Calendly/
-HubSpot → Next Appointment calendar-watch pipeline; additive) · 031 billing CC +
-invoice message (`billing_accounts.billing_cc` optional CC email; `invoices.client_message`
-free-text note shown to the client at the top of the invoice; both additive/nullable) ·
+HubSpot → Next Appointment calendar-watch pipeline; additive) · **026 coach growth
+areas** (`coach_growth_areas` + per-session self-assessments; coach-scoped, RLS) ·
+**026 dashboard layouts** (⚠️ **duplicate 026 number** — `dashboard_layouts.blocks`
+jsonb, the coach-assembled "legos" homepage) · **027 billing** (Business Center core:
+`billing_accounts`/`coachees`/`engagements`/`billable_sessions`/`invoices`/
+`invoice_lines`/`invoice_reminders`) · **028 billing fixes** (installment_count 1–12
+constraint) · **029 billing sessions + account status** (`engagements.session_count`;
+`billing_accounts.status` active/closed + `closed_at`) · **030 client type**
+(`clients.client_type` client|coach — team coaches that live in the roster) · 031
+billing CC + invoice message (`billing_accounts.billing_cc` optional CC email;
+`invoices.client_message` free-text note shown to the client at the top of the invoice;
+both additive/nullable) ·
 032 billing skip + warnings (`engagements.skip_billing` boolean; `billable_sessions.appointment_id`
 FK; `billing_run_warnings` table for calendar cross-check and subscription no-sessions warnings) ·
 033 billing settings (`coaches.billing_settings` jsonb — preview_before_approve, auto_send_on_approve,
-cc_self_on_send; additive, NULL = defaults) · 034 transcript title (`transcripts.title` — human-readable
+cc_self_on_send; additive, NULL = defaults) · **034 nudge coach note** (⚠️ **duplicate 034
+number** — `nudges.coach_note`, a private field the coach attaches before sending, never
+sent to the client; **shipped**) · 034 transcript title (`transcripts.title` — human-readable
 title proposed at ingest from the calendar-slot match / Plaud summary / non-timestamp filename, coach-editable
 in the review queue; additive, nullable, NULL = UI falls back to filename/"Untitled"; **applied**) ·
 035 nudge PDF attachment (`nudges.pdf_resource_id` + `garden_notes.pdf_resource_id`
@@ -1331,12 +1342,11 @@ and back in** to grant calendar-write + populate the refresh token with it;
   possible (action items, insights, key takeaways). Reduce paragraph prose; favor
   scannable structure. Update the system prompt in that route handler.
 
-- **Nudge editor — coach note field.** In the `NudgeItem` edit area (both the Nudge
-  Queue and the per-client `NudgesCard`), add a **"Coach note"** text field (maps to
-  a new `nudges.coach_note` text column, migration required). This note is **not
-  sent** to the client — it's private context the coach attaches before sending (e.g.
-  "reference the Skydive story"). Displayed in the edit panel below the body editor,
-  labeled "Private note (not sent)". Save via the existing `PATCH /api/nudges/[nudgeId]`.
+- **Nudge editor — coach note field. ✅ SHIPPED (migration 034 `nudges.coach_note`).**
+  The `NudgeItem` edit area (Nudge Queue + per-client `NudgesCard`) has a **"Coach note"**
+  field mapping to `nudges.coach_note`. **Not sent** to the client — private context the
+  coach attaches before sending (e.g. "reference the Skydive story"), saved via
+  `PATCH /api/nudges/[nudgeId]`.
 
 #### Previously Tracked Open Items
 
