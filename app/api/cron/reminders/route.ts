@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { sendAppointmentReminder, syncAppointmentFromCalendar } from '@/lib/appointments'
 import { normalizeReminderSettings, reminderKind } from '@/lib/scheduling'
+import { runPrepGeneration } from '@/lib/prep-sheets/generate'
 import type { Coach } from '@/lib/supabase/types'
 
 export const runtime = 'nodejs'
@@ -96,5 +97,16 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ sent, considered })
+  // Pass 3 — prep-sheet pipeline generation. Runs as a branch here (no separate
+  // vercel.json cron): once a day, at each coach's review_hour, it drafts prep
+  // sheets for upcoming sessions and emails a review digest. Best-effort — a
+  // failure inside never aborts the reminder passes above.
+  let prep = null
+  try {
+    prep = await runPrepGeneration(supabase, new Date(now))
+  } catch (e) {
+    console.error('[cron/reminders] prep generation failed', e)
+  }
+
+  return NextResponse.json({ sent, considered, prep })
 }
