@@ -219,6 +219,17 @@ export type Coach = {
   reminder_settings: {
     confirmation: boolean
     reminders: { hoursBefore: number; enabled: boolean }[]
+    // Prep Sheet Pipeline settings (migration 039). Read defensively — an absent
+    // block means defaults (canonical shape + defaults in lib/prep-sheets/settings.ts).
+    prep_sheets?: {
+      enabled: boolean
+      generate_lead_days: number   // draft + review email this many days out (default 4)
+      review_hour: number          // coach-local hour for the review email (default 7)
+      delivery_lead_days: number   // client receives it this many days out (default 2)
+      delivery_hour: number        // hour, in the client's timezone (default 8)
+      cutoff_hours_before: number  // below this, auto-skip rather than send late (default 12)
+      history_window_days: number  // eligibility lookback (default 90)
+    }
   } | null
   // Nudging settings (migration 022). null = use the built-in defaults. Canonical
   // shape + defaults live in lib/nudges/settings.ts.
@@ -362,6 +373,9 @@ export type Communication = {
   status: string // 'sent' | 'failed' | 'scheduled'
   gmail_message_id: string | null
   error_detail: string | null
+  // The session this comm belongs to (migration 039). Set by the prep-sheet
+  // dispatch; nullable so every other send path is unaffected.
+  appointment_id: string | null
   sent_at: Timestamp
 }
 
@@ -422,6 +436,50 @@ export type PrepSheet = {
   html: string | null
   sent_at: Timestamp
   created_at: Timestamp
+}
+
+// The Prep Sheet Pipeline state machine (migration 039). One row per
+// appointment; drives Generate → Review → Approve → Scheduled Send. Distinct
+// from PrepSheet above (the interactive send-log snapshot from migration 013).
+export type PrepSheetStatus = 'draft' | 'approved' | 'sent' | 'skipped' | 'failed'
+export type PrepSheetSkipReason =
+  | 'coach_choice'
+  | 'no_history'
+  | 'not_approved_in_time'
+  | 'appointment_cancelled'
+
+// What client history fed a draft — the audit trail for why a sheet looks the
+// way it does. Written at generation; null on a no_history skip means "nothing found".
+export type PrepSheetEligibility = {
+  note_count: number
+  transcript_count: number
+  most_recent_note_at: Timestamp | null
+  most_recent_transcript_at: Timestamp | null
+  note_ids: string[]
+  transcript_ids: string[]
+}
+
+export type PrepSheetPipeline = {
+  id: string
+  coach_id: string
+  client_id: string
+  appointment_id: string
+  status: PrepSheetStatus
+  subject: string | null
+  body_html: string | null
+  generated_at: Timestamp | null
+  generation_model: string | null
+  eligibility: PrepSheetEligibility | null
+  approved_at: Timestamp | null
+  scheduled_send_at: Timestamp | null
+  sent_at: Timestamp | null
+  communication_id: string | null
+  skipped_at: Timestamp | null
+  skip_reason: PrepSheetSkipReason | null
+  error_detail: string | null
+  skip_token: string | null
+  created_at: Timestamp
+  updated_at: Timestamp
 }
 
 export type Transcript = {
@@ -555,6 +613,12 @@ export type Database = {
         Row: PrepSheet
         Insert: Insertable<PrepSheet>
         Update: Updatable<PrepSheet>
+        Relationships: []
+      }
+      prep_sheet_pipeline: {
+        Row: PrepSheetPipeline
+        Insert: Insertable<PrepSheetPipeline>
+        Update: Updatable<PrepSheetPipeline>
         Relationships: []
       }
       email_signatures: {
