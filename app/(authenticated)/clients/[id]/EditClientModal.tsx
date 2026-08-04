@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import type { Client } from '@/lib/supabase/types'
 import { Modal } from '@/app/components/shared/Modal'
 import { TimezoneCombobox } from '@/app/components/shared/TimezoneCombobox'
@@ -52,6 +52,7 @@ export function EditClientModal({
   /** Opens the issue-agreement flow (details → payment → review → send) after saving. */
   onIssueAgreement?: () => void
 }) {
+  const router = useRouter()
   const [form, setForm] = useState<Record<string, string>>(() => {
     const f: Record<string, string> = {
       status: client.status || 'active',
@@ -259,6 +260,15 @@ export function EditClientModal({
     }
   }
 
+  // Save the client edits, then navigate to the account/engagement page — so a
+  // jump to the full billing management doesn't drop unsaved changes.
+  async function saveAndNavigate(href: string) {
+    if (await persist()) {
+      onClose()
+      router.push(href)
+    }
+  }
+
 
   return (
     <Modal title="Edit client" onClose={onClose}>
@@ -442,24 +452,28 @@ export function EditClientModal({
                   <span className="block truncate text-[13px] font-medium text-tlw-espresso">{account.name}</span>
                   <span className="text-[11px] capitalize text-tlw-warm-gray">{account.type} account</span>
                 </div>
-                <Link
-                  href={`/business-center/accounts/${account.id}`}
-                  className="shrink-0 rounded-tlw-md border border-tlw-navy-rich px-2.5 py-1.5 text-[12px] font-medium text-tlw-navy-rich transition-colors hover:bg-tlw-navy-rich hover:text-tlw-cream"
+                <button
+                  type="button"
+                  onClick={() => saveAndNavigate(`/business-center/accounts/${account.id}`)}
+                  disabled={saving}
+                  className="shrink-0 rounded-tlw-md border border-tlw-navy-rich px-2.5 py-1.5 text-[12px] font-medium text-tlw-navy-rich transition-colors hover:bg-tlw-navy-rich hover:text-tlw-cream disabled:opacity-40"
                 >
                   Manage account &amp; engagements →
-                </Link>
+                </button>
               </div>
             ) : billingLinked === false ? (
               <div className="mt-2 rounded-tlw-md border border-dashed border-tlw-warm-gray/30 bg-tlw-surface px-3 py-2.5">
                 <p className="text-[12px] leading-snug text-tlw-warm-gray">
                   No billing account is linked to this client yet.
                 </p>
-                <Link
-                  href="/business-center/accounts"
-                  className="mt-2 inline-block rounded-tlw-md border border-tlw-navy-rich px-2.5 py-1.5 text-[12px] font-medium text-tlw-navy-rich transition-colors hover:bg-tlw-navy-rich hover:text-tlw-cream"
+                <button
+                  type="button"
+                  onClick={() => saveAndNavigate('/business-center/accounts')}
+                  disabled={saving}
+                  className="mt-2 inline-block rounded-tlw-md border border-tlw-navy-rich px-2.5 py-1.5 text-[12px] font-medium text-tlw-navy-rich transition-colors hover:bg-tlw-navy-rich hover:text-tlw-cream disabled:opacity-40"
                 >
                   Set up billing in the Business Center →
-                </Link>
+                </button>
               </div>
             ) : null}
 
