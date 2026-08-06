@@ -370,6 +370,14 @@ function NoteEditor({
     [clientId]
   )
 
+  // After a successful save, hold the "Saved ✓" flash briefly, then settle the
+  // button back to its resting state so the color fill reads as feedback.
+  useEffect(() => {
+    if (state !== 'saved') return
+    const t = setTimeout(() => setState('idle'), 1500)
+    return () => clearTimeout(t)
+  }, [state])
+
   // Debounced autosave whenever an edited field changes.
   useEffect(() => {
     if (!dirty.current) return
@@ -469,9 +477,16 @@ function NoteEditor({
           </button>
           <button
             onClick={save}
-            className="rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-1.5 text-[12px] font-medium text-tlw-espresso transition-colors hover:border-tlw-warm-gray/50"
+            disabled={state === 'saving'}
+            className={`rounded-tlw-lg border px-3 py-1.5 text-[12px] font-medium transition-colors duration-tlw-base ${
+              state === 'saving'
+                ? 'border-tlw-navy-deep bg-tlw-navy-deep text-white'
+                : state === 'saved'
+                ? 'border-tlw-signal-orange bg-tlw-signal-orange text-white'
+                : 'border-tlw-warm-gray/30 text-tlw-espresso hover:border-tlw-warm-gray/50'
+            }`}
           >
-            Save now
+            {state === 'saving' ? 'Saving…' : state === 'saved' ? 'Saved ✓' : 'Save now'}
           </button>
         </div>
       </div>
