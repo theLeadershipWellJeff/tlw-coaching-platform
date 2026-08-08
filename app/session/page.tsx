@@ -27,26 +27,14 @@ function SessionPage() {
   }, [clientName])
 
   async function run() {
-    // 1. Pull CA notes
-    setStep('loading-notes')
-    let notes: any[] = []
-    let actions: any[] = []
-    try {
-      const notesRes = await fetch(`/api/notes?clientName=${encodeURIComponent(clientName)}`)
-      const notesData = await notesRes.json()
-      notes = notesData.notes || []
-      actions = notesData.actions || []
-    } catch (e) {
-      // Continue with empty notes — user can still generate
-    }
-
-    // 2. Generate content
+    // Generate content. The coaching plan is drawn from the client's stored
+    // engagement goals (server-side in /api/generate); no external notes source.
     setStep('generating')
     try {
       const genRes = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientName, notes, actions }),
+        body: JSON.stringify({ clientName }),
       })
       const genData = await genRes.json()
       if (genData.error) throw new Error(genData.error)

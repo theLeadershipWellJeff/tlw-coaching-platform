@@ -27,31 +27,13 @@ function SessionPage() {
   }, [clientName])
 
   async function run() {
-    // 1. Pull CA notes + Zoom summaries in parallel
+    // 1. Pull Zoom summaries (additive). The server matches on calendar history,
+    //    so no external session-time seed is needed.
     setStep('loading-notes')
-    let notes: any[] = []
-    let actions: any[] = []
     let zoomSummaries: any[] = []
 
-    const notesPromise = fetch(`/api/notes?clientName=${encodeURIComponent(clientName)}`)
-      .then(r => r.json())
-      .catch(() => ({ notes: [], actions: [] }))
-
-    const notesData = await notesPromise
-    notes = notesData.notes || []
-    actions = notesData.actions || []
-
-    // CA note dates seed Zoom matching; the server also pulls calendar history
-    const sessionTimes = notes
-      .map((n: any) => n.date)
-      .filter(Boolean)
-
     try {
-      const qs = new URLSearchParams({
-        clientName,
-        clientEmail,
-        sessionTimes: sessionTimes.join(','),
-      })
+      const qs = new URLSearchParams({ clientName, clientEmail })
       const zoomRes = await fetch(`/api/zoom-summaries?${qs.toString()}`)
       const zoomData = await zoomRes.json()
       zoomSummaries = zoomData.summaries || []
@@ -59,13 +41,14 @@ function SessionPage() {
       // Zoom is additive — continue without it
     }
 
-    // 2. Generate content
+    // 2. Generate content. The coaching plan comes from the client's stored
+    //    engagement goals (server-side in /api/generate).
     setStep('generating')
     try {
       const genRes = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientName, notes, actions, zoomSummaries }),
+        body: JSON.stringify({ clientName, zoomSummaries }),
       })
       const genData = await genRes.json()
       if (genData.error) throw new Error(genData.error)

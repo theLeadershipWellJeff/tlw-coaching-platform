@@ -7,9 +7,10 @@ app evolves.
 
 A coaching platform for Dr. Jeff Holmes (theLeadershipWell). Two pillars:
 
-1. **Session prep** — pulls a client's history (Coach Accountable notes, Zoom/
-   transcript context) and uses Claude to generate a personalized prep email,
-   sent via Gmail.
+1. **Session prep** — pulls a client's history (workspace notes, `coaching_goals`,
+   Zoom/transcript context) and uses Claude to generate a personalized prep email,
+   sent via Gmail. (Coach Accountable was the original notes source; it was
+   decommissioned in Phase 0 — see the "CA notes / clients import" section.)
 2. **Coaching scorecard** — scores recorded sessions against the ICF 2025 Core
    Competencies refined by theLeadershipWell's standards. The **consolidated
    spec `spec/theLeadershipWell_Session_Report_Spec_v0.4.md` is the base source
@@ -241,11 +242,16 @@ single short fragment. A client stored with a one-letter last name (e.g. "Michel
 W") previously substring-matched any title containing "w". Fixed in
 `/api/sessions` (dashboard) and the transcript matcher is email-first by design.
 
-### CA notes / clients import
-`/api/clients/import` (clients) and `/api/clients/[id]/import-notes` (notes,
-`Session.getAll`). Both idempotent. The API routes remain, but the roster's bulk
-"Import from CA" buttons were removed (the CA migration is done) — replaced by
-the Active/Inactive roster toggle (below).
+### CA notes / clients import — DECOMMISSIONED (Phase 0)
+Coach Accountable is shut down apart from Jeff's out-of-app maintenance connection.
+The live CA integration was removed in Phase 0 (see `ISOLATION_AUDIT.md` §0.3): the
+routes `/api/clients/import`, `/api/clients/[id]/import-notes`, and `/api/notes` (the
+CA notes proxy) were **deleted**, and `/api/sessions` + the `app/session/*` prep flow
+were stripped of their CA calls (prep now runs off `clients.coaching_goals`). **CA
+provenance and imported history are retained** — `clients.ca_client_id` and
+`notes.ca_session_id` (+ its partial unique index) stay, and all imported
+notes/actions/clients render normally. The roster's bulk "Import from CA" buttons had
+already been replaced by the Active/Inactive toggle (below).
 
 ### Roster Active/Inactive/Archived toggle + Email all (`clients/ClientsRoster.tsx`)
 The roster splits on `clients.status`: a segmented **Active / Inactive /
@@ -860,8 +866,7 @@ embedded select) — wired through `/api/reports`, `/api/transcripts`, and
 ## Environment variables
 
 Google OAuth (`GOOGLE_CLIENT_ID/SECRET`), `NEXTAUTH_URL/SECRET`,
-`ANTHROPIC_API_KEY`, Coach Accountable (`COACH_ACCOUNTABLE_API_ID/_API_KEY`),
-Supabase (`NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_API_SECRET_KEY`),
+`ANTHROPIC_API_KEY`, Supabase (`NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_API_SECRET_KEY`),
 `JEFF_FROM_EMAIL`/`JEFF_CC_EMAIL`, Zoom (`ZOOM_ACCOUNT_ID/CLIENT_ID/CLIENT_SECRET`),
 `INGEST_SECRET`, `CRON_SECRET` (Bearer token for the hourly crons —
 `/api/cron/reminders`, `/api/cron/nudges`, `/api/cron/vault-sync`; set the same
