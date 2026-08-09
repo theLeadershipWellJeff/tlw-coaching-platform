@@ -1,0 +1,19 @@
+-- Migration NNN — <short description>
+-- Up-script (forward change). Author the paired _down.sql FIRST.
+-- Procedure: docs/MIGRATION_PROCEDURE.md  (snapshot → staging → verify → prod)
+--
+-- Rules:
+--  • Additive-by-default: prefer nullable columns / new tables.
+--  • Every NEW table must enable RLS (no policies — service-role bypasses it,
+--    consistent with the app until the Phase 1 RLS rollout).
+--  • Deliver this as a ready-to-paste block in chat for Jeff to run by hand.
+
+-- Example (delete and replace):
+-- ALTER TABLE clients ADD COLUMN IF NOT EXISTS example_col text;
+--
+-- CREATE TABLE IF NOT EXISTS example_table (
+--   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+--   coach_id uuid NOT NULL REFERENCES coaches(id),
+--   created_at timestamptz NOT NULL DEFAULT now()
+-- );
+-- ALTER TABLE example_table ENABLE ROW LEVEL SECURITY;

@@ -56,8 +56,6 @@ Copy the output — that's your NEXTAUTH_SECRET.
 | NEXTAUTH_URL | https://theleadershipwell.online |
 | NEXTAUTH_SECRET | from Step 2 |
 | ANTHROPIC_API_KEY | your Anthropic key |
-| COACH_ACCOUNTABLE_API_KEY | your CA API key |
-| COACH_ACCOUNTABLE_BASE_URL | https://www.coachaccountable.com/api/v1 |
 | JEFF_FROM_EMAIL | jeff@jeffkholmes.com |
 | JEFF_CC_EMAIL | jeff@theleadershipwell.com |
 
