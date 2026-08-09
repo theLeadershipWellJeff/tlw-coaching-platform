@@ -27,9 +27,11 @@ quick, current "what exists right now" ledger._
   routes). Full route-by-route isolation classification: **`ISOLATION_AUDIT.md` §2**.
 - **6 Vercel crons** (all hourly, `vercel.json`): `reminders`, `nudges`, `vault-sync`,
   `calendar-sync`, `billing-reminders`, `billing-retries`. Audit: `ISOLATION_AUDIT.md` §3.
-- **41 migrations**, strict `001`–`041` (Phase 0 renumbered the old `026`/`034`
+- **42 migrations**, strict `001`–`042` (Phase 0 renumbered the old `026`/`034`
   duplicates — map in `docs/MIGRATION_PROCEDURE.md`). **Applied by hand** in the
-  Supabase SQL editor; production is at `041`.
+  Supabase SQL editor; production is at `042`. `042` = the Phase 1 §5.0 tenant
+  foundation (`organizations` + `org_id` on every tenant table, backfilled to
+  org #1); applied to staging + production 2026-08-09.
 
 ## Feature areas shipped (all live)
 
@@ -65,6 +67,16 @@ quick, current "what exists right now" ledger._
   staging Supabase project itself is Jeff's to create.
 - **Isolation audit** produced (`ISOLATION_AUDIT.md`) — the checklist Phase 1 executes.
 - **No schema change, no RLS enabled** — Phase 0 is infrastructure + reconnaissance.
+
+## Phase 1 progress (multi-tenant enforcement — `docs/PHASE_1_BUILD_BRIEF.md`)
+
+- **§5.0 — DONE.** `organizations` table + `org_id` on every tenant table, backfilled
+  to org #1 (migration 042, applied staging + prod 2026-08-09). Schema only.
+- **§5.1 — in progress.** JWT-minting substrate: `lib/supabase/jwt.ts` +
+  `getSupabaseForClaims()` (request-scoped, RLS-honoring client) + `lib/tenant.ts`.
+  **Dormant** — wired into no route yet; RLS enforcement begins per table-group in §5.3.
+  Needs `SUPABASE_JWT_SECRET` set (per environment) before any route uses it.
+- Decisions driving Phase 1 are recorded in `ISOLATION_AUDIT.md` §8.
 
 ## Known isolation gaps (do NOT rely on DB enforcement)
 

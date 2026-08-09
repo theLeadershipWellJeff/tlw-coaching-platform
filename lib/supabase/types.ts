@@ -216,6 +216,8 @@ export type PdfResource = {
 
 export type Coach = {
   id: string
+  // Tenant (migration 042). Every coach belongs to exactly one organization.
+  org_id: string
   email: string
   name: string
   role: string // coach | supervisor

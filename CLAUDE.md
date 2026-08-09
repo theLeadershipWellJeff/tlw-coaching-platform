@@ -1190,6 +1190,16 @@ backfilled, the roster would filter to zero clients. Read the backfill comment i
 applied before scheduling is used.** The `library-pdfs` Storage bucket is created
 automatically on first upload.
 
+**Phase 0/1 note (2026-08).** The `026`/`034` duplicate numbers were resolved by a
+full-shift renumber to a strict `001`–`041`; the ledger prose above still cites the
+**old** numbers — the authoritative old→new map is in `docs/MIGRATION_PROCEDURE.md`.
+**`042_organizations_and_org_id.sql` — APPLIED (staging + production, 2026-08-09).**
+Creates `organizations` (tenant root; seeds org #1 = theLeadershipWell) and adds
+`org_id NOT NULL DEFAULT org#1` + index to all 36 tenant tables. Schema only — no RLS
+enforcement yet (Phase 1 §5.0; multi-tenant migration tracked in
+`docs/PHASE_1_BUILD_BRIEF.md`). The `org_id` DEFAULT is transitional; a later
+migration drops it once inserts set `org_id` from the request JWT (§5.1).
+
 **Scheduling go-live checklist:** (1) apply `016_appointments.sql`; (2) set
 `CRON_SECRET` in Vercel (same value the cron sends); (3) enable the
 `calendar.events` scope is already in `authOptions` — **the coach must sign out
