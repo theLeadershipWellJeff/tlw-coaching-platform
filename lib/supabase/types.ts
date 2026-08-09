@@ -44,6 +44,22 @@ export type CoachingGoal = {
   source?: 'manual' | 'generated'
 }
 
+// The tenant root (migration 042). One row per coaching firm; TLW is org #1.
+// org_id lives on every tenant table but is only wired into app reads/writes
+// starting Phase 1 §5.1 — so it is intentionally not yet on the row types below.
+export type Organization = {
+  id: string
+  name: string
+  legal_entity_name: string | null
+  from_email: string | null
+  cc_email: string | null
+  logo_url: string | null
+  brand_color: string | null
+  timezone: string | null
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
 export type Client = {
   id: string
   name: string
@@ -526,7 +542,7 @@ export type SessionReport = {
  * any nullable column is optional too (Postgres fills NULL). Everything else
  * is required.
  */
-type Defaulted = 'id' | 'created_at' | 'updated_at' | 'sent_at' | 'agreement_on_file' | 'client_type'
+type Defaulted = 'id' | 'created_at' | 'updated_at' | 'sent_at' | 'agreement_on_file' | 'client_type' | 'org_id'
 type NullableKeys<T> = { [K in keyof T]-?: null extends T[K] ? K : never }[keyof T]
 type OptionalOnInsert<T> = Defaulted | Extract<keyof T, NullableKeys<T>>
 
@@ -537,6 +553,12 @@ type Updatable<T> = Partial<Insertable<T>>
 export type Database = {
   public: {
     Tables: {
+      organizations: {
+        Row: Organization
+        Insert: Insertable<Organization>
+        Update: Updatable<Organization>
+        Relationships: []
+      }
       clients: {
         Row: Client
         Insert: Insertable<Client>
