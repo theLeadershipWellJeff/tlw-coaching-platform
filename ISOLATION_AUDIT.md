@@ -455,7 +455,7 @@ promoted entity — a nullable `sponsor_contact_*` / role, and a read-only aggre
 **not** a reason to fork the model. *Caveat:* if a payer must exist who is explicitly
 **not** billing (ROI reports only, a third party pays), or a client sponsored by two
 parties, promotion needs an added nullable sponsor role. Default to promotion; revisit
-only if that requirement appears. (Open decision #1.)
+only if that requirement appears. (**Resolved 2026-08-09 — promote; see §8 #1.**)
 
 ### Sponsor aggregate reporting — read-from vs. the hard wall
 **Read (aggregate only):** `billing_accounts → coachees → engagements →
@@ -500,27 +500,22 @@ the switch to a JWT-scoped client on the routes that touch it.
 
 ---
 
-## 8. Open questions requiring a Jeff decision
+## 8. Decisions — RESOLVED (2026-08-09)
 
-1. **Sponsor** — confirm **promote `billing_accounts`** (recommended, §6) vs. a new
-   `sponsors` entity. Blocks the sponsor-reporting design. _(Open decision #1.)_
-2. **`/api/coaches[/[id]]`** — this is the clearest privilege-escalation surface. Should
-   coach list/create/edit/delete be **supervisor-only**? Should role changes be blocked
-   entirely outside an admin path? (Needed before any second internal coach exists.)
-3. **`/api/zoom-summaries` + `/api/zoom-test`** — is Zoom a firm-global integration or
-   must summaries be per-coach in multi-tenant? And should `zoom-test` (a diagnostic)
-   be removed before external launch?
-4. **`/api/vault/map`** and vault sync — confirmed per-tenant vault-lite (decision
-   record), but confirm the firm-global `VAULT_REPO`/PAT is acceptable **only** until
-   Phase 1 moves vault identity per-tenant.
-5. **Permanent bearer tokens** — should `receipt` / `agenda` / `authorize` links gain a
-   TTL, or is the current "token = permanent credential" acceptable for external tenants?
-6. **GDPR Art. 9** — do coaching transcripts constitute special-category data? Requires
-   privacy counsel; blocks EU launch, not Phase 0. _(Open decision #2.)_
-7. **EU data residency** — build tenant→database routing, or keep the DB connection a
-   lookup (not a constant) so it stays possible? _(Open decision #3.)_
-8. **Google OAuth scope classification** (sensitive vs. restricted) — 4–12 week
-   verification tail; run before external launch. _(Open decision #4.)_
+All Phase-1-blocking questions were decided by Jeff on 2026-08-09. Recorded here as
+the binding inputs to the Phase 1 build brief (`docs/PHASE_1_BUILD_BRIEF.md`).
+
+| # | Question | **Decision** |
+|---|---|---|
+| 1 | Sponsor: promote `billing_accounts` vs. new `sponsors` table | ✅ **Promote `billing_accounts`** (enterprise accounts become sponsors; add a nullable sponsor contact/role + a read-only aggregate view behind the §6 hard wall). No parallel table. |
+| 2 | `/api/coaches[/[id]]`: role-gate coach admin | ✅ **Supervisor-only** for list / create / edit / delete / role-change. A coach may edit only their own non-role fields. |
+| 3 | Anthropic key: per-tenant BYO | ✅ **Per-tenant BYO from day one.** Build a single `getAnthropic(tenant)` resolver; route all 10 call sites through it. Keys encrypted at rest, never logged, masked in UI, graceful failure. No platform-key fallback. |
+| 4 | Zoom: firm-global vs. per-coach; keep `/api/zoom-test`? | ✅ **Per-coach** — every coach (including TLW's own) connects their own Zoom account. **Delete `/api/zoom-test`** (leftover diagnostic). |
+| 5 | Vault: tenant access to Jeff's garden? | ✅ **Firm-only.** Jeff/TLW keeps the real vault; **external tenants never touch it** — they get **vault-lite** (in-app native framework store behind the same provider interface). |
+| 6 | Permanent bearer tokens (`receipt`/`agenda`/`authorize`) | ✅ **Add a TTL** to receipt/authorize (and agenda) links before external launch. |
+| 7 | GDPR Art. 9 — transcripts as special-category | ✅ **Assume yes (special-category).** Low urgency / not blocking near-term work — **wire in late, but the architecture must account for it as we build** (data classification, DPA-ready boundaries). |
+| 8 | EU data residency | ✅ **Keep it possible** — the tenant→database connection stays a **lookup, not a constant**, so residency routing can be added later without re-architecture. Wire in late. |
+| 9 | Google OAuth scope classification (sensitive vs. restricted) | ⏳ **External process** — 4–12 week verification tail; run before external launch. Not a code decision; tracked, not blocking Phase 1 build.
 
 ---
 
