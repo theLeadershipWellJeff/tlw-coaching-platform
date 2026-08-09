@@ -72,10 +72,14 @@ quick, current "what exists right now" ledger._
 
 - **§5.0 — DONE.** `organizations` table + `org_id` on every tenant table, backfilled
   to org #1 (migration 042, applied staging + prod 2026-08-09). Schema only.
-- **§5.1 — in progress.** JWT-minting substrate: `lib/supabase/jwt.ts` +
+- **§5.1 — DONE.** JWT-minting substrate: `lib/supabase/jwt.ts` +
   `getSupabaseForClaims()` (request-scoped, RLS-honoring client) + `lib/tenant.ts`.
-  **Dormant** — wired into no route yet; RLS enforcement begins per table-group in §5.3.
-  Needs `SUPABASE_JWT_SECRET` set (per environment) before any route uses it.
+  `SUPABASE_JWT_SECRET` set in Vercel (Production + Preview).
+- **§5.3 group 1a — in progress.** First strangler cutover: `FOR SELECT` org
+  policies on `notes` + `actions` (migration 043) + three read routes
+  (`clients/[id]/notes` GET, `.../actions` GET, `.../history` notes sub-query)
+  switched to the JWT client. SELECT-only — writes stay on the admin client until
+  group 1b. Staging proof via `supabase/staging/002_org_split.sql` (two real orgs).
 - Decisions driving Phase 1 are recorded in `ISOLATION_AUDIT.md` §8.
 
 ## Known isolation gaps (do NOT rely on DB enforcement)
