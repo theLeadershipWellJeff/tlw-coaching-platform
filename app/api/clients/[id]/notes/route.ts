@@ -1,15 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin } from '@/lib/supabase/server'
+import { getSupabaseAdmin, getSupabaseForClaims } from '@/lib/supabase/server'
 import { toErrorResponse } from '@/lib/api-handler'
 import { requireClientCoach } from '@/lib/client-access'
+import { tenantClaimsFromCoach } from '@/lib/tenant'
 
 // List a client's notes (most recent session first).
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const supabase = getSupabaseAdmin()
-    await requireClientCoach(supabase, params.id)
+    // Authorize on the admin client (identity + coach_clients gate), then read
+    // the data through the org-scoped JWT client so RLS backstops the tenant
+    // boundary at the database (Phase 1 §5.3).
+    const admin = getSupabaseAdmin()
+    const coach = await requireClientCoach(admin, params.id)
+    const db = getSupabaseForClaims(tenantClaimsFromCoach(coach))
 
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from('notes')
       .select('*')
       .eq('client_id', params.id)

@@ -1200,6 +1200,16 @@ enforcement yet (Phase 1 §5.0; multi-tenant migration tracked in
 `docs/PHASE_1_BUILD_BRIEF.md`). The `org_id` DEFAULT is transitional; a later
 migration drops it once inserts set `org_id` from the request JWT (§5.1).
 
+**Phase 1 §5.3 — RLS rollout (in progress).** `043_rls_notes_actions_select.sql`
+(+ `_down`) — the first strangler cutover: `FOR SELECT` org-isolation policies on
+`notes` + `actions`, read via the `org_id` JWT claim (`getSupabaseForClaims`).
+**SELECT-only** — writes stay on the service-role admin client (which bypasses
+RLS), so the migration changes no behavior for existing routes; only the three
+switched read routes (`clients/[id]/notes` GET, `.../actions` GET, `.../history`
+notes sub-query) run under it. **Apply to staging first, verify with the proof in
+`supabase/staging/002_org_split.sql`, then production.** Group 1b (write policies +
+`org_id` on inserts) and group 2 (`clients`/roster + billing embeds) follow.
+
 **Scheduling go-live checklist:** (1) apply `016_appointments.sql`; (2) set
 `CRON_SECRET` in Vercel (same value the cron sends); (3) enable the
 `calendar.events` scope is already in `authOptions` — **the coach must sign out

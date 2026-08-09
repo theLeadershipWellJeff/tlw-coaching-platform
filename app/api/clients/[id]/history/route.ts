@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin } from '@/lib/supabase/server'
+import { getSupabaseAdmin, getSupabaseForClaims } from '@/lib/supabase/server'
 import { toErrorResponse } from '@/lib/api-handler'
 import { requireClientCoach } from '@/lib/client-access'
+import { tenantClaimsFromCoach } from '@/lib/tenant'
 
 export type HistoryItem =
   | { kind: 'note'; id: string; title: string | null; session_date: string | null; created_at: string }
@@ -14,10 +15,14 @@ export type HistoryItem =
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const supabase = getSupabaseAdmin()
-    await requireClientCoach(supabase, params.id)
+    const coach = await requireClientCoach(supabase, params.id)
+    // `notes` is org-scoped by RLS (§5.3 group 1a) → read it on the JWT client.
+    // The other three tables have no policy yet, so they stay on the admin
+    // client (they move to the JWT client as their groups come online).
+    const db = getSupabaseForClaims(tenantClaimsFromCoach(coach))
 
     const [notesRes, commsRes, nudgesRes, reportsRes] = await Promise.all([
-      supabase
+      db
         .from('notes')
         .select('id, title, session_date, created_at')
         .eq('client_id', params.id)
