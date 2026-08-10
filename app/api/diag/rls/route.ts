@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin, getSupabaseForClaims } from '@/lib/supabase/server'
 import { mintSupabaseAccessToken } from '@/lib/supabase/jwt'
+import { withOrgClaim } from '@/lib/supabase/pg'
 
 // ⚠️ TEMPORARY DIAGNOSTIC — NOT FOR MERGE TO main/production.
 // Runs on a PR preview (which points at the STAGING Supabase project) to
@@ -87,6 +88,22 @@ export async function GET(req: NextRequest) {
   }
   const jwtProbes = [await probe(ORG1), await probe(ORG2)]
 
+  // 5) Option A: direct Postgres, per-transaction org claim (SET LOCAL ROLE
+  //    authenticated + request.jwt.claims). Healthy => org1=8, org2=4.
+  async function pgProbe(orgId: string) {
+    try {
+      const rows = await withOrgClaim(
+        { orgId, coachId: 'diag', coachRole: 'coach' },
+        (tx) => tx<{ n: number }[]>`select count(*)::int as n from notes`
+      )
+      return { orgId, count: rows?.[0]?.n ?? null, error: null }
+    } catch (e) {
+      return { orgId, count: null, error: e instanceof Error ? e.message : String(e) }
+    }
+  }
+  const dbUrlSet = !!process.env.SUPABASE_DB_URL
+  const pgProbes = dbUrlSet ? [await pgProbe(ORG1), await pgProbe(ORG2)] : []
+
   return NextResponse.json({
     host,
     jwksErr,
@@ -96,5 +113,7 @@ export async function GET(req: NextRequest) {
     adminCount,
     adminErr,
     jwtProbes,
+    dbUrlSet,
+    pgProbes,
   })
 }
