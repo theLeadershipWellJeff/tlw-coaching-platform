@@ -175,6 +175,85 @@ function EditLineModal({ line, invoiceId, onSaved, onDeleted, onClose }: {
   )
 }
 
+// ── Void modal ────────────────────────────────────────────────────────────────
+
+function VoidInvoiceModal({ invoice, onClose, onVoided }: {
+  invoice: InvoiceWithLines
+  onClose: () => void
+  onVoided: (voidedAt: string) => void
+}) {
+  const [reason, setReason] = useState('')
+  const [confirming, setConfirming] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
+
+  async function submit() {
+    setSubmitting(true)
+    setError('')
+    const res = await fetch(`/api/billing/invoices/${invoice.id}/adjust`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'void', reason: reason.trim() }),
+    })
+    const d = await res.json().catch(() => ({}))
+    if (!res.ok || !d.ok) {
+      setError(d.error || 'Could not void the invoice.')
+      setSubmitting(false)
+      setConfirming(false)
+      return
+    }
+    onVoided(new Date().toISOString())
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-tlw-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="border-b border-tlw-warm-gray/10 px-5 py-3">
+          <h3 className="text-[15px] font-semibold text-tlw-navy-deep">Void invoice</h3>
+        </div>
+        <div className="space-y-4 px-5 py-4">
+          <p className="text-[12px] text-tlw-warm-gray">
+            Voiding cancels this invoice ({money(invoice.total)}) in Stripe and marks it void here. No money
+            moves, the client can no longer pay it, and any pending reminders stop. This can&apos;t be undone.
+          </p>
+          <div>
+            <label className="mb-1 block text-[11px] font-medium uppercase tracking-wider text-tlw-warm-gray">Reason (required)</label>
+            <textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={2}
+              placeholder="Why is this invoice being voided?"
+              className="w-full rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-canvas px-2 py-1.5 text-[13px] text-tlw-espresso outline-none focus:border-tlw-signal-orange"
+            />
+          </div>
+          {confirming && (
+            <div className="rounded-tlw-md border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
+              Cancel this invoice ({money(invoice.total)}). No money moves.
+            </div>
+          )}
+          {error && <p className="text-[12px] text-red-600">{error}</p>}
+        </div>
+        <div className="flex items-center justify-end gap-2 border-t border-tlw-warm-gray/10 px-5 py-3">
+          <button onClick={onClose} className="px-3 py-1.5 text-[13px] text-tlw-warm-gray hover:text-tlw-espresso">Cancel</button>
+          {!confirming ? (
+            <button
+              onClick={() => setConfirming(true)}
+              disabled={!reason.trim()}
+              className="rounded-tlw-lg bg-tlw-navy-deep px-3 py-1.5 text-[13px] font-medium text-white disabled:opacity-40"
+            >
+              Review
+            </button>
+          ) : (
+            <button onClick={submit} disabled={submitting} className="rounded-tlw-lg bg-red-600 px-3 py-1.5 text-[13px] font-medium text-white disabled:opacity-50">
+              {submitting ? 'Voiding…' : 'Confirm void'}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function InvoiceDetailPage() {
@@ -194,6 +273,7 @@ export default function InvoiceDetailPage() {
   const [resendDone, setResendDone] = useState(false)
   const [resendErr, setResendErr] = useState('')
   const [actionErr, setActionErr] = useState('')
+  const [showVoid, setShowVoid] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -574,6 +654,35 @@ export default function InvoiceDetailPage() {
               {markPaidErr && <p className="mt-2 text-[12px] text-red-600">{markPaidErr}</p>}
               {markPaidNote && <p className="mt-2 text-[12px] text-green-700">{markPaidNote}</p>}
             </section>
+          )}
+
+          {/* Void a finalized-but-unpaid invoice */}
+          {['sent', 'overdue', 'failed', 'approved'].includes(invoice.status) && invoice.stripe_invoice_id && (
+            <section className="rounded-tlw-2xl border border-red-100 bg-tlw-surface px-5 py-4">
+              <p className="mb-1 text-[13px] font-semibold text-tlw-navy-deep">Void invoice</p>
+              <p className="mb-3 text-[12px] text-tlw-warm-gray">
+                Cancel this invoice if it was sent in error or is no longer owed. It&apos;s voided in Stripe and
+                marked void here — no money moves, the client can no longer pay it, and pending reminders stop.
+                Voiding can&apos;t be undone.
+              </p>
+              <button
+                onClick={() => setShowVoid(true)}
+                className="rounded-tlw-lg border border-red-300 bg-red-50 px-4 py-2 text-[13px] font-medium text-red-700 transition-colors hover:bg-red-100"
+              >
+                Void invoice
+              </button>
+            </section>
+          )}
+
+          {showVoid && (
+            <VoidInvoiceModal
+              invoice={invoice}
+              onClose={() => setShowVoid(false)}
+              onVoided={(voidedAt) => {
+                setInvoice((inv) => inv ? { ...inv, status: 'void', voided_at: voidedAt } : inv)
+                setShowVoid(false)
+              }}
+            />
           )}
 
           {editLine && (
