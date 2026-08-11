@@ -312,7 +312,13 @@ export function ClientsRoster() {
         <AddClientModal
           onClose={() => setShowAdd(false)}
           onCreated={(c) => {
-            setShowAdd(false)
+            // Record the new client but keep the modal MOUNTED — it advances to
+            // its own Step 2 (billing setup) via setStep('engagement'). Closing
+            // here would unmount the modal in the same tick and Step 2 would
+            // never render (the window would just disappear). The modal closes
+            // itself via onClose (Skip / Done / after engagement); the
+            // justCreated "Issue Agreement" prompt sits behind the modal and
+            // becomes visible only once it closes.
             setClients((prev) => [...prev, c].sort((a, b) => a.name.localeCompare(b.name)))
             setJustCreated({ id: c.id, name: c.name })
           }}
