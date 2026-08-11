@@ -48,34 +48,35 @@ function Body({ size, loading, accounts, error }: { size: CardSize; loading: boo
     )
   }
 
-  const shown = size === 'compact' ? accounts.slice(0, 3) : accounts
+  // The list scrolls: ~5 rows visible, the rest reachable by scrolling in-card.
+  // Compact keeps a shorter window since it's a single narrow column.
+  const listMaxH = size === 'compact' ? 'max-h-[168px]' : 'max-h-[248px]'
 
   return (
-    <div className="space-y-1.5">
-      {shown.map((acct) => (
-        <Link
-          key={acct.id}
-          href={`/business-center/accounts/${acct.id}`}
-          className="flex items-center justify-between gap-3 rounded-tlw-lg px-2 py-1.5 transition-colors hover:bg-tlw-canvas"
-        >
-          <div className="min-w-0">
-            <p className="truncate text-[13px] font-medium text-tlw-navy-deep">{acct.name}</p>
-            {size !== 'compact' && (
+    <div className="space-y-3">
+      <Link href="/business-center/accounts" className="flex items-baseline gap-2 transition-opacity hover:opacity-80">
+        <span className="text-3xl font-semibold leading-none text-tlw-navy-deep">{accounts.length}</span>
+        <span className="text-[12px] text-tlw-warm-gray">{accounts.length === 1 ? 'account' : 'accounts'}</span>
+      </Link>
+      <div className={`${listMaxH} space-y-1 overflow-y-auto pr-1`}>
+        {accounts.map((acct) => (
+          <Link
+            key={acct.id}
+            href={`/business-center/accounts/${acct.id}`}
+            className="flex items-center justify-between gap-3 rounded-tlw-lg px-2 py-1.5 transition-colors hover:bg-tlw-canvas"
+          >
+            <div className="min-w-0">
+              <p className="truncate text-[13px] font-medium text-tlw-navy-deep">{acct.name}</p>
               <p className="text-[11px] text-tlw-warm-gray">
                 {acct.coacheeCount} {acct.coacheeCount === 1 ? 'coachee' : 'coachees'} · {acct.activeEngagements} active
               </p>
-            )}
-          </div>
-          <span className="shrink-0 rounded-full bg-tlw-canvas px-2 py-0.5 text-[11px] font-medium capitalize text-tlw-warm-gray">
-            {acct.type}
-          </span>
-        </Link>
-      ))}
-      {size === 'expanded' && (
-        <Link href="/business-center/accounts" className="block pt-1 text-[12px] text-tlw-navy-deep underline-offset-2 hover:underline">
-          Manage accounts →
-        </Link>
-      )}
+            </div>
+            <span className="shrink-0 rounded-full bg-tlw-canvas px-2 py-0.5 text-[11px] font-medium capitalize text-tlw-warm-gray">
+              {acct.type}
+            </span>
+          </Link>
+        ))}
+      </div>
     </div>
   )
 }

@@ -463,7 +463,8 @@ export default function AccountsPage() {
   return (
     <>
       <PageHeader
-        breadcrumb="Business Center"
+        backHref="/business-center"
+        backLabel="Business Center"
         title="Accounts"
         actions={
           <div className="flex items-center gap-2">
