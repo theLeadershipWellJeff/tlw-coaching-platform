@@ -22,6 +22,7 @@ import {
   createCreditNote,
   voidStripeInvoice,
   invoiceAmountCaptured,
+  getStripeInvoiceState,
 } from './stripe'
 import { cancelReminders } from './reminders'
 import { sendAdjustmentNotice } from './receipt'
@@ -59,6 +60,46 @@ export async function createAdjustment(
     if (!['sent', 'overdue', 'failed', 'approved'].includes(inv.status) || !inv.stripe_invoice_id) {
       return { ok: false, error: 'Only a finalized, unpaid invoice can be voided.', code: 'not_allowed' }
     }
+    // Our status can lag a Stripe webhook — Stripe only voids an `open` invoice.
+    // Read the live state first and reconcile so we never fire a doomed void
+    // (the "This invoice isn't open" error) or leave the record out of sync.
+    let live: { status: string | null; paidAt: string | null; amountPaid: number }
+    try {
+      live = await getStripeInvoiceState(inv.stripe_invoice_id)
+    } catch {
+      return { ok: false, error: 'Could not reach Stripe to check the invoice. Try again.', code: 'stripe' }
+    }
+    const now = new Date().toISOString()
+    if (live.status === 'void') {
+      // Already void in Stripe — sync our record and report success (idempotent).
+      if (inv.status !== 'void') {
+        await supabase.from('invoices').update({ status: 'void', voided_at: now, updated_at: now } as any).eq('id', invoiceId)
+        await cancelReminders(supabase, invoiceId).catch(() => {})
+      }
+      return { ok: true, adjustmentId: '', type: 'void', amountCents: Math.round(inv.total * 100) }
+    }
+    if (live.status === 'paid') {
+      // The client already paid — reconcile our record and refuse the void.
+      await supabase
+        .from('invoices')
+        .update({ status: 'paid', paid_at: live.paidAt ?? now, updated_at: now } as any)
+        .eq('id', invoiceId)
+      await cancelReminders(supabase, invoiceId).catch(() => {})
+      return {
+        ok: false,
+        code: 'not_allowed',
+        error: 'This invoice was already paid in Stripe, so it can’t be voided — refund or credit it instead. Its status has been updated to Paid.',
+      }
+    }
+    if (live.status !== 'open') {
+      // draft / uncollectible / anything else Stripe won't void.
+      return {
+        ok: false,
+        code: 'not_allowed',
+        error: `Stripe reports this invoice as “${live.status ?? 'unknown'}”, which can’t be voided.`,
+      }
+    }
+    // live.status === 'open' → safe to void; fall through to claim + execute.
   } else {
     // refund / credit_to_balance require a paid invoice with a Stripe id.
     if (inv.status !== 'paid' || !inv.stripe_invoice_id) {

@@ -331,6 +331,24 @@ export async function voidStripeInvoice(
   return getStripe().invoices.voidInvoice(stripeInvoiceId, undefined, { idempotencyKey })
 }
 
+/**
+ * Read a Stripe invoice's live state so a void/adjust can reconcile against it —
+ * our stored status can lag a webhook (e.g. the client paid but the paid webhook
+ * never landed), and Stripe only lets you void an `open` invoice. `status` is one
+ * of draft|open|paid|void|uncollectible; `paidAt` is the settled timestamp when paid.
+ */
+export async function getStripeInvoiceState(
+  stripeInvoiceId: string,
+): Promise<{ status: string | null; paidAt: string | null; amountPaid: number }> {
+  const inv = (await getStripe().invoices.retrieve(stripeInvoiceId)) as any
+  const paidTs = inv.status_transitions?.paid_at
+  return {
+    status: inv.status ?? null,
+    paidAt: paidTs ? new Date(paidTs * 1000).toISOString() : null,
+    amountPaid: inv.amount_paid ?? 0,
+  }
+}
+
 /** Fetch a finalized invoice's PDF bytes for the branded receipt attachment. */
 export async function fetchInvoicePdf(stripeInvoiceId: string): Promise<Buffer | null> {
   const inv = await getStripe().invoices.retrieve(stripeInvoiceId)

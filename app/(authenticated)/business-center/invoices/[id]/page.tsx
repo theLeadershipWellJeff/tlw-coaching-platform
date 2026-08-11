@@ -197,9 +197,10 @@ function VoidInvoiceModal({ invoice, onClose, onVoided }: {
     })
     const d = await res.json().catch(() => ({}))
     if (!res.ok || !d.ok) {
+      // Stay on the confirm step (don't bounce back to the reason field) so the
+      // coach sees why and can retry a transient error or just close.
       setError(d.error || 'Could not void the invoice.')
       setSubmitting(false)
-      setConfirming(false)
       return
     }
     onVoided(new Date().toISOString())
@@ -275,13 +276,24 @@ export default function InvoiceDetailPage() {
   const [actionErr, setActionErr] = useState('')
   const [showVoid, setShowVoid] = useState(false)
 
-  useEffect(() => {
+  async function loadInvoice() {
     if (!id) return
-    fetch(`/api/billing/invoices/${id}`)
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((d) => { setInvoice(d.invoice); setMessage(d.invoice.client_message ?? '') })
-      .catch(() => setError(true))
-      .finally(() => setLoading(false))
+    try {
+      const r = await fetch(`/api/billing/invoices/${id}`)
+      if (!r.ok) throw new Error()
+      const d = await r.json()
+      setInvoice(d.invoice)
+      setMessage(d.invoice.client_message ?? '')
+    } catch {
+      setError(true)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadInvoice()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
   async function markPaid() {
@@ -677,7 +689,12 @@ export default function InvoiceDetailPage() {
           {showVoid && (
             <VoidInvoiceModal
               invoice={invoice}
-              onClose={() => setShowVoid(false)}
+              onClose={() => {
+                setShowVoid(false)
+                // A failed attempt may have reconciled our status (e.g. Stripe
+                // reported it already paid/void) — refetch so the page reflects it.
+                loadInvoice()
+              }}
               onVoided={(voidedAt) => {
                 setInvoice((inv) => inv ? { ...inv, status: 'void', voided_at: voidedAt } : inv)
                 setShowVoid(false)
