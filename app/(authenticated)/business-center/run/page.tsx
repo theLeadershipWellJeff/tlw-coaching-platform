@@ -598,6 +598,7 @@ function InvoiceCard({
   const isSent = invoice.status === 'sent'
   const isPaid = invoice.status === 'paid'
   const isFailed = invoice.status === 'failed'
+  const isOverdue = invoice.status === 'overdue'
 
   const borderClass = isPaid
     ? 'border-emerald-200'
@@ -700,8 +701,9 @@ function InvoiceCard({
   // Charge is offered on a draft/approved/failed invoice with a live card that
   // hasn't already succeeded (§3 primary surface).
   const canCharge = hasActiveCard && (isDraft || isApproved || (isFailed && invoice.charge_status === 'failed'))
-  // Adjustments: refund/credit on a paid invoice, void on a finalized-unpaid one.
-  const canAdjust = isPaid || ((isSent || isFailed) && !!invoice.stripe_invoice_id)
+  // Adjustments: refund/credit on a paid invoice, void on a finalized-unpaid one
+  // (sent / overdue / failed — the statuses the lib accepts for a void).
+  const canAdjust = isPaid || ((isSent || isOverdue || isFailed) && !!invoice.stripe_invoice_id)
 
   return (
     <>
@@ -1276,7 +1278,7 @@ export default function BillingRunPage() {
     setLoadingInvoices(true)
     try {
       const res = await fetch(
-        `/api/billing/invoices?status=draft,approved,sent,paid,failed&periodStart=${start}&periodEnd=${end}`,
+        `/api/billing/invoices?status=draft,approved,sent,overdue,paid,failed&periodStart=${start}&periodEnd=${end}`,
       )
       if (!res.ok) throw new Error()
       const d = await res.json()
