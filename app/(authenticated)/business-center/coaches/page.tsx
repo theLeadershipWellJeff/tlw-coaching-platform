@@ -1,6 +1,5 @@
 'use client'
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
 import { PageHeader } from '@/app/components/layout/PageHeader'
 
 type Coach = {
@@ -242,24 +241,17 @@ export default function CoachesPage() {
   return (
     <>
       <PageHeader
-        breadcrumb="Business Center"
+        backHref="/business-center/accounts"
+        backLabel="Accounts"
         title="My Team"
         subtitle="Coaches working under theLeadershipWell"
         actions={
-          <div className="flex items-center gap-2">
-            <Link
-              href="/business-center/accounts"
-              className="rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-1.5 text-[13px] text-tlw-espresso transition-colors hover:bg-tlw-canvas"
-            >
-              ← Accounts
-            </Link>
-            <button
-              onClick={() => setShowAdd(true)}
-              className="rounded-tlw-lg bg-tlw-navy-deep px-3 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-tlw-navy-deep/90"
-            >
-              + Add coach
-            </button>
-          </div>
+          <button
+            onClick={() => setShowAdd(true)}
+            className="rounded-tlw-lg bg-tlw-navy-deep px-3 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-tlw-navy-deep/90"
+          >
+            + Add coach
+          </button>
         }
       />
 

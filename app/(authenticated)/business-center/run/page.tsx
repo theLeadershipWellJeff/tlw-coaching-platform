@@ -1465,17 +1465,10 @@ export default function BillingRunPage() {
   return (
     <>
       <PageHeader
-        breadcrumb="Business Center"
+        backHref="/business-center/invoices"
+        backLabel="Invoices"
         title="Billing run"
         subtitle={invoices.length > 0 ? formatPeriod(periodStart, periodEnd) : undefined}
-        actions={
-          <Link
-            href="/business-center/invoices"
-            className="rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-1.5 text-[13px] text-tlw-espresso transition-colors hover:bg-tlw-canvas"
-          >
-            ← Invoices
-          </Link>
-        }
       />
 
       {/* Period picker + assemble */}

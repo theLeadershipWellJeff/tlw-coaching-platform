@@ -1070,17 +1070,10 @@ export default function AccountDetailPage() {
   return (
     <>
       <PageHeader
-        breadcrumb="Business Center / Accounts"
+        backHref="/business-center/accounts"
+        backLabel="Accounts"
         title={account?.name ?? 'Account'}
         subtitle={account?.billing_email}
-        actions={
-          <Link
-            href="/business-center/accounts"
-            className="rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-1.5 text-[13px] text-tlw-espresso transition-colors hover:bg-tlw-canvas"
-          >
-            ← Accounts
-          </Link>
-        }
       />
 
       {loading && <div className="h-32 animate-pulse rounded-tlw-2xl bg-tlw-surface/70" />}

@@ -325,24 +325,17 @@ function InvoicesContent() {
   return (
     <>
       <PageHeader
-        eyebrow="theLeadershipWell"
+        backHref="/business-center"
+        backLabel="Business Center"
         title="Invoices"
-        subtitle="Billing runs, outstanding AR, and payment history"
+        subtitle="Outstanding AR and payment history"
         actions={
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowCreate(true)}
-              className="rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-1.5 text-[13px] text-tlw-espresso transition-colors hover:bg-tlw-canvas"
-            >
-              + New invoice
-            </button>
-            <Link
-              href="/business-center/run"
-              className="rounded-tlw-lg bg-tlw-navy-deep px-4 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-tlw-navy-deep/90"
-            >
-              Run billing
-            </Link>
-          </div>
+          <button
+            onClick={() => setShowCreate(true)}
+            className="rounded-tlw-lg bg-tlw-navy-deep px-4 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-tlw-navy-deep/90"
+          >
+            + New invoice
+          </button>
         }
       />
 

@@ -18,10 +18,10 @@ export default function BusinessCenterPage() {
               Invoices
             </Link>
             <Link
-              href="/business-center/run"
+              href="/business-center/invoices?new=1"
               className="rounded-tlw-lg bg-tlw-navy-deep px-4 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-tlw-navy-deep/90"
             >
-              Run billing
+              + Create invoice
             </Link>
           </div>
         }

@@ -1,6 +1,5 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
-import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { PageHeader } from '@/app/components/layout/PageHeader'
 import type { InvoiceWithLines, InvoiceLine } from '@/lib/billing/types'
@@ -432,7 +431,8 @@ export default function InvoiceDetailPage() {
   return (
     <>
       <PageHeader
-        breadcrumb={`Invoices / ${invoice?.account?.name ?? '…'}`}
+        backHref="/business-center/invoices"
+        backLabel={`Invoices${invoice?.account?.name ? ` / ${invoice.account.name}` : ''}`}
         title={period ? `Invoice · ${period}` : 'Invoice'}
         actions={
           <div className="flex items-center gap-2">
@@ -449,12 +449,6 @@ export default function InvoiceDetailPage() {
                 received ✓
               </span>
             )}
-            <Link
-              href="/business-center/invoices"
-              className="rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-1.5 text-[13px] text-tlw-espresso transition-colors hover:bg-tlw-canvas"
-            >
-              ← Back
-            </Link>
           </div>
         }
       />
