@@ -249,7 +249,6 @@ function AddEngagementModal({ accountId, coachees, onAdded, onClose }: {
   const [coacheeId, setCoacheeId] = useState(coachees[0]?.id ?? '')
   const [applyToAll, setApplyToAll] = useState(isEnterprise)
   const [mode, setMode] = useState<'arrears' | 'subscription' | 'per_engagement'>('arrears')
-  const [owner, setOwner] = useState<'TLW' | 'CA'>('TLW')
   // Shared rate fields (used when applyToAll=true or solo account)
   const [rateHourly, setRateHourly] = useState('')
   const [monthlyAmount, setMonthlyAmount] = useState('')
@@ -284,7 +283,7 @@ function AddEngagementModal({ accountId, coachees, onAdded, onClose }: {
     const body: Record<string, unknown> = {
       coachee_id: cId,
       billing_mode: mode,
-      billing_owner: owner,
+      billing_owner: 'TLW', // Coach Accountable was decommissioned; TLW is the only owner.
       description_template: descTemplate.trim() || null,
       session_count: sessionCount ? parseInt(sessionCount, 10) : null,
     }
@@ -365,26 +364,6 @@ function AddEngagementModal({ accountId, coachees, onAdded, onClose }: {
                 )}
               </div>
             )}
-
-            <div>
-              <label className="mb-1 block text-[12px] font-medium text-tlw-espresso">Billing owner</label>
-              <div className="flex gap-3">
-                {(['TLW', 'CA'] as const).map((o) => (
-                  <button
-                    key={o}
-                    type="button"
-                    onClick={() => setOwner(o)}
-                    className={`flex-1 rounded-tlw-lg border px-3 py-2 text-[13px] font-medium transition-colors ${
-                      owner === o
-                        ? 'border-tlw-navy-deep bg-tlw-navy-deep text-white'
-                        : 'border-tlw-warm-gray/30 text-tlw-espresso hover:bg-tlw-canvas'
-                    }`}
-                  >
-                    {o === 'TLW' ? 'TLW (us)' : 'Coach Accountable'}
-                  </button>
-                ))}
-              </div>
-            </div>
 
             <div>
               <label className="mb-1 block text-[12px] font-medium text-tlw-espresso">Billing mode</label>
