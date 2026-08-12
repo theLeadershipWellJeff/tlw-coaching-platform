@@ -72,14 +72,35 @@ quick, current "what exists right now" ledger._
 
 - **§5.0 — DONE.** `organizations` table + `org_id` on every tenant table, backfilled
   to org #1 (migration 042, applied staging + prod 2026-08-09). Schema only.
-- **§5.1 — DONE.** JWT-minting substrate: `lib/supabase/jwt.ts` +
-  `getSupabaseForClaims()` (request-scoped, RLS-honoring client) + `lib/tenant.ts`.
-  `SUPABASE_JWT_SECRET` set in Vercel (Production + Preview).
-- **§5.3 group 1a — in progress.** First strangler cutover: `FOR SELECT` org
-  policies on `notes` + `actions` (migration 043) + three read routes
-  (`clients/[id]/notes` GET, `.../actions` GET, `.../history` notes sub-query)
-  switched to the JWT client. SELECT-only — writes stay on the admin client until
-  group 1b. Staging proof via `supabase/staging/002_org_split.sql` (two real orgs).
+- **§5.1 — superseded.** The original plan minted a Supabase JWT (HS256) for a
+  request-scoped PostgREST client. It **does not work on this project**: the
+  Supabase projects use **asymmetric JWT signing keys** (ES256), and PostgREST v13
+  rejects self-signed HS256 tokens → the client authenticates as an unprivileged
+  role and RLS returns zero rows. Confirmed in prod (notes wouldn't open) and via
+  a staging diagnostic (JWKS is EC/ES256 only). The JWT-mint code was removed;
+  `SUPABASE_JWT_SECRET` in Vercel is now unused (safe to leave or delete).
+- **§5.3 approach — replaced by "Option A" (direct Postgres).** Instead of a JWT,
+  org-scoped reads use a pooled Postgres connection that sets the org claim per
+  transaction (`SET LOCAL ROLE authenticated` + `request.jwt.claims`), so the
+  `043` RLS policies apply. Helper: `lib/supabase/pg.ts#withOrgClaim` (uses
+  `SUPABASE_DB_URL` = the Transaction-pooler string). **Proven on staging** via the
+  synthetic two-org seed: an Org A request saw 8 notes / 0 leak, Org B saw 4 / 0.
+- **§5.3 group 1a — PARKED (2026-08-10).** The three read routes
+  (`clients/[id]/notes` GET, `.../actions` GET, `.../history` notes sub-query) were
+  converted to `withOrgClaim`, but **reverted** because the **production**
+  `SUPABASE_DB_URL` password is wrong (pooler reachable, credential rejected —
+  "password authentication failed"; a diagnostic confirmed username/host/port/format
+  all correct, only the password value is off). This is a **credential fix, not a
+  code fix**. Production reads run on the service-role admin client (healthy);
+  tenant isolation is enforced in app code as before.
+  - **Live + dormant:** migration `043` SELECT policies on `notes`/`actions`
+    (applied staging + prod; harmless — service-role bypasses RLS), `lib/supabase/pg.ts`,
+    `lib/tenant.ts`, `supabase/staging/002_org_split.sql`.
+  - **To resume (~15 min):** (1) reset the **prod** DB password (Supabase → Settings
+    → Database → Reset database password), update the prod `SUPABASE_DB_URL` env var,
+    redeploy; (2) re-apply the three route conversions to `withOrgClaim` (git history:
+    PR #180); (3) verify on the staging preview, then prod-smoke. Natural trigger:
+    onboarding a second real organization.
 - Decisions driving Phase 1 are recorded in `ISOLATION_AUDIT.md` §8.
 
 ## Known isolation gaps (do NOT rely on DB enforcement)
