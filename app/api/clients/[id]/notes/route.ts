@@ -1,27 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
-import { withOrgClaim } from '@/lib/supabase/pg'
-import { tenantClaimsFromCoach } from '@/lib/tenant'
 import { toErrorResponse } from '@/lib/api-handler'
 import { requireClientCoach } from '@/lib/client-access'
-import type { Note } from '@/lib/supabase/types'
 
-// List a client's notes (most recent session first). Authorize on the admin
-// client (identity + coach_clients gate), then read through an org-scoped
-// Postgres transaction so RLS enforces the tenant boundary at the database
-// (Phase 1 §5.3, Option A).
+// List a client's notes (most recent session first).
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const coach = await requireClientCoach(getSupabaseAdmin(), params.id)
-    const notes = await withOrgClaim(
-      tenantClaimsFromCoach(coach),
-      (sql) => sql<Note[]>`
-        select * from notes
-        where client_id = ${params.id}
-        order by session_date desc, created_at desc
-      `
-    )
-    return NextResponse.json({ notes })
+    const supabase = getSupabaseAdmin()
+    await requireClientCoach(supabase, params.id)
+
+    const { data, error } = await supabase
+      .from('notes')
+      .select('*')
+      .eq('client_id', params.id)
+      .order('session_date', { ascending: false })
+      .order('created_at', { ascending: false })
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ notes: data })
   } catch (e) {
     return toErrorResponse(e)
   }
