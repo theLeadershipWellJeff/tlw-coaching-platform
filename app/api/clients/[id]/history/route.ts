@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
+import { withOrgClaim } from '@/lib/supabase/pg'
+import { tenantClaimsFromCoach } from '@/lib/tenant'
 import { toErrorResponse } from '@/lib/api-handler'
 import { requireClientCoach } from '@/lib/client-access'
 
@@ -14,15 +16,22 @@ export type HistoryItem =
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const supabase = getSupabaseAdmin()
-    await requireClientCoach(supabase, params.id)
+    const coach = await requireClientCoach(supabase, params.id)
 
-    const [notesRes, commsRes, nudgesRes, reportsRes] = await Promise.all([
-      supabase
-        .from('notes')
-        .select('id, title, session_date, created_at')
-        .eq('client_id', params.id)
-        .order('created_at', { ascending: false })
-        .limit(50),
+    // `notes` is org-scoped by RLS (§5.3 group 1a) → read it on the org-scoped
+    // Postgres connection. communications/nudges/session_reports have no policy
+    // yet, so they stay on the admin client (they move as their groups land).
+    const [notesRows, commsRes, nudgesRes, reportsRes] = await Promise.all([
+      withOrgClaim(
+        tenantClaimsFromCoach(coach),
+        (sql) => sql<{ id: string; title: string | null; session_date: string | null; created_at: string }[]>`
+          select id, title, session_date, created_at
+          from notes
+          where client_id = ${params.id}
+          order by created_at desc
+          limit 50
+        `
+      ),
       supabase
         .from('communications')
         .select('id, type, direction, subject, preview, status, sent_at')
@@ -44,7 +53,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
         .limit(50),
     ])
 
-    const notes: HistoryItem[] = (notesRes.data || []).map((n) => ({
+    const notes: HistoryItem[] = (notesRows || []).map((n) => ({
       kind: 'note',
       id: n.id,
       title: n.title,

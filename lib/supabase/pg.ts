@@ -13,7 +13,7 @@
  * identity/authorization, writes (for now), crons, and webhooks.
  */
 import postgres, { type Sql, type TransactionSql } from 'postgres'
-import type { TenantClaims } from './jwt'
+import type { TenantClaims } from '../tenant'
 
 let sql: Sql | null = null
 
@@ -32,6 +32,20 @@ function getSql(): Sql {
     max: 1, // one connection per serverless instance; the pooler fans out
     idle_timeout: 20,
     connect_timeout: 10,
+    types: {
+      // Return DATE (oid 1082) as the raw 'YYYY-MM-DD' string, matching what the
+      // API returned under PostgREST. postgres.js otherwise parses dates to JS
+      // Date objects, which JSON-serialize to full ISO timestamps — the UI does
+      // `session_date + 'T12:00:00'` and binds it to <input type="date">, both of
+      // which require a bare date string. (timestamptz stays a Date → ISO, which
+      // the UI consumes via new Date(), so no override needed there.)
+      date: {
+        to: 1082,
+        from: [1082],
+        serialize: (v: string) => v,
+        parse: (v: string) => v,
+      },
+    },
   })
   return sql
 }
