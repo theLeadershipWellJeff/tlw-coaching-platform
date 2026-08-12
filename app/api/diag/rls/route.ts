@@ -52,5 +52,30 @@ export async function GET(req: NextRequest) {
   const dbUrlSet = !!process.env.SUPABASE_DB_URL
   const pgProbes = dbUrlSet ? [await pgProbe(ORG1), await pgProbe(ORG2)] : []
 
-  return NextResponse.json({ host, dbUrlSet, adminCount, adminErr, pgProbes })
+  // Safe fingerprint of the connection string the deployed function is actually
+  // using — reveals username/host/port and a MASKED password shape (length +
+  // first/last char + whether it has chars needing URL-encoding), never the
+  // password itself. Confirms the deploy picked up the intended value.
+  function inspectDbUrl() {
+    const raw = process.env.SUPABASE_DB_URL || ''
+    try {
+      const u = new URL(raw)
+      const pw = decodeURIComponent(u.password || '')
+      return {
+        user: u.username,
+        host: u.hostname,
+        port: u.port,
+        db: u.pathname.replace(/^\//, ''),
+        pwLen: pw.length,
+        pwFirst: pw.slice(0, 1),
+        pwLast: pw.slice(-1),
+        pwNeedsEncoding: /[^A-Za-z0-9._~-]/.test(pw),
+        rawTrimmedDiffers: raw !== raw.trim(),
+      }
+    } catch (e) {
+      return { parseError: e instanceof Error ? e.message : String(e) }
+    }
+  }
+
+  return NextResponse.json({ host, dbUrlSet, adminCount, adminErr, pgProbes, dbUrl: inspectDbUrl() })
 }
