@@ -844,7 +844,7 @@ reports, emails). In-app *lists* show the full client name, resolved in code via
 embedded select) — wired through `/api/reports`, `/api/transcripts`, and
 `/api/reports/[id]` (`clientName`).
 
-### Client Portal (`app/portal/*`; migration 044) — Phases 1–2
+### Client Portal (`app/portal/*`; migrations 044–045) — Phases 1–3
 A SEPARATE client-facing authenticated surface, fully walled off from the coach
 app. Clients sign in with an **email magic link** (never Google). The portal
 session is a signed cookie carrying only `clientId` — a coach's NextAuth session
@@ -871,8 +871,17 @@ is never accepted here, and vice-versa.
   messages (outbound `communications`). **Contact your coach** (`ContactCoachCard`
   → `POST /api/portal/contact`) emails the coach (from their Gmail) and logs an
   **inbound** `communications` row.
-- **Not yet live:** AI chat (Phase 3), quick search, frameworks/PDF, doc upload,
-  onboarding tour, and a client self-service password option are future phases.
+- **AI chat (Phase 3, migration 045).** A reflection chat at `/portal/chat`
+  (linked from the home). `portal_conversations` + `portal_messages` store the
+  threads; `lib/portal/chat.ts#buildChatContext` feeds Claude ONLY the client's
+  own coaching goals + transcripts (`raw_md`, capped at ~40k chars) — never
+  key_info/coach notes. Routes: `GET/POST /api/portal/chat` (list / send — creates
+  a conversation on first message, titled from it; persists both turns, non-
+  streaming) + `GET /api/portal/chat/[id]` (a thread's messages, ownership-checked).
+  Model `PORTAL_CHAT_MODEL` or `claude-sonnet-4-6`. Every route scoped to the
+  authenticated portal `clientId`.
+- **Not yet live:** quick search, frameworks/PDF, doc upload, onboarding tour, and
+  a client self-service password option are future phases.
 
 ## Security & pipeline hardening (absorbed from PRs #45/#55)
 
@@ -1251,6 +1260,10 @@ credential (see `APP_STATE.md`); the `043` policies stay applied + dormant.
 
 **`044_client_tokens.sql` — APPLIED (staging + production, 2026-08).** The Client
 Portal magic-link auth table (see the Client Portal section). Additive.
+
+**`045_portal_chat.sql` — `portal_conversations` + `portal_messages`** (Client
+Portal AI chat). Additive; **apply before the chat is used — the chat routes
+select/insert these tables.**
 
 **Scheduling go-live checklist:** (1) apply `016_appointments.sql`; (2) set
 `CRON_SECRET` in Vercel (same value the cron sends); (3) enable the
