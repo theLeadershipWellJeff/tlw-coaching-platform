@@ -32,6 +32,17 @@ export async function POST(req: NextRequest) {
   if (!content) return NextResponse.json({ error: 'Message is empty.' }, { status: 400 })
   if (content.length > 8000) return NextResponse.json({ error: 'Message is too long.' }, { status: 400 })
 
+  // Optional document the client attached this turn (extracted text from the
+  // upload route). Included in the model context for THIS turn only; only a short
+  // filename marker is persisted with the message.
+  const attachment =
+    body.attachment && typeof body.attachment.text === 'string' && body.attachment.text.trim()
+      ? {
+          filename: String(body.attachment.filename || 'document').slice(0, 200),
+          text: String(body.attachment.text).slice(0, 30000),
+        }
+      : null
+
   const supabase = getSupabaseAdmin()
   const { data: client } = await supabase
     .from('clients')
@@ -63,10 +74,12 @@ export async function POST(req: NextRequest) {
     conversationId = conv.id
   }
 
-  // Persist the user message, then generate against the full thread.
+  // Persist the user message (with just a filename marker for any attachment),
+  // then generate against the full thread.
+  const persistedContent = attachment ? `${content}\n\n📎 Attached: ${attachment.filename}` : content
   await supabase
     .from('portal_messages')
-    .insert({ conversation_id: conversationId, org_id: client.org_id, role: 'user', content })
+    .insert({ conversation_id: conversationId, org_id: client.org_id, role: 'user', content: persistedContent })
 
   const { data: history } = await supabase
     .from('portal_messages')
@@ -78,6 +91,11 @@ export async function POST(req: NextRequest) {
     role: m.role === 'assistant' ? 'assistant' : 'user',
     content: m.content,
   }))
+  // Splice the attachment's extracted text into this turn's last user message.
+  if (attachment && msgs.length) {
+    const last = msgs[msgs.length - 1]
+    last.content = `${last.content}\n\n[Attached document "${attachment.filename}"]:\n${attachment.text}`
+  }
 
   let reply = ''
   try {

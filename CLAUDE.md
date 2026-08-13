@@ -893,8 +893,14 @@ is never accepted here, and vice-versa.
   authorizes the slug against the client's own nudges, then 302s to a short-lived
   signed URL on `PDF_BUCKET`. A client can only ever open a framework/PDF that was
   actually surfaced to them.
-- **Not yet live:** doc upload (Phase 6), onboarding tour (Phase 7), and a client
-  self-service password option are future phases.
+- **Document upload in chat (Phase 6).** The chat has a paperclip: a client
+  attaches a PDF/Word/text file → `POST /api/portal/chat/upload` (scoped, 4 MB cap)
+  extracts its text via `lib/transcripts/extract.ts#extractTranscriptText` and
+  returns it (the file itself is NOT stored). The chat POST accepts an optional
+  `attachment: {filename, text}` (capped 30k chars) that is spliced into that
+  turn's last user message for the model; only a `📎 filename` marker is persisted.
+- **Not yet live:** onboarding tour (Phase 7) and a client self-service password
+  option are future phases.
 
 ## Security & pipeline hardening (absorbed from PRs #45/#55)
 

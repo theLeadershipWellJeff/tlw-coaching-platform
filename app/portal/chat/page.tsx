@@ -18,7 +18,28 @@ export default function PortalChat() {
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
+  const [attachment, setAttachment] = useState<{ filename: string; text: string } | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
   const endRef = useRef<HTMLDivElement>(null)
+
+  async function uploadFile(file: File) {
+    setUploading(true)
+    setError('')
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch('/api/portal/chat/upload', { method: 'POST', body: fd })
+      const d = await res.json()
+      if (!res.ok) setError(d.error || 'Could not read that file.')
+      else setAttachment({ filename: d.filename, text: d.text })
+    } catch {
+      setError('Could not read that file.')
+    } finally {
+      setUploading(false)
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
 
   useEffect(() => {
     fetch('/api/portal/chat')
@@ -53,15 +74,20 @@ export default function PortalChat() {
   async function send(text: string) {
     const content = text.trim()
     if (!content || sending) return
+    const sentAttachment = attachment
     setInput('')
     setError('')
-    setMessages((m) => [...m, { role: 'user', content }])
+    setAttachment(null)
+    setMessages((m) => [
+      ...m,
+      { role: 'user', content: sentAttachment ? `${content}\n\n📎 ${sentAttachment.filename}` : content },
+    ])
     setSending(true)
     try {
       const res = await fetch('/api/portal/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conversationId: activeId, content }),
+        body: JSON.stringify({ conversationId: activeId, content, attachment: sentAttachment }),
       })
       const d = await res.json()
       if (!res.ok) {
@@ -176,28 +202,62 @@ export default function PortalChat() {
               e.preventDefault()
               send(input)
             }}
-            className="flex items-end gap-2 border-t border-tlw-warm-gray/15 p-3"
+            className="flex flex-col gap-2 border-t border-tlw-warm-gray/15 p-3"
           >
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault()
-                  send(input)
-                }
-              }}
-              rows={1}
-              placeholder="Type a message…"
-              className="max-h-32 min-h-[40px] flex-1 resize-none rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-canvas px-3 py-2 text-[14px] text-tlw-espresso outline-none focus:border-tlw-signal-orange"
-            />
-            <button
-              type="submit"
-              disabled={sending || !input.trim()}
-              className="rounded-tlw-lg bg-tlw-navy-deep px-4 py-2.5 text-[14px] font-medium text-white transition-colors hover:bg-tlw-navy-rich disabled:opacity-50"
-            >
-              Send
-            </button>
+            {attachment && (
+              <div className="flex items-center gap-2 self-start rounded-tlw-md bg-tlw-canvas px-2.5 py-1 text-[12px] text-tlw-espresso">
+                <span className="max-w-[240px] truncate">📎 {attachment.filename}</span>
+                <button
+                  type="button"
+                  onClick={() => setAttachment(null)}
+                  aria-label="Remove attachment"
+                  className="text-tlw-warm-gray hover:text-tlw-espresso"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+            <div className="flex items-end gap-2">
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".pdf,.docx,.txt,.md,.text"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0]
+                  if (f) uploadFile(f)
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                disabled={uploading}
+                title="Attach a document"
+                className="shrink-0 rounded-tlw-lg border border-tlw-warm-gray/25 px-3 py-2.5 text-[14px] text-tlw-warm-gray transition-colors hover:bg-tlw-canvas disabled:opacity-50"
+              >
+                {uploading ? '…' : '📎'}
+              </button>
+              <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    send(input)
+                  }
+                }}
+                rows={1}
+                placeholder="Type a message…"
+                className="max-h-32 min-h-[40px] flex-1 resize-none rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-canvas px-3 py-2 text-[14px] text-tlw-espresso outline-none focus:border-tlw-signal-orange"
+              />
+              <button
+                type="submit"
+                disabled={sending || !input.trim()}
+                className="rounded-tlw-lg bg-tlw-navy-deep px-4 py-2.5 text-[14px] font-medium text-white transition-colors hover:bg-tlw-navy-rich disabled:opacity-50"
+              >
+                Send
+              </button>
+            </div>
           </form>
         </section>
       </div>
