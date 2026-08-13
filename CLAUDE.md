@@ -899,8 +899,11 @@ is never accepted here, and vice-versa.
   returns it (the file itself is NOT stored). The chat POST accepts an optional
   `attachment: {filename, text}` (capped 30k chars) that is spliced into that
   turn's last user message for the model; only a `📎 filename` marker is persisted.
-- **Not yet live:** onboarding tour (Phase 7) and a client self-service password
-  option are future phases.
+- **Onboarding + tips (Phase 7).** `PortalOnboarding` shows a first-visit welcome
+  modal (dismissal remembered in `localStorage`, key `tlw-portal-onboarded`), and
+  each home card carries an `InfoPopover` (ⓘ) with a one-line tip.
+- **Not yet live:** a client self-service password option (magic-link is the only
+  sign-in today) is the remaining future enhancement. All 7 planned phases shipped.
 
 ## Security & pipeline hardening (absorbed from PRs #45/#55)
 

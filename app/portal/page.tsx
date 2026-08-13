@@ -4,13 +4,18 @@ import { loadPortalOverview, type PortalOverview } from '@/lib/portal/data'
 import { PortalLogoutButton } from './PortalLogoutButton'
 import { ContactCoachCard } from './ContactCoachCard'
 import { FrameworksCard } from './FrameworksCard'
+import { InfoPopover } from './InfoPopover'
+import { PortalOnboarding } from './PortalOnboarding'
 
 export const dynamic = 'force-dynamic'
 
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
+function Card({ title, info, children }: { title: string; info?: string; children: React.ReactNode }) {
   return (
     <div className="rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface p-5">
-      <h2 className="text-[13px] font-semibold uppercase tracking-[1.5px] text-tlw-navy-rich">{title}</h2>
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-[13px] font-semibold uppercase tracking-[1.5px] text-tlw-navy-rich">{title}</h2>
+        {info && <InfoPopover label={title} text={info} />}
+      </div>
       <div className="mt-3">{children}</div>
     </div>
   )
@@ -52,6 +57,7 @@ export default async function PortalHome() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10">
+      <PortalOnboarding />
       <div className="flex items-center justify-between">
         <p className="text-[11px] font-medium uppercase tracking-[2px] text-tlw-warm-gray">
           theLeadershipWell
@@ -86,7 +92,7 @@ export default async function PortalHome() {
 
       <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Next appointment */}
-        <Card title="Next session">
+        <Card title="Next session" info="Your upcoming coaching session. Ask your coach to schedule or change a time.">
           {data.nextAppointment ? (
             <p className="text-[15px] text-tlw-espresso">
               {fmtDateTime(data.nextAppointment.scheduled_at, data.client.timezone)}
@@ -98,7 +104,7 @@ export default async function PortalHome() {
         </Card>
 
         {/* Coaching goals */}
-        <Card title="Your coaching goals">
+        <Card title="Your coaching goals" info="The goals you and your coach are working on. Revisit them anytime to stay focused.">
           {data.goals.length === 0 ? (
             <Empty>Your goals will appear here once set with your coach.</Empty>
           ) : (
@@ -123,7 +129,7 @@ export default async function PortalHome() {
         </Card>
 
         {/* Session records */}
-        <Card title="Your sessions">
+        <Card title="Your sessions" info="A record of your past sessions. Use the search box up top to find a moment.">
           {data.transcripts.length === 0 ? (
             <Empty>Your session records will appear here.</Empty>
           ) : (
@@ -141,7 +147,7 @@ export default async function PortalHome() {
         </Card>
 
         {/* Messages from coach */}
-        <Card title="Messages from your coach">
+        <Card title="Messages from your coach" info="Notes and nudges your coach has sent you.">
           {data.messages.length === 0 ? (
             <Empty>Messages your coach sends you will appear here.</Empty>
           ) : (
