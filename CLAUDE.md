@@ -880,8 +880,13 @@ is never accepted here, and vice-versa.
   streaming) + `GET /api/portal/chat/[id]` (a thread's messages, ownership-checked).
   Model `PORTAL_CHAT_MODEL` or `claude-sonnet-4-6`. Every route scoped to the
   authenticated portal `clientId`.
-- **Not yet live:** quick search, frameworks/PDF, doc upload, onboarding tour, and
-  a client self-service password option are future phases.
+- **Quick search (Phase 4).** `GET /api/portal/search?q=` (scoped to the portal
+  clientId) ILIKE-searches the client's own `transcripts.raw_md` (wildcards
+  escaped) and returns title/date/snippet; `/portal/search` renders results with
+  highlighted matches, and the home has a search box (native GET form). Migration-
+  free; transcripts only (coach notes/key_info never searched).
+- **Not yet live:** frameworks/PDF, doc upload, onboarding tour, and a client
+  self-service password option are future phases.
 
 ## Security & pipeline hardening (absorbed from PRs #45/#55)
 
