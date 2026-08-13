@@ -62,6 +62,8 @@ export type Organization = {
 
 export type Client = {
   id: string
+  // Tenant (migration 042). Every client belongs to exactly one organization.
+  org_id: string
   name: string
   email: string | null
   title: string | null
@@ -552,6 +554,20 @@ type Insertable<T> = Omit<T, OptionalOnInsert<T>> &
   Partial<Pick<T, Extract<keyof T, OptionalOnInsert<T>>>>
 type Updatable<T> = Partial<Insertable<T>>
 
+// Client Portal magic-link tokens (migration 044). Only the sha256 hash of the
+// raw token is stored — the raw token lives only in the emailed link. Single-use
+// (used_at) and expiring (expires_at).
+export type ClientToken = {
+  id: string
+  org_id: string
+  client_id: string
+  token_hash: string
+  purpose: string // login
+  expires_at: Timestamp
+  used_at: Timestamp | null
+  created_at: Timestamp
+}
+
 export type Database = {
   public: {
     Tables: {
@@ -559,6 +575,12 @@ export type Database = {
         Row: Organization
         Insert: Insertable<Organization>
         Update: Updatable<Organization>
+        Relationships: []
+      }
+      client_tokens: {
+        Row: ClientToken
+        Insert: Insertable<ClientToken>
+        Update: Updatable<ClientToken>
         Relationships: []
       }
       clients: {
