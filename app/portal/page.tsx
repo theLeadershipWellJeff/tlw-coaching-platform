@@ -60,7 +60,22 @@ export default async function PortalHome() {
 
       <h1 className="mt-8 text-[24px] font-medium text-tlw-navy-deep">Welcome, {firstName}.</h1>
 
-      <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <a
+        href="/portal/chat"
+        className="mt-6 flex items-center justify-between rounded-tlw-2xl border border-tlw-navy-rich/20 bg-tlw-navy-rich/5 p-5 transition-colors hover:bg-tlw-navy-rich/10"
+      >
+        <div>
+          <p className="text-[15px] font-medium text-tlw-navy-deep">Chat with your coaching assistant</p>
+          <p className="mt-0.5 text-[13px] text-tlw-warm-gray">
+            Reflect on your goals and sessions, anytime.
+          </p>
+        </div>
+        <span className="text-[20px] text-tlw-signal-orange" aria-hidden>
+          →
+        </span>
+      </a>
+
+      <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Next appointment */}
         <Card title="Next session">
           {data.nextAppointment ? (

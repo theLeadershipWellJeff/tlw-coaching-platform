@@ -568,6 +568,26 @@ export type ClientToken = {
   created_at: Timestamp
 }
 
+// Client Portal AI chat (migration 045). Conversations + messages; context is
+// built from the client's own goals/transcripts only.
+export type PortalConversation = {
+  id: string
+  org_id: string
+  client_id: string
+  title: string
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
+export type PortalMessage = {
+  id: string
+  org_id: string
+  conversation_id: string
+  role: string // user | assistant
+  content: string
+  created_at: Timestamp
+}
+
 export type Database = {
   public: {
     Tables: {
@@ -581,6 +601,18 @@ export type Database = {
         Row: ClientToken
         Insert: Insertable<ClientToken>
         Update: Updatable<ClientToken>
+        Relationships: []
+      }
+      portal_conversations: {
+        Row: PortalConversation
+        Insert: Insertable<PortalConversation>
+        Update: Updatable<PortalConversation>
+        Relationships: []
+      }
+      portal_messages: {
+        Row: PortalMessage
+        Insert: Insertable<PortalMessage>
+        Update: Updatable<PortalMessage>
         Relationships: []
       }
       clients: {
