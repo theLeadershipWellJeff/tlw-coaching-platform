@@ -7,6 +7,7 @@ import { NameCard } from './NameCard'
 import { IssueAgreementModal } from './IssueAgreementModal'
 import { EmailModal } from './EmailModal'
 import { PlanSessionModal } from './PlanSessionModal'
+import { InviteToPortalButton } from './InviteToPortalButton'
 import { WorkspaceProvider } from '@/components/workspace/WorkspaceContext'
 import { WorkspaceSurface } from '@/components/workspace/WorkspaceSurface'
 import { clientToCsv, clientCsvFilename } from '@/lib/client-csv'
@@ -140,6 +141,7 @@ export function ClientDetail({ clientId }: { clientId: string }) {
         >
           <span aria-hidden>↓</span> Export CSV
         </button>
+        <InviteToPortalButton clientId={clientId} />
       </div>
 
       {/* Card grid — coach-global layout, per-client data via WorkspaceContext. */}

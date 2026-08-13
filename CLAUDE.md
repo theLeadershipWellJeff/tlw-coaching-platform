@@ -844,6 +844,36 @@ reports, emails). In-app *lists* show the full client name, resolved in code via
 embedded select) — wired through `/api/reports`, `/api/transcripts`, and
 `/api/reports/[id]` (`clientName`).
 
+### Client Portal (`app/portal/*`; migration 044) — Phases 1–2
+A SEPARATE client-facing authenticated surface, fully walled off from the coach
+app. Clients sign in with an **email magic link** (never Google). The portal
+session is a signed cookie carrying only `clientId` — a coach's NextAuth session
+is never accepted here, and vice-versa.
+
+- **Auth (Phase 1).** `client_tokens` (migration 044) stores only the **sha256
+  hash** of each magic-link token (raw token lives only in the emailed link),
+  single-use (`used_at`), 24h TTL. Flow: `/portal/login` (email) →
+  `POST /api/portal/auth/request` (anti-enumeration — always a generic response;
+  rate-limited 5/client/hour; sends the link from the client's coach's Gmail via
+  `sendCoachHtmlEmail`) → emailed link to `/portal/verify?token=` → the verify page
+  **POSTs** the token (scanner-safe) to `POST /api/portal/auth/verify`, which
+  consumes it and sets the session cookie. `lib/portal/session.ts` signs/verifies
+  the cookie with **Web Crypto (HMAC-SHA256)** so it runs in both the Edge
+  `middleware.ts` (guards `/portal/**`, allowing only `/portal/login` + `/verify`)
+  and Node routes; signed with `NEXTAUTH_SECRET` (no new env var).
+- **Coach-initiated invite.** Client workspace action bar → **Invite to portal**
+  (`InviteToPortalButton` → `POST /api/clients/[id]/portal-invite`, tenant-gated by
+  `requireClientCoach`) mints a magic link and emails it to the client.
+- **Read-only cards (Phase 2).** The portal home (`app/portal/page.tsx`, SSR)
+  loads `lib/portal/data.ts#loadPortalOverview` — all queries hard-scoped to the
+  authenticated `clientId`, **never** `key_info` or any coach-private field:
+  next appointment, coaching goals, session list (transcripts), and recent
+  messages (outbound `communications`). **Contact your coach** (`ContactCoachCard`
+  → `POST /api/portal/contact`) emails the coach (from their Gmail) and logs an
+  **inbound** `communications` row.
+- **Not yet live:** AI chat (Phase 3), quick search, frameworks/PDF, doc upload,
+  onboarding tour, and a client self-service password option are future phases.
+
 ## Security & pipeline hardening (absorbed from PRs #45/#55)
 
 - **Tenant isolation on sibling routes.** `/api/notes` (CA proxy) now requires a
@@ -1216,6 +1246,11 @@ switched read routes (`clients/[id]/notes` GET, `.../actions` GET, `.../history`
 notes sub-query) run under it. **Apply to staging first, verify with the proof in
 `supabase/staging/002_org_split.sql`, then production.** Group 1b (write policies +
 `org_id` on inserts) and group 2 (`clients`/roster + billing embeds) follow.
+NOTE: §5.3 group 1a route cutover is **PARKED** on a prod `SUPABASE_DB_URL`
+credential (see `APP_STATE.md`); the `043` policies stay applied + dormant.
+
+**`044_client_tokens.sql` — APPLIED (staging + production, 2026-08).** The Client
+Portal magic-link auth table (see the Client Portal section). Additive.
 
 **Scheduling go-live checklist:** (1) apply `016_appointments.sql`; (2) set
 `CRON_SECRET` in Vercel (same value the cron sends); (3) enable the
