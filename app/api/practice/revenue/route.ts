@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { getSessionCoach } from '@/lib/coach'
+import { accessibleClientIds } from '@/lib/client-access'
 import { listClientMatchedEvents, zonedWallClockToUtc, type RosterClientWithEmail } from '@/lib/calendar'
 import { billedHours, sessionRevenue } from '@/lib/billing'
 
@@ -78,8 +79,13 @@ export async function GET() {
   // one window earlier (no new revenue calculation).
   const priorMonday = addDays(lastMonday, -7)
 
-  // Per-client fee + name/email lookup.
-  const { data: clientRows } = await supabase.from('clients').select('id, name, email, session_fee')
+  // Per-client fee + name/email lookup — SCOPED to this coach's own clients, so
+  // one coach's revenue never leaks into another's dashboard.
+  const clientIds = coach ? await accessibleClientIds(supabase, coach.id) : []
+  const clientRes = clientIds.length
+    ? await supabase.from('clients').select('id, name, email, session_fee').in('id', clientIds)
+    : null
+  const clientRows = clientRes?.data ?? []
   const feeById = new Map<string, number>()
   const nameById = new Map<string, string>()
   const roster: RosterClientWithEmail[] = []
@@ -101,11 +107,15 @@ export async function GET() {
   // can predate Jan 1). We split it into windows below; all valuation reuses
   // sessionRevenue/billedHours.
   const notesStart = priorMondayStr < yearStartStr ? priorMondayStr : yearStartStr
-  const { data: notes } = await supabase
-    .from('notes')
-    .select('id, client_id, session_date, duration_minutes')
-    .gte('session_date', notesStart)
-    .lt('session_date', ymdStr(thisMonday))
+  const notesRes = clientIds.length
+    ? await supabase
+        .from('notes')
+        .select('id, client_id, session_date, duration_minutes')
+        .gte('session_date', notesStart)
+        .lt('session_date', ymdStr(thisMonday))
+        .in('client_id', clientIds)
+    : null
+  const notes = notesRes?.data ?? []
 
   // Per-client roll-ups for the breakdown pies (client · sessions · amount),
   // one map per period. Same amounts the totals are built from — no new math.
