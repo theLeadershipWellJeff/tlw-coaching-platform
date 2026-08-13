@@ -1061,6 +1061,13 @@ Stripe hosted Checkout (`setup` mode) — never on a TLW page (PCI SAQ-A).**
 - **Google Cloud APIs** must be enabled in the OAuth project: Gmail, Calendar,
   **Drive** (drive.readonly was added for Plaud import — enable the Drive API in
   the Cloud console if you hit "Drive API has not been used").
+- **OAuth consent screen is PUBLISHED / "In production"** (as of 2026-08). Any
+  Google account can sign in — no test-user allowlist. On first sign-in a
+  `coaches` row is auto-created (`getOrCreateCoach`) and the coach lands on an
+  empty, per-coach-scoped workspace. To onboard a new coach (e.g. a tester): they
+  just sign in at the app with their Google account and grant the consent scopes.
+  Manage publishing status / any future scope verification at
+  https://console.cloud.google.com/apis/credentials/consent.
 - **Adding an OAuth scope requires the coach to sign out and back in** (the
   refresh token / access token only gains the scope on re-consent). This also
   populates `coaches.google_refresh_token`. ⚠️ The **scheduling** feature added
@@ -1219,6 +1226,19 @@ and back in** to grant calendar-write + populate the refresh token with it;
 ## Roadmap
 
 ### Shipped
+- **Coach-workspace catch-up (2026-08, roadmap sync).** Several items previously
+  listed under "Open" are in fact shipped — the Open list below is stale for these:
+  the notes-panel **Actions capture** shows the last 5 prior *open* actions
+  (checkable) newest-first + an **Insights** card of the 5 most recent prior
+  `INSIGHT:` lines (`NotesPanel#CapturePanel`); the dashboard **Emails Sent** and
+  **Nudges** cards are clickable → "View all" modal → row links into the client
+  workspace (`components/dashboard/cards/EmailsSentCard.tsx`, `NudgesCard.tsx`);
+  **Send to client** drafts terser/bulleted (`/api/notes/client-email` prompt); the
+  **Coaching map** has a **Send to client** button (`CoachingMapCard#buildMapEmailHtml`
+  → `/api/email/send`); and **Coaching hours + ICF log** (week/month/year toggle,
+  View-log, CSV export; `components/coaching-hours/CoachingHoursWidget.tsx` +
+  `/api/coaching-hours`) is live in **Practice**, the **dashboard**, and the
+  **Business Center** (registered card; now in the default BC layout).
 - **Branded email send + Recent Communication card (Phase 1B)** — Compose Email
   in the client workspace sends branded HTML via the coach's Gmail (signature
   appended server-side from `email_signatures`, Cc the firm), with review-before-
