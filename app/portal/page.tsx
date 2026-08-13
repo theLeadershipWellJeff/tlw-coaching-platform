@@ -1,42 +1,144 @@
 import { redirect } from 'next/navigation'
 import { getPortalClientId } from '@/lib/portal/server'
-import { getSupabaseAdmin } from '@/lib/supabase/server'
+import { loadPortalOverview, type PortalOverview } from '@/lib/portal/data'
 import { PortalLogoutButton } from './PortalLogoutButton'
+import { ContactCoachCard } from './ContactCoachCard'
 
 export const dynamic = 'force-dynamic'
 
-/**
- * Client Portal home. Phase 1 is a minimal authenticated shell proving the
- * boundary — the read-only workspace cards arrive in Phase 2. Only non-sensitive
- * client fields are ever read here (never key_info or any coach-private field).
- */
+function Card({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface p-5">
+      <h2 className="text-[13px] font-semibold uppercase tracking-[1.5px] text-tlw-navy-rich">{title}</h2>
+      <div className="mt-3">{children}</div>
+    </div>
+  )
+}
+
+function Empty({ children }: { children: React.ReactNode }) {
+  return <p className="text-[13px] text-tlw-warm-gray">{children}</p>
+}
+
+function fmtDateTime(iso: string, tz: string | null): string {
+  try {
+    return new Intl.DateTimeFormat('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZone: tz || undefined,
+    }).format(new Date(iso))
+  } catch {
+    return new Date(iso).toLocaleString('en-US')
+  }
+}
+
+function fmtDate(ymd: string | null): string {
+  if (!ymd) return ''
+  const d = new Date(ymd + 'T12:00:00')
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
 export default async function PortalHome() {
   const clientId = await getPortalClientId()
   if (!clientId) redirect('/portal/login')
 
-  const supabase = getSupabaseAdmin()
-  const { data: client } = await supabase
-    .from('clients')
-    .select('id, name')
-    .eq('id', clientId)
-    .maybeSingle()
-  if (!client) redirect('/portal/login')
+  const data: PortalOverview | null = await loadPortalOverview(clientId)
+  if (!data) redirect('/portal/login')
 
-  const firstName = (client.name || '').split(' ')[0] || 'there'
+  const firstName = (data.client.name || '').split(' ')[0] || 'there'
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-10">
+    <div className="mx-auto max-w-4xl px-4 py-10">
       <div className="flex items-center justify-between">
         <p className="text-[11px] font-medium uppercase tracking-[2px] text-tlw-warm-gray">
           theLeadershipWell
         </p>
         <PortalLogoutButton />
       </div>
+
       <h1 className="mt-8 text-[24px] font-medium text-tlw-navy-deep">Welcome, {firstName}.</h1>
-      <p className="mt-3 text-[15px] text-tlw-warm-gray">
-        You&apos;re signed in to your coaching portal. Your goals, sessions, and resources will
-        appear here soon.
-      </p>
+
+      <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {/* Next appointment */}
+        <Card title="Next session">
+          {data.nextAppointment ? (
+            <p className="text-[15px] text-tlw-espresso">
+              {fmtDateTime(data.nextAppointment.scheduled_at, data.client.timezone)}
+              <span className="text-tlw-warm-gray"> · {data.nextAppointment.duration_minutes} min</span>
+            </p>
+          ) : (
+            <Empty>No upcoming session scheduled yet.</Empty>
+          )}
+        </Card>
+
+        {/* Coaching goals */}
+        <Card title="Your coaching goals">
+          {data.goals.length === 0 ? (
+            <Empty>Your goals will appear here once set with your coach.</Empty>
+          ) : (
+            <ul className="space-y-3">
+              {data.goals.map((g, i) => (
+                <li key={i}>
+                  <p className="text-[14px] font-medium text-tlw-navy-deep">{g.title}</p>
+                  {g.description && (
+                    <p className="mt-0.5 text-[13px] text-tlw-espresso">{g.description}</p>
+                  )}
+                  {g.metrics && g.metrics.filter(Boolean).length > 0 && (
+                    <ul className="mt-1 space-y-0.5">
+                      {g.metrics.filter(Boolean).map((m, j) => (
+                        <li key={j} className="text-[12px] text-tlw-warm-gray">— {m}</li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        {/* Session records */}
+        <Card title="Your sessions">
+          {data.transcripts.length === 0 ? (
+            <Empty>Your session records will appear here.</Empty>
+          ) : (
+            <ul className="space-y-1.5">
+              {data.transcripts.map((t) => (
+                <li key={t.id} className="flex items-baseline justify-between gap-3">
+                  <span className="min-w-0 truncate text-[13px] text-tlw-espresso">
+                    {t.title || 'Session'}
+                  </span>
+                  <span className="shrink-0 text-[12px] text-tlw-warm-gray">{fmtDate(t.session_date)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        {/* Messages from coach */}
+        <Card title="Messages from your coach">
+          {data.messages.length === 0 ? (
+            <Empty>Messages your coach sends you will appear here.</Empty>
+          ) : (
+            <ul className="space-y-2.5">
+              {data.messages.map((m) => (
+                <li key={m.id}>
+                  <p className="text-[13px] font-medium text-tlw-navy-deep">{m.subject || 'Message'}</p>
+                  {m.preview && (
+                    <p className="mt-0.5 line-clamp-2 text-[12px] text-tlw-warm-gray">{m.preview}</p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        {/* Contact your coach — interactive */}
+        <div className="lg:col-span-2">
+          <ContactCoachCard />
+        </div>
+      </div>
     </div>
   )
 }
