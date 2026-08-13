@@ -60,6 +60,14 @@ export default async function PortalHome() {
 
       <h1 className="mt-8 text-[24px] font-medium text-tlw-navy-deep">Welcome, {firstName}.</h1>
 
+      <form action="/portal/search" className="mt-6">
+        <input
+          name="q"
+          placeholder="Search your sessions…"
+          className="w-full rounded-tlw-lg border border-tlw-warm-gray/25 bg-tlw-surface px-4 py-2.5 text-[14px] text-tlw-espresso outline-none focus:border-tlw-signal-orange"
+        />
+      </form>
+
       <a
         href="/portal/chat"
         className="mt-6 flex items-center justify-between rounded-tlw-2xl border border-tlw-navy-rich/20 bg-tlw-navy-rich/5 p-5 transition-colors hover:bg-tlw-navy-rich/10"
