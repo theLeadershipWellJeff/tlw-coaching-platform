@@ -3,6 +3,7 @@ import { getPortalClientId } from '@/lib/portal/server'
 import { loadPortalOverview, type PortalOverview } from '@/lib/portal/data'
 import { PortalLogoutButton } from './PortalLogoutButton'
 import { ContactCoachCard } from './ContactCoachCard'
+import { FrameworksCard } from './FrameworksCard'
 
 export const dynamic = 'force-dynamic'
 
@@ -156,6 +157,11 @@ export default async function PortalHome() {
             </ul>
           )}
         </Card>
+
+        {/* Frameworks surfaced to this client (self-hides when none) */}
+        <div className="lg:col-span-2">
+          <FrameworksCard />
+        </div>
 
         {/* Contact your coach — interactive */}
         <div className="lg:col-span-2">

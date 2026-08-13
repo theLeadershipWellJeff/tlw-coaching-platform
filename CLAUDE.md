@@ -885,7 +885,15 @@ is never accepted here, and vice-versa.
   escaped) and returns title/date/snippet; `/portal/search` renders results with
   highlighted matches, and the home has a search box (native GET form). Migration-
   free; transcripts only (coach notes/key_info never searched).
-- **Not yet live:** frameworks/PDF, doc upload, onboarding tour, and a client
+- **Frameworks + PDF (Phase 5).** `GET /api/portal/frameworks` lists the leaves
+  surfaced to THIS client (distinct `framework_slug` from their `type='framework'`
+  nudges → `garden_notes` where `nudge_eligible`), returning title/summary/type +
+  whether a PDF exists. `FrameworksCard` (self-hides when none) opens a popup with
+  the summary + **Open PDF** → `GET /api/portal/frameworks/[slug]/pdf`, which
+  authorizes the slug against the client's own nudges, then 302s to a short-lived
+  signed URL on `PDF_BUCKET`. A client can only ever open a framework/PDF that was
+  actually surfaced to them.
+- **Not yet live:** doc upload (Phase 6), onboarding tour (Phase 7), and a client
   self-service password option are future phases.
 
 ## Security & pipeline hardening (absorbed from PRs #45/#55)
