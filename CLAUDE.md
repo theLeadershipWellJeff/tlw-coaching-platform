@@ -1339,13 +1339,13 @@ Portal magic-link auth table (see the Client Portal section). Additive.
 Portal AI chat). Additive; **apply before the chat is used — the chat routes
 select/insert these tables.**
 
-**`046_signature_owner.sql` — PENDING.** Attaches the seeded global email
+**`046_signature_owner.sql` — APPLIED (staging + production, 2026-08-14).** Attaches the seeded global email
 signature (coach_id NULL) to Jeff's coach row, since signature resolution no
 longer serves the global row to other coaches. Idempotent, no schema change.
 **Apply before onboarding beta coaches** (until then Jeff's sends fall back to
 the generic signature built from his name/email — cosmetic only).
 
-**`047_coach_calendar_and_transcript_source.sql` — PENDING.** Adds
+**`047_coach_calendar_and_transcript_source.sql` — APPLIED (staging + production, 2026-08-14).** Adds
 `coaches.calendar_id` (NULL = primary) + `coaches.transcript_source` (NULL =
 manual). Additive; reads are defensive so the app runs without it, but **the
 Account → Calendar and Transcript source panels can't SAVE until it's applied.**
@@ -1353,7 +1353,7 @@ Sessions booked before a calendar switch keep working — event reads/deletes
 fall back to the primary calendar on a 404, and changing the calendar clears
 `calendar_sync_token` for a clean re-baseline.
 
-**`048_supervisor_bootstrap_and_signature_unique.sql` — PENDING.** (1) Promotes
+**`048_supervisor_bootstrap_and_signature_unique.sql` — APPLIED (staging + production, 2026-08-14).** (1) Promotes
 the founding coach (email jeff@jeffkholmes.com, else earliest-created) to
 `role='supervisor'` if no supervisor exists — **required, or nobody can reach
 the now-gated /api/coaches routes.** (2) Collapses any duplicate per-coach
