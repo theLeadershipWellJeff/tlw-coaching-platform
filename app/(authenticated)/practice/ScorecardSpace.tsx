@@ -308,6 +308,12 @@ export function ScorecardSpace() {
   const [picked, setPicked] = useState<Record<string, string>>({})
   const [deletePending, setDeletePending] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
+  // Bulk select + delete for the needs-review queue (e.g. clearing out
+  // non-session recordings that Plaud imported).
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkConfirm, setBulkConfirm] = useState(false)
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [bulkError, setBulkError] = useState<string | null>(null)
   const [reportDeletePending, setReportDeletePending] = useState<string | null>(null)
   const [reportDeleting, setReportDeleting] = useState<string | null>(null)
   const [openPreview, setOpenPreview] = useState<string | null>(null)
@@ -339,8 +345,10 @@ export function ScorecardSpace() {
     }
   }
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  // Refetch everything WITHOUT flipping the page into the loading skeleton —
+  // used after a delete so the list updates in place and the scroll position
+  // holds (the skeleton swap was resetting the page to the top).
+  const fetchAll = useCallback(async () => {
     const [s, r, t, c, rev, f] = await Promise.all([
       fetch('/api/reports/summary').then((x) => (x.ok ? x.json() : null)),
       fetch('/api/reports').then((x) => (x.ok ? x.json() : null)),
@@ -355,8 +363,13 @@ export function ScorecardSpace() {
     setClients((c?.clients || []).filter(isActiveClient))
     setRevenue(rev || null)
     setFocus(f?.focus || {})
-    setLoading(false)
   }, [])
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    await fetchAll()
+    setLoading(false)
+  }, [fetchAll])
 
   const saveFocus = useCallback(async (id: number, text: string) => {
     setFocus((prev) => ({ ...prev, [String(id)]: text }))
@@ -383,11 +396,77 @@ export function ScorecardSpace() {
       const res = await fetch(`/api/transcripts/${transcriptId}`, { method: 'DELETE' })
       if (res.ok) {
         setDeletePending(null)
-        await load()
+        // Drop the row in place and refresh in the background — no loading
+        // skeleton, so the page doesn't jump back to the top.
+        setNeedsReview((rows) => rows.filter((r) => r.id !== transcriptId))
+        setSelected((prev) => {
+          if (!prev.has(transcriptId)) return prev
+          const next = new Set(prev)
+          next.delete(transcriptId)
+          return next
+        })
+        fetchAll()
       }
     } finally {
       setDeleting(null)
     }
+  }
+
+  // Bulk delete: fires the same per-transcript DELETE for every checked row,
+  // a few at a time, removing each row as it goes. Scroll position holds.
+  async function deleteSelected() {
+    const ids = needsReview.map((t) => t.id).filter((id) => selected.has(id))
+    if (ids.length === 0) return
+    setBulkDeleting(true)
+    setBulkError(null)
+    let failed = 0
+    try {
+      const CONCURRENCY = 4
+      for (let i = 0; i < ids.length; i += CONCURRENCY) {
+        await Promise.all(
+          ids.slice(i, i + CONCURRENCY).map(async (id) => {
+            try {
+              const res = await fetch(`/api/transcripts/${id}`, { method: 'DELETE' })
+              if (!res.ok) throw new Error()
+              setNeedsReview((rows) => rows.filter((r) => r.id !== id))
+              setSelected((prev) => {
+                const next = new Set(prev)
+                next.delete(id)
+                return next
+              })
+            } catch {
+              failed += 1
+            }
+          })
+        )
+      }
+      setBulkConfirm(false)
+      if (failed > 0) {
+        setBulkError(
+          `${failed} transcript${failed === 1 ? '' : 's'} could not be deleted — they stay selected, try again.`
+        )
+      }
+      fetchAll()
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
+
+  function toggleSelected(transcriptId: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(transcriptId)) next.delete(transcriptId)
+      else next.add(transcriptId)
+      return next
+    })
+    setBulkConfirm(false)
+  }
+
+  function toggleSelectAll() {
+    setSelected((prev) =>
+      prev.size === needsReview.length ? new Set<string>() : new Set(needsReview.map((t) => t.id))
+    )
+    setBulkConfirm(false)
   }
 
   async function deleteReport(reportId: string) {
@@ -396,7 +475,8 @@ export function ScorecardSpace() {
       const res = await fetch(`/api/reports/${reportId}`, { method: 'DELETE' })
       if (res.ok) {
         setReportDeletePending(null)
-        await load()
+        setReports((rows) => rows.filter((r) => r.id !== reportId))
+        fetchAll()
       }
     } finally {
       setReportDeleting(null)
@@ -455,6 +535,12 @@ export function ScorecardSpace() {
       body: { clientId },
     })
     setNeedsReview((rows) => rows.filter((r) => r.id !== t.id))
+    setSelected((prev) => {
+      if (!prev.has(t.id)) return prev
+      const next = new Set(prev)
+      next.delete(t.id)
+      return next
+    })
   }
 
   // Add-but-don't-score is quick — stays synchronous.
@@ -470,7 +556,14 @@ export function ScorecardSpace() {
         body: JSON.stringify({ clientId, score: false }),
       })
       if (res.ok) {
-        await load()
+        setNeedsReview((rows) => rows.filter((r) => r.id !== transcriptId))
+        setSelected((prev) => {
+          if (!prev.has(transcriptId)) return prev
+          const next = new Set(prev)
+          next.delete(transcriptId)
+          return next
+        })
+        fetchAll()
       } else {
         const data = await res.json().catch(() => ({}))
         setAssignError((e) => ({ ...e, [transcriptId]: data.error || 'Could not add. Please try again.' }))
@@ -662,6 +755,51 @@ export function ScorecardSpace() {
             without a scorecard (e.g. an orientation or teaching session). Matches are never
             auto-assigned without confidence.
           </p>
+          <div className="mb-3 flex flex-wrap items-center gap-3">
+            <label className="flex cursor-pointer items-center gap-2 text-[12px] text-tlw-espresso">
+              <input
+                type="checkbox"
+                checked={needsReview.length > 0 && selected.size === needsReview.length}
+                onChange={toggleSelectAll}
+                className="h-4 w-4"
+                style={{ accentColor: 'var(--color-signal-orange)' }}
+              />
+              select all
+            </label>
+            {selected.size > 0 &&
+              (bulkConfirm ? (
+                <>
+                  <button
+                    onClick={deleteSelected}
+                    disabled={bulkDeleting}
+                    className="rounded-tlw-md border border-red-300 px-2.5 py-1.5 text-[12px] font-medium text-red-600 transition-opacity duration-tlw-base hover:opacity-80 disabled:opacity-40"
+                  >
+                    {bulkDeleting
+                      ? 'deleting…'
+                      : `confirm delete ${selected.size} transcript${selected.size === 1 ? '' : 's'}`}
+                  </button>
+                  <button
+                    onClick={() => setBulkConfirm(false)}
+                    disabled={bulkDeleting}
+                    className="rounded-tlw-md px-2 py-1.5 text-[12px] text-tlw-warm-gray transition-opacity duration-tlw-base hover:opacity-80"
+                  >
+                    cancel
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => setBulkConfirm(true)}
+                  className="rounded-tlw-md border border-tlw-warm-gray/25 px-2.5 py-1.5 text-[12px] text-red-600 transition-opacity duration-tlw-base hover:opacity-80"
+                >
+                  delete selected ({selected.size})
+                </button>
+              ))}
+            {bulkError && (
+              <p className="text-[12px]" style={{ color: 'var(--color-danger)' }}>
+                {bulkError}
+              </p>
+            )}
+          </div>
           <div className="space-y-2">
             {needsReview.map((t) => {
               const pv = previewCache[t.id]
@@ -673,6 +811,14 @@ export function ScorecardSpace() {
                   style={{ backgroundColor: 'var(--color-surface)' }}
                 >
                   <div className="flex flex-wrap items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(t.id)}
+                      onChange={() => toggleSelected(t.id)}
+                      aria-label={`Select ${t.title || t.filename || 'transcript'}`}
+                      className="h-4 w-4 shrink-0"
+                      style={{ accentColor: 'var(--color-signal-orange)' }}
+                    />
                     <div className="min-w-0 flex-1">
                       {renaming === t.id ? (
                         <div className="flex items-center gap-2">

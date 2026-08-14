@@ -140,6 +140,17 @@ session"** checkbox (`/api/transcripts/manual` `autoScore:false` →
 unscored rows as "not scored" with a **"score now"** button (`PATCH` with
 `{rescore:true}`) so an unscored transcript can always be scored later.
 
+**Scoring timeouts (2026-08-14 fix).** Every route that runs the engine
+in-band (`/api/transcripts/ingest`, `/api/transcripts/[id]` PATCH,
+`/api/transcripts/manual`, `/api/reports/[id]/rescore`) sets `maxDuration =
+300` — the engine allows 100 s per Claude attempt with one retry (200 s worst
+case) plus the growth/nudge passes after the report lands. The ingest webhook
+previously capped at 60 s, so Vercel killed auto-scores mid-run and matched
+Plaud transcripts landed "not scored"; the other routes' 120 s couldn't cover
+a retried attempt. The engine also caps output at `max_tokens: 10000` (was
+6000, which truncated long reports into "invalid JSON") and fails loud on
+`stop_reason === 'max_tokens'`.
+
 **Background scoring + progress bar (`lib/scoring-jobs.ts`).** Scoring takes
 ~120 s, so "confirm & score" (review queue) and "score now" (client transcripts
 list) are **fire-and-forget**: the click registers a job in a client-side store
@@ -156,6 +167,13 @@ stored PATCH body). A failed score is never lost — the transcript stays filed 
 the client as "not scored". Assign-to-client pulldowns (review queue, dashboard
 unmatched bookings, billing-account picker) list **working clients only** —
 the roster's Active-tab definition (not inactive/archived).
+
+**Review-queue deletes (`ScorecardSpace.tsx`).** The needs-review list has
+per-row checkboxes + a select-all toolbar with **"delete selected (n)"**
+(confirm step; loops the existing per-transcript DELETE, concurrency 4 — no
+bulk endpoint). All deletes (single, bulk, report) and "add, don't score"
+remove the row optimistically and refresh via `fetchAll()` (no loading-skeleton
+flip), so the page keeps its scroll position instead of jumping to the top.
 
 ### Scoring engine (`lib/scoring/engine.ts`)
 Prompts Claude with the consolidated v0.4 rubric — the **per-competency band
