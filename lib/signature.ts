@@ -43,11 +43,33 @@ function escapeHtml(s: string): string {
 }
 
 /**
- * A generic, TLW-branded signature built from a coach's own name/email — what a
- * coach gets before they've saved a personal signature. Same email-safe table
- * shell as the branded default, no Jeff-specific details.
+ * The structured fields a coach edits in Account → Email signature. The saved
+ * row stores the RENDERED html (what sends append) prefixed with an HTML
+ * comment carrying these fields as JSON, so the editor can round-trip them
+ * without a schema change. Mail clients ignore the comment.
  */
-export function buildGenericSignatureHtml(name: string, email: string): string {
+export type SignatureFields = {
+  name: string
+  title: string // e.g. "Executive Coach · theLeadershipWell"
+  email: string
+  phone?: string
+  website?: string // display + link, e.g. "theleadershipwell.com"
+  bookingUrl?: string // "Book a session →" target; omitted = no booking line
+}
+
+const FIELDS_COMMENT_RE = /^<!--TLW_SIG_FIELDS:(.*?)-->/
+
+/** Render the email-safe signature table from structured fields. Pure. */
+export function buildSignatureHtmlFromFields(f: SignatureFields): string {
+  const website = (f.website || '').trim()
+  const websiteHref = website ? (website.startsWith('http') ? website : `https://${website}`) : ''
+  const contactBits = [
+    `<a href="mailto:${escapeHtml(f.email)}" style="color:#0C1940;text-decoration:none;">${escapeHtml(f.email)}</a>`,
+    ...(f.phone?.trim() ? [escapeHtml(f.phone.trim())] : []),
+    ...(website
+      ? [`<a href="${escapeHtml(websiteHref)}" style="color:#0C1940;text-decoration:none;">${escapeHtml(website)}</a>`]
+      : []),
+  ]
   return (
     `<table cellpadding="0" cellspacing="0" style="margin-top:24px;border-top:1px solid #e5e0d8;padding-top:16px;font-family:'DM Sans',Helvetica,Arial,sans-serif;">` +
     `<tr>` +
@@ -57,15 +79,45 @@ export function buildGenericSignatureHtml(name: string, email: string): string {
     `</tr>` +
     `<tr>` +
     `<td>` +
-    `<div style="font-weight:700;font-size:14px;color:#111226;">${escapeHtml(name)}</div>` +
-    `<div style="font-size:12px;color:#8B8680;margin-top:1px;">Executive Coach &middot; theLeadershipWell</div>` +
-    `<div style="font-size:12px;color:#8B8680;margin-top:4px;">` +
-    `<a href="mailto:${escapeHtml(email)}" style="color:#0C1940;text-decoration:none;">${escapeHtml(email)}</a>` +
-    `</div>` +
+    `<div style="font-weight:700;font-size:14px;color:#111226;">${escapeHtml(f.name)}</div>` +
+    `<div style="font-size:12px;color:#8B8680;margin-top:1px;">${escapeHtml(f.title)}</div>` +
+    `<div style="font-size:12px;color:#8B8680;margin-top:4px;">${contactBits.join('&nbsp;&middot;&nbsp;')}</div>` +
+    (f.bookingUrl?.trim()
+      ? `<div style="font-size:12px;margin-top:4px;">` +
+        `<a href="${escapeHtml(f.bookingUrl.trim())}" style="color:#0C1940;text-decoration:none;font-weight:600;">Book a session &rarr;</a>` +
+        `</div>`
+      : '') +
     `</td>` +
     `</tr>` +
     `</table>`
   )
+}
+
+/** The storable value: fields JSON in a leading comment + the rendered table. */
+export function serializeSignature(f: SignatureFields): string {
+  return `<!--TLW_SIG_FIELDS:${JSON.stringify(f)}-->` + buildSignatureHtmlFromFields(f)
+}
+
+/** Recover the editor fields from a stored signature; null for legacy/foreign HTML. */
+export function parseSignatureFields(html: string): SignatureFields | null {
+  const m = (html || '').match(FIELDS_COMMENT_RE)
+  if (!m) return null
+  try {
+    const f = JSON.parse(m[1])
+    if (f && typeof f.name === 'string' && typeof f.email === 'string') return f as SignatureFields
+  } catch {
+    /* fall through */
+  }
+  return null
+}
+
+/**
+ * A generic, TLW-branded signature built from a coach's own name/email — what a
+ * coach gets before they've saved a personal signature. Same email-safe table
+ * shell as the branded default, no Jeff-specific details.
+ */
+export function buildGenericSignatureHtml(name: string, email: string): string {
+  return buildSignatureHtmlFromFields({ name, title: 'Executive Coach · theLeadershipWell', email })
 }
 
 /**

@@ -8,6 +8,9 @@ import { getServerSession } from 'next-auth'
 import { google } from 'googleapis'
 import { authOptions } from '@/lib/authOptions'
 import { matchZoomSummariesForClient } from '@/lib/matchZoomToClient'
+import { getSupabaseAdmin } from '@/lib/supabase/server'
+import { getSessionCoach } from '@/lib/coach'
+import { coachCalendarId } from '@/lib/calendar'
 
 const CALENDAR_LOOKBACK_DAYS = 90
 
@@ -15,6 +18,7 @@ async function getCalendarSessionTimes(
   accessToken: string,
   clientName: string,
   clientEmail: string,
+  calendarId: string,
 ): Promise<string[]> {
   const auth = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
@@ -27,7 +31,7 @@ async function getCalendarSessionTimes(
   const past = new Date(now.getTime() - CALENDAR_LOOKBACK_DAYS * 24 * 60 * 60 * 1000)
 
   const res = await calendar.events.list({
-    calendarId: 'primary',
+    calendarId,
     timeMin: past.toISOString(),
     timeMax: now.toISOString(),
     singleEvents: true,
@@ -82,7 +86,11 @@ export async function GET(req: NextRequest) {
   const accessToken = (session as any).accessToken as string | undefined
   if (accessToken && (clientName || clientEmail)) {
     try {
-      calendarTimes = await getCalendarSessionTimes(accessToken, clientName, clientEmail)
+      // Read the coach's chosen calendar (Account → Calendar); 'primary' default.
+      const supabase = getSupabaseAdmin()
+      const coach = await getSessionCoach(supabase)
+      const calendarId = coach ? coachCalendarId(coach) : 'primary'
+      calendarTimes = await getCalendarSessionTimes(accessToken, clientName, clientEmail, calendarId)
     } catch (e) {
       console.error('Calendar history fetch failed:', e)
     }

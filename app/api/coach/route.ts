@@ -35,6 +35,9 @@ export async function GET() {
       reminder_settings: normalizeReminderSettings(coach.reminder_settings),
       nudge_settings: normalizeNudgeSettings(coach.nudge_settings),
       billing_settings: normalizeBillingSettings(coach.billing_settings as any),
+      // Migration 047. null → the defaults ('primary' calendar, manual source).
+      calendar_id: coach.calendar_id ?? null,
+      transcript_source: coach.transcript_source || 'manual',
     },
   })
 }
@@ -119,6 +122,26 @@ export async function PATCH(req: NextRequest) {
     const patch = body.billingSettings as Partial<typeof current>
     update.nudge_settings = update.nudge_settings // keep TS happy
     ;(update as any).billing_settings = normalizeBillingSettings({ ...current, ...patch })
+  }
+
+  // Which Google calendar the app reads/writes (migration 047). '' or null →
+  // back to the primary calendar. The value is an opaque Google calendar id; it
+  // is validated by use (an invalid id just fails the next calendar call).
+  if ('calendarId' in body) {
+    const raw = body.calendarId == null ? '' : String(body.calendarId).trim()
+    if (raw.length > 300) {
+      return NextResponse.json({ error: 'Invalid calendar id.' }, { status: 400 })
+    }
+    ;(update as any).calendar_id = raw === '' || raw === 'primary' ? null : raw
+  }
+
+  // Transcript source (migration 047): manual | plaud | zoom.
+  if ('transcriptSource' in body) {
+    const src = String(body.transcriptSource ?? '').trim()
+    if (!['manual', 'plaud', 'zoom'].includes(src)) {
+      return NextResponse.json({ error: 'Invalid transcript source.' }, { status: 400 })
+    }
+    ;(update as any).transcript_source = src
   }
 
   // Vault settings (the editable part of nudge_settings) — merge onto the current

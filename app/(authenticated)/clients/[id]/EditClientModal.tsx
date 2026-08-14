@@ -380,7 +380,7 @@ export function EditClientModal({
             <span className="text-[13px] text-tlw-espresso">
               Signed coaching agreement on file
               <span className="mt-0.5 block text-[11px] leading-snug text-tlw-warm-gray">
-                Check this for an agreement signed outside this platform (e.g. Coach Accountable) — no need to
+                Check this for an agreement signed outside this platform (on paper or another tool) — no need to
                 re-issue. The scorecard&apos;s ethics gate (C1) reads this directly.
               </span>
             </span>

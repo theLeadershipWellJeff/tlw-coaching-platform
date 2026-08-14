@@ -905,6 +905,56 @@ is never accepted here, and vice-versa.
 - **Not yet live:** a client self-service password option (magic-link is the only
   sign-in today) is the remaining future enhancement. All 7 planned phases shipped.
 
+## Multi-coach beta (2026-08 — coach onboarding readiness)
+
+Plan: `docs/BETA_COACH_ONBOARDING_PLAN.md`. Beta scope decision: **transcript
+intake is manual upload only** — per-coach Plaud/Zoom automated intake is
+post-beta (Tier 3 of the plan).
+
+- **Ingest roster is coach-scoped.** `ingestMarkdown` matches only against the
+  ingesting coach's own clients (`accessibleClientIds`) — a webhook transcript
+  can no longer name/calendar-match to another coach's client.
+- **`requireSupervisor` (lib/api-handler.ts)** gates `/api/coaches` +
+  `/api/coaches/[id]` (list/add/edit/delete coaches). The Coaches admin page
+  shows a "Supervisor access required" notice on 403. Jeff's row must carry
+  `role='supervisor'`.
+- **Outbound identity is the acting coach's, everywhere.** `sendCoachHtmlEmail`
+  stamps `From: coach.name <coach.email>` (Gmail enforces the authenticated
+  account anyway); scorecard/needs-review notices, billing cover/thank-you/
+  receipt/reminder/decline sign-offs + footers, agreement issue/sign
+  notifications, appointment-confirmation CC, the compose modal's CC default,
+  prep emails, and every LLM prompt voice/name the signed-in coach (env
+  `JEFF_*` values are last-resort fallbacks only).
+- **Signature resolution changed** (`lib/signature.ts`): own row → generic
+  TLW signature from the coach's name/email → constant. The global
+  (coach_id NULL) row is no longer served to other coaches — migration **046**
+  attaches the seeded global (Jeff) row to Jeff's coach row so his signature is
+  unchanged.
+- **Account → Email signature editor** (`SignatureSettings.tsx`): structured
+  fields (name/title/email/phone/website/booking link) → email-safe HTML via
+  `lib/signature.ts#buildSignatureHtmlFromFields`, live preview, saved by
+  `PUT /api/email/signature` (fields round-trip via a leading
+  `<!--TLW_SIG_FIELDS:{json}-->` comment — no schema change); DELETE resets to
+  the generic signature.
+- **Account → Calendar picker** (`CalendarSettings.tsx` + `GET /api/calendar/list`):
+  `coaches.calendar_id` (migration 047, NULL = primary). Every calendar call in
+  `lib/calendar.ts` + zoom-summaries resolves through
+  `lib/calendar.ts#coachCalendarId` — never hardcode `'primary'` again.
+- **Account → Transcript source** (`TranscriptSourceSettings.tsx`):
+  `coaches.transcript_source` (047; manual|plaud|zoom, NULL = manual). Records
+  the coach's choice; Plaud/Zoom rows are "automated intake coming soon" with a
+  Plaud signup link (swap `PLAUD_SIGNUP_URL` for the affiliate link when it
+  exists). Manual upload works regardless of the setting.
+- **Sign-in allowlist:** optional `BETA_COACH_EMAILS` env (comma list) gates
+  Google sign-in via `callbacks.signIn`; coaches with an existing row are always
+  allowed; unset = open sign-up.
+- **First-run checklist** (`dashboard/WelcomeChecklist.tsx`): shows while the
+  roster is empty (dismissible, localStorage `tlw-welcome-dismissed`) — walks a
+  new coach through timezone/calendar, signature, transcript source, first client.
+- **CA scrub:** the two remaining user-facing "(e.g. Coach Accountable)" example
+  strings, the stale `OPEN ACTION ITEMS FROM COACH ACCOUNTABLE` prompt header,
+  and README's old CA flow narration are gone. Provenance columns stay.
+
 ## Security & pipeline hardening (absorbed from PRs #45/#55)
 
 - **Tenant isolation on sibling routes.** `/api/notes` (CA proxy) now requires a
@@ -929,6 +979,8 @@ is never accepted here, and vice-versa.
 Google OAuth (`GOOGLE_CLIENT_ID/SECRET`), `NEXTAUTH_URL/SECRET`,
 `ANTHROPIC_API_KEY`, Supabase (`NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_API_SECRET_KEY`),
 `JEFF_FROM_EMAIL`/`JEFF_CC_EMAIL`, Zoom (`ZOOM_ACCOUNT_ID/CLIENT_ID/CLIENT_SECRET`),
+`BETA_COACH_EMAILS` (optional comma-separated sign-in allowlist — see the
+Multi-coach beta section; unset = open sign-up),
 `INGEST_SECRET`, `CRON_SECRET` (Bearer token for the hourly crons —
 `/api/cron/reminders`, `/api/cron/nudges`, `/api/cron/vault-sync`; set the same
 value in Vercel), `DEFAULT_COACH_EMAIL` (= `jeff@jeffkholmes.com`),
@@ -1286,6 +1338,17 @@ Portal magic-link auth table (see the Client Portal section). Additive.
 **`045_portal_chat.sql` — `portal_conversations` + `portal_messages`** (Client
 Portal AI chat). Additive; **apply before the chat is used — the chat routes
 select/insert these tables.**
+
+**`046_signature_owner.sql` — PENDING.** Attaches the seeded global email
+signature (coach_id NULL) to Jeff's coach row, since signature resolution no
+longer serves the global row to other coaches. Idempotent, no schema change.
+**Apply before onboarding beta coaches** (until then Jeff's sends fall back to
+the generic signature built from his name/email — cosmetic only).
+
+**`047_coach_calendar_and_transcript_source.sql` — PENDING.** Adds
+`coaches.calendar_id` (NULL = primary) + `coaches.transcript_source` (NULL =
+manual). Additive; reads are defensive so the app runs without it, but **the
+Account → Calendar and Transcript source panels can't SAVE until it's applied.**
 
 **Scheduling go-live checklist:** (1) apply `016_appointments.sql`; (2) set
 `CRON_SECRET` in Vercel (same value the cron sends); (3) enable the
