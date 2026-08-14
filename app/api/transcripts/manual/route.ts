@@ -4,8 +4,9 @@ import { getSessionCoach } from '@/lib/coach'
 import { ingestMarkdown } from '@/lib/transcripts/ingest'
 
 export const runtime = 'nodejs'
-// Scoring a full transcript can exceed a minute (engine times out at 100s).
-export const maxDuration = 120
+// Scoring can run long: 100s per Claude attempt with one retry, plus the
+// growth/nudge passes. 300s so a slow run isn't killed by the platform.
+export const maxDuration = 300
 
 /**
  * Manual transcript add — paste a transcript into the app (e.g. to backfill

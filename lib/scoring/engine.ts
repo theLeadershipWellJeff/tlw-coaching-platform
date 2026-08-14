@@ -1012,15 +1012,25 @@ export async function scoreTranscript(
   const message = await client.messages.create(
     {
       model: MODEL,
-      max_tokens: 6000,
+      // The v0.5.3 report JSON (envelopes, taxonomy, evidence moments, quoted
+      // spans) can run well past the old 6000 cap on a long session — a capped
+      // response truncates mid-JSON and used to surface as "invalid JSON".
+      max_tokens: 10000,
       system: SYSTEM,
       messages: [{ role: 'user', content: buildPrompt(transcript, ctx) }],
     },
-    // Fail before Vercel's function timeout (maxDuration on the calling routes is
-    // 120s) so a slow call surfaces as a clean scoring error, not a killed
-    // function. One retry, not the SDK default of two, to avoid retry storms.
+    // Fail before Vercel's function timeout (maxDuration 300 on the calling
+    // routes — room for a timed-out first attempt plus the one retry) so a slow
+    // call surfaces as a clean scoring error, not a killed function. One retry,
+    // not the SDK default of two, to avoid retry storms.
     { timeout: 100_000, maxRetries: 1 }
   )
+
+  if (message.stop_reason === 'max_tokens') {
+    throw new Error(
+      'Engine response was truncated before the report JSON completed (max_tokens) — retry, and if it persists the transcript may be unusually long.'
+    )
+  }
 
   const text = message.content.find((b) => b.type === 'text')
   const rawText = text && 'text' in text ? text.text : ''

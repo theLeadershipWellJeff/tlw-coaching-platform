@@ -13,9 +13,10 @@ import { useSyncExternalStore } from 'react'
  */
 
 export const EXPECTED_SCORING_SECONDS = 120
-// Engine times out at 100s and the route at 120s — well past that with no
-// report, the run failed (or the response was lost); surface a retry.
-const MAX_WAIT_MS = 5 * 60_000
+// Engine allows up to 100s per attempt (one retry) and the routes run up to
+// 300s — well past that with no report, the run failed (or the response was
+// lost); surface a retry.
+const MAX_WAIT_MS = 7 * 60_000
 const POLL_MS = 10_000
 const DONE_TTL_MS = 24 * 60 * 60 * 1000
 const KEY = 'tlw-scoring-jobs'

@@ -5,8 +5,12 @@ import { ingestMarkdown } from '@/lib/transcripts/ingest'
 import { sendNeedsReviewEmail } from '@/lib/transcript-review-email'
 
 // Scoring calls Claude on a full transcript — give the function room to run.
+// A confident match auto-scores INSIDE this webhook: the engine allows up to
+// 100s per attempt with one retry, plus the growth/nudge passes after the
+// report lands. The old 60s cap let Vercel kill the function mid-score, which
+// is why matched Plaud transcripts were landing "not scored".
 export const runtime = 'nodejs'
-export const maxDuration = 60
+export const maxDuration = 300
 
 /**
  * Transcript ingest webhook.

@@ -4,8 +4,9 @@ import { getSessionCoach } from '@/lib/coach'
 import { runAndStoreReport } from '@/lib/scoring/store'
 
 export const runtime = 'nodejs'
-// Scoring a full transcript can exceed a minute (engine times out at 100s).
-export const maxDuration = 120
+// Scoring can run long: 100s per Claude attempt with one retry, plus the
+// growth pass. 300s so a slow run isn't killed by the platform.
+export const maxDuration = 300
 
 /**
  * Re-score a stored report against the current rubric/engine. Used when the

@@ -6,8 +6,10 @@ import { runAndStoreReport } from '@/lib/scoring/store'
 import { parseTranscript, buildTranscriptTitle } from '@/lib/transcripts/parse'
 
 export const runtime = 'nodejs'
-// Scoring a full transcript can exceed a minute (engine times out at 100s).
-export const maxDuration = 120
+// Scoring can run long: the engine allows 100s per Claude attempt with one
+// retry (200s worst case), then the growth pass + nudge generation run in-band.
+// 120s let Vercel kill a slow-but-healthy run; 300s covers the whole path.
+export const maxDuration = 300
 
 const PREVIEW_CHARS = 2000
 
