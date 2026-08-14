@@ -8,13 +8,21 @@
 --
 -- This migration preserves Jeff's existing signature exactly by converting the
 -- seeded global row into HIS coach-specific row (only if he doesn't already
--- have one). Idempotent; safe to re-run. No schema change.
+-- have one). Target: the coach row with email jeff@jeffkholmes.com, else the
+-- EARLIEST-created coach row (Jeff is the founding coach in this database) —
+-- so a different sign-in address can't silently strand the signature.
+-- Idempotent; safe to re-run. No schema change.
 
+with jeff as (
+  select id from coaches
+  order by (email = 'jeff@jeffkholmes.com') desc, created_at asc
+  limit 1
+)
 update email_signatures
-set coach_id = (select id from coaches where email = 'jeff@jeffkholmes.com')
+set coach_id = (select id from jeff)
 where coach_id is null
-  and exists (select 1 from coaches where email = 'jeff@jeffkholmes.com')
+  and exists (select 1 from jeff)
   and not exists (
     select 1 from email_signatures es2
-    where es2.coach_id = (select id from coaches where email = 'jeff@jeffkholmes.com')
+    where es2.coach_id = (select id from jeff)
   );

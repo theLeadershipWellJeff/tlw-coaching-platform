@@ -7,6 +7,7 @@ const DISMISS_KEY = 'tlw-welcome-dismissed'
 type StepState = {
   timezone: boolean
   signature: boolean
+  transcriptSource: boolean
   hasClients: boolean
 }
 
@@ -14,36 +15,50 @@ type StepState = {
  * First-run setup checklist for a new coach. Shows on the dashboard until the
  * coach has at least one client (or dismisses it) — walks them through the
  * settings that make the app theirs: timezone/calendar, email signature,
- * transcript source, first client. Dismissal persists in localStorage.
+ * transcript source, first client. Dismissal persists in localStorage, and is
+ * auto-persisted once the roster has clients so established coaches pay for at
+ * most ONE roster check ever.
  */
 export function WelcomeChecklist() {
   const [visible, setVisible] = useState(false)
-  const [steps, setSteps] = useState<StepState>({ timezone: false, signature: false, hasClients: false })
+  const [steps, setSteps] = useState<StepState>({
+    timezone: false,
+    signature: false,
+    transcriptSource: false,
+    hasClients: false,
+  })
 
   useEffect(() => {
     if (typeof window !== 'undefined' && localStorage.getItem(DISMISS_KEY)) return
     let cancelled = false
     async function load() {
       try {
-        const [coachRes, sigRes, clientsRes] = await Promise.all([
-          fetch('/api/coach'),
-          fetch('/api/email/signature'),
-          fetch('/api/clients'),
-        ])
+        // Cheap gate first: an established coach short-circuits here and the
+        // dismissal is persisted so this fetch never repeats.
+        const clientsRes = await fetch('/api/clients')
+        if (cancelled || !clientsRes.ok) return
+        const clientsData = await clientsRes.json()
+        const clientCount = Array.isArray(clientsData?.clients) ? clientsData.clients.length : 0
+        if (clientCount > 0) {
+          try {
+            localStorage.setItem(DISMISS_KEY, '1')
+          } catch {
+            /* ignore */
+          }
+          return
+        }
+
+        const [coachRes, sigRes] = await Promise.all([fetch('/api/coach'), fetch('/api/email/signature')])
         if (cancelled) return
         const coach = coachRes.ok ? (await coachRes.json())?.coach : null
         const sig = sigRes.ok ? await sigRes.json() : null
-        const clientsData = clientsRes.ok ? await clientsRes.json() : null
-        const clientCount = Array.isArray(clientsData?.clients) ? clientsData.clients.length : 0
-        const next: StepState = {
+        setSteps({
           timezone: !!coach?.timezone,
           signature: !!sig?.custom,
-          hasClients: clientCount > 0,
-        }
-        setSteps(next)
-        // Only surface the checklist while the practice is empty — an
-        // established coach never sees it.
-        setVisible(clientCount === 0)
+          transcriptSource: !!coach?.transcript_source,
+          hasClients: false,
+        })
+        setVisible(true)
       } catch {
         /* stay hidden on any error */
       }
@@ -68,7 +83,12 @@ export function WelcomeChecklist() {
   const items: { done: boolean; label: string; href: string; cta: string }[] = [
     { done: steps.timezone, label: 'Set your timezone and pick your calendar', href: '/account', cta: 'Open Account' },
     { done: steps.signature, label: 'Build your email signature', href: '/account', cta: 'Open Account' },
-    { done: false, label: 'Choose your transcript source (manual upload works today)', href: '/account', cta: 'Open Account' },
+    {
+      done: steps.transcriptSource,
+      label: 'Choose your transcript source (manual upload works today)',
+      href: '/account',
+      cta: 'Open Account',
+    },
     { done: steps.hasClients, label: 'Add your first client', href: '/clients', cta: 'Open Clients' },
   ]
 

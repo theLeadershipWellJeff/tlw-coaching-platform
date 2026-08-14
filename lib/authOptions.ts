@@ -48,14 +48,23 @@ export const authOptions = {
       if (allowlist.includes(email)) return true
       try {
         const supabase = getSupabaseAdmin()
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('coaches')
           .select('id')
           .eq('email', email)
           .maybeSingle()
         if (data) return true
+        // A read ERROR (not "no row") must fail OPEN — the gate promises an
+        // already-onboarded coach can never be locked out, and a transient DB
+        // blip must not break that. A genuine stranger just reaches an app that
+        // is down anyway; tenant isolation is enforced separately server-side.
+        if (error) {
+          console.error('Allowlist coach lookup errored — failing open:', error)
+          return true
+        }
       } catch (e) {
-        console.error('Allowlist coach lookup failed:', e)
+        console.error('Allowlist coach lookup failed — failing open:', e)
+        return true
       }
       return false
     },

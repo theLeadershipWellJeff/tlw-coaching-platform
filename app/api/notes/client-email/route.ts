@@ -50,7 +50,7 @@ Guidelines:
 - Keep the coach's warm, direct voice, but scannable structure beats wordiness.
 - Do NOT list the "ACTION:" or "INSIGHT:" items — those are appended separately as an interactive checklist and Insights list; repeating them would duplicate.
 - Do NOT invent anything not in the note. If the note is thin, keep the email very short.
-- Sign off as "Jeff". No subject line inside the body. No AI mention.
+- Sign off with the coach's first name ("${coachName.split(' ')[0]}"). No subject line inside the body. No AI mention.
 
 Return ONLY valid JSON — no markdown fences, no preamble:
 {"subject": "Short, specific subject line", "body": "The email as plain text. Use bullet lists (- item) wherever there are multiple related points."}

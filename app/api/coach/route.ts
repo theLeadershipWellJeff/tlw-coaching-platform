@@ -36,8 +36,10 @@ export async function GET() {
       nudge_settings: normalizeNudgeSettings(coach.nudge_settings),
       billing_settings: normalizeBillingSettings(coach.billing_settings as any),
       // Migration 047. null → the defaults ('primary' calendar, manual source).
+      // transcript_source stays raw null until the coach explicitly chooses, so
+      // the UI can distinguish "hasn't chosen" from "chose manual".
       calendar_id: coach.calendar_id ?? null,
-      transcript_source: coach.transcript_source || 'manual',
+      transcript_source: coach.transcript_source ?? null,
     },
   })
 }
@@ -132,7 +134,13 @@ export async function PATCH(req: NextRequest) {
     if (raw.length > 300) {
       return NextResponse.json({ error: 'Invalid calendar id.' }, { status: 400 })
     }
-    ;(update as any).calendar_id = raw === '' || raw === 'primary' ? null : raw
+    const next = raw === '' || raw === 'primary' ? null : raw
+    ;(update as any).calendar_id = next
+    if ((coach.calendar_id ?? null) !== next) {
+      // The incremental booking-capture cursor belongs to the OLD calendar —
+      // clear it so the next sync does a clean full read of the new one.
+      ;(update as any).calendar_sync_token = null
+    }
   }
 
   // Transcript source (migration 047): manual | plaud | zoom.

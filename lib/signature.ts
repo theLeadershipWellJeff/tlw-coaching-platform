@@ -133,12 +133,15 @@ export async function getActiveSignatureHtml(
   coach: { id: string; name?: string | null; email?: string | null }
 ): Promise<string> {
   try {
+    // limit(1) + newest-first (not maybeSingle) so a stray duplicate row can
+    // never error the read and silently drop the coach's saved signature.
     const { data } = await supabase
       .from('email_signatures')
       .select('coach_id, html')
       .eq('coach_id', coach.id)
-      .maybeSingle()
-    if (data?.html) return data.html
+      .order('updated_at', { ascending: false })
+      .limit(1)
+    if (data?.[0]?.html) return data[0].html
   } catch {
     // fall through
   }

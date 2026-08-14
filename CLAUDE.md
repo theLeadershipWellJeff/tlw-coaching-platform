@@ -1349,6 +1349,16 @@ the generic signature built from his name/email — cosmetic only).
 `coaches.calendar_id` (NULL = primary) + `coaches.transcript_source` (NULL =
 manual). Additive; reads are defensive so the app runs without it, but **the
 Account → Calendar and Transcript source panels can't SAVE until it's applied.**
+Sessions booked before a calendar switch keep working — event reads/deletes
+fall back to the primary calendar on a 404, and changing the calendar clears
+`calendar_sync_token` for a clean re-baseline.
+
+**`048_supervisor_bootstrap_and_signature_unique.sql` — PENDING.** (1) Promotes
+the founding coach (email jeff@jeffkholmes.com, else earliest-created) to
+`role='supervisor'` if no supervisor exists — **required, or nobody can reach
+the now-gated /api/coaches routes.** (2) Collapses any duplicate per-coach
+`email_signatures` rows and adds a unique index on `coach_id` (the signature
+editor's upsert also self-heals duplicates in code, so order doesn't matter).
 
 **Scheduling go-live checklist:** (1) apply `016_appointments.sql`; (2) set
 `CRON_SECRET` in Vercel (same value the cron sends); (3) enable the

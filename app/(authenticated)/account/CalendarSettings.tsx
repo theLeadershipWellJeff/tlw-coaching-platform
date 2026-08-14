@@ -70,7 +70,8 @@ export function CalendarSettings() {
       <p className="mb-2 text-[11px] font-medium uppercase tracking-[2px] text-tlw-warm-gray">Calendar</p>
       <p className="mb-4 text-[13px] text-tlw-warm-gray">
         The Google calendar your coaching sessions live on. Session booking, transcript matching,
-        conflict checks, and reminders all use this calendar.
+        conflict checks, and reminders all use this calendar. Sessions already booked keep working
+        after a switch — new bookings land on the calendar you pick here.
       </p>
 
       {!loaded && <div className="h-9 w-64 animate-pulse rounded-tlw-md bg-tlw-warm-gray/10" />}

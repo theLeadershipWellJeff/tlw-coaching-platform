@@ -26,11 +26,14 @@ export async function GET() {
   try {
     const supabase = getSupabaseAdmin()
     const coach = await requireCoach(supabase)
-    const { data: own } = await supabase
+    // Newest-first + limit(1): duplicate rows (pre-048 race) must not error.
+    const { data: ownRows } = await supabase
       .from('email_signatures')
       .select('html')
       .eq('coach_id', coach.id)
-      .maybeSingle()
+      .order('updated_at', { ascending: false })
+      .limit(1)
+    const own = ownRows?.[0]
     const html = own?.html ?? (await getActiveSignatureHtml(supabase, coach))
     return NextResponse.json({
       html: stripFieldsComment(html),
@@ -75,18 +78,27 @@ export async function PUT(req: NextRequest) {
     }
     const html = serializeSignature(fields)
 
-    // No unique index on coach_id, so upsert by hand (update own row, else insert).
+    // Hand-rolled upsert (migration 048 adds the unique index; this also heals
+    // any duplicate rows a pre-048 save race left behind): update the newest
+    // row, delete the rest, insert when none exists.
     const { data: existing } = await supabase
       .from('email_signatures')
       .select('id')
       .eq('coach_id', coach.id)
-      .maybeSingle()
-    if (existing) {
+      .order('updated_at', { ascending: false })
+    if (existing && existing.length > 0) {
+      const [keep, ...stale] = existing
       const { error } = await supabase
         .from('email_signatures')
         .update({ html, updated_at: new Date().toISOString() })
-        .eq('id', existing.id)
+        .eq('id', keep.id)
       if (error) throw new Error(`Supabase (signature update): ${error.message}`)
+      if (stale.length > 0) {
+        await supabase
+          .from('email_signatures')
+          .delete()
+          .in('id', stale.map((r) => r.id))
+      }
     } else {
       const { error } = await supabase
         .from('email_signatures')
