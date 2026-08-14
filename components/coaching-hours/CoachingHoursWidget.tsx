@@ -9,7 +9,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-type Period = 'week' | 'month' | 'year'
+type Period = 'week' | 'month' | 'year' | 'all'
 
 interface Session {
   id: string
@@ -17,14 +17,22 @@ interface Session {
   duration_minutes: number
   billed_hours: number
   title: string | null
-  client_id: string
+  client_id: string | null
   client_name: string
+  /** 'note' = in-app session note; 'imported' = coaching_hours_entries row. */
+  source: 'note' | 'imported'
+  /** 'aggregate' = a single block of prior hours (e.g. pre-platform history). */
+  kind: 'session' | 'aggregate'
+  paid: boolean
 }
 
 interface HoursData {
   total_minutes: number
   total_hours: number
+  paid_minutes: number
+  pro_bono_minutes: number
   sessions: Session[]
+  imports_available: boolean
 }
 
 interface Client {
@@ -155,6 +163,286 @@ function AddSessionForm({
   )
 }
 
+// ── Import hours (historical / pre-platform) ─────────────────────────────────
+
+/** Minimal CSV parser — quoted fields, embedded commas/newlines, CRLF. */
+function parseCSV(text: string): string[][] {
+  const rows: string[][] = []
+  let row: string[] = []
+  let field = ''
+  let inQuotes = false
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
+    if (inQuotes) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++ } else inQuotes = false
+      } else field += ch
+    } else if (ch === '"') inQuotes = true
+    else if (ch === ',') { row.push(field); field = '' }
+    else if (ch === '\n' || ch === '\r') {
+      if (ch === '\r' && text[i + 1] === '\n') i++
+      row.push(field); field = ''
+      if (row.some((c) => c.trim() !== '')) rows.push(row)
+      row = []
+    } else field += ch
+  }
+  row.push(field)
+  if (row.some((c) => c.trim() !== '')) rows.push(row)
+  return rows
+}
+
+/** Accepts YYYY-MM-DD or M/D/YYYY (and M-D-YYYY); returns ISO or null. */
+function normalizeDate(raw: string): string | null {
+  const s = raw.trim()
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
+  const m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/)
+  if (m) {
+    const [, mo, d, y] = m
+    return `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`
+  }
+  return null
+}
+
+interface ImportEntry {
+  session_date: string
+  duration_minutes: number
+  client_label: string
+  title?: string
+  kind?: 'session' | 'aggregate'
+  paid?: boolean
+}
+
+/** Map CSV rows onto import entries via loose header matching. */
+function csvToEntries(rows: string[][]): { entries: ImportEntry[]; errors: string[] } {
+  const errors: string[] = []
+  if (rows.length < 2) return { entries: [], errors: ['The file needs a header row and at least one data row.'] }
+  const header = rows[0].map((h) => h.trim().toLowerCase())
+  const col = (...names: string[]) => header.findIndex((h) => names.some((n) => h.includes(n)))
+  const dateCol = col('date')
+  const clientCol = col('client', 'name')
+  const minutesCol = col('minute', 'min')
+  const hoursCol = col('hour')
+  const titleCol = col('title', 'description', 'topic')
+  const paidCol = col('paid')
+  if (dateCol < 0 || clientCol < 0 || (minutesCol < 0 && hoursCol < 0)) {
+    return {
+      entries: [],
+      errors: ['Header row must include date, client, and minutes (or hours) columns.'],
+    }
+  }
+
+  const entries: ImportEntry[] = []
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i]
+    const date = normalizeDate(r[dateCol] || '')
+    if (!date) { errors.push(`Row ${i + 1}: unrecognized date "${r[dateCol] || ''}"`); continue }
+    const client = (r[clientCol] || '').trim()
+    if (!client) { errors.push(`Row ${i + 1}: missing client`); continue }
+    let minutes = 0
+    if (minutesCol >= 0 && (r[minutesCol] || '').trim() !== '') {
+      minutes = Math.round(Number(r[minutesCol]))
+    } else if (hoursCol >= 0) {
+      minutes = Math.round(Number(r[hoursCol]) * 60)
+    }
+    if (!Number.isFinite(minutes) || minutes <= 0) {
+      errors.push(`Row ${i + 1}: bad duration`)
+      continue
+    }
+    const paidRaw = paidCol >= 0 ? (r[paidCol] || '').trim().toLowerCase() : ''
+    entries.push({
+      session_date: date,
+      duration_minutes: minutes,
+      client_label: client,
+      title: titleCol >= 0 ? (r[titleCol] || '').trim() || undefined : undefined,
+      paid: paidRaw === '' ? true : !['no', 'n', 'false', '0', 'pro bono', 'probono'].includes(paidRaw),
+    })
+  }
+  return { entries, errors }
+}
+
+function ImportHoursPanel({
+  onImported,
+  onCancel,
+}: {
+  onImported: () => void
+  onCancel: () => void
+}) {
+  const [mode, setMode] = useState<'block' | 'csv'>('block')
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState('')
+  const [done, setDone] = useState('')
+
+  // Prior-hours block form
+  const [label, setLabel] = useState('Prior coaching hours (pre-platform)')
+  const [hours, setHours] = useState<string>('')
+  const [asOf, setAsOf] = useState(todayISO())
+  const [paid, setPaid] = useState(true)
+
+  // CSV form
+  const [parsed, setParsed] = useState<{ entries: ImportEntry[]; errors: string[]; filename: string } | null>(null)
+
+  async function post(entries: ImportEntry[], source: 'manual' | 'csv') {
+    setSaving(true)
+    setErr('')
+    try {
+      const res = await fetch('/api/coaching-hours/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source, entries }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { setErr(data.error || 'Import failed.'); return }
+      setDone(`Imported ${data.imported} entr${data.imported === 1 ? 'y' : 'ies'}.`)
+      onImported()
+    } catch {
+      setErr('Network error.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function submitBlock(e: React.FormEvent) {
+    e.preventDefault()
+    const h = Number(hours)
+    if (!Number.isFinite(h) || h <= 0) { setErr('Enter the total hours as a number.'); return }
+    post(
+      [{
+        session_date: asOf,
+        duration_minutes: Math.round(h * 60),
+        client_label: label.trim() || 'Prior coaching hours',
+        kind: 'aggregate',
+        paid,
+      }],
+      'manual'
+    )
+  }
+
+  function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    setParsed(null)
+    setErr('')
+    setDone('')
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      const { entries, errors } = csvToEntries(parseCSV(String(reader.result || '')))
+      setParsed({ entries, errors, filename: file.name })
+    }
+    reader.readAsText(file)
+  }
+
+  const inputCls =
+    'w-full rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-surface px-2.5 py-1.5 text-[13px] text-tlw-espresso outline-none focus:border-tlw-signal-orange'
+
+  return (
+    <div className="mt-4 rounded-tlw-lg border border-tlw-signal-orange/30 bg-tlw-canvas/60 p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <p className="text-[12px] font-semibold uppercase tracking-[1.5px] text-tlw-warm-gray">Import hours</p>
+        <div className="flex gap-1">
+          {(['block', 'csv'] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => { setMode(m); setErr(''); setDone('') }}
+              className={`rounded-tlw-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                mode === m
+                  ? 'bg-tlw-navy-rich text-tlw-cream'
+                  : 'border border-tlw-warm-gray/25 text-tlw-espresso hover:bg-tlw-canvas'
+              }`}
+            >
+              {m === 'block' ? 'Prior hours total' : 'CSV file'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {mode === 'block' ? (
+        <form onSubmit={submitBlock}>
+          <p className="mb-3 text-[12px] text-tlw-warm-gray">
+            Record your coaching hours from before the app as one block, so the app carries your
+            complete lifetime total. If you have per-session records, use the CSV upload instead —
+            the log then keeps the per-client detail ICF asks for.
+          </p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-[11px] text-tlw-warm-gray">Label</label>
+              <input type="text" value={label} onChange={(e) => setLabel(e.target.value)} className={inputCls} />
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] text-tlw-warm-gray">Total hours</label>
+              <input
+                type="number" min={0.5} step={0.5} value={hours} onChange={(e) => setHours(e.target.value)}
+                placeholder="e.g. 850" required className={inputCls}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] text-tlw-warm-gray">As of (date the total covers through)</label>
+              <input type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} required className={inputCls} />
+            </div>
+            <label className="flex items-center gap-2 text-[12px] text-tlw-espresso sm:col-span-2">
+              <input
+                type="checkbox" checked={paid} onChange={(e) => setPaid(e.target.checked)}
+                className="h-4 w-4" style={{ accentColor: 'var(--color-signal-orange)' }}
+              />
+              These were paid coaching hours
+            </label>
+          </div>
+          <div className="mt-3 flex items-center gap-2">
+            <button
+              type="submit" disabled={saving}
+              className="rounded-tlw-md bg-tlw-navy-rich px-3 py-1.5 text-[12px] font-medium text-tlw-cream transition-opacity hover:opacity-90 disabled:opacity-40"
+            >
+              {saving ? 'Importing…' : 'Add prior hours'}
+            </button>
+            <button type="button" onClick={onCancel} className="rounded-tlw-md px-3 py-1.5 text-[12px] text-tlw-warm-gray transition-opacity hover:opacity-80">
+              Close
+            </button>
+          </div>
+        </form>
+      ) : (
+        <div>
+          <p className="mb-3 text-[12px] text-tlw-warm-gray">
+            Upload a CSV with a header row. Required columns: <strong>date</strong> (YYYY-MM-DD or
+            M/D/YYYY), <strong>client</strong>, and <strong>minutes</strong> or <strong>hours</strong>.
+            Optional: <strong>title</strong>, <strong>paid</strong> (yes/no — &ldquo;no&rdquo; logs the row as pro bono).
+          </p>
+          <input type="file" accept=".csv,text/csv" onChange={onFile} className="text-[12px] text-tlw-espresso" />
+          {parsed && (
+            <div className="mt-3">
+              <p className="text-[12px] text-tlw-espresso">
+                <strong>{parsed.filename}</strong>: {parsed.entries.length} row{parsed.entries.length === 1 ? '' : 's'} ready
+                {parsed.errors.length > 0 && <> · {parsed.errors.length} skipped</>}
+              </p>
+              {parsed.errors.slice(0, 3).map((e, i) => (
+                <p key={i} className="text-[11px] text-red-600">{e}</p>
+              ))}
+              {parsed.errors.length > 3 && (
+                <p className="text-[11px] text-tlw-warm-gray">…and {parsed.errors.length - 3} more</p>
+              )}
+            </div>
+          )}
+          <div className="mt-3 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => parsed && post(parsed.entries, 'csv')}
+              disabled={saving || !parsed || parsed.entries.length === 0}
+              className="rounded-tlw-md bg-tlw-navy-rich px-3 py-1.5 text-[12px] font-medium text-tlw-cream transition-opacity hover:opacity-90 disabled:opacity-40"
+            >
+              {saving ? 'Importing…' : `Import ${parsed?.entries.length ?? 0} rows`}
+            </button>
+            <button type="button" onClick={onCancel} className="rounded-tlw-md px-3 py-1.5 text-[12px] text-tlw-warm-gray transition-opacity hover:opacity-80">
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {err && <p className="mt-2 text-[12px] text-red-600">{err}</p>}
+      {done && !err && <p className="mt-2 text-[12px] text-green-700">{done}</p>}
+    </div>
+  )
+}
+
 function SessionRow({
   session,
   onUpdate,
@@ -171,6 +459,12 @@ function SessionRow({
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
+  // Note-backed rows edit the note; imported rows edit coaching_hours_entries.
+  const endpoint =
+    session.source === 'imported'
+      ? `/api/coaching-hours/imports/${session.id}`
+      : `/api/coaching-hours/${session.id}`
+
   async function save() {
     if (minutes === session.duration_minutes && date === session.session_date) {
       setEditing(false)
@@ -178,7 +472,7 @@ function SessionRow({
     }
     setSaving(true)
     try {
-      const res = await fetch(`/api/coaching-hours/${session.id}`, {
+      const res = await fetch(endpoint, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ duration_minutes: minutes, session_date: date }),
@@ -195,7 +489,7 @@ function SessionRow({
   async function doDelete() {
     setDeleting(true)
     try {
-      const res = await fetch(`/api/coaching-hours/${session.id}`, { method: 'DELETE' })
+      const res = await fetch(endpoint, { method: 'DELETE' })
       if (res.ok) onDelete(session.id)
     } finally {
       setDeleting(false)
@@ -233,8 +527,17 @@ function SessionRow({
             <>
               <p className="text-[13px] font-medium text-tlw-navy-deep">{session.client_name}</p>
               <p className="text-[11px] text-tlw-warm-gray">
-                {fmtDate(session.session_date)}
+                {session.kind === 'aggregate' ? <>through {fmtDate(session.session_date)}</> : fmtDate(session.session_date)}
                 {session.title && <> · {session.title}</>}
+                {session.source === 'imported' && (
+                  <>
+                    {' '}·{' '}
+                    <span className="rounded bg-tlw-canvas px-1.5 py-0.5 text-[10px] text-tlw-warm-gray">
+                      imported
+                    </span>
+                  </>
+                )}
+                {!session.paid && <> · pro bono</>}
               </p>
             </>
           )}
@@ -244,9 +547,17 @@ function SessionRow({
           {!editing && (
             <div className="text-right">
               <p className="text-[14px] font-medium text-tlw-navy-deep">
-                {session.duration_minutes}m
+                {session.kind === 'aggregate'
+                  ? `${Math.round((session.duration_minutes / 60) * 10) / 10}h`
+                  : `${session.duration_minutes}m`}
               </p>
-              <p className="text-[10px] text-tlw-warm-gray">{session.billed_hours}h billed</p>
+              <p className="text-[10px] text-tlw-warm-gray">
+                {session.source === 'imported'
+                  ? session.kind === 'aggregate'
+                    ? 'prior hours block'
+                    : `${Math.round((session.duration_minutes / 60) * 10) / 10}h`
+                  : `${session.billed_hours}h billed`}
+              </p>
             </div>
           )}
 
@@ -316,6 +627,7 @@ function HoursLogModal({
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
+  const [showImport, setShowImport] = useState(false)
   const [exportPeriod, setExportPeriod] = useState<Period>(period)
   const overlayRef = useRef<HTMLDivElement>(null)
 
@@ -337,23 +649,30 @@ function HoursLogModal({
     load(exportPeriod)
   }, [load, exportPeriod])
 
+  function recompute(prev: HoursData, sessions: Session[]): HoursData {
+    const total_minutes = sessions.reduce((acc, s) => acc + s.duration_minutes, 0)
+    const paid_minutes = sessions.filter((s) => s.paid).reduce((acc, s) => acc + s.duration_minutes, 0)
+    return {
+      ...prev,
+      sessions,
+      total_minutes,
+      total_hours: Math.round((total_minutes / 60) * 10) / 10,
+      paid_minutes,
+      pro_bono_minutes: total_minutes - paid_minutes,
+    }
+  }
+
   function handleUpdate(id: string, updates: Partial<Session>) {
     setData((prev) => {
       if (!prev) return prev
-      const sessions = prev.sessions.map((s) =>
-        s.id === id ? { ...s, ...updates } : s
-      )
-      const total_minutes = sessions.reduce((acc, s) => acc + s.duration_minutes, 0)
-      return { ...prev, sessions, total_minutes, total_hours: Math.round((total_minutes / 60) * 10) / 10 }
+      return recompute(prev, prev.sessions.map((s) => (s.id === id ? { ...s, ...updates } : s)))
     })
   }
 
   function handleDelete(id: string) {
     setData((prev) => {
       if (!prev) return prev
-      const sessions = prev.sessions.filter((s) => s.id !== id)
-      const total_minutes = sessions.reduce((acc, s) => acc + s.duration_minutes, 0)
-      return { ...prev, sessions, total_minutes, total_hours: Math.round((total_minutes / 60) * 10) / 10 }
+      return recompute(prev, prev.sessions.filter((s) => s.id !== id))
     })
   }
 
@@ -363,8 +682,7 @@ function HoursLogModal({
       const sessions = [session, ...prev.sessions].sort((a, b) =>
         b.session_date.localeCompare(a.session_date)
       )
-      const total_minutes = sessions.reduce((acc, s) => acc + s.duration_minutes, 0)
-      return { ...prev, sessions, total_minutes, total_hours: Math.round((total_minutes / 60) * 10) / 10 }
+      return recompute(prev, sessions)
     })
     setShowAdd(false)
   }
@@ -372,13 +690,15 @@ function HoursLogModal({
   function exportCSV() {
     if (!data) return
     const rows = [
-      ['Date', 'Client', 'Session title', 'Duration (min)', 'Billed hours'],
+      ['Date', 'Client', 'Session title', 'Duration (min)', 'Hours', 'Paid', 'Source'],
       ...data.sessions.map((s) => [
         s.session_date,
         s.client_name,
         s.title || '',
         String(s.duration_minutes),
-        String(s.billed_hours),
+        String(Math.round((s.duration_minutes / 60) * 10) / 10),
+        s.paid ? 'yes' : 'no',
+        s.source === 'imported' ? (s.kind === 'aggregate' ? 'imported (prior hours block)' : 'imported') : 'in-app',
       ]),
     ]
     const csv = rows.map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(',')).join('\n')
@@ -389,8 +709,16 @@ function HoursLogModal({
     a.click()
   }
 
-  const periodLabel: Record<Period, string> = { week: 'This week', month: 'This month', year: 'This year' }
-  const totalBilled = data?.sessions.reduce((a, s) => a + s.billed_hours, 0) ?? 0
+  function exportPDF() {
+    // Server-generated PDF (lib/coaching-hours-pdf.ts) — the re-certification
+    // document. Content-Disposition: attachment makes this a plain download.
+    const a = document.createElement('a')
+    a.href = `/api/coaching-hours/export?period=${exportPeriod}`
+    a.click()
+  }
+
+  const periodLabel: Record<Period, string> = { week: 'This week', month: 'This month', year: 'This year', all: 'All time' }
+  const sessionCount = data?.sessions.filter((s) => s.kind !== 'aggregate').length ?? 0
 
   return (
     <div
@@ -420,7 +748,7 @@ function HoursLogModal({
           {/* Period toggle */}
           <div className="mb-5 flex items-center gap-2">
             <span className="text-[12px] text-tlw-warm-gray">Show:</span>
-            {(['week', 'month', 'year'] as Period[]).map((p) => (
+            {(['week', 'month', 'year', 'all'] as Period[]).map((p) => (
               <button
                 key={p}
                 onClick={() => setExportPeriod(p)}
@@ -443,12 +771,20 @@ function HoursLogModal({
                 <p className="text-[22px] font-medium leading-none text-tlw-navy-deep">{data.total_hours}h</p>
               </div>
               <div>
-                <p className="text-[10px] uppercase tracking-[1.5px] text-tlw-warm-gray">Billed hours</p>
-                <p className="text-[22px] font-medium leading-none text-tlw-navy-deep">{totalBilled}h</p>
+                <p className="text-[10px] uppercase tracking-[1.5px] text-tlw-warm-gray">Paid</p>
+                <p className="text-[22px] font-medium leading-none text-tlw-navy-deep">
+                  {Math.round((data.paid_minutes / 60) * 10) / 10}h
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-[1.5px] text-tlw-warm-gray">Pro bono</p>
+                <p className="text-[22px] font-medium leading-none text-tlw-navy-deep">
+                  {Math.round((data.pro_bono_minutes / 60) * 10) / 10}h
+                </p>
               </div>
               <div>
                 <p className="text-[10px] uppercase tracking-[1.5px] text-tlw-warm-gray">Sessions</p>
-                <p className="text-[22px] font-medium leading-none text-tlw-navy-deep">{data.sessions.length}</p>
+                <p className="text-[22px] font-medium leading-none text-tlw-navy-deep">{sessionCount}</p>
               </div>
             </div>
           )}
@@ -456,10 +792,16 @@ function HoursLogModal({
           {/* Actions row */}
           <div className="mb-4 flex flex-wrap gap-2">
             <button
-              onClick={() => setShowAdd((v) => !v)}
+              onClick={() => { setShowAdd((v) => !v); setShowImport(false) }}
               className="rounded-tlw-md border border-tlw-warm-gray/25 px-3 py-1.5 text-[12px] font-medium text-tlw-espresso transition-colors hover:bg-tlw-canvas"
             >
               + Add session
+            </button>
+            <button
+              onClick={() => { setShowImport((v) => !v); setShowAdd(false) }}
+              className="rounded-tlw-md border border-tlw-warm-gray/25 px-3 py-1.5 text-[12px] font-medium text-tlw-espresso transition-colors hover:bg-tlw-canvas"
+            >
+              Import hours
             </button>
             <button
               onClick={exportCSV}
@@ -468,6 +810,14 @@ function HoursLogModal({
             >
               Export CSV
             </button>
+            <button
+              onClick={exportPDF}
+              disabled={!data || data.sessions.length === 0}
+              title="Download a formatted coaching-hours document for ICF re-certification"
+              className="rounded-tlw-md border border-tlw-warm-gray/25 px-3 py-1.5 text-[12px] font-medium text-tlw-espresso transition-colors hover:bg-tlw-canvas disabled:opacity-40"
+            >
+              Export PDF
+            </button>
           </div>
 
           {showAdd && (
@@ -475,6 +825,13 @@ function HoursLogModal({
               clients={clients}
               onAdd={handleAdd}
               onCancel={() => setShowAdd(false)}
+            />
+          )}
+
+          {showImport && (
+            <ImportHoursPanel
+              onImported={() => load(exportPeriod)}
+              onCancel={() => setShowImport(false)}
             />
           )}
 
@@ -533,7 +890,7 @@ export function CoachingHoursWidget({ compact = false }: Props) {
     load(period)
   }, [load, period])
 
-  const periodLabel: Record<Period, string> = { week: 'Past week', month: 'Past month', year: 'Past year' }
+  const periodLabel: Record<Period, string> = { week: 'Past week', month: 'Past month', year: 'Past year', all: 'All time' }
 
   return (
     <>
@@ -542,7 +899,7 @@ export function CoachingHoursWidget({ compact = false }: Props) {
       <div>
         {/* Period toggle */}
         <div className="mb-3 flex gap-1">
-          {(['week', 'month', 'year'] as Period[]).map((p) => (
+          {(['week', 'month', 'year', 'all'] as Period[]).map((p) => (
             <button
               key={p}
               onClick={() => setPeriod(p)}
@@ -552,7 +909,7 @@ export function CoachingHoursWidget({ compact = false }: Props) {
                   : 'text-tlw-warm-gray hover:text-tlw-espresso'
               }`}
             >
-              {p === 'week' ? 'Wk' : p === 'month' ? 'Mo' : 'Yr'}
+              {p === 'week' ? 'Wk' : p === 'month' ? 'Mo' : p === 'year' ? 'Yr' : 'All'}
             </button>
           ))}
         </div>

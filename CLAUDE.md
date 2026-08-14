@@ -1371,6 +1371,22 @@ Sessions booked before a calendar switch keep working — event reads/deletes
 fall back to the primary calendar on a 404, and changing the calendar clears
 `calendar_sync_token` for a clean re-baseline.
 
+**`049_coaching_hours_entries.sql` — coaching hours import (canonical hours record).**
+Creates `coaching_hours_entries`: imported/historical coaching hours (CSV rows,
+hand-logged sessions, or a single `kind='aggregate'` "prior hours" block), so
+the app carries the coach's complete lifetime total. Free-text `client_label`
+(historical clients need not be roster clients), `paid` boolean (ICF paid vs
+pro-bono split), RLS enabled. Additive; **apply before the hours-log "Import
+hours" panel is used** — the log GET and the PDF export read the table
+defensively (they degrade to notes-only until it exists), but the import POST
+and the imported-row edit/delete routes need it. `lib/coaching-hours.ts` is the
+shared loader (notes + entries merged; period `all` = lifetime);
+`GET /api/coaching-hours/export?period=` renders the ICF re-certification PDF
+via `lib/coaching-hours-pdf.ts` (pdf-lib — header, paid/pro-bono summary,
+prior-hours blocks, by-client rollup, paginated chronological log). The widget
+gained an **All-time** period, an **Import hours** panel (prior-hours block +
+CSV upload), and an **Export PDF** button next to Export CSV.
+
 **`048_supervisor_bootstrap_and_signature_unique.sql` — APPLIED (staging + production, 2026-08-14).** (1) Promotes
 the founding coach (email jeff@jeffkholmes.com, else earliest-created) to
 `role='supervisor'` if no supervisor exists — **required, or nobody can reach

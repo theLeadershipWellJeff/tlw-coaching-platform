@@ -595,6 +595,23 @@ export type PortalMessage = {
   created_at: Timestamp
 }
 
+// Imported / historical coaching hours (migration 049). Free-text client_label
+// because pre-platform clients need not exist in the roster; kind 'aggregate'
+// is a single block of prior hours (e.g. "Prior coaching hours 2015–2024").
+export type CoachingHoursEntry = {
+  id: string
+  org_id: string
+  coach_id: string
+  session_date: string
+  duration_minutes: number
+  client_label: string
+  title: string | null
+  kind: string // session | aggregate
+  paid: boolean
+  source: string // manual | csv
+  created_at: Timestamp
+}
+
 export type Database = {
   public: {
     Tables: {
@@ -620,6 +637,12 @@ export type Database = {
         Row: PortalMessage
         Insert: Insertable<PortalMessage>
         Update: Updatable<PortalMessage>
+        Relationships: []
+      }
+      coaching_hours_entries: {
+        Row: CoachingHoursEntry
+        Insert: Insertable<CoachingHoursEntry>
+        Update: Updatable<CoachingHoursEntry>
         Relationships: []
       }
       clients: {
