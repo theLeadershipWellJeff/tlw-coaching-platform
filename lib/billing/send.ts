@@ -350,7 +350,7 @@ async function sendClientCoverEmail(
             ${authBlock}
             <p style="margin:0;color:#3d2b1f;font-size:15px;line-height:1.6;">
               Warmly,<br />
-              <strong>${escapeHtml(coach.name || 'Dr. Jeff Holmes')}</strong><br />
+              <strong>${escapeHtml(coach.name || coach.email)}</strong><br />
               <span style="color:#7a6e6a;font-size:13px;">theLeadershipWell</span>
             </p>
           </td>
@@ -358,7 +358,7 @@ async function sendClientCoverEmail(
         <tr>
           <td style="background:#f9f7f4;padding:16px 32px;border-top:1px solid #e8e0d8;">
             <p style="margin:0;color:#7a6e6a;font-size:11px;text-align:center;">
-              theLeadershipWell · jeff@theleadershipwell.com
+              theLeadershipWell · ${escapeHtml(coach.email)}
             </p>
           </td>
         </tr>
@@ -452,7 +452,7 @@ export async function sendPaymentThankYou(
             </p>
             <p style="margin:0;color:#3d2b1f;font-size:15px;line-height:1.6;">
               Warmly,<br />
-              <strong>${escapeHtml(coach.name || 'Dr. Jeff Holmes')}</strong><br />
+              <strong>${escapeHtml(coach.name || coach.email)}</strong><br />
               <span style="color:#7a6e6a;font-size:13px;">theLeadershipWell</span>
             </p>
           </td>
@@ -460,7 +460,7 @@ export async function sendPaymentThankYou(
         <tr>
           <td style="background:#f9f7f4;padding:16px 32px;border-top:1px solid #e8e0d8;">
             <p style="margin:0;color:#7a6e6a;font-size:11px;text-align:center;">
-              theLeadershipWell · jeff@theleadershipwell.com
+              theLeadershipWell · ${escapeHtml(coach.email)}
             </p>
           </td>
         </tr>

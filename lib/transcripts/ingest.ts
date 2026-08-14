@@ -11,6 +11,7 @@ import type { Coach, Database } from '@/lib/supabase/types'
 import { parseTranscript, deriveInitials, buildTranscriptTitle } from './parse'
 import { proposeTranscriptTitle } from './title'
 import { matchClient, type RosterClient } from './match'
+import { accessibleClientIds } from '@/lib/client-access'
 import { runAndStoreReport } from '@/lib/scoring/store'
 import {
   findClientFromCalendar,
@@ -164,7 +165,13 @@ export async function ingestMarkdown(
     match = { clientId: input.forceClient.id, confidence: 1, status: 'matched' }
     matchedName = input.forceClient.name
   } else {
-    const { data: roster } = await supabase.from('clients').select('id, name, email')
+    // Tenant isolation: only ever match against the ingesting coach's own
+    // roster. An unscoped read here could name/calendar-match a transcript to
+    // ANOTHER coach's client and score it against them (ISOLATION_AUDIT §1).
+    const ownIds = await accessibleClientIds(supabase, coach.id)
+    const { data: roster } = ownIds.length
+      ? await supabase.from('clients').select('id, name, email').in('id', ownIds)
+      : { data: [] }
     const clients = (roster || []) as RosterClientWithEmail[]
 
     // 1) Match on a name in the title/front matter (when the file is named).

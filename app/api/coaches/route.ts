@@ -1,13 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
-import { getSessionCoach } from '@/lib/coach'
+import { requireSupervisor, toErrorResponse } from '@/lib/api-handler'
 
 export const runtime = 'nodejs'
 
+// Coach management is supervisor-only: listing every coach (with client/account
+// counts), and adding coaches, are firm-admin operations — an ordinary coach
+// must not see or manage colleagues (ISOLATION_AUDIT Decision #2).
+
 export async function GET() {
   const supabase = getSupabaseAdmin()
-  const coach = await getSessionCoach(supabase)
-  if (!coach) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  let coach
+  try {
+    coach = await requireSupervisor(supabase)
+  } catch (e) {
+    return toErrorResponse(e)
+  }
 
   const { data, error } = await supabase
     .from('coaches')
@@ -54,8 +62,11 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const supabase = getSupabaseAdmin()
-  const coach = await getSessionCoach(supabase)
-  if (!coach) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  try {
+    await requireSupervisor(supabase)
+  } catch (e) {
+    return toErrorResponse(e)
+  }
 
   const body = await req.json().catch(() => ({}))
   const name = (body?.name as string | undefined)?.trim()

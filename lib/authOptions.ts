@@ -30,6 +30,35 @@ export const authOptions = {
     }),
   ],
   callbacks: {
+    /**
+     * Beta gate. When BETA_COACH_EMAILS is set (comma-separated), only those
+     * addresses — plus anyone who already has a coaches row — may sign in;
+     * everyone else sees NextAuth's AccessDenied page. Unset/empty = open
+     * sign-up (the pre-beta behavior). Existing coaches are always allowed so
+     * enabling the gate can never lock out someone already onboarded.
+     */
+    async signIn({ user }: any) {
+      const allowlist = (process.env.BETA_COACH_EMAILS || '')
+        .split(',')
+        .map((e) => e.trim().toLowerCase())
+        .filter(Boolean)
+      if (allowlist.length === 0) return true
+      const email = (user?.email || '').toLowerCase()
+      if (!email) return false
+      if (allowlist.includes(email)) return true
+      try {
+        const supabase = getSupabaseAdmin()
+        const { data } = await supabase
+          .from('coaches')
+          .select('id')
+          .eq('email', email)
+          .maybeSingle()
+        if (data) return true
+      } catch (e) {
+        console.error('Allowlist coach lookup failed:', e)
+      }
+      return false
+    },
     async jwt({ token, account }: any) {
       if (account) {
         token.accessToken = account.access_token

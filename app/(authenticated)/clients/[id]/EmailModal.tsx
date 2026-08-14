@@ -30,7 +30,9 @@ export function EmailModal({
   onSent?: () => void
 }) {
   const [to, setTo] = useState(initialTo)
-  const [cc, setCc] = useState('jeff@theleadershipwell.com')
+  // Default the Cc to the signed-in coach's own address (a copy in their inbox);
+  // loaded from /api/coach so it's never another coach's mailbox.
+  const [cc, setCc] = useState('')
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
   const [stage, setStage] = useState<'compose' | 'review'>('compose')
@@ -44,6 +46,14 @@ export function EmailModal({
     fetch('/api/email/signature')
       .then((r) => (r.ok ? r.json() : { html: '' }))
       .then((d) => !cancelled && setSignature(d.html || ''))
+      .catch(() => {})
+    fetch('/api/coach')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled || !d?.coach?.email) return
+        // Only prefill if the coach hasn't already typed something.
+        setCc((prev) => (prev === '' ? d.coach.email : prev))
+      })
       .catch(() => {})
     return () => {
       cancelled = true

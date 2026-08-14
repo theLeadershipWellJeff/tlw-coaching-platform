@@ -13,12 +13,18 @@ import { getBaseUrl } from '@/lib/url'
 import { headerSafe, encodeHeaderValue } from '@/lib/email-mime'
 import { logCommunication, htmlToPreview } from '@/lib/communications'
 
-function makeRawEmail(to: string, cc: string, subject: string, body: string, isHTML: boolean) {
+function makeRawEmail(
+  sender: { email: string; name: string },
+  to: string,
+  cc: string,
+  subject: string,
+  body: string,
+  isHTML: boolean
+) {
   const contentType = isHTML ? 'text/html' : 'text/plain'
-  const from = process.env.JEFF_FROM_EMAIL!
 
   const message = [
-    `From: Jeff Holmes <${from}>`,
+    `From: ${headerSafe(sender.name)} <${sender.email}>`,
     `To: ${headerSafe(to)}`,
     `Cc: ${headerSafe(cc)}`,
     `Subject: ${encodeHeaderValue(subject)}`,
@@ -45,13 +51,21 @@ export async function POST(req: NextRequest) {
   )
   auth.setCredentials({ access_token: session.accessToken as string })
   const gmail = google.gmail({ version: 'v1', auth })
-  const cc = process.env.JEFF_CC_EMAIL!
+  // The send goes out through the signed-in coach's Gmail — From is their
+  // identity, and the courtesy copy goes to their own inbox (not a firm default).
+  const senderEmail = (session as any).user?.email || process.env.JEFF_FROM_EMAIL!
+  const sender = {
+    email: senderEmail,
+    name: (session as any).user?.name || process.env.DEFAULT_COACH_NAME || senderEmail,
+  }
+  const cc = senderEmail || process.env.JEFF_CC_EMAIL!
 
   const results = []
 
   // 1. Send intro email
   if (sendIntro && introText) {
     const introRaw = makeRawEmail(
+      sender,
       clientEmail,
       cc,
       'Quick favor - feedback on something I\'m building',
@@ -103,7 +117,7 @@ export async function POST(req: NextRequest) {
     console.error('[send] prep tracking (action links / agenda) failed', e)
   }
 
-  const html = buildClientEmailHTML(clientName, content, actionLinks, agendaUrl)
+  const html = buildClientEmailHTML(clientName, content, actionLinks, agendaUrl, sender.name)
 
   // Snapshot the prep sheet against the client so it can be re-read in the
   // workspace alongside the session notes. Best-effort — never block the send.
@@ -124,6 +138,7 @@ export async function POST(req: NextRequest) {
   }
 
   const prepRaw = makeRawEmail(
+    sender,
     clientEmail,
     cc,
     'Your Session Preparation - theLeadershipWell',

@@ -11,7 +11,7 @@ export async function GET() {
   try {
     const supabase = getSupabaseAdmin()
     const coach = await requireCoach(supabase)
-    const html = await getActiveSignatureHtml(supabase, coach.id)
+    const html = await getActiveSignatureHtml(supabase, coach)
     return NextResponse.json({ html })
   } catch (e) {
     return toErrorResponse(e)

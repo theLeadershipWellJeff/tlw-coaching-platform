@@ -41,7 +41,9 @@ async function loadGoals(clientId?: string, clientName?: string): Promise<Coachi
 
 export async function POST(req: NextRequest) {
   try {
-    await requireSession()
+    const session = await requireSession()
+    // Voice the prep email as the signed-in coach, not a fixed name.
+    const coachName = (session as any).user?.name || 'the coach'
     const { clientName, clientId, notes, actions, zoomSummaries } = await readJson(req, GenerateSchema)
 
   const notesText = notes
@@ -67,7 +69,7 @@ export async function POST(req: NextRequest) {
 
     zoomSection = `
 
-ZOOM AI MEETING SUMMARIES (recent sessions — focus on ${clientName}'s themes, not Jeff's action items):
+ZOOM AI MEETING SUMMARIES (recent sessions — focus on ${clientName}'s themes, not the coach's action items):
 ${zoomText}`
   }
 
@@ -103,7 +105,7 @@ There are no workspace goals on file, so derive the "coachingPlan". This is the 
   "questions": [
     {"theme": "EXACT goal title", "question": "Open-ended reflection question deeply tied to that goal and your specific situation, addressed to you — 30-50 words"}
   ],
-  "closingLine": "1-2 warm, specific, personal sentences from Jeff — acknowledge the real work this client is doing. No AI mention. No generic coaching language. Sound like Jeff.",
+  "closingLine": "1-2 warm, specific, personal sentences from ${coachName} — acknowledge the real work this client is doing. No AI mention. No generic coaching language. Sound like ${coachName}.",
   "quote": {"text": "An inspiring quote relevant to this client's specific journey — not overused or cliché", "author": "Author Name"}
 }`
     : `{
@@ -132,23 +134,23 @@ There are no workspace goals on file, so derive the "coachingPlan". This is the 
     {"theme": "EXACT title from coachingPlan item 2", "question": "Reflection question"},
     {"theme": "EXACT title from coachingPlan item 3", "question": "Reflection question"}
   ],
-  "closingLine": "1-2 warm, specific, personal sentences from Jeff — acknowledge the real work this client is doing. No AI mention. No generic coaching language. Sound like Jeff, not a template.",
+  "closingLine": "1-2 warm, specific, personal sentences from ${coachName} — acknowledge the real work this client is doing. No AI mention. No generic coaching language. Sound like ${coachName}, not a template.",
   "quote": {"text": "An inspiring quote relevant to this client's specific journey — not overused or cliché", "author": "Author Name"}
 }`
 
-  const prompt = `You are helping Jeff Holmes, executive coach at theLeadershipWell, generate a personalized session preparation email for ${clientName}.
+  const prompt = `You are helping ${coachName}, executive coach at theLeadershipWell, generate a personalized session preparation email for ${clientName}.
 
 Return ONLY a valid JSON object — no markdown fences, no preamble, no explanation.
 
 SOURCE PRECEDENCE:
-- Jeff's SESSION NOTES are the PRIMARY substance for every section — build the content from them first.
+- The coach's SESSION NOTES are the PRIMARY substance for every section — build the content from them first.
 - The ZOOM AI MEETING SUMMARIES are corroborating/supporting ONLY: use them to fill gaps, surface ${clientName}'s own language, and confirm. They never override or contradict the notes.
 - On any conflict, the NOTES WIN. If a summary implies something the notes don't support, defer to the notes.
 
 VOICE:
 - Address ${clientName} DIRECTLY in the second person — "you," "your." NEVER refer to ${clientName} in the third person ("the client," "she/he," "${clientName} has been…").
 - Second person applies to ${clientName} ONLY. Other people named (direct reports, colleagues, spouse, etc.) are referred to normally in the third person — do NOT second-person them.
-- Warm, direct, affirming, plain. Mirror Jeff's actual phrasing from the notes — preserve his words where they carry the meaning rather than paraphrasing into generic coaching-speak. Sound like Jeff.
+- Warm, direct, affirming, plain. Mirror the coach's actual phrasing from the notes — preserve their words where they carry the meaning rather than paraphrasing into generic coaching-speak. Sound like ${coachName}.
 
 ${planInstruction}
 
@@ -160,7 +162,7 @@ RECENT EXPLORATION ("exploring") — the recent motion, NOT the standing plan:
 SESSION NOTES (most recent first — the PRIMARY source):
 ${notesText}
 
-OPEN ACTION ITEMS FROM COACH ACCOUNTABLE:
+OPEN ACTION ITEMS (commitments still outstanding):
 ${actionsText}${zoomSection}
 
 Generate this exact JSON structure:

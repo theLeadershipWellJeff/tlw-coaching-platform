@@ -33,7 +33,8 @@ function dollars(n: number, currency = 'usd'): string {
 
 // Shared branded shell — mirrors lib/billing/send.ts so all billing mail reads
 // as one system.
-function shell(inner: string): string {
+function shell(inner: string, coachEmail?: string): string {
+  const footerContact = coachEmail ? escapeHtml(coachEmail) : 'jeff@theleadershipwell.com'
   return `
 <!DOCTYPE html>
 <html>
@@ -47,7 +48,7 @@ function shell(inner: string): string {
         </td></tr>
         <tr><td style="padding:32px;">${inner}</td></tr>
         <tr><td style="background:#f9f7f4;padding:16px 32px;border-top:1px solid #e8e0d8;">
-          <p style="margin:0;color:#7a6e6a;font-size:11px;text-align:center;">theLeadershipWell · jeff@theleadershipwell.com</p>
+          <p style="margin:0;color:#7a6e6a;font-size:11px;text-align:center;">theLeadershipWell · ${footerContact}</p>
         </td></tr>
       </table>
     </td></tr>
@@ -98,13 +99,13 @@ export async function sendAuthorizationInvite(
     <p style="margin:24px 0;">
       <a href="${link}" style="display:inline-block;background:#111226;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:6px;font-size:14px;">Store my card securely</a>
     </p>
-    <p style="margin:0;color:#3d2b1f;font-size:15px;line-height:1.6;">Warmly,<br /><strong>${escapeHtml(coach.name || 'Dr. Jeff Holmes')}</strong><br /><span style="color:#7a6e6a;font-size:13px;">theLeadershipWell</span></p>`
+    <p style="margin:0;color:#3d2b1f;font-size:15px;line-height:1.6;">Warmly,<br /><strong>${escapeHtml(coach.name || coach.email)}</strong><br /><span style="color:#7a6e6a;font-size:13px;">theLeadershipWell</span></p>`
 
   const sent = await sendCoachHtmlEmail(coach as any, {
     to: opts.billingEmail,
     cc: opts.billingCc ?? undefined,
     subject,
-    html: shell(inner),
+    html: shell(inner, coach.email),
   }).catch(() => false)
 
   await logComm(supabase, coachId, 'billing_authorization', subject, sent)
@@ -159,13 +160,13 @@ export async function sendPaymentReceipt(
     <p style="margin:0 0 16px;color:#3d2b1f;font-size:15px;line-height:1.6;">Dear ${escapeHtml(account.name)},</p>
     <p style="margin:0 0 8px;color:#3d2b1f;font-size:15px;line-height:1.6;">We've charged your card on file <strong>${total}</strong>${period ? ` for <strong>${period}</strong>` : ''}. Your paid invoice is attached for your records. No further action is needed.</p>
     ${linkBlock}
-    <p style="margin:24px 0 0;color:#3d2b1f;font-size:15px;line-height:1.6;">Warmly,<br /><strong>${escapeHtml(coach.name || 'Dr. Jeff Holmes')}</strong><br /><span style="color:#7a6e6a;font-size:13px;">theLeadershipWell</span></p>`
+    <p style="margin:24px 0 0;color:#3d2b1f;font-size:15px;line-height:1.6;">Warmly,<br /><strong>${escapeHtml(coach.name || coach.email)}</strong><br /><span style="color:#7a6e6a;font-size:13px;">theLeadershipWell</span></p>`
 
   const sent = await sendCoachHtmlEmail(coach as any, {
     to: account.billing_email,
     cc: account.billing_cc ?? undefined,
     subject,
-    html: shell(inner),
+    html: shell(inner, coach.email),
     attachments,
   }).catch(() => false)
 
@@ -201,13 +202,13 @@ export async function sendAdjustmentNotice(
   const inner = `
     <p style="margin:0 0 16px;color:#3d2b1f;font-size:15px;line-height:1.6;">Dear ${escapeHtml(account.name)},</p>
     <p style="margin:0 0 16px;color:#3d2b1f;font-size:15px;line-height:1.6;">${body}</p>
-    <p style="margin:24px 0 0;color:#3d2b1f;font-size:15px;line-height:1.6;">Warmly,<br /><strong>${escapeHtml(coach.name || 'Dr. Jeff Holmes')}</strong><br /><span style="color:#7a6e6a;font-size:13px;">theLeadershipWell</span></p>`
+    <p style="margin:24px 0 0;color:#3d2b1f;font-size:15px;line-height:1.6;">Warmly,<br /><strong>${escapeHtml(coach.name || coach.email)}</strong><br /><span style="color:#7a6e6a;font-size:13px;">theLeadershipWell</span></p>`
 
   const sent = await sendCoachHtmlEmail(coach as any, {
     to: account.billing_email,
     cc: account.billing_cc ?? undefined,
     subject,
-    html: shell(inner),
+    html: shell(inner, coach.email),
   }).catch(() => false)
 
   const communicationId = await logComm(supabase, coachId, 'billing_adjustment', subject, sent)

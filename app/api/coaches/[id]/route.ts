@@ -1,15 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
-import { getSessionCoach } from '@/lib/coach'
+import { requireSupervisor, toErrorResponse } from '@/lib/api-handler'
 
 export const runtime = 'nodejs'
 
 type Params = { params: { id: string } }
 
+// Supervisor-only: editing a coach's role is privilege management and deleting
+// a coach is destructive — neither may be reachable by an ordinary coach
+// (ISOLATION_AUDIT Decision #2).
+
 export async function PATCH(req: NextRequest, { params }: Params) {
   const supabase = getSupabaseAdmin()
-  const coach = await getSessionCoach(supabase)
-  if (!coach) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  try {
+    await requireSupervisor(supabase)
+  } catch (e) {
+    return toErrorResponse(e)
+  }
 
   const body = await req.json().catch(() => ({}))
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
@@ -31,8 +38,12 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
 export async function DELETE(_req: NextRequest, { params }: Params) {
   const supabase = getSupabaseAdmin()
-  const coach = await getSessionCoach(supabase)
-  if (!coach) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  let coach
+  try {
+    coach = await requireSupervisor(supabase)
+  } catch (e) {
+    return toErrorResponse(e)
+  }
 
   // Prevent deleting yourself.
   if (params.id === coach.id)

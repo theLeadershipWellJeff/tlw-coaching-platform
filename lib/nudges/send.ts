@@ -83,7 +83,7 @@ export async function sendNudge(
 
   const subject = nudge.draft_subject?.trim() || 'A quick note'
   const bodyHtml = nudgeBodyToHtml(nudge.draft_body)
-  const signature = await getActiveSignatureHtml(supabase, coach.id)
+  const signature = await getActiveSignatureHtml(supabase, coach)
   const html = bodyHtml + signature
 
   const ok = await sendCoachHtmlEmail(coach, { to: client.email, subject, html, attachments }).catch(() => false)

@@ -50,7 +50,7 @@ function dedupePreserveOrder(items: string[], max: number): string[] {
 export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const supabase = getSupabaseAdmin()
-    await requireClientCoach(supabase, params.id)
+    const coach = await requireClientCoach(supabase, params.id)
 
     const { data: client, error: cErr } = await supabase
       .from('clients')
@@ -126,7 +126,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
       ? `Coaching goals:\n${goals.map((g) => `- ${g.title}${g.description ? ` — ${g.description}` : ''}`).join('\n')}`
       : 'Coaching goals: (none set)'
 
-    const prompt = `You are helping Jeff Holmes, executive coach at theLeadershipWell, prepare to open his next session with ${client.name}. Below is what's on file. Synthesize it into a tight prep brief the coach can read in ten seconds right before the call.
+    const prompt = `You are helping ${coach.name || 'the coach'}, executive coach at theLeadershipWell, prepare to open their next session with ${client.name}. Below is what's on file. Synthesize it into a tight prep brief the coach can read in ten seconds right before the call.
 
 ${fmt('Flagged for next time (from prior notes — the coach explicitly wanted to return to these)', nextTime)}
 

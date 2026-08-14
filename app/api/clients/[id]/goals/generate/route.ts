@@ -28,7 +28,7 @@ function toText(html: string): string {
 export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const supabase = getSupabaseAdmin()
-    await requireClientCoach(supabase, params.id)
+    const coach = await requireClientCoach(supabase, params.id)
 
     if (!process.env.ANTHROPIC_API_KEY) {
       return NextResponse.json({ error: 'ANTHROPIC_API_KEY is not configured.' }, { status: 500 })
@@ -59,7 +59,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
     .map((n) => `[${n.session_date}] ${n.title || ''}\n${toText(n.content)}`)
     .join('\n\n---\n\n')
 
-  const prompt = `You are helping Jeff Holmes, executive coach at theLeadershipWell, articulate the CURRENT coaching goals for ${client.name}, drawn from their recent session notes.
+  const prompt = `You are helping ${coach.name || 'the coach'}, executive coach at theLeadershipWell, articulate the CURRENT coaching goals for ${client.name}, drawn from their recent session notes.
 
 Return ONLY a valid JSON array — no markdown fences, no preamble. 3 to 4 goals, most important first:
 [

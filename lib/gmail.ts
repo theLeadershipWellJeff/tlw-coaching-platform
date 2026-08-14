@@ -20,13 +20,14 @@ export type EmailAttachment = {
 
 function makeRawHtmlEmail(opts: {
   from: string
+  fromName: string
   to: string
   cc?: string
   subject: string
   html: string
   attachments?: EmailAttachment[]
 }): string {
-  const lines = [`From: ${process.env.DEFAULT_COACH_NAME || 'Jeff Holmes'} <${opts.from}>`, `To: ${headerSafe(opts.to)}`]
+  const lines = [`From: ${headerSafe(opts.fromName)} <${opts.from}>`, `To: ${headerSafe(opts.to)}`]
   if (opts.cc) lines.push(`Cc: ${headerSafe(opts.cc)}`)
   lines.push(`Subject: ${encodeHeaderValue(opts.subject)}`, 'MIME-Version: 1.0')
 
@@ -76,8 +77,13 @@ export async function sendCoachHtmlEmail(
   const gmail = google.gmail({ version: 'v1', auth })
 
   try {
+    // The send goes out through THIS coach's Gmail (their refresh token), so the
+    // From header must be their identity — Gmail rewrites a non-alias From to the
+    // authenticated account anyway, and stamping another coach's address (the old
+    // JEFF_FROM_EMAIL behavior) mislabeled every beta coach's mail as Jeff's.
     const raw = makeRawHtmlEmail({
-      from: process.env.JEFF_FROM_EMAIL!,
+      from: coach.email || process.env.JEFF_FROM_EMAIL!,
+      fromName: coach.name || process.env.DEFAULT_COACH_NAME || coach.email,
       to: opts.to,
       cc: opts.cc,
       subject: opts.subject,
