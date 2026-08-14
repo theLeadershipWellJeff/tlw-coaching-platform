@@ -225,15 +225,40 @@ function CoachRow({ coach, onUpdated, onRemoved }: {
 export default function CoachesPage() {
   const [coaches, setCoaches] = useState<Coach[]>([])
   const [loading, setLoading] = useState(true)
+  const [forbidden, setForbidden] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
 
   useEffect(() => {
     fetch('/api/coaches')
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((r) => {
+        if (r.status === 403) { setForbidden(true); return Promise.reject() }
+        return r.ok ? r.json() : Promise.reject()
+      })
       .then((d) => setCoaches(d.coaches ?? []))
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
+
+  // Coach management is supervisor-only (the API enforces it) — show a clear
+  // notice instead of a misleading empty roster + an Add button that would fail.
+  if (forbidden) {
+    return (
+      <>
+        <PageHeader
+          backHref="/business-center/accounts"
+          backLabel="Accounts"
+          title="My Team"
+          subtitle="Coaches working under theLeadershipWell"
+        />
+        <div className="rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface px-6 py-10 text-center">
+          <p className="text-[14px] font-medium text-tlw-navy-deep">Supervisor access required</p>
+          <p className="mt-1 text-[13px] text-tlw-warm-gray">
+            Managing the coach roster is limited to supervisors. Ask your practice lead if you need access.
+          </p>
+        </div>
+      </>
+    )
+  }
 
   const myCoaches = coaches.filter((c) => !c.is_me)
   const me = coaches.find((c) => c.is_me)

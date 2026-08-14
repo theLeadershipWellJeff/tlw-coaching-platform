@@ -60,8 +60,8 @@ export async function POST(req: NextRequest) {
     // Tenant gate: 404 unless the coach is linked to this client. Returns the coach.
     const coach = await requireClientCoach(supabase, clientId)
 
-    const ccAddr = cc === '' ? undefined : cc || process.env.JEFF_CC_EMAIL
-    const signature = await getActiveSignatureHtml(supabase, coach.id)
+    const ccAddr = cc === '' ? undefined : cc || coach.email || process.env.JEFF_CC_EMAIL
+    const signature = await getActiveSignatureHtml(supabase, coach)
 
     // Wrap the composed body in a base font, then append the signature. This is
     // the exact HTML that goes out AND what we log.
@@ -71,8 +71,9 @@ export async function POST(req: NextRequest) {
       `</div>` +
       signature
 
-    const fromEmail = process.env.JEFF_FROM_EMAIL || coach.email
-    const fromName = process.env.DEFAULT_COACH_NAME || coach.name
+    // The signed-in coach's own identity — the send goes out through THEIR Gmail.
+    const fromEmail = coach.email || process.env.JEFF_FROM_EMAIL || ''
+    const fromName = coach.name || process.env.DEFAULT_COACH_NAME || coach.email
 
     const auth = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET)
     auth.setCredentials({ access_token: session.accessToken as string })

@@ -21,6 +21,15 @@ function SessionPage() {
   const [activeEdit, setActiveEdit] = useState<string | null>(null)
   const [personalNote, setPersonalNote] = useState('')
   const [sendStatus, setSendStatus] = useState('')
+  const [coachName, setCoachName] = useState('')
+
+  // The signature preview + CC note read as the signed-in coach, not a fixed name.
+  useEffect(() => {
+    fetch('/api/coach')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d?.coach?.name && setCoachName(d.coach.name))
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (clientName) run()
@@ -178,7 +187,7 @@ function SessionPage() {
         <TLWLogo size={48} light />
         <h2 className="font-serif text-3xl font-light text-tlw-cream mt-6 mb-3">Sent ✓</h2>
         <p className="text-tlw-warm-gray text-sm mb-2">Session prep delivered to {clientName}</p>
-        <p className="text-tlw-warm-gray text-xs mb-8">CC&apos;d to jeff@theleadershipwell.com</p>
+        <p className="text-tlw-warm-gray text-xs mb-8">A copy was CC&apos;d to your inbox</p>
         <button onClick={() => router.push('/')} className="text-tlw-cream underline text-sm">← Back to dashboard</button>
       </div>
     )
@@ -338,7 +347,7 @@ function SessionPage() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                 <TLWLogo size={38} />
                 <div>
-                  <p style={{ fontWeight: 700, fontSize: 14, color: '#111226' }}>Jeff Holmes</p>
+                  <p style={{ fontWeight: 700, fontSize: 14, color: '#111226' }}>{coachName || 'Your coach'}</p>
                   <p style={{ fontSize: 12, color: '#8B8680', marginTop: 1 }}>Executive Coach · theLeadershipWell</p>
                 </div>
               </div>
@@ -359,7 +368,7 @@ function SessionPage() {
               Send to {clientName} →
             </button>
           </div>
-          <p className="text-tlw-warm-gray text-xs text-center mt-2">Also CC&apos;d to jeff@theleadershipwell.com</p>
+          <p className="text-tlw-warm-gray text-xs text-center mt-2">A copy will also be CC&apos;d to your inbox</p>
         </div>
       </div>
     </div>

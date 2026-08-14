@@ -30,6 +30,44 @@ export const authOptions = {
     }),
   ],
   callbacks: {
+    /**
+     * Beta gate. When BETA_COACH_EMAILS is set (comma-separated), only those
+     * addresses — plus anyone who already has a coaches row — may sign in;
+     * everyone else sees NextAuth's AccessDenied page. Unset/empty = open
+     * sign-up (the pre-beta behavior). Existing coaches are always allowed so
+     * enabling the gate can never lock out someone already onboarded.
+     */
+    async signIn({ user }: any) {
+      const allowlist = (process.env.BETA_COACH_EMAILS || '')
+        .split(',')
+        .map((e) => e.trim().toLowerCase())
+        .filter(Boolean)
+      if (allowlist.length === 0) return true
+      const email = (user?.email || '').toLowerCase()
+      if (!email) return false
+      if (allowlist.includes(email)) return true
+      try {
+        const supabase = getSupabaseAdmin()
+        const { data, error } = await supabase
+          .from('coaches')
+          .select('id')
+          .eq('email', email)
+          .maybeSingle()
+        if (data) return true
+        // A read ERROR (not "no row") must fail OPEN — the gate promises an
+        // already-onboarded coach can never be locked out, and a transient DB
+        // blip must not break that. A genuine stranger just reaches an app that
+        // is down anyway; tenant isolation is enforced separately server-side.
+        if (error) {
+          console.error('Allowlist coach lookup errored — failing open:', error)
+          return true
+        }
+      } catch (e) {
+        console.error('Allowlist coach lookup failed — failing open:', e)
+        return true
+      }
+      return false
+    },
     async jwt({ token, account }: any) {
       if (account) {
         token.accessToken = account.access_token

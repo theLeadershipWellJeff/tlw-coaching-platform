@@ -261,6 +261,13 @@ export type Coach = {
   // cursor. null until the first sync; cleared + re-seeded on a 410 (stale token).
   calendar_sync_token: string | null
   calendar_synced_at: Timestamp | null
+  // Which Google calendar the app reads/writes (migration 047). null = 'primary'.
+  // Set in Account → Calendar from the coach's own calendar list.
+  calendar_id: string | null
+  // Where this coach's transcripts come from (migration 047):
+  // 'manual' (default) | 'plaud' | 'zoom'. Plaud/Zoom automated intake are
+  // post-beta; the setting records the coach's choice + drives the settings UI.
+  transcript_source: string | null
   created_at: Timestamp
   updated_at: Timestamp
 }

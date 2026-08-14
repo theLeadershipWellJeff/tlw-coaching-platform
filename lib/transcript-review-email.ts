@@ -33,7 +33,8 @@ export async function sendNeedsReviewEmail(
   coach: Coach,
   info: { filename?: string | null; sessionDate?: string | null; preview?: string | null }
 ): Promise<void> {
-  const from = process.env.JEFF_FROM_EMAIL
+  // Sent through this coach's own Gmail — From is their address.
+  const from = coach.email || process.env.JEFF_FROM_EMAIL
   const to = (coach.email || '').trim()
   if (!from || !to || !coach.google_refresh_token) return
 

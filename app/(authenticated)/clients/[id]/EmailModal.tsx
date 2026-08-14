@@ -30,7 +30,12 @@ export function EmailModal({
   onSent?: () => void
 }) {
   const [to, setTo] = useState(initialTo)
-  const [cc, setCc] = useState('jeff@theleadershipwell.com')
+  // Default the Cc to the signed-in coach's own address (a copy in their inbox);
+  // loaded from /api/coach so it's never another coach's mailbox. `ccTouched`
+  // separates "the coach deliberately cleared the Cc" (suppress it) from "the
+  // prefill hasn't resolved / failed" (let the server default to the coach).
+  const [cc, setCc] = useState('')
+  const [ccTouched, setCcTouched] = useState(false)
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
   const [stage, setStage] = useState<'compose' | 'review'>('compose')
@@ -44,6 +49,14 @@ export function EmailModal({
     fetch('/api/email/signature')
       .then((r) => (r.ok ? r.json() : { html: '' }))
       .then((d) => !cancelled && setSignature(d.html || ''))
+      .catch(() => {})
+    fetch('/api/coach')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled || !d?.coach?.email) return
+        // Only prefill if the coach hasn't already typed something.
+        setCc((prev) => (prev === '' ? d.coach.email : prev))
+      })
       .catch(() => {})
     return () => {
       cancelled = true
@@ -59,7 +72,15 @@ export function EmailModal({
       const res = await fetch('/api/email/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId, to, cc, subject, bodyHtml: textToHtml(body) }),
+        // An untouched, unresolved-empty Cc is omitted so the server applies its
+        // own coach default; '' is only sent when the coach cleared it on purpose.
+        body: JSON.stringify({
+          clientId,
+          to,
+          ...(cc === '' && !ccTouched ? {} : { cc }),
+          subject,
+          bodyHtml: textToHtml(body),
+        }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to send')
@@ -94,7 +115,10 @@ export function EmailModal({
             <span className="w-12 shrink-0 text-[12px] text-tlw-warm-gray">Cc</span>
             <input
               value={cc}
-              onChange={(e) => setCc(e.target.value)}
+              onChange={(e) => {
+                setCcTouched(true)
+                setCc(e.target.value)
+              }}
               placeholder="cc@email.com (optional)"
               className="w-full rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-surface px-3 py-2 text-[13px] text-tlw-espresso outline-none focus:border-tlw-navy-rich"
             />

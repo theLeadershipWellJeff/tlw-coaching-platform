@@ -98,8 +98,8 @@ export async function sendAppointmentReminder(
   const subject =
     kind === 'confirmation' ? `Our next session — ${whenLabel}` : `Reminder: our session — ${whenLabel}`
   // Cc the coach on the confirmation (a copy for their records); the nudge is
-  // just for the client.
-  const cc = kind === 'confirmation' ? process.env.JEFF_CC_EMAIL || undefined : undefined
+  // just for the client. The copy goes to the appointment's own coach.
+  const cc = kind === 'confirmation' ? coach.email || process.env.JEFF_CC_EMAIL || undefined : undefined
 
   const ok = await sendCoachHtmlEmail(coach, { to: client.email, cc, subject, html }).catch(() => false)
   if (!ok) {

@@ -2,6 +2,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
 import { PageHeader } from '@/app/components/layout/PageHeader'
 import { DashboardSurface } from '@/components/dashboard/DashboardSurface'
+import { WelcomeChecklist } from './WelcomeChecklist'
 
 function greeting(): string {
   const h = new Date().getHours()
@@ -22,6 +23,8 @@ export default async function DashboardPage() {
   return (
     <>
       <PageHeader eyebrow="theLeadershipWell" title={`${greeting()}, ${firstName}`} subtitle={today} />
+      {/* First-run setup checklist — only visible while the roster is empty. */}
+      <WelcomeChecklist />
       {/* One unified, arrangeable board: roster, Up next, scorecard, and every
           other tile are cards you can add, size, and drag to reorder. */}
       <DashboardSurface />

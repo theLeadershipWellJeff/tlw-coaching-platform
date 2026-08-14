@@ -4,6 +4,9 @@ import { PageHeader } from '@/app/components/layout/PageHeader'
 import { SupervisorSettings } from './SupervisorSettings'
 import { TimezoneSettings } from './TimezoneSettings'
 import { SchedulingSettings } from './SchedulingSettings'
+import { SignatureSettings } from './SignatureSettings'
+import { CalendarSettings } from './CalendarSettings'
+import { TranscriptSourceSettings } from './TranscriptSourceSettings'
 import { VaultSettings } from './VaultSettings'
 
 export default async function AccountPage() {
@@ -34,7 +37,13 @@ export default async function AccountPage() {
 
         <TimezoneSettings />
 
+        <CalendarSettings />
+
         <SchedulingSettings />
+
+        <SignatureSettings />
+
+        <TranscriptSourceSettings />
 
         <VaultSettings />
 

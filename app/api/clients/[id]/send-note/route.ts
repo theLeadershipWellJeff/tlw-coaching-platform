@@ -11,8 +11,8 @@ import { headerSafe, encodeHeaderValue } from '@/lib/email-mime'
 
 export const runtime = 'nodejs'
 
-function makeRawHtmlEmail(opts: { from: string; to: string; cc?: string; subject: string; html: string }): string {
-  const lines = [`From: Jeff Holmes <${opts.from}>`, `To: ${headerSafe(opts.to)}`]
+function makeRawHtmlEmail(opts: { from: string; fromName: string; to: string; cc?: string; subject: string; html: string }): string {
+  const lines = [`From: ${headerSafe(opts.fromName)} <${opts.from}>`, `To: ${headerSafe(opts.to)}`]
   if (opts.cc) lines.push(`Cc: ${headerSafe(opts.cc)}`)
   lines.push(
     `Subject: ${encodeHeaderValue(opts.subject)}`,
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if (!session?.accessToken) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const supabase = getSupabaseAdmin()
-    await requireClientCoach(supabase, params.id)
+    const coach = await requireClientCoach(supabase, params.id)
 
     const body = await req.json().catch(() => ({}))
     const subject = (body.subject || '').trim()
@@ -70,10 +70,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const gmail = google.gmail({ version: 'v1', auth })
 
     try {
+      // Sent through the signed-in coach's Gmail — From and the self-Cc are theirs.
       const raw = makeRawHtmlEmail({
-        from: process.env.JEFF_FROM_EMAIL!,
+        from: coach.email || process.env.JEFF_FROM_EMAIL!,
+        fromName: coach.name || coach.email,
         to: client.email,
-        cc: process.env.JEFF_CC_EMAIL,
+        cc: coach.email || process.env.JEFF_CC_EMAIL,
         subject,
         html,
       })

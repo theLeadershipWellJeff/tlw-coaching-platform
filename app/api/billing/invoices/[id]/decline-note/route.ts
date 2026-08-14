@@ -20,7 +20,7 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
-function defaultDraft(accountName: string): { subject: string; body: string } {
+function defaultDraft(accountName: string, coachName: string): { subject: string; body: string } {
   return {
     subject: 'A quick note about your recent payment',
     body:
@@ -29,7 +29,7 @@ function defaultDraft(accountName: string): { subject: string; body: string } {
       `This usually just means the card needs updating.\n\n` +
       `When you have a moment, could you reply to let me know a good time to update it, or use the ` +
       `payment link in your invoice email? No rush — I just wanted to flag it so nothing slips.\n\n` +
-      `Warmly,\nDr. Jeff Holmes`,
+      `Warmly,\n${coachName}`,
   }
 }
 
@@ -49,7 +49,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const invoice = await loadInvoice(supabase, actor.coach.id, params.id)
   if (!invoice) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  return NextResponse.json({ draft: defaultDraft(invoice.billing_accounts?.name ?? 'there') })
+  return NextResponse.json({ draft: defaultDraft(invoice.billing_accounts?.name ?? 'there', actor.coach.name || actor.coach.email) })
 }
 
 export async function POST(req: NextRequest, { params }: Params) {
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (!account?.billing_email) return NextResponse.json({ error: 'This account has no billing email.' }, { status: 422 })
 
   const body = await req.json().catch(() => ({})) as { subject?: string; body?: string }
-  const draft = defaultDraft(account.name ?? 'there')
+  const draft = defaultDraft(account.name ?? 'there', actor.coach.name || actor.coach.email)
   const subject = (body.subject ?? draft.subject).trim()
   const text = (body.body ?? draft.body).trim()
 

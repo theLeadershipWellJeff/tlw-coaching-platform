@@ -49,6 +49,20 @@ export async function requireCoach(supabase: SupabaseClient<Database>): Promise<
 }
 
 /**
+ * Require the signed-in coach to be a supervisor. Coach-management surfaces
+ * (list/add/edit/remove coaches) are supervisor-only — without this gate any
+ * coach could promote themselves or delete a colleague (ISOLATION_AUDIT
+ * Decision #2). Throws ApiError(401) unauthenticated, ApiError(403) otherwise.
+ */
+export async function requireSupervisor(supabase: SupabaseClient<Database>): Promise<Coach> {
+  const coach = await requireCoach(supabase)
+  if (coach.role !== 'supervisor') {
+    throw new ApiError(403, 'Supervisor access required')
+  }
+  return coach
+}
+
+/**
  * Parse + validate a JSON request body against a zod schema. Throws
  * ApiError(400) on bad JSON or a schema violation, with the first issue's
  * message — so routes stop trusting raw `await req.json()`.

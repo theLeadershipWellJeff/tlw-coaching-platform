@@ -81,8 +81,9 @@ export async function POST(req: NextRequest) {
       if (coach) {
         const clientName = agreement.client_name || 'Your client'
         try {
+          // Notify the agreement's OWN coach — not the firm default address.
           await sendCoachHtmlEmail(coach, {
-            to: process.env.JEFF_CC_EMAIL || coach.email,
+            to: coach.email || process.env.JEFF_CC_EMAIL || '',
             subject: `${clientName} signed their coaching agreement`,
             html: buildSignedNotificationHTML({ clientName, signedAt: signedAtLabel, recordingAuthorized: body.recordingAuthorized }),
           })

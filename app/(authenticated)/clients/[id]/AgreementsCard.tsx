@@ -99,7 +99,7 @@ export function AgreementsCard({
 
           {status === 'external' && (
             <div className="text-[13px] text-tlw-espresso">
-              <p>Signed agreement on file — recorded outside this platform (e.g. Coach Accountable).</p>
+              <p>Signed agreement on file — recorded outside this platform.</p>
               <p className="text-tlw-warm-gray">Recording &amp; AI processing: {recLabel}</p>
             </div>
           )}

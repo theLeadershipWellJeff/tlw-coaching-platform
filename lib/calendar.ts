@@ -63,6 +63,15 @@ export function zonedWallClockToUtc(dateStr: string, timeStr: string, timeZone: 
   return new Date(wallMs - offset)
 }
 
+/**
+ * The Google calendar this coach's sessions live on (migration 047). Every
+ * calendar read/write in this module goes through this — a coach who books on a
+ * secondary calendar picks it in Account → Calendar; null/absent = 'primary'.
+ */
+export function coachCalendarId(coach: Coach): string {
+  return coach.calendar_id?.trim() || 'primary'
+}
+
 function coachEmails(coach: Coach): string[] {
   return [
     coach.email,
@@ -96,7 +105,7 @@ export async function findClientFromCalendar(
   let items: any[] = []
   try {
     const res = await calendar.events.list({
-      calendarId: 'primary',
+      calendarId: coachCalendarId(coach),
       timeMin: new Date(sessionInstant.getTime() - SEARCH_WINDOW_MS).toISOString(),
       timeMax: new Date(sessionInstant.getTime() + SEARCH_WINDOW_MS).toISOString(),
       singleEvents: true,
@@ -195,7 +204,7 @@ export async function createClientEvent(
 
   try {
     const res = await calendar.events.insert({
-      calendarId: 'primary',
+      calendarId: coachCalendarId(coach),
       sendUpdates: 'all',
       requestBody: {
         summary: opts.summary,
@@ -238,22 +247,34 @@ export async function getClientEventState(coach: Coach, eventId: string): Promis
   auth.setCredentials({ refresh_token: coach.google_refresh_token })
   const calendar = google.calendar({ version: 'v3', auth })
 
-  try {
-    const res = await calendar.events.get({ calendarId: 'primary', eventId })
-    const e = res.data
-    const startIso = e.start?.dateTime || null
-    const endIso = e.end?.dateTime || null
-    const startsAt = startIso ? new Date(startIso) : null
-    const durationMinutes =
-      startIso && endIso ? Math.round((new Date(endIso).getTime() - new Date(startIso).getTime()) / 60000) : null
-    return { found: true, cancelled: e.status === 'cancelled', startsAt, durationMinutes }
-  } catch (e: any) {
-    if (Number(e?.code) === 404 || e?.response?.status === 404) {
-      return { found: false, cancelled: true, startsAt: null, durationMinutes: null }
+  async function read(calendarId: string): Promise<EventState | '404'> {
+    try {
+      const res = await calendar.events.get({ calendarId, eventId })
+      const e = res.data
+      const startIso = e.start?.dateTime || null
+      const endIso = e.end?.dateTime || null
+      const startsAt = startIso ? new Date(startIso) : null
+      const durationMinutes =
+        startIso && endIso ? Math.round((new Date(endIso).getTime() - new Date(startIso).getTime()) / 60000) : null
+      return { found: true, cancelled: e.status === 'cancelled', startsAt, durationMinutes }
+    } catch (e: any) {
+      if (Number(e?.code) === 404 || e?.response?.status === 404) return '404'
+      console.error('Calendar event get failed:', e)
+      return unknown
     }
-    console.error('Calendar event get failed:', e)
-    return unknown
   }
+
+  const selected = coachCalendarId(coach)
+  const first = await read(selected)
+  if (first !== '404') return first
+  // A 404 on a non-primary calendar may just mean the event predates the coach
+  // switching calendars (it lives on primary). Check there before declaring the
+  // event deleted — a calendar-setting change must never cancel real bookings.
+  if (selected !== 'primary') {
+    const fallback = await read('primary')
+    if (fallback !== '404') return fallback
+  }
+  return { found: false, cancelled: true, startsAt: null, durationMinutes: null }
 }
 
 export interface ConflictResult {
@@ -290,10 +311,10 @@ export async function getCalendarConflicts(
       requestBody: {
         timeMin: startsAt.toISOString(),
         timeMax: endsAt.toISOString(),
-        items: [{ id: 'primary' }],
+        items: [{ id: coachCalendarId(coach) }],
       },
     })
-    const busyBlocks = res.data.calendars?.primary?.busy || []
+    const busyBlocks = res.data.calendars?.[coachCalendarId(coach)]?.busy || []
     const conflicts = busyBlocks
       .filter((b) => b.start && b.end)
       .map((b) => ({ start: b.start as string, end: b.end as string }))
@@ -310,9 +331,21 @@ export async function deleteClientEvent(coach: Coach, eventId: string): Promise<
   const auth = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET)
   auth.setCredentials({ refresh_token: coach.google_refresh_token })
   const calendar = google.calendar({ version: 'v3', auth })
+  const selected = coachCalendarId(coach)
   try {
-    await calendar.events.delete({ calendarId: 'primary', eventId, sendUpdates: 'all' })
-  } catch (e) {
+    await calendar.events.delete({ calendarId: selected, eventId, sendUpdates: 'all' })
+  } catch (e: any) {
+    // Same pre-calendar-switch fallback as getClientEventState: an event booked
+    // before the coach changed calendars lives on primary — delete it there.
+    if (selected !== 'primary' && (Number(e?.code) === 404 || e?.response?.status === 404)) {
+      try {
+        await calendar.events.delete({ calendarId: 'primary', eventId, sendUpdates: 'all' })
+        return
+      } catch (e2) {
+        console.error('Calendar event delete failed (primary fallback):', e2)
+        return
+      }
+    }
     console.error('Calendar event delete failed:', e)
   }
 }
@@ -347,7 +380,7 @@ export async function listClientMatchedEvents(
   let items: any[] = []
   try {
     const res = await calendar.events.list({
-      calendarId: 'primary',
+      calendarId: coachCalendarId(coach),
       timeMin: timeMin.toISOString(),
       timeMax: timeMax.toISOString(),
       singleEvents: true,
@@ -424,7 +457,7 @@ export async function listCalendarEvents(
   let items: any[] = []
   try {
     const res = await calendar.events.list({
-      calendarId: 'primary',
+      calendarId: coachCalendarId(coach),
       timeMin: timeMin.toISOString(),
       timeMax: timeMax.toISOString(),
       singleEvents: true,
@@ -493,7 +526,7 @@ export async function listCalendarDelta(coach: Coach, syncToken: string | null):
     let nextSyncToken: string | null = null
     do {
       const res = await calendar.events.list({
-        calendarId: 'primary',
+        calendarId: coachCalendarId(coach),
         singleEvents: true,
         showDeleted: true,
         maxResults: 250,
@@ -550,7 +583,7 @@ export async function listUpcomingEvents(coach: Coach, timeMin: Date, timeMax: D
   try {
     do {
       const res = await calendar.events.list({
-        calendarId: 'primary',
+        calendarId: coachCalendarId(coach),
         singleEvents: true,
         orderBy: 'startTime',
         maxResults: 250,

@@ -142,6 +142,8 @@ export async function sendDueReminders(supabase: SupabaseClient): Promise<{ sent
     const htmlBody = buildReminderEmail({
       accountName: account?.name ?? 'Client',
       billingEmail: account?.billing_email ?? '',
+      coachName: coach.name || coach.email,
+      coachEmail: coach.email,
       period,
       total: totalFormatted,
       // Tracked view link (marks the invoice received, then redirects to the
@@ -187,10 +189,13 @@ export async function sendDueReminders(supabase: SupabaseClient): Promise<{ sent
 function buildReminderEmail(opts: {
   accountName: string
   billingEmail: string
+  coachName: string
+  coachEmail: string
   period: string
   total: string
   viewUrl?: string | null
 }): string {
+  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   return `
 <!DOCTYPE html>
 <html>
@@ -224,7 +229,7 @@ function buildReminderEmail(opts: {
             </p>
             <p style="margin:0;color:#3d2b1f;font-size:15px;line-height:1.6;">
               Warmly,<br />
-              <strong>Dr. Jeff Holmes</strong><br />
+              <strong>${esc(opts.coachName)}</strong><br />
               <span style="color:#7a6e6a;font-size:13px;">theLeadershipWell</span>
             </p>
           </td>
@@ -232,7 +237,7 @@ function buildReminderEmail(opts: {
         <tr>
           <td style="background:#f9f7f4;padding:16px 32px;border-top:1px solid #e8e0d8;">
             <p style="margin:0;color:#7a6e6a;font-size:11px;text-align:center;">
-              theLeadershipWell · jeff@theleadershipwell.com
+              theLeadershipWell · ${esc(opts.coachEmail)}
             </p>
           </td>
         </tr>

@@ -39,16 +39,18 @@ export async function POST(req: NextRequest) {
   if (!noteText) return NextResponse.json({ error: 'The note is empty — nothing to send.' }, { status: 400 })
 
   const firstName = clientName.split(' ')[0] || 'there'
+  // Voice the recap as the signed-in coach, not a fixed name.
+  const coachName = (session as any).user?.name || 'the coach'
 
-  const prompt = `You are Jeff Holmes, executive coach at theLeadershipWell. Turn the raw session note below into a terse, client-facing recap email to ${clientName}.
+  const prompt = `You are ${coachName}, executive coach at theLeadershipWell. Turn the raw session note below into a terse, client-facing recap email to ${clientName}.
 
 Guidelines:
 - Be brief and scannable. Prefer bullet lists (- item) over prose wherever there are multiple related points — themes explored, what surfaced, key decisions, shifts in thinking.
 - One short opening sentence greeting ${firstName}. One short closing sentence. No filler or padding.
-- Keep Jeff's warm, direct voice, but scannable structure beats wordiness.
+- Keep the coach's warm, direct voice, but scannable structure beats wordiness.
 - Do NOT list the "ACTION:" or "INSIGHT:" items — those are appended separately as an interactive checklist and Insights list; repeating them would duplicate.
 - Do NOT invent anything not in the note. If the note is thin, keep the email very short.
-- Sign off as "Jeff". No subject line inside the body. No AI mention.
+- Sign off with the coach's first name ("${coachName.split(' ')[0]}"). No subject line inside the body. No AI mention.
 
 Return ONLY valid JSON — no markdown fences, no preamble:
 {"subject": "Short, specific subject line", "body": "The email as plain text. Use bullet lists (- item) wherever there are multiple related points."}

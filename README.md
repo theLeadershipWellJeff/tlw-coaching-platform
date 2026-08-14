@@ -75,9 +75,10 @@ Copy the output — that's your NEXTAUTH_SECRET.
 ## STEP 5 — Test
 
 1. Open https://theleadershipwell.online
-2. Sign in with Google (jeff@jeffkholmes.com)
+2. Sign in with Google
 3. You'll see upcoming sessions from your calendar
-4. Click any session → it pulls CA notes → generates prep → shows live editable preview
+4. Click any session → it generates prep from the client's stored coaching
+   goals and notes → shows live editable preview
 5. Edit any field by clicking it
 6. Hit Send → email goes directly to client (no drafts!)
 
@@ -88,14 +89,14 @@ Copy the output — that's your NEXTAUTH_SECRET.
 ```
 Google Calendar → upcoming sessions on dashboard
        ↓ click a session
-Coach Accountable API → pulls last 6 months of notes
+Client workspace → coaching goals + session notes
        ↓
 Claude API → generates personalized content
        ↓
 Live editable preview → click any field to edit inline
        ↓
 Gmail API → sends real email (not a draft)
-CC: jeff@theleadershipwell.com on everything
+CC: a copy to your own inbox on everything
 ```
 
 ---

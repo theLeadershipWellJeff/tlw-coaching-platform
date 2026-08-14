@@ -17,7 +17,8 @@ export function buildClientEmailHTML(
   clientName: string,
   c: PrepContent,
   actionLinks: (string | null)[] = [],
-  agendaUrl?: string
+  agendaUrl?: string,
+  coachName = 'Jeff Holmes'
 ): string {
   const anyActionLinks = actionLinks.some(Boolean)
   return `<!DOCTYPE html>
@@ -162,7 +163,7 @@ export function buildClientEmailHTML(
         </svg>
       </td>
       <td>
-        <div style="font-weight:700;font-size:14px;color:#111226;">Jeff Holmes</div>
+        <div style="font-weight:700;font-size:14px;color:#111226;">${esc(coachName)}</div>
         <div style="font-size:12px;color:#8B8680;margin-top:1px;">Executive Coach &middot; theLeadershipWell</div>
       </td>
     </tr></table>

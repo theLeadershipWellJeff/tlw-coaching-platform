@@ -30,8 +30,10 @@ export async function sendScorecardEmail(
   report: SessionReportJson,
   opts?: { to?: string }
 ): Promise<string | null> {
-  const from = process.env.JEFF_FROM_EMAIL
-  if (!from) throw new Error('JEFF_FROM_EMAIL is not configured.')
+  // Send goes out through this coach's Gmail, so From is their own address
+  // (env fallback kept for legacy single-coach configs).
+  const from = coach.email || process.env.JEFF_FROM_EMAIL
+  if (!from) throw new Error('No sender address available for the scorecard email.')
   if (!coach.google_refresh_token) {
     throw new Error('Coach has no Google refresh token — sign out and back in to grant access.')
   }
