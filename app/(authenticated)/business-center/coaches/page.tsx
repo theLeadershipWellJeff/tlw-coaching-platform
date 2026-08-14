@@ -2,6 +2,16 @@
 import { useEffect, useState } from 'react'
 import { PageHeader } from '@/app/components/layout/PageHeader'
 
+type CoachUsage = {
+  transcript_count: number
+  report_count: number
+  note_count: number
+  email_count: number
+  appointment_count: number
+  nudge_sent_count: number
+  last_active_at: string | null
+}
+
 type Coach = {
   id: string
   name: string
@@ -11,7 +21,40 @@ type Coach = {
   timezone: string | null
   client_count: number
   account_count: number
+  has_signed_in: boolean
+  usage: CoachUsage
   is_me: boolean
+}
+
+const EMPTY_USAGE: CoachUsage = {
+  transcript_count: 0,
+  report_count: 0,
+  note_count: 0,
+  email_count: 0,
+  appointment_count: 0,
+  nudge_sent_count: 0,
+  last_active_at: null,
+}
+
+/** "Aug 14", or "Aug 14, 2025" when not this year. */
+function shortDate(ts: string): string {
+  const d = new Date(ts)
+  const sameYear = d.getFullYear() === new Date().getFullYear()
+  return d.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    ...(sameYear ? {} : { year: 'numeric' }),
+  })
+}
+
+/** Relative "last active" label: today / yesterday / Nd ago / a date. */
+function lastActiveLabel(ts: string | null): string {
+  if (!ts) return 'no activity yet'
+  const days = Math.floor((Date.now() - new Date(ts).getTime()) / 86_400_000)
+  if (days <= 0) return 'active today'
+  if (days === 1) return 'active yesterday'
+  if (days < 14) return `active ${days}d ago`
+  return `last active ${shortDate(ts)}`
 }
 
 const ROLE_STYLES: Record<string, string> = {
@@ -37,7 +80,14 @@ function AddCoachModal({ onAdded, onClose }: { onAdded: (c: Coach) => void; onCl
     })
     const d = await res.json()
     if (!res.ok) { setError(d.error ?? 'Failed'); setSaving(false); return }
-    onAdded({ ...d.coach, client_count: 0, account_count: 0, is_me: false })
+    onAdded({
+      ...d.coach,
+      client_count: 0,
+      account_count: 0,
+      has_signed_in: false,
+      usage: EMPTY_USAGE,
+      is_me: false,
+    })
   }
 
   return (
@@ -151,12 +201,17 @@ function CoachRow({ coach, onUpdated, onRemoved }: {
             <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium capitalize ${ROLE_STYLES[coach.role] ?? ''}`}>
               {coach.role}
             </span>
+            {!coach.has_signed_in && (
+              <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                HASN&apos;T SIGNED IN YET
+              </span>
+            )}
           </div>
           <p className="text-[12px] text-tlw-warm-gray">{coach.email}</p>
           <p className="mt-0.5 text-[11px] text-tlw-warm-gray">
-            {coach.client_count} client{coach.client_count !== 1 ? 's' : ''}
+            Joined {shortDate(coach.created_at)}
             {' · '}
-            {coach.account_count} active account{coach.account_count !== 1 ? 's' : ''}
+            {coach.has_signed_in ? lastActiveLabel(coach.usage.last_active_at) : 'awaiting first sign-in'}
             {coach.timezone && ` · ${coach.timezone}`}
           </p>
         </div>
@@ -179,6 +234,25 @@ function CoachRow({ coach, onUpdated, onRemoved }: {
             )}
           </div>
         )}
+      </div>
+
+      {/* Usage rollup — how much this coach is actually using the platform. */}
+      <div className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-8">
+        {[
+          { label: 'Clients', value: coach.client_count },
+          { label: 'Accounts', value: coach.account_count },
+          { label: 'Transcripts', value: coach.usage.transcript_count },
+          { label: 'Scorecards', value: coach.usage.report_count },
+          { label: 'Notes', value: coach.usage.note_count },
+          { label: 'Emails', value: coach.usage.email_count },
+          { label: 'Sessions', value: coach.usage.appointment_count },
+          { label: 'Nudges', value: coach.usage.nudge_sent_count },
+        ].map((s) => (
+          <div key={s.label} className="rounded-tlw-lg bg-tlw-canvas px-2 py-1.5 text-center">
+            <p className="text-[14px] font-semibold tabular-nums text-tlw-navy-deep">{s.value}</p>
+            <p className="text-[10px] text-tlw-warm-gray">{s.label}</p>
+          </div>
+        ))}
       </div>
 
       {editing && (
