@@ -10,22 +10,29 @@ built**, but three of the load-bearing pieces — **notes**, **billing**, and
 "main feature" and "where the power will lie" (AI over notes+transcripts, and
 fast search) are each built against **transcripts only**.
 
+> **Decisions recorded 2026-08-15** (Jeff). The four open questions are settled —
+> see [Decisions](#decisions-settled-2026-08-15) at the end. In short: the portal
+> shows **only notes sent via "Send to client"**; **enterprise coachees see no
+> billing**; **username/password is added alongside magic-link**, with the coach
+> able to resend the link; frameworks appear when **nudged *or* mentioned in a
+> session**; **ACH is deferred**. The sections below have been revised to match.
+
 ---
 
 ## Scorecard
 
 | # | Requirement (from the brief) | Status | Where |
 |---|---|---|---|
-| 1 | "Well password protected very secure area" | ⚠️ Partial | `lib/portal/session.ts`, `middleware.ts` |
+| 1 | "Well password protected very secure area" (+ username/password, coach resend) | ⚠️ Partial | `lib/portal/session.ts`, `middleware.ts` |
 | 2 | Check scheduled appointments | ⚠️ Partial | `lib/portal/data.ts:29` |
 | 3 | Ability to schedule with me (HubSpot link, at the top) | ❌ Missing | — |
-| 4 | Notes available in the workspace | ❌ Missing | — |
+| 4 | Notes (those sent to the client) available in the workspace | ❌ Missing | — |
 | 5 | Transcripts available in the workspace | ⚠️ Partial | `app/portal/page.tsx:132` |
 | 6 | AI chat over **transcripts and notes** | ⚠️ Partial | `lib/portal/chat.ts` |
 | 7 | Conversation sidebar (Claude-style) | ✅ Built | `app/portal/chat/page.tsx:131` |
 | 8 | Upload documents into conversations | ✅ Built | `app/api/portal/chat/upload/route.ts` |
 | 9 | Coaching goals card | ✅ Built | `app/portal/page.tsx:107` |
-| 10 | Frameworks card → pop-up → open/download PDF | ✅ Built (narrow source) | `app/portal/FrameworksCard.tsx` |
+| 10 | Frameworks card → pop-up → open/download PDF (nudged **or** mentioned) | ⚠️ Partial | `app/portal/FrameworksCard.tsx` |
 | 11 | Email the coach from the portal | ✅ Built | `app/portal/ContactCoachCard.tsx` |
 | 12 | Quick search **over transcripts and notes**, fast, with context lines | ⚠️ Partial | `app/api/portal/search/route.ts` |
 | 13 | Tour guide — dialogue boxes walking each card | ⚠️ Partial | `app/portal/PortalOnboarding.tsx` |
@@ -57,7 +64,8 @@ fast search) are each built against **transcripts only**.
 
 | Gap | Detail |
 |---|---|
-| **No password at all** | Jeff asked for "well password protected." Sign-in is magic-link only — there is no password, no password reset, no 2FA. Whether that's a gap or a better answer is a product call, but the brief's literal ask is unimplemented. If clients expect a password, add a set-password step at first login (Argon2/bcrypt hash on a new `client_credentials` table) with magic-link kept as the recovery path. |
+| **No password at all** *(decided: build it)* | Sign-in is magic-link only — no password, no reset, no 2FA. **Decision: add username + password alongside magic-link**, which stays as the recovery path. Build: a `client_credentials` table (`client_id`, `username` unique, `password_hash`, `created_at`, `last_login_at`, `failed_attempts`, `locked_until`) hashed with bcrypt/Argon2 — never on `clients`, so a stray `select *` in a portal read can't leak the hash. Offer "create a password" at first login and from a portal settings page. Needs login throttling (lockout after N failed attempts) — the current magic-link rate limit does not cover a password form. |
+| **Coach-side credential view + resend** *(decided: build it)* | **Decision: the coach can see the client's login state and resend the link.** Half of this exists — `InviteToPortalButton` → `POST /api/clients/[id]/portal-invite` already mints and emails a fresh magic link, so "resend when they lose credentials" is essentially done and just needs surfacing as such. What's missing is the **status view**: username, whether a password is set, and last portal login, on the client workspace. Note for the UI copy: the coach can **never** see the password itself (it's a one-way hash) — the affordances are *resend link* and *trigger a password reset*, not *reveal password*. |
 | **7-day session, no rotation** | `PORTAL_SESSION_TTL_SECONDS = 7 * 24 * 3600` with no sliding renewal, no server-side revocation list, and no "sign out everywhere." A stolen cookie is valid for up to 7 days with no kill switch. |
 | **No CSRF token on portal POSTs** | Mitigated in practice by `sameSite: 'lax'` (cross-site POSTs don't carry the cookie), but there's no explicit token — worth noting since the brief calls this the highest-security surface. |
 | **No rate limiting past login** | `/api/portal/chat` (a paid Claude call), `/api/portal/contact` (sends email as the coach), and `/api/portal/chat/upload` have **no** per-client rate limit. A logged-in client can loop the chat endpoint. Only the magic-link send is limited. |
@@ -75,11 +83,19 @@ rendered `app/portal/page.tsx:95`).
 **Missing:**
 
 - **The HubSpot scheduling link — the feature Jeff named as the hook that gets
-  them into the portal — does not exist anywhere.** No `bookingLink` /
-  `hubspot_url` field on `coaches`, no link in the portal UI. (The only HubSpot
+  them into the portal — is not surfaced anywhere in the portal.** No
+  `booking_url` field on `coaches`, no link in the portal UI. (The other HubSpot
   references in the repo are cosmetic booking-*source* detection in
-  `lib/booking-sync.ts`.) The signature builder has an unrelated optional
-  `bookingUrl` field (`lib/signature.ts:57`), not wired to the portal.
+  `lib/booking-sync.ts`.)
+
+  Useful find: **Jeff's actual booking link already lives in the repo** —
+  `https://meetings-na2.hubspot.com/dr-jeff`, as the "Book a session →" line in
+  the seeded email signature
+  (`supabase/migrations/017_email_signatures_communications.sql:52`), and the
+  signature builder has an optional `bookingUrl` field for it
+  (`lib/signature.ts:57`). So this is a per-coach value that already exists in
+  one place and just needs promoting to a real `coaches.booking_url` column that
+  both the signature and the portal read.
 - **Not at the top.** The brief puts scheduling at the top of the page; today
   the top is the search box and a chat CTA.
 - **Only one appointment, no history.** No list of upcoming sessions, no past
@@ -104,12 +120,38 @@ route** (confirmed: zero references across `app/portal`, `app/api/portal`,
 (`lib/portal/data.ts:43`). Jeff's brief names notes three separate times: in the
 workspace, in the AI context, and in search.
 
-A product decision is needed first: **coach notes are private working documents.**
-Exposing `notes.content` wholesale would put the coach's raw in-session writing
-in front of the client. The safe design is a **share gate** — a
-`notes.shared_with_client` boolean (plus `shared_at`), a "Share with client"
-toggle in the coach's note editor, and portal reads filtered to shared notes
-only. That also cleanly answers what the AI and search are allowed to read.
+**Decision: the portal shows only notes the coach actually sent** via the
+"Send to client" button at the end of a session. Raw coach notes never cross the
+boundary. This is the right gate — it needs no new coach workflow, and the thing
+the client sees is identical to the email they already received.
+
+**But the record it depends on does not exist yet.** `POST /api/clients/[id]/send-note`
+sends the email and returns — it **does not log to `communications` and does not
+stamp anything on the note** (verified: no `logCommunication` call in the route;
+it persists action links, builds the HTML, calls Gmail, returns). So today there
+is **no record anywhere of which notes were sent to a client, or what they said**.
+Two consequences:
+
+- The portal has nothing to read from — this must be built before §4 is possible.
+- It's a **coach-side gap too**: sent notes don't appear in the workspace "Recent
+  Communication" card, unlike every other send path (`/api/email/send`, nudges,
+  billing) which all log. Fixing it closes both at once.
+
+**The design.** Store the **sent version**, not the raw note — the AI-drafted
+client-facing narrative plus its Insights and Actions sections. The raw note
+contains `ACTION:`/`INSIGHT:` markers and coach shorthand that were deliberately
+stripped for the client. `communications` already has the right shape, including
+a `body_html` column holding the full sent HTML
+(`supabase/migrations/017_email_signatures_communications.sql:33`).
+
+1. Make `send-note` call `logCommunication` with `type='session_note'` (the
+   column is unconstrained text — no DDL), `body_html` = the sent HTML.
+2. Add `notes.sent_to_client_at` (+ optionally `communication_id`) so the coach's
+   note editor can show "sent ✓" and the portal can order by session.
+3. Portal reads `communications` where `type='session_note'` — a **Session notes**
+   card, a viewer page, a search source, and AI context, all from one gate.
+4. Backfill is not possible (the data was never recorded), so the portal's notes
+   history starts from the day this ships. Worth telling clients in the tour copy.
 
 **Transcripts: listed but not readable.** The sessions card shows title + date
 for the 20 most recent (`app/portal/page.tsx:132`) — rows are **not clickable**,
@@ -119,11 +161,14 @@ brief's stated primary use case — "they can't remember something and want to
 share it out to their team" — being unable to open the session is a hard block.
 
 **To close:**
-1. Migration: `notes.shared_with_client` + coach-side share toggle.
+1. Log sent notes (above) — `send-note` → `communications`, plus
+   `notes.sent_to_client_at`.
 2. `GET /api/portal/transcripts/[id]` and `/api/portal/notes/[id]` (ownership-
    checked), plus `/portal/sessions/[id]` and `/portal/notes/[id]` viewer pages.
 3. Make the session list, notes list, and every search result link to them.
-4. Add a proper **Notes card** to the home grid.
+4. Add a proper **Session notes** card to the home grid — distinct from the
+   existing "Messages from your coach" card, which should stay as the
+   general email/nudge log.
 
 ---
 
@@ -180,9 +225,24 @@ short-lived signed URL (`lib/portal/frameworks.ts:51`).
 Gaps:
 - **Only frameworks sent as a `type='framework'` nudge appear**
   (`frameworks.ts:20-26`). A framework Jeff *talked about in session* but never
-  nudged is invisible. The brief says "frameworks we have talked about" — needs
-  either coach-explicit assignment (a client↔leaf mapping) or surfacing from
-  transcript mentions.
+  nudged is invisible. **Decision: nudged OR mentioned in a session both surface
+  it.**
+
+  The detection already exists and is being thrown away. The nudge pipeline's
+  extraction step already identifies when a session **named** a leaf — that's the
+  `framework_basis: named` → `origin: 'mentioned'` path in `lib/nudges/`. But a
+  mention only becomes visible if it survives `applyDedupAndCap` (**cap of 2 per
+  window**, priority action > framework > insight), so most mentions are
+  discarded. Build: persist every detected mention to a new
+  `client_frameworks` table (`client_id`, `framework_slug`, `source`
+  nudged|mentioned, `transcript_id`, `first_seen_at`) at scoring time,
+  independent of whether a nudge is drafted. `loadPortalFrameworks` then reads
+  that table UNION the nudge history, still gated on `nudge_eligible` so a
+  non-surfaceable leaf can never leak.
+
+  Two notes: the mention detector runs on transcripts, so mentions only appear
+  for **scored** sessions; and a coach-side override (assign/remove a framework
+  for a client) is worth adding so a false positive can be cleared.
 - "Open PDF" opens in a tab; no explicit **download** affordance (brief says
   "open and download").
 - No ⓘ popover on this card; the modal has no Esc-to-close or focus trap.
@@ -269,10 +329,10 @@ reused rather than rebuilt:
 
 | Piece | Notes |
 |---|---|
-| **Client → billing account resolution** | `coachees` links `client_id` → billing account (`supabase/migrations/028_billing.sql:19,122`). A portal billing card needs a helper resolving the authenticated `clientId` to its account(s) — and a clear rule for **enterprise accounts**, where the payer is the company, not the client. A coachee on a corporate account must **not** see the company's invoices. This is the main security design question in the billing work. |
+| **Client → billing account resolution** | `coachees` links `client_id` → `billing_account_id`, UNIQUE on `(coach_id, client_id)` (`supabase/migrations/028_billing.sql:19`). **Decision: an enterprise coachee sees no billing at all.** The schema makes this a clean one-line rule — `billing_accounts.type` is already `CHECK (type IN ('solo','enterprise'))` (`028_billing.sql`), so the portal shows the billing card **only when the resolved account is `type='solo'`**; on `'enterprise'` the card does not render and every `/api/portal/billing/*` route returns 404 (not 403 — don't confirm an account exists). Enforce it in **one** helper (`lib/portal/billing.ts#resolvePortalBillingAccount`) that every route calls, so the rule can't be forgotten on a later endpoint. |
 | **Portal payment-method routes** | `/api/portal/billing/*` — status, start a Checkout setup session, remove/replace. Should reuse `lib/billing/payment-methods.ts`, not duplicate it. Note the **agreement gate** (`accountPassesAgreementGate`) currently governs coach-initiated authorization sends; decide whether a client-initiated add is subject to it. |
 | **Invoice history card** | Paid/outstanding list with amounts and dates, and "view invoice" via the existing hosted-invoice/receipt-token path. |
-| **ACH is not supported today** | `payment_method_types: ['card']` (`lib/billing/stripe.ts:217`). ACH needs `'us_bank_account'` added, plus mandate-text handling, the micro-deposit/instant-verification flow, and the `payment_intent.processing` → settled states (ACH is not instant, so the "paid" transition needs a pending state). This is a genuine build, not a flag flip. |
+| **ACH — deferred** *(decided)* | `payment_method_types: ['card']` (`lib/billing/stripe.ts:217`). **Decision: build ACH later.** For the record when it comes up: it needs `'us_bank_account'` added, mandate-text handling, the micro-deposit/instant-verification flow, and a **pending-settlement state** — ACH is not instant, so `handlePaidTransition` would need a `processing` status between sent and paid. A genuine build, not a flag flip. Card-on-file ships first. |
 | **Onboarding hook** | The brief wants the option offered "when a client sets up their workspace" — i.e. a step in the first-run flow, which today is a single dismissible modal. |
 
 ---
@@ -281,37 +341,63 @@ reused rather than rebuilt:
 
 Ordered by value-per-effort against the brief's own stated priorities.
 
+**Tier 0 — the prerequisite (do this first)**
+0. **Log sent notes.** `send-note` → `logCommunication(type='session_note')` with
+   `body_html`, plus `notes.sent_to_client_at`. A small change to one route that
+   unblocks items 2, 4, and 5 below — and fixes the coach-side Recent
+   Communication gap on the way. Nothing in the notes track can start until this
+   is recording.
+
 **Tier 1 — makes the portal deliver on its promise**
 1. **Transcript + note viewer pages**, and make session-list and search results
    clickable. (Unblocks the #1 stated use case; small.)
-2. **Notes in the portal** behind a `shared_with_client` gate — workspace card,
-   search source, and AI context. (Closes the single largest structural gap.)
-3. **HubSpot scheduling link at the top** + expanded appointments card. (The
-   stated hook; smallest item on this list.)
-4. **Real full-text search** (`tsvector` + GIN over transcripts and shared
-   notes, `ts_headline` snippets, transcripts/notes toggle). (The stated
-   "power," and today's implementation won't hold speed at scale.)
+2. **Sent notes in the portal** — Session notes card, viewer, search source, AI
+   context. (Closes the largest structural gap; depends on Tier 0.)
+3. **HubSpot scheduling link at the top** + expanded appointments card. Promote
+   the link to `coaches.booking_url` (it already exists in the signature seed).
+   (The stated hook; smallest item on this list.)
+4. **Real full-text search** (`tsvector` + GIN over transcripts and sent notes,
+   `ts_headline` snippets, transcripts/notes toggle). (The stated "power," and
+   today's implementation won't hold speed at scale.)
 
 **Tier 2 — the main feature, properly**
-5. **Retrieval-based chat context** (kill the 40k truncation), notes in context,
-   streaming responses, higher `max_tokens`, citations back to sessions.
+5. **Retrieval-based chat context** (kill the 40k truncation), sent notes in
+   context, streaming responses, higher `max_tokens`, citations back to sessions.
 6. **Rate limiting** on chat/contact/upload, and a portal access log.
 7. Mobile conversation sidebar; rename/delete conversations.
 
 **Tier 3 — the brief's remaining asks**
-8. **Billing in the portal:** account resolution (with the enterprise rule
-   settled first), card-on-file via the existing Checkout setup flow, invoice
-   history. ACH as a separate follow-on.
-9. **Real step-through tour** + ⓘ on every card with 2–3 usage ideas, dismissal
-   moved to `clients.portal_onboarded`, replayable.
-10. **Password option** (set at first login, magic-link as recovery), session
-    rotation, and revocation.
+8. **Username + password** (`client_credentials`, set at first login, magic-link
+   as recovery), login throttling, session rotation/revocation, and the
+   **coach-side login-status view** next to the existing resend-link button.
+9. **Billing in the portal:** solo-only account resolution, card-on-file via the
+   existing Checkout setup flow, invoice history. ACH deferred.
+10. **Frameworks from session mentions** — persist mentions to `client_frameworks`
+    at scoring time; union with nudge history; coach override.
+11. **Real step-through tour** + ⓘ on every card with 2–3 usage ideas, dismissal
+    moved to `clients.portal_onboarded`, replayable.
 
-**Open product questions for Jeff**
-- Should clients see coach notes at all, or only notes explicitly shared? (Drives
-  §4, §6, §12.)
-- On an enterprise engagement, should the coachee see any billing, or is that the
-  company's view only?
-- Password *in addition to* magic-link, or is magic-link the answer to "well
-  password protected"?
-- Should frameworks be coach-assignable, or stay nudge-derived?
+---
+
+## Decisions (settled 2026-08-15)
+
+| Question | Decision | Consequences |
+|---|---|---|
+| **Which notes can the client see?** | **Only notes sent via the "Send to client" button** at the end of a session. Raw coach notes never cross the boundary. Sent notes are stored in the portal. | Needs the send-note logging fix first (§4) — **today nothing is recorded**, so this is a prerequisite, not a nicety. Also fixes the coach-side "Recent Communication" gap. History starts at ship date; no backfill is possible. |
+| **Billing on an enterprise engagement?** | **No — the coachee sees no billing.** | One rule, one helper: show billing only when the resolved `billing_accounts.type = 'solo'`; enterprise → card hidden, routes 404. The `solo`/`enterprise` CHECK already exists, so no migration for the gate itself. |
+| **Password, or magic-link?** | **Both.** Client can create a username + password; magic-link stays. **The coach can view the client's login state and resend the login link** when credentials are lost. | New `client_credentials` table (never on `clients`). Resend already exists as `portal-invite` — needs surfacing. Coach sees username / password-set / last-login, **never the password** (one-way hash) — reset, not reveal. Add login throttling. |
+| **How do frameworks reach the portal?** | **Nudged *or* mentioned in a session.** | Mention detection already runs in the nudge pipeline but is discarded by the 2-per-window cap. Persist mentions to a `client_frameworks` table at scoring time, independent of nudge drafting. Mentions require a **scored** session. Add a coach override to clear false positives. |
+| **ACH?** | **Later.** Card-on-file first. | Needs `us_bank_account`, mandate text, verification flow, and a pending-settlement state in `handlePaidTransition`. |
+
+### Net effect on the plan
+
+The notes decision **moves work earlier**: logging sent notes is now a
+prerequisite for the notes card, the search source, *and* the AI context — three
+Tier-1/2 items that all depend on one small route change. It's the highest
+leverage item in the document and should ship first.
+
+The frameworks and billing decisions both got **cheaper** than the original
+analysis assumed: framework mentions are already detected (just discarded), and
+the enterprise rule is already expressible via an existing CHECK constraint.
+The password decision is the one item that got **more expensive**, adding a
+credentials table, a login form, throttling, and a coach-side status view.
