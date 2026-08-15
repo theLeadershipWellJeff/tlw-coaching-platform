@@ -107,6 +107,12 @@ export type Note = {
   duration_minutes: number
   calendar_event_id: string | null
   ca_session_id: string | null
+  // When this note was sent to the client via "Send to client" (migration 050).
+  // null = never sent. This is the gate the Client Portal reads — only sent
+  // notes are ever shown to a client.
+  sent_to_client_at: Timestamp | null
+  // The communications row holding the exact email the client received.
+  client_communication_id: string | null
   created_at: Timestamp
   updated_at: Timestamp
 }
@@ -392,7 +398,7 @@ export type Communication = {
   id: string
   coach_id: string | null
   client_id: string | null // null = account-level billing comm (no single client)
-  type: string // 'email' | 'reminder' | 'prep_sheet' | 'receipt' | 'billing_authorization' | 'billing_adjustment'
+  type: string // 'email' | 'session_note' | 'reminder' | 'prep_sheet' | 'receipt' | 'billing_authorization' | 'billing_adjustment'
   direction: string // 'outbound' | 'inbound'
   subject: string | null
   preview: string | null

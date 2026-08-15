@@ -232,7 +232,19 @@ function RecentNotes({
               n.id === activeId ? 'bg-tlw-canvas/60' : ''
             }`}
           >
-            <span className="truncate text-[13px] text-tlw-navy-deep">{n.title?.trim() || 'Untitled note'}</span>
+            <span className="flex min-w-0 items-center gap-1.5">
+              <span className="truncate text-[13px] text-tlw-navy-deep">{n.title?.trim() || 'Untitled note'}</span>
+              {/* Sent notes are the ones that will surface in the client portal. */}
+              {n.sent_to_client_at && (
+                <span
+                  title="Sent to the client"
+                  className="shrink-0 text-[11px] leading-none text-tlw-warm-gray"
+                  aria-label="Sent to client"
+                >
+                  📝
+                </span>
+              )}
+            </span>
             <span className="shrink-0 text-[11px] text-tlw-warm-gray">{formatDate(n.session_date)}</span>
           </button>
         ))}
@@ -530,6 +542,13 @@ function NoteEditor({
           actions={captures.actions.map((a) => a.text)}
           insights={captures.insights.map((i) => i.text)}
           onClose={() => setSendOpen(false)}
+          onSent={(communicationId) =>
+            onSaved({
+              ...note,
+              sent_to_client_at: new Date().toISOString(),
+              client_communication_id: communicationId,
+            })
+          }
         />
       )}
 

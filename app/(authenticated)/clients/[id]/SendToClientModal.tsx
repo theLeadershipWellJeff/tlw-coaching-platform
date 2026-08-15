@@ -18,6 +18,7 @@ export function SendToClientModal({
   actions,
   insights,
   onClose,
+  onSent,
 }: {
   client: Client
   noteTitle: string
@@ -26,6 +27,9 @@ export function SendToClientModal({
   actions: string[]
   insights: string[]
   onClose: () => void
+  /** Fired once the send succeeds, with the communications row id (migration
+   *  050) so the caller can mark the note sent without a refetch. */
+  onSent?: (communicationId: string | null) => void
 }) {
   const [drafting, setDrafting] = useState(true)
   const [subject, setSubject] = useState('')
@@ -70,6 +74,7 @@ export function SendToClientModal({
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to send.')
       setSent(true)
+      onSent?.(data.communication?.id ?? null)
       setTimeout(onClose, 1000)
     } catch (e: any) {
       setError(e.message)

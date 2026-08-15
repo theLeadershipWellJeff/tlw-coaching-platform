@@ -506,7 +506,16 @@ list (✦) and the `ACTION:` lines an interactive checklist. Sending goes throug
    (re-uses the row for the same note+description across re-sends);
 2. builds the HTML email (`lib/client-note-email.ts`) where each action's box is
    a click-to-log link `${getBaseUrl()}/api/actions/complete?token=…`;
-3. sends HTML via Gmail (Cc the coach).
+3. sends HTML via Gmail (Cc the coach);
+4. **logs the send to `communications` as `type='session_note'`** with the exact
+   HTML the client received in `body_html` (migration 050), and stamps
+   `notes.sent_to_client_at` + `notes.client_communication_id` on the note.
+   Failures log too (`status='failed'`), so a bad send surfaces on the Recent
+   Communication card instead of vanishing. **This row is the Client Portal's
+   gate** — the portal shows only notes that were actually sent, so a raw coach
+   note never crosses the boundary. Before migration 050 this route logged
+   nothing at all, so there is no history to backfill: the portal's notes record
+   begins the day it ships. The notes list shows a 📝 marker on sent notes.
 
 `GET /api/actions/complete?token=…` is **public** (the token is the credential)
 — it flips the action to `done` (idempotent) and returns a branded confirmation
@@ -1386,6 +1395,18 @@ via `lib/coaching-hours-pdf.ts` (pdf-lib — header, paid/pro-bono summary,
 prior-hours blocks, by-client rollup, paginated chronological log). The widget
 gained an **All-time** period, an **Import hours** panel (prior-hours block +
 CSV upload), and an **Export PDF** button next to Export CSV.
+
+**`050_note_sent_to_client.sql` — ⚠️ PENDING, apply before deploying.** Adds
+`notes.sent_to_client_at` + `notes.client_communication_id` (FK →
+`communications`, ON DELETE SET NULL), a partial index on sent notes, and a
+`(client_id, type, sent_at desc)` index on `communications`. Additive and
+nullable — existing notes read as never-sent, which is correct since the data
+was never recorded. **The send-note route writes these columns**, so apply this
+before the deploy or every "Send to client" will still deliver the email but log
+an error stamping the note. Client Portal Tier 0: this is the record the portal
+reads to show only the notes a coach actually sent. Reversible via
+`050_note_sent_to_client_down.sql` (which deliberately keeps the
+`type='session_note'` communications rows — they are the record of real sends).
 
 **`048_supervisor_bootstrap_and_signature_unique.sql` — APPLIED (staging + production, 2026-08-14).** (1) Promotes
 the founding coach (email jeff@jeffkholmes.com, else earliest-created) to
