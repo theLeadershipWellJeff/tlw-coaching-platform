@@ -894,24 +894,61 @@ is never accepted here, and vice-versa.
 - **Read-only cards (Phase 2).** The portal home (`app/portal/page.tsx`, SSR)
   loads `lib/portal/data.ts#loadPortalOverview` — all queries hard-scoped to the
   authenticated `clientId`, **never** `key_info` or any coach-private field:
-  next appointment, coaching goals, session list (transcripts), and recent
-  messages (outbound `communications`). **Contact your coach** (`ContactCoachCard`
-  → `POST /api/portal/contact`) emails the coach (from their Gmail) and logs an
-  **inbound** `communications` row.
+  upcoming sessions (next 5), coaching goals, session list (transcripts), the
+  **session notes the coach sent** (`type='session_note'`), and other recent
+  messages (session notes excluded so they don't appear twice). **Contact your
+  coach** (`ContactCoachCard` → `POST /api/portal/contact`) emails the coach
+  (from their Gmail) and logs an **inbound** `communications` row.
+- **Notes = sent notes only.** The portal NEVER reads the `notes` table — a
+  coach's note is a private working document. What a client sees is the email the
+  coach chose to send via "Send to client", i.e. the `type='session_note'` rows in
+  `communications` (migration 050). That gate governs the notes card, the note
+  viewer, search, and the AI chat context alike.
+- **Viewers.** `/portal/sessions/[id]` renders a transcript and
+  `/portal/notes/[id]` renders a sent note; both load through
+  `loadPortalTranscript`/`loadPortalSessionNote`, scoped to BOTH the row id and
+  the authenticated `clientId`, so someone else's id 404s rather than revealing
+  it exists. The note viewer renders the stored email HTML inside a **sandboxed
+  iframe** (no scripts; `allow-popups` + `allow-top-navigation-by-user-activation`
+  keep the action-item links working) so email styling can't leak into the portal
+  and nothing in the body can execute. The session list, notes card, and every
+  search result link into these.
+- **Booking (migration 051).** `coaches.booking_url` (HubSpot/Calendly) renders as
+  a **"Schedule your next session"** button at the top of the portal — the first
+  thing a client sees. Set in Account → Scheduling ("Client booking link"; the
+  PATCH validates http(s) only, since it's rendered as a link on a client-facing
+  page). Bookings land on the coach's Google Calendar and are captured by the
+  existing calendar-watch sync (migration 025), so they come back as the client's
+  next session with no per-provider integration. NULL = no button.
 - **AI chat (Phase 3, migration 045).** A reflection chat at `/portal/chat`
   (linked from the home). `portal_conversations` + `portal_messages` store the
   threads; `lib/portal/chat.ts#buildChatContext` feeds Claude ONLY the client's
-  own coaching goals + transcripts (`raw_md`, capped at ~40k chars) — never
-  key_info/coach notes. Routes: `GET/POST /api/portal/chat` (list / send — creates
+  own coaching goals, transcripts (`raw_md`, capped at ~40k chars), and the
+  **session notes their coach sent them** (tags stripped via
+  `htmlToPlainText`, own ~12k budget so short dense notes don't compete with raw
+  transcripts) — never key_info or the `notes` table. Routes: `GET/POST /api/portal/chat` (list / send — creates
   a conversation on first message, titled from it; persists both turns, non-
   streaming) + `GET /api/portal/chat/[id]` (a thread's messages, ownership-checked).
   Model `PORTAL_CHAT_MODEL` or `claude-sonnet-4-6`. Every route scoped to the
   authenticated portal `clientId`.
-- **Quick search (Phase 4).** `GET /api/portal/search?q=` (scoped to the portal
-  clientId) ILIKE-searches the client's own `transcripts.raw_md` (wildcards
-  escaped) and returns title/date/snippet; `/portal/search` renders results with
-  highlighted matches, and the home has a search box (native GET form). Migration-
-  free; transcripts only (coach notes/key_info never searched).
+- **Quick search (Phase 4; rebuilt on FTS, migration 052).** `GET
+  /api/portal/search?q=` (scoped to the portal clientId) calls the
+  `portal_search(p_client_id, p_query, p_limit)` SQL function — one ranked query
+  across the client's **own transcripts** and the **session notes their coach
+  sent them**. Coach-private `notes` are never indexed or searched. Both sources
+  carry a generated `search_vector` (`transcripts`, `communications`) with
+  title/subject weighted 'A' over body 'B'; `communications.body_html` has tags
+  stripped by `regexp_replace` before indexing so email markup can't match. The
+  GIN indexes are **compound on `(client_id, search_vector)`** via `btree_gin`,
+  so a search scans only that client's rows instead of matching every tenant and
+  filtering after (confirmed by EXPLAIN — `client_id` lands in the Index Cond).
+  Query parsing uses `websearch_to_tsquery`, which never raises on whatever a
+  person types (unbalanced quotes, punctuation, `OR`/`-` all handled). Snippets
+  come from `ts_headline` delimited with **`[[hl]]`/`[[/hl]]` sentinels, not
+  `<mark>` tags** — the page splits on them and renders the highlight itself, so
+  transcript text can never inject markup into a client-facing page. The route
+  **falls back to the old ILIKE transcript scan** if the function is missing, so
+  a deploy landing before the migration still works.
 - **Frameworks + PDF (Phase 5).** `GET /api/portal/frameworks` lists the leaves
   surfaced to THIS client (distinct `framework_slug` from their `type='framework'`
   nudges → `garden_notes` where `nudge_eligible`), returning title/summary/type +
@@ -1396,17 +1433,33 @@ prior-hours blocks, by-client rollup, paginated chronological log). The widget
 gained an **All-time** period, an **Import hours** panel (prior-hours block +
 CSV upload), and an **Export PDF** button next to Export CSV.
 
-**`050_note_sent_to_client.sql` — ⚠️ PENDING, apply before deploying.** Adds
+**`050_note_sent_to_client.sql` — APPLIED (2026-08-15).** Adds
 `notes.sent_to_client_at` + `notes.client_communication_id` (FK →
 `communications`, ON DELETE SET NULL), a partial index on sent notes, and a
 `(client_id, type, sent_at desc)` index on `communications`. Additive and
 nullable — existing notes read as never-sent, which is correct since the data
-was never recorded. **The send-note route writes these columns**, so apply this
-before the deploy or every "Send to client" will still deliver the email but log
-an error stamping the note. Client Portal Tier 0: this is the record the portal
+was never recorded. Client Portal Tier 0: this is the record the portal
 reads to show only the notes a coach actually sent. Reversible via
 `050_note_sent_to_client_down.sql` (which deliberately keeps the
 `type='session_note'` communications rows — they are the record of real sends).
+
+**`051_coach_booking_url.sql` — ⚠️ PENDING.** Adds `coaches.booking_url` (the
+client-facing HubSpot/Calendly scheduler link shown at the top of the Client
+Portal) and seeds the founding coach's existing HubSpot link — the one already
+hand-written into the seeded email signature — so the button works on day one.
+Additive/nullable; NULL just hides the button, and reads are defensive, so the
+app runs without it. Set per coach in Account → Scheduling.
+
+**`052_portal_search.sql` — ⚠️ PENDING.** Client Portal full-text search: adds a
+generated `search_vector` to `transcripts` and `communications`, compound
+`btree_gin` GIN indexes on `(client_id, search_vector)`, and the `portal_search`
+SQL function that ranks one query across a client's transcripts + sent session
+notes. Replaces an `ilike '%term%'` scan that no index could serve. Generated
+columns mean **no backfill and no write-path change** — Postgres computes them
+for existing rows during the migration. Requires the `btree_gin` extension
+(created by the migration; standard on Supabase). The search route **falls back
+to the old ILIKE path if the function is absent**, so deploy order is not
+critical here. Verified up + down against Postgres 16.
 
 **`048_supervisor_bootstrap_and_signature_unique.sql` — APPLIED (staging + production, 2026-08-14).** (1) Promotes
 the founding coach (email jeff@jeffkholmes.com, else earliest-created) to

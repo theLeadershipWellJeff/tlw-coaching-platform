@@ -8,13 +8,15 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Communication, Database } from './supabase/types'
 
 /**
- * Strip tags + collapse whitespace from an HTML body and truncate to `max`
- * chars — the card preview line. Decodes the handful of entities our own
- * signature/body builders emit so the preview reads as plain text.
+ * Strip tags + collapse whitespace from an HTML body. Decodes the handful of
+ * entities our own signature/body builders emit so the result reads as plain
+ * text. Used for the card preview line and, at full length, to feed a sent
+ * email's text to the portal chat + search.
  */
-export function htmlToPreview(html: string, max = 140): string {
-  const text = (html || '')
+export function htmlToPlainText(html: string): string {
+  return (html || '')
     .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
     .replace(/<[^>]+>/g, ' ')
     .replace(/&nbsp;/gi, ' ')
     .replace(/&middot;/gi, '·')
@@ -23,6 +25,11 @@ export function htmlToPreview(html: string, max = 140): string {
     .replace(/&gt;/gi, '>')
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+/** `htmlToPlainText`, truncated to `max` chars — the card preview line. */
+export function htmlToPreview(html: string, max = 140): string {
+  const text = htmlToPlainText(html)
   return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text
 }
 

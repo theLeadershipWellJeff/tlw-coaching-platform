@@ -34,9 +34,10 @@ export function PortalOnboarding() {
           This is your private space to stay connected to your coaching:
         </p>
         <ul className="mt-3 space-y-1.5 text-[13px] text-tlw-espresso">
+          <li>📅 <strong>Book your next session</strong> from the button up top.</li>
           <li>💬 <strong>Chat</strong> with an assistant that knows your goals and sessions.</li>
-          <li>🎯 Revisit your <strong>goals</strong> and <strong>session history</strong>.</li>
-          <li>🔎 <strong>Search</strong> across your sessions.</li>
+          <li>🎯 Revisit your <strong>goals</strong>, <strong>sessions</strong>, and the <strong>notes</strong> your coach sent you.</li>
+          <li>🔎 <strong>Search</strong> across your sessions and notes.</li>
           <li>✉️ <strong>Message your coach</strong> anytime.</li>
         </ul>
         <p className="mt-3 text-[12px] text-tlw-warm-gray">

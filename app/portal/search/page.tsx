@@ -3,7 +3,16 @@ import { Suspense, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 
-type Result = { id: string; title: string | null; session_date: string | null; snippet: string }
+type Result = {
+  kind: 'session' | 'note'
+  id: string
+  title: string
+  occurred_on: string | null
+  snippet: string
+}
+
+const HL_OPEN = '[[hl]]'
+const HL_CLOSE = '[[/hl]]'
 
 function fmtDate(ymd: string | null): string {
   if (!ymd) return ''
@@ -14,20 +23,25 @@ function fmtDate(ymd: string | null): string {
   })
 }
 
-function Highlight({ text, term }: { text: string; term: string }) {
-  if (!term) return <>{text}</>
-  const parts = text.split(new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'ig'))
+/**
+ * Render a snippet whose matches are wrapped in sentinel delimiters by the
+ * search layer. Deliberately NOT dangerouslySetInnerHTML — the snippet is
+ * transcript text, so it is only ever rendered as text.
+ */
+function Snippet({ text }: { text: string }) {
+  const parts = text.split(HL_OPEN)
   return (
     <>
-      {parts.map((p, i) =>
-        p.toLowerCase() === term.toLowerCase() ? (
-          <mark key={i} className="rounded bg-tlw-signal-orange/25 px-0.5">
-            {p}
-          </mark>
-        ) : (
-          <span key={i}>{p}</span>
+      {parts.map((part, i) => {
+        if (i === 0) return <span key={i}>{part}</span>
+        const [hit, ...rest] = part.split(HL_CLOSE)
+        return (
+          <span key={i}>
+            <mark className="rounded bg-tlw-signal-orange/25 px-0.5">{hit}</mark>
+            {rest.join(HL_CLOSE)}
+          </span>
         )
-      )}
+      })}
     </>
   )
 }
@@ -73,7 +87,7 @@ function SearchInner() {
           name="q"
           defaultValue={q}
           autoFocus
-          placeholder="Search your sessions…"
+          placeholder="Search your sessions and notes…"
           className="w-full rounded-tlw-lg border border-tlw-warm-gray/25 bg-tlw-surface px-4 py-2.5 text-[15px] text-tlw-espresso outline-none focus:border-tlw-signal-orange"
         />
       </form>
@@ -82,18 +96,32 @@ function SearchInner() {
         {loading ? (
           <p className="text-[13px] text-tlw-warm-gray">Searching…</p>
         ) : searched && results.length === 0 ? (
-          <p className="text-[13px] text-tlw-warm-gray">No sessions mention “{q}”.</p>
+          <p className="text-[13px] text-tlw-warm-gray">
+            Nothing in your sessions or notes mentions “{q}”.
+          </p>
         ) : (
           <ul className="space-y-3">
             {results.map((r) => (
-              <li key={r.id} className="rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface p-4">
-                <div className="flex items-baseline justify-between gap-3">
-                  <p className="text-[14px] font-medium text-tlw-navy-deep">{r.title || 'Session'}</p>
-                  <span className="shrink-0 text-[12px] text-tlw-warm-gray">{fmtDate(r.session_date)}</span>
-                </div>
-                <p className="mt-1.5 text-[13px] leading-relaxed text-tlw-espresso">
-                  <Highlight text={r.snippet} term={q} />
-                </p>
+              <li key={`${r.kind}-${r.id}`}>
+                <Link
+                  href={r.kind === 'note' ? `/portal/notes/${r.id}` : `/portal/sessions/${r.id}`}
+                  className="block rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface p-4 transition-colors hover:border-tlw-warm-gray/30"
+                >
+                  <div className="flex items-baseline justify-between gap-3">
+                    <p className="min-w-0 truncate text-[14px] font-medium text-tlw-navy-deep">
+                      {r.title}
+                    </p>
+                    <span className="shrink-0 text-[12px] text-tlw-warm-gray">
+                      {fmtDate(r.occurred_on)}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-[11px] uppercase tracking-[1.5px] text-tlw-warm-gray">
+                    {r.kind === 'note' ? 'Session notes' : 'Session'}
+                  </p>
+                  <p className="mt-1.5 text-[13px] leading-relaxed text-tlw-espresso">
+                    <Snippet text={r.snippet} />
+                  </p>
+                </Link>
               </li>
             ))}
           </ul>

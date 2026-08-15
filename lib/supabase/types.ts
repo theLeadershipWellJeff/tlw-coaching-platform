@@ -274,6 +274,11 @@ export type Coach = {
   // 'manual' (default) | 'plaud' | 'zoom'. Plaud/Zoom automated intake are
   // post-beta; the setting records the coach's choice + drives the settings UI.
   transcript_source: string | null
+  // Client-facing scheduler link — HubSpot Meetings, Calendly, etc. (migration
+  // 051). Rendered as the Client Portal's "Schedule your next session" button.
+  // null = no booking button. Bookings made through it land on the coach's
+  // Google Calendar and are captured by the existing calendar-watch sync.
+  booking_url: string | null
   created_at: Timestamp
   updated_at: Timestamp
 }
@@ -863,7 +868,22 @@ export type Database = {
       }
     }
     Views: Record<string, never>
-    Functions: Record<string, never>
+    Functions: {
+      // Client Portal ranked search across a client's own transcripts and the
+      // session notes their coach sent them (migration 052).
+      portal_search: {
+        Args: { p_client_id: string; p_query: string; p_limit?: number }
+        Returns: {
+          kind: string // 'session' | 'note'
+          id: string
+          title: string
+          occurred_on: DateString | null
+          // Matches are wrapped in the [[hl]]…[[/hl]] sentinels, never HTML.
+          snippet: string
+          rank: number
+        }[]
+      }
+    }
     Enums: Record<string, never>
     CompositeTypes: Record<string, never>
   }

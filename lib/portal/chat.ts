@@ -1,15 +1,20 @@
 /**
  * Client Portal AI chat — context + generation. The model sees ONLY the client's
- * own coaching goals and session transcripts (scoped by clientId); never
- * key_info, coach notes, or any other coach-private field.
+ * own coaching goals, session transcripts, and the session notes the coach chose
+ * to SEND them (migration 050) — all scoped by clientId. It never sees key_info,
+ * the `notes` table, or any other coach-private field.
  */
 import Anthropic from '@anthropic-ai/sdk'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
+import { htmlToPlainText } from '@/lib/communications'
 import type { CoachingGoal } from '@/lib/supabase/types'
 
 const MODEL = process.env.PORTAL_CHAT_MODEL || 'claude-sonnet-4-6'
 // Cap the transcript corpus fed as context so we stay within a sane token budget.
 const TRANSCRIPT_CHAR_BUDGET = 40000
+// Sent notes are short and dense — the coach's own summary of a session — so
+// they get their own budget rather than competing with raw transcripts.
+const NOTES_CHAR_BUDGET = 12000
 
 export type ChatMsg = { role: 'user' | 'assistant'; content: string }
 
@@ -27,12 +32,24 @@ export async function buildChatContext(clientId: string): Promise<{ clientName: 
     ? (client!.coaching_goals as CoachingGoal[])
     : []
 
-  const { data: transcripts } = await supabase
-    .from('transcripts')
-    .select('title, session_date, raw_md')
-    .eq('client_id', clientId)
-    .order('session_date', { ascending: false, nullsFirst: false })
-    .limit(30)
+  const [{ data: transcripts }, { data: sentNotes }] = await Promise.all([
+    supabase
+      .from('transcripts')
+      .select('title, session_date, raw_md')
+      .eq('client_id', clientId)
+      .order('session_date', { ascending: false, nullsFirst: false })
+      .limit(30),
+    // The notes the coach SENT this client — never the `notes` table.
+    supabase
+      .from('communications')
+      .select('subject, body_html, sent_at')
+      .eq('client_id', clientId)
+      .eq('type', 'session_note')
+      .eq('direction', 'outbound')
+      .eq('status', 'sent')
+      .order('sent_at', { ascending: false })
+      .limit(30),
+  ])
 
   let budget = TRANSCRIPT_CHAR_BUDGET
   const parts: string[] = []
@@ -44,6 +61,17 @@ export async function buildChatContext(clientId: string): Promise<{ clientName: 
     parts.push(
       `## Session${t.session_date ? ` — ${t.session_date}` : ''}${t.title ? ` (${t.title})` : ''}\n${chunk}`
     )
+  }
+
+  let notesBudget = NOTES_CHAR_BUDGET
+  const noteParts: string[] = []
+  for (const n of sentNotes || []) {
+    if (notesBudget <= 0) break
+    const chunk = htmlToPlainText(n.body_html || '').slice(0, notesBudget)
+    if (!chunk) continue
+    notesBudget -= chunk.length
+    const date = n.sent_at ? new Date(n.sent_at).toISOString().slice(0, 10) : ''
+    noteParts.push(`## Notes${date ? ` — ${date}` : ''}${n.subject ? ` (${n.subject})` : ''}\n${chunk}`)
   }
 
   const goalsText = goals.length
@@ -63,6 +91,9 @@ Guidelines:
 
 ${clientName}'S COACHING GOALS:
 ${goalsText}
+
+SESSION NOTES ${clientName} RECEIVED FROM THEIR COACH:
+${noteParts.join('\n\n') || '(no session notes sent yet)'}
 
 ${clientName}'S SESSION HISTORY:
 ${parts.join('\n\n') || '(no sessions on file yet)'}`
