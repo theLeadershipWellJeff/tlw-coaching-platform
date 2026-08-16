@@ -192,8 +192,29 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'Nothing to update.' }, { status: 400 })
   }
 
-  const { error } = await supabase.from('coaches').update(update).eq('id', coach.id)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  // Apply booking_url separately (migration 051). Postgres rejects the WHOLE
+  // update statement on an unknown column, so bundling it in would mean that
+  // before 051 is applied, saving Account → Scheduling fails outright — taking
+  // availability and reminders down with it. Isolated, an unapplied migration
+  // costs only the booking link.
+  const { booking_url, ...rest } = update
+  if (booking_url !== undefined) {
+    const { error: bookingError } = await supabase
+      .from('coaches')
+      .update({ booking_url })
+      .eq('id', coach.id)
+    if (bookingError) {
+      console.error('booking_url update failed (migration 051 applied?):', bookingError.message)
+      if (Object.keys(rest).length === 0) {
+        return NextResponse.json({ error: bookingError.message }, { status: 500 })
+      }
+    }
+  }
+
+  if (Object.keys(rest).length > 0) {
+    const { error } = await supabase.from('coaches').update(rest).eq('id', coach.id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  }
 
   return NextResponse.json(update)
 }

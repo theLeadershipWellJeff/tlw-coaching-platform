@@ -38,10 +38,25 @@ export async function loadPortalOverview(clientId: string): Promise<PortalOvervi
 
   const { data: client } = await supabase
     .from('clients')
-    .select('id, name, timezone, coaching_goals, portal_onboarded')
+    .select('id, name, timezone, coaching_goals')
     .eq('id', clientId)
     .maybeSingle()
   if (!client) return null
+
+  // Read the tour flag separately and defensively. Postgres errors the WHOLE
+  // select on an unknown column, so folding `portal_onboarded` into the query
+  // above would turn "migration 053 not applied yet" into "every client bounces
+  // off their portal" — a deploy-order cliff this page must not have. Unknown =
+  // treat as not-yet-onboarded, which just offers the tour.
+  const onboarded = await supabase
+    .from('clients')
+    .select('portal_onboarded')
+    .eq('id', clientId)
+    .maybeSingle()
+    .then(
+      (r) => !!r.data?.portal_onboarded,
+      () => false
+    )
 
   const nowIso = new Date().toISOString()
   const [apptRes, txRes, notesRes, commRes, coachRes] = await Promise.all([
@@ -99,7 +114,7 @@ export async function loadPortalOverview(clientId: string): Promise<PortalOvervi
 
   return {
     client: { id: client.id, name: client.name, timezone: client.timezone },
-    onboarded: !!client.portal_onboarded,
+    onboarded,
     goals: Array.isArray(client.coaching_goals) ? (client.coaching_goals as CoachingGoal[]) : [],
     appointments: (apptRes.data ?? []).map((a) => ({
       id: a.id,
