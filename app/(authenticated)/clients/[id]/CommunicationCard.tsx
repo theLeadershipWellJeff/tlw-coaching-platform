@@ -25,10 +25,16 @@ function relTime(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-const ICONS: Record<string, string> = { email: '✉', reminder: '🔔', prep_sheet: '📄' }
+const ICONS: Record<string, string> = {
+  email: '✉',
+  session_note: '📝',
+  reminder: '🔔',
+  prep_sheet: '📄',
+}
 
 function labelFor(c: CommRow): string {
   if (c.subject && c.subject.trim()) return c.subject
+  if (c.type === 'session_note') return 'Session notes'
   if (c.type === 'reminder') return 'Reminder'
   if (c.type === 'prep_sheet') return 'Prep sheet'
   return 'Email'

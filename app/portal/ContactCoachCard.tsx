@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { InfoPopover } from './InfoPopover'
 
 export function ContactCoachCard() {
   const [message, setMessage] = useState('')
@@ -25,9 +26,15 @@ export function ContactCoachCard() {
 
   return (
     <div className="rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface p-5">
-      <h2 className="text-[13px] font-semibold uppercase tracking-[1.5px] text-tlw-navy-rich">
-        Contact your coach
-      </h2>
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-[13px] font-semibold uppercase tracking-[1.5px] text-tlw-navy-rich">
+          Contact your coach
+        </h2>
+        <InfoPopover
+          label="Contact your coach"
+          text="Send your coach a note without leaving the portal. Good for a quick question between sessions, something you want to flag before you next meet, or rescheduling."
+        />
+      </div>
       {state === 'sent' ? (
         <div className="mt-3">
           <p className="text-[14px] text-tlw-espresso">Your message is on its way. 🎉</p>

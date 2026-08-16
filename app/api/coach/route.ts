@@ -40,6 +40,8 @@ export async function GET() {
       // the UI can distinguish "hasn't chosen" from "chose manual".
       calendar_id: coach.calendar_id ?? null,
       transcript_source: coach.transcript_source ?? null,
+      // Migration 051. null = the Client Portal shows no booking button.
+      booking_url: coach.booking_url ?? null,
     },
   })
 }
@@ -72,7 +74,33 @@ export async function PATCH(req: NextRequest) {
     availability?: ReturnType<typeof normalizeAvailability>
     reminder_settings?: ReturnType<typeof normalizeReminderSettings>
     nudge_settings?: ReturnType<typeof normalizeNudgeSettings>
+    booking_url?: string | null
   } = {}
+
+  // Client-facing scheduler link shown in the Client Portal (migration 051).
+  // "" clears it. Only http(s) is accepted — this URL is rendered as a link on a
+  // client-facing page, so a javascript:/data: scheme must never reach it.
+  if ('bookingUrl' in body) {
+    const raw = String(body.bookingUrl ?? '').trim()
+    if (raw === '') {
+      update.booking_url = null
+    } else {
+      let ok = false
+      try {
+        const parsed = new URL(raw)
+        ok = parsed.protocol === 'https:' || parsed.protocol === 'http:'
+      } catch {
+        ok = false
+      }
+      if (!ok) {
+        return NextResponse.json(
+          { error: 'Enter a valid booking link starting with https://' },
+          { status: 400 }
+        )
+      }
+      update.booking_url = raw
+    }
+  }
 
   if ('supervisorEmail' in body) {
     const raw = String(body.supervisorEmail ?? '').trim()
@@ -164,8 +192,29 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'Nothing to update.' }, { status: 400 })
   }
 
-  const { error } = await supabase.from('coaches').update(update).eq('id', coach.id)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  // Apply booking_url separately (migration 051). Postgres rejects the WHOLE
+  // update statement on an unknown column, so bundling it in would mean that
+  // before 051 is applied, saving Account → Scheduling fails outright — taking
+  // availability and reminders down with it. Isolated, an unapplied migration
+  // costs only the booking link.
+  const { booking_url, ...rest } = update
+  if (booking_url !== undefined) {
+    const { error: bookingError } = await supabase
+      .from('coaches')
+      .update({ booking_url })
+      .eq('id', coach.id)
+    if (bookingError) {
+      console.error('booking_url update failed (migration 051 applied?):', bookingError.message)
+      if (Object.keys(rest).length === 0) {
+        return NextResponse.json({ error: bookingError.message }, { status: 500 })
+      }
+    }
+  }
+
+  if (Object.keys(rest).length > 0) {
+    const { error } = await supabase.from('coaches').update(rest).eq('id', coach.id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  }
 
   return NextResponse.json(update)
 }

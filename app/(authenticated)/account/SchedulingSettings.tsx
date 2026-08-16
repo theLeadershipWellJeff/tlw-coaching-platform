@@ -31,6 +31,9 @@ function leadLabel(hours: number): string {
 export function SchedulingSettings() {
   const [availability, setAvailability] = useState<CoachAvailability>(defaultAvailability())
   const [reminders, setReminders] = useState<ReminderSettings>(defaultReminderSettings())
+  // Client-facing scheduler link (migration 051) — its own column, not part of
+  // reminder_settings, since the portal reads it directly.
+  const [bookingUrl, setBookingUrl] = useState('')
   const [loaded, setLoaded] = useState(false)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
@@ -42,6 +45,7 @@ export function SchedulingSettings() {
         if (d?.coach) {
           setAvailability(normalizeAvailability(d.coach.availability))
           setReminders(normalizeReminderSettings(d.coach.reminder_settings))
+          setBookingUrl(d.coach.booking_url ?? '')
         }
       })
       .catch(() => {})
@@ -78,7 +82,7 @@ export function SchedulingSettings() {
       const res = await fetch('/api/coach', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ availability, reminderSettings: reminders }),
+        body: JSON.stringify({ availability, reminderSettings: reminders, bookingUrl }),
       })
       const data = await res.json().catch(() => ({}))
       if (res.ok) setMsg({ ok: true, text: 'Saved.' })
@@ -151,6 +155,25 @@ export function SchedulingSettings() {
         className="w-full rounded-tlw-md border border-tlw-warm-gray/25 bg-white px-3 py-2 text-[13px] text-tlw-espresso outline-none focus:border-tlw-signal-orange"
       />
       <p className="mt-1 text-[11px] text-tlw-warm-gray">Leave blank to use the default room ({DEFAULT_MEETING_LINK}).</p>
+
+      {/* Client-facing booking link (migration 051) */}
+      <p className="mb-1 mt-6 text-[12px] font-medium text-tlw-espresso">Client booking link</p>
+      <p className="mb-2 text-[12px] text-tlw-warm-gray">
+        Your HubSpot or Calendly scheduler. Shown as “Schedule your next session” at the top of the
+        client portal — bookings land on your calendar and appear as their next session.
+      </p>
+      <input
+        type="url"
+        inputMode="url"
+        value={bookingUrl}
+        disabled={!loaded}
+        placeholder="https://meetings-na2.hubspot.com/your-link"
+        onChange={(e) => setBookingUrl(e.target.value)}
+        className="w-full rounded-tlw-md border border-tlw-warm-gray/25 bg-white px-3 py-2 text-[13px] text-tlw-espresso outline-none focus:border-tlw-signal-orange"
+      />
+      <p className="mt-1 text-[11px] text-tlw-warm-gray">
+        Leave blank to hide the booking button from the portal.
+      </p>
 
       {/* Reminders */}
       <p className="mb-3 mt-6 text-[12px] font-medium text-tlw-espresso">Session reminders</p>

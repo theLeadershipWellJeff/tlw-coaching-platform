@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { consumeLoginToken } from '@/lib/portal/tokens'
 import { signPortalToken, PORTAL_COOKIE, portalCookieOptions } from '@/lib/portal/session'
+import { logPortalAccess } from '@/lib/portal/access'
 
 export const runtime = 'nodejs'
 
@@ -17,6 +18,8 @@ export async function POST(req: NextRequest) {
   if (!result) {
     return NextResponse.json({ error: 'This link is invalid or has expired.' }, { status: 401 })
   }
+
+  await logPortalAccess(result.clientId, 'login_verify')
 
   const jwt = await signPortalToken(result.clientId)
   const res = NextResponse.json({ ok: true })

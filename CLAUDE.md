@@ -506,7 +506,16 @@ list (✦) and the `ACTION:` lines an interactive checklist. Sending goes throug
    (re-uses the row for the same note+description across re-sends);
 2. builds the HTML email (`lib/client-note-email.ts`) where each action's box is
    a click-to-log link `${getBaseUrl()}/api/actions/complete?token=…`;
-3. sends HTML via Gmail (Cc the coach).
+3. sends HTML via Gmail (Cc the coach);
+4. **logs the send to `communications` as `type='session_note'`** with the exact
+   HTML the client received in `body_html` (migration 050), and stamps
+   `notes.sent_to_client_at` + `notes.client_communication_id` on the note.
+   Failures log too (`status='failed'`), so a bad send surfaces on the Recent
+   Communication card instead of vanishing. **This row is the Client Portal's
+   gate** — the portal shows only notes that were actually sent, so a raw coach
+   note never crosses the boundary. Before migration 050 this route logged
+   nothing at all, so there is no history to backfill: the portal's notes record
+   begins the day it ships. The notes list shows a 📝 marker on sent notes.
 
 `GET /api/actions/complete?token=…` is **public** (the token is the credential)
 — it flips the action to `done` (idempotent) and returns a branded confirmation
@@ -885,24 +894,68 @@ is never accepted here, and vice-versa.
 - **Read-only cards (Phase 2).** The portal home (`app/portal/page.tsx`, SSR)
   loads `lib/portal/data.ts#loadPortalOverview` — all queries hard-scoped to the
   authenticated `clientId`, **never** `key_info` or any coach-private field:
-  next appointment, coaching goals, session list (transcripts), and recent
-  messages (outbound `communications`). **Contact your coach** (`ContactCoachCard`
-  → `POST /api/portal/contact`) emails the coach (from their Gmail) and logs an
-  **inbound** `communications` row.
-- **AI chat (Phase 3, migration 045).** A reflection chat at `/portal/chat`
-  (linked from the home). `portal_conversations` + `portal_messages` store the
+  upcoming sessions (next 5), coaching goals, session list (transcripts), the
+  **session notes the coach sent** (`type='session_note'`), and other recent
+  messages (session notes excluded so they don't appear twice). **Contact your
+  coach** (`ContactCoachCard` → `POST /api/portal/contact`) emails the coach
+  (from their Gmail) and logs an **inbound** `communications` row.
+- **Notes = sent notes only.** The portal NEVER reads the `notes` table — a
+  coach's note is a private working document. What a client sees is the email the
+  coach chose to send via "Send to client", i.e. the `type='session_note'` rows in
+  `communications` (migration 050). That gate governs the notes card, the note
+  viewer, search, and the AI chat context alike.
+- **Viewers.** `/portal/sessions/[id]` renders a transcript and
+  `/portal/notes/[id]` renders a sent note; both load through
+  `loadPortalTranscript`/`loadPortalSessionNote`, scoped to BOTH the row id and
+  the authenticated `clientId`, so someone else's id 404s rather than revealing
+  it exists. The note viewer renders the stored email HTML inside a **sandboxed
+  iframe** (no scripts; `allow-popups` + `allow-top-navigation-by-user-activation`
+  keep the action-item links working) so email styling can't leak into the portal
+  and nothing in the body can execute. The session list, notes card, and every
+  search result link into these.
+- **Booking (migration 051).** `coaches.booking_url` (HubSpot/Calendly) renders as
+  a **"Schedule your next session"** button at the top of the portal — the first
+  thing a client sees. Set in Account → Scheduling ("Client booking link"; the
+  PATCH validates http(s) only, since it's rendered as a link on a client-facing
+  page). Bookings land on the coach's Google Calendar and are captured by the
+  existing calendar-watch sync (migration 025), so they come back as the client's
+  next session with no per-provider integration. NULL = no button.
+- **AI chat (Phase 3, migration 045; retrieval + streaming in 053).** A reflection
+  chat at `/portal/chat`. `portal_conversations` + `portal_messages` store the
   threads; `lib/portal/chat.ts#buildChatContext` feeds Claude ONLY the client's
-  own coaching goals + transcripts (`raw_md`, capped at ~40k chars) — never
-  key_info/coach notes. Routes: `GET/POST /api/portal/chat` (list / send — creates
+  own coaching goals, transcripts, and the **session notes their coach sent
+  them** — never key_info or the `notes` table. Context is **retrieved, not
+  stuffed**: the newest 4 sessions (recency matters in coaching) PLUS passages
+  ranked against the question asked, drawn from the client's whole history via
+  the `portal_chat_context` SQL function (migration 053, reusing 052's search
+  vectors). The old version filled ~40k chars newest-first and stopped, so a
+  client more than a handful of sessions in silently lost their oldest material —
+  exactly what they come to the chat to remember. Missing function → degrades to
+  recency-only. Replies **stream** (`streamChatReply` → a `ReadableStream` of
+  text; the conversation id rides the `X-Conversation-Id` header so a new thread
+  is addressable before the body finishes) and `max_tokens` is 4096 (was 1024). Routes: `GET/POST /api/portal/chat` (list / send — creates
   a conversation on first message, titled from it; persists both turns, non-
   streaming) + `GET /api/portal/chat/[id]` (a thread's messages, ownership-checked).
   Model `PORTAL_CHAT_MODEL` or `claude-sonnet-4-6`. Every route scoped to the
   authenticated portal `clientId`.
-- **Quick search (Phase 4).** `GET /api/portal/search?q=` (scoped to the portal
-  clientId) ILIKE-searches the client's own `transcripts.raw_md` (wildcards
-  escaped) and returns title/date/snippet; `/portal/search` renders results with
-  highlighted matches, and the home has a search box (native GET form). Migration-
-  free; transcripts only (coach notes/key_info never searched).
+- **Quick search (Phase 4; rebuilt on FTS, migration 052).** `GET
+  /api/portal/search?q=` (scoped to the portal clientId) calls the
+  `portal_search(p_client_id, p_query, p_limit)` SQL function — one ranked query
+  across the client's **own transcripts** and the **session notes their coach
+  sent them**. Coach-private `notes` are never indexed or searched. Both sources
+  carry a generated `search_vector` (`transcripts`, `communications`) with
+  title/subject weighted 'A' over body 'B'; `communications.body_html` has tags
+  stripped by `regexp_replace` before indexing so email markup can't match. The
+  GIN indexes are **compound on `(client_id, search_vector)`** via `btree_gin`,
+  so a search scans only that client's rows instead of matching every tenant and
+  filtering after (confirmed by EXPLAIN — `client_id` lands in the Index Cond).
+  Query parsing uses `websearch_to_tsquery`, which never raises on whatever a
+  person types (unbalanced quotes, punctuation, `OR`/`-` all handled). Snippets
+  come from `ts_headline` delimited with **`[[hl]]`/`[[/hl]]` sentinels, not
+  `<mark>` tags** — the page splits on them and renders the highlight itself, so
+  transcript text can never inject markup into a client-facing page. The route
+  **falls back to the old ILIKE transcript scan** if the function is missing, so
+  a deploy landing before the migration still works.
 - **Frameworks + PDF (Phase 5).** `GET /api/portal/frameworks` lists the leaves
   surfaced to THIS client (distinct `framework_slug` from their `type='framework'`
   nudges → `garden_notes` where `nudge_eligible`), returning title/summary/type +
@@ -917,11 +970,57 @@ is never accepted here, and vice-versa.
   returns it (the file itself is NOT stored). The chat POST accepts an optional
   `attachment: {filename, text}` (capped 30k chars) that is spliced into that
   turn's last user message for the model; only a `📎 filename` marker is persisted.
-- **Onboarding + tips (Phase 7).** `PortalOnboarding` shows a first-visit welcome
-  modal (dismissal remembered in `localStorage`, key `tlw-portal-onboarded`), and
-  each home card carries an `InfoPopover` (ⓘ) with a one-line tip.
-- **Not yet live:** a client self-service password option (magic-link is the only
-  sign-in today) is the remaining future enhancement. All 7 planned phases shipped.
+- **Onboarding + tips (Phase 7; rebuilt in 053).** `PortalTour` is a **six-step
+  walkthrough** of the home page's cards (progress dots double as navigation,
+  skippable). The "taken" flag is `clients.portal_onboarded` (migration 053) —
+  per client, not per browser, so it doesn't re-fire on a new device — and a
+  **"Take the tour again"** link at the foot of the page replays it. Every card
+  carries an `InfoPopover` (ⓘ).
+- **Rate limiting + audit (`lib/portal/access.ts`, migration 053).**
+  `portal_access_log` is both the audit trail for a surface holding a client's
+  full history and the counter behind per-client rate limits (chat 60/h, upload
+  20/h, contact 10/h, password sign-in 10/15min). Counting lives in Postgres
+  because the app is serverless — an in-process counter resets on every cold
+  start and isn't shared across instances. The limiter **fails open** (a logging
+  outage must not lock every client out); the session cookie, not this, is the
+  security boundary.
+- **Username + password (migration 054).** Optional, alongside magic-link, which
+  stays as the recovery path. `client_credentials` holds a **scrypt** hash
+  (Node built-in — no new dependency; params stored with each hash so they can be
+  raised later) in **its own table**, never on `clients`, so a `select *` there
+  can't carry a hash into a response. Set at `/portal/settings` (requires a live
+  portal session, i.e. the client arrived via an emailed link — possession of the
+  inbox is what authorizes it, which is also why there's no separate reset flow).
+  `POST /api/portal/auth/login` returns one generic failure for unknown-username /
+  wrong-password / locked alike, so it can't enumerate accounts, and locks a row
+  for 15 min after 8 failures. **Coach side:** `GET /api/clients/[id]/portal-invite`
+  returns username / password-set / last-seen / locked, surfaced on the
+  `InviteToPortalButton` ("Resend portal link" once they've been in). The coach
+  can never see the password — it's a one-way hash; the remedies are resend-link
+  and let the client set a new one.
+- **Billing (`lib/portal/billing.ts`).** **An enterprise coachee sees no billing
+  at all** — the company is the payer. `resolvePortalBillingAccount` is the single
+  gate: it resolves `coachees` → `billing_accounts` and returns null unless
+  `type='solo'`; every portal billing route goes through it and 404s (never 403)
+  on a miss, so a response can't confirm an account exists. `GET /api/portal/billing`
+  returns the card on file + invoice history (drafts and voids excluded);
+  `POST /api/portal/billing/setup-session` opens Stripe hosted Checkout in setup
+  mode, reusing `getOrCreateStripeCustomer`/`createSetupCheckoutSession` so card
+  entry stays off every TLW page (PCI SAQ-A) and the existing
+  `setup_intent.succeeded` webhook still does the attaching. `BillingCard`
+  self-hides when the API says unavailable. **ACH is deliberately not built** —
+  it needs `us_bank_account`, mandate text, verification, and a pending-settlement
+  state in `handlePaidTransition`.
+- **Frameworks now include session mentions (migration 055).** `client_frameworks`
+  records every framework a scored session **named**, written in
+  `generate.ts` right after extraction and **before** `applyDedupAndCap` discards
+  most candidates — that cap governs how much mail a client gets, which is a
+  different question from what they've discussed. `loadPortalFrameworks` unions
+  mentions with nudge history; `resolveClientFrameworkPdf` authorizes against the
+  same union (kept deliberately in step — authorizing more than the card shows
+  would leak, less would look broken) and re-checks `nudge_eligible`.
+  `dismissed_at` is the coach's override for a false positive. Reads are
+  defensive: no table → the old nudge-derived list.
 
 ## Multi-coach beta (2026-08 — coach onboarding readiness)
 
@@ -1386,6 +1485,56 @@ via `lib/coaching-hours-pdf.ts` (pdf-lib — header, paid/pro-bono summary,
 prior-hours blocks, by-client rollup, paginated chronological log). The widget
 gained an **All-time** period, an **Import hours** panel (prior-hours block +
 CSV upload), and an **Export PDF** button next to Export CSV.
+
+**`050_note_sent_to_client.sql` — APPLIED (2026-08-15).** Adds
+`notes.sent_to_client_at` + `notes.client_communication_id` (FK →
+`communications`, ON DELETE SET NULL), a partial index on sent notes, and a
+`(client_id, type, sent_at desc)` index on `communications`. Additive and
+nullable — existing notes read as never-sent, which is correct since the data
+was never recorded. Client Portal Tier 0: this is the record the portal
+reads to show only the notes a coach actually sent. Reversible via
+`050_note_sent_to_client_down.sql` (which deliberately keeps the
+`type='session_note'` communications rows — they are the record of real sends).
+
+**`051_coach_booking_url.sql` — ⚠️ PENDING.** Adds `coaches.booking_url` (the
+client-facing HubSpot/Calendly scheduler link shown at the top of the Client
+Portal) and seeds the founding coach's existing HubSpot link — the one already
+hand-written into the seeded email signature — so the button works on day one.
+Additive/nullable; NULL just hides the button, and reads are defensive, so the
+app runs without it. Set per coach in Account → Scheduling.
+
+**`052_portal_search.sql` — ⚠️ PENDING.** Client Portal full-text search: adds a
+generated `search_vector` to `transcripts` and `communications`, compound
+`btree_gin` GIN indexes on `(client_id, search_vector)`, and the `portal_search`
+SQL function that ranks one query across a client's transcripts + sent session
+notes. Replaces an `ilike '%term%'` scan that no index could serve. Generated
+columns mean **no backfill and no write-path change** — Postgres computes them
+for existing rows during the migration. Requires the `btree_gin` extension
+(created by the migration; standard on Supabase). The search route **falls back
+to the old ILIKE path if the function is absent**, so deploy order is not
+critical here. Verified up + down against Postgres 16.
+
+**`053_portal_access_log.sql` — ⚠️ PENDING.** Three additive pieces for the
+Client Portal: `portal_access_log` (audit trail + the durable counter behind
+per-client rate limiting — in-process counters are useless on serverless),
+`clients.portal_onboarded` (the first-visit tour flag, moved off localStorage),
+and the `portal_chat_context` SQL function (retrieval for the AI chat, reusing
+052's search vectors). All reads are defensive — the rate limiter fails open, the
+tour re-offers itself, and the chat degrades to recency-only context — so the app
+runs without it, just with the old truncation behavior. Verified up + down.
+
+**`054_client_credentials.sql` — ⚠️ PENDING.** Optional Client Portal username +
+password (scrypt hash) in its own table, kept off `clients` so a `select *` can
+never carry a hash into a response. Magic-link sign-in is unaffected and remains
+the recovery path; without this migration the password tab simply always fails.
+Down drops every stored password — nobody is locked out, since the emailed link
+always works. Verified up + down.
+
+**`055_client_frameworks.sql` — ⚠️ PENDING.** Records frameworks a scored session
+**named**, not just ones a nudge was sent about, so the portal's Frameworks card
+reflects what was actually discussed. Written by the nudge pipeline before its
+per-window cap discards candidates. Additive; the portal falls back to the
+nudge-derived list when the table is absent. Verified up + down.
 
 **`048_supervisor_bootstrap_and_signature_unique.sql` — APPLIED (staging + production, 2026-08-14).** (1) Promotes
 the founding coach (email jeff@jeffkholmes.com, else earliest-created) to

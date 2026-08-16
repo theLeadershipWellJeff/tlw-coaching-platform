@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { InfoPopover } from './InfoPopover'
 
 type Framework = {
   slug: string
@@ -25,9 +26,15 @@ export function FrameworksCard() {
 
   return (
     <div className="rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface p-5">
-      <h2 className="text-[13px] font-semibold uppercase tracking-[1.5px] text-tlw-navy-rich">
-        Your frameworks
-      </h2>
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-[13px] font-semibold uppercase tracking-[1.5px] text-tlw-navy-rich">
+          Your frameworks
+        </h2>
+        <InfoPopover
+          label="Your frameworks"
+          text="The models and frameworks that have come up in your coaching. Tap one for a short explanation, and open the PDF when you want to work through it or share it with your team."
+        />
+      </div>
       <div className="mt-3">
         {items === null ? (
           <p className="text-[13px] text-tlw-warm-gray">Loading…</p>

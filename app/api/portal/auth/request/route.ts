@@ -5,6 +5,7 @@ import { resolveClientCoach } from '@/lib/portal/coach'
 import { buildMagicLinkEmailHtml } from '@/lib/portal/email'
 import { sendCoachHtmlEmail } from '@/lib/gmail'
 import { getBaseUrl } from '@/lib/url'
+import { logPortalAccess } from '@/lib/portal/access'
 
 export const runtime = 'nodejs'
 
@@ -37,6 +38,8 @@ export async function POST(req: NextRequest) {
     const raw = await createLoginToken(client.id, client.org_id)
     const link = `${getBaseUrl()}/portal/verify?token=${raw}`
     const firstName = (client.name || '').split(' ')[0] || 'there'
+
+    await logPortalAccess(client.id, 'login_request')
 
     await sendCoachHtmlEmail(coach, {
       to: client.email,

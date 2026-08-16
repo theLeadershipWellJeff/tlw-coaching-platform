@@ -93,6 +93,9 @@ export type Client = {
   agreement_on_file: boolean
   recording_authorized: boolean | null
   agreement_id: string | null
+  // Client Portal first-visit tour taken (migration 053). Stored per client
+  // rather than per browser, so it doesn't re-fire on every new device.
+  portal_onboarded: boolean
   created_at: Timestamp
   updated_at: Timestamp
 }
@@ -107,6 +110,12 @@ export type Note = {
   duration_minutes: number
   calendar_event_id: string | null
   ca_session_id: string | null
+  // When this note was sent to the client via "Send to client" (migration 050).
+  // null = never sent. This is the gate the Client Portal reads — only sent
+  // notes are ever shown to a client.
+  sent_to_client_at: Timestamp | null
+  // The communications row holding the exact email the client received.
+  client_communication_id: string | null
   created_at: Timestamp
   updated_at: Timestamp
 }
@@ -268,6 +277,11 @@ export type Coach = {
   // 'manual' (default) | 'plaud' | 'zoom'. Plaud/Zoom automated intake are
   // post-beta; the setting records the coach's choice + drives the settings UI.
   transcript_source: string | null
+  // Client-facing scheduler link — HubSpot Meetings, Calendly, etc. (migration
+  // 051). Rendered as the Client Portal's "Schedule your next session" button.
+  // null = no booking button. Bookings made through it land on the coach's
+  // Google Calendar and are captured by the existing calendar-watch sync.
+  booking_url: string | null
   created_at: Timestamp
   updated_at: Timestamp
 }
@@ -392,7 +406,7 @@ export type Communication = {
   id: string
   coach_id: string | null
   client_id: string | null // null = account-level billing comm (no single client)
-  type: string // 'email' | 'reminder' | 'prep_sheet' | 'receipt' | 'billing_authorization' | 'billing_adjustment'
+  type: string // 'email' | 'session_note' | 'reminder' | 'prep_sheet' | 'receipt' | 'billing_authorization' | 'billing_adjustment'
   direction: string // 'outbound' | 'inbound'
   subject: string | null
   preview: string | null
@@ -404,6 +418,50 @@ export type Communication = {
   // dispatch; nullable so every other send path is unaffected.
   appointment_id: string | null
   sent_at: Timestamp
+}
+
+// Client Portal audit trail + rate-limit counter (migration 053). One row per
+// notable portal action. `detail` never holds message content — only an id or a
+// short reason.
+export type PortalAccessLog = {
+  id: string
+  org_id: string
+  client_id: string
+  action: string
+  detail: string | null
+  ok: boolean
+  created_at: Timestamp
+}
+
+// Client Portal username + password (migration 054). Kept OUT of `clients` so a
+// `select *` on that table can never carry a password hash into a response.
+export type ClientCredential = {
+  client_id: string
+  org_id: string
+  username: string
+  // scrypt hash — one-way. Never returned to a coach or a client.
+  password_hash: string
+  failed_attempts: number
+  locked_until: Timestamp | null
+  last_login_at: Timestamp | null
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
+// Frameworks surfaced to a client (migration 055). Written when a scored session
+// names a framework, or when a framework nudge is sent, independent of whether a
+// nudge survives the per-window cap. `dismissed_at` is the coach's override.
+export type ClientFramework = {
+  id: string
+  org_id: string
+  client_id: string
+  coach_id: string
+  framework_slug: string
+  source: string // 'mentioned' | 'nudged' | 'coach'
+  transcript_id: string | null
+  dismissed_at: Timestamp | null
+  first_seen_at: Timestamp
+  last_seen_at: Timestamp
 }
 
 // Per-coach customizable dashboard layout (migration 026). One row per coach per
@@ -553,7 +611,7 @@ export type SessionReport = {
  * any nullable column is optional too (Postgres fills NULL). Everything else
  * is required.
  */
-type Defaulted = 'id' | 'created_at' | 'updated_at' | 'sent_at' | 'agreement_on_file' | 'client_type' | 'org_id'
+type Defaulted = 'id' | 'created_at' | 'updated_at' | 'sent_at' | 'agreement_on_file' | 'client_type' | 'org_id' | 'portal_onboarded' | 'failed_attempts' | 'first_seen_at' | 'last_seen_at'
 type NullableKeys<T> = { [K in keyof T]-?: null extends T[K] ? K : never }[keyof T]
 type OptionalOnInsert<T> = Defaulted | Extract<keyof T, NullableKeys<T>>
 
@@ -855,9 +913,55 @@ export type Database = {
         Update: Updatable<BillingAuthorizationEvent>
         Relationships: []
       }
+      portal_access_log: {
+        Row: PortalAccessLog
+        Insert: Insertable<PortalAccessLog>
+        Update: Updatable<PortalAccessLog>
+        Relationships: []
+      }
+      client_credentials: {
+        Row: ClientCredential
+        Insert: Insertable<ClientCredential>
+        Update: Updatable<ClientCredential>
+        Relationships: []
+      }
+      client_frameworks: {
+        Row: ClientFramework
+        Insert: Insertable<ClientFramework>
+        Update: Updatable<ClientFramework>
+        Relationships: []
+      }
     }
     Views: Record<string, never>
-    Functions: Record<string, never>
+    Functions: {
+      // Retrieval for the Client Portal AI chat (migration 053): passages from
+      // the client's whole history ranked against the question they asked.
+      portal_chat_context: {
+        Args: { p_client_id: string; p_query: string; p_limit?: number }
+        Returns: {
+          kind: string // 'session' | 'note'
+          id: string
+          title: string
+          occurred_on: DateString | null
+          excerpt: string
+          rank: number
+        }[]
+      }
+      // Client Portal ranked search across a client's own transcripts and the
+      // session notes their coach sent them (migration 052).
+      portal_search: {
+        Args: { p_client_id: string; p_query: string; p_limit?: number }
+        Returns: {
+          kind: string // 'session' | 'note'
+          id: string
+          title: string
+          occurred_on: DateString | null
+          // Matches are wrapped in the [[hl]]…[[/hl]] sentinels, never HTML.
+          snippet: string
+          rank: number
+        }[]
+      }
+    }
     Enums: Record<string, never>
     CompositeTypes: Record<string, never>
   }

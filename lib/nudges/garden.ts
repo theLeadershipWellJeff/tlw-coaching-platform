@@ -139,3 +139,50 @@ export async function loadFrameworkContext(
     related,
   }
 }
+
+/**
+ * Record the frameworks a session surfaced for a client (migration 055).
+ *
+ * Called with EVERY framework candidate the extractor produced, before the
+ * per-window cap in `applyDedupAndCap` discards most of them. That cap governs
+ * how much mail a client receives; what the Client Portal's Frameworks card
+ * shows is what they have actually discussed — a different question, and the
+ * reason mentions were previously invisible.
+ *
+ * Best-effort by contract: a failure here (including the table not existing yet)
+ * must never break nudge generation or the scoring run that triggered it.
+ */
+export async function recordClientFrameworks(
+  supabase: SupabaseClient<Database>,
+  opts: {
+    clientId: string
+    coachId: string
+    orgId: string
+    transcriptId: string | null
+    slugs: string[]
+    source?: 'mentioned' | 'nudged' | 'coach'
+  }
+): Promise<void> {
+  const slugs = Array.from(new Set(opts.slugs.filter(Boolean)))
+  if (!slugs.length) return
+
+  const now = new Date().toISOString()
+  try {
+    await supabase.from('client_frameworks').upsert(
+      slugs.map((framework_slug) => ({
+        client_id: opts.clientId,
+        coach_id: opts.coachId,
+        org_id: opts.orgId,
+        framework_slug,
+        source: opts.source ?? 'mentioned',
+        transcript_id: opts.transcriptId,
+        last_seen_at: now,
+      })),
+      // Repeat mentions bump last_seen_at rather than duplicating the row, and
+      // deliberately do NOT clear a coach's dismissal.
+      { onConflict: 'client_id,framework_slug' }
+    )
+  } catch (e) {
+    console.error('recordClientFrameworks failed:', e)
+  }
+}

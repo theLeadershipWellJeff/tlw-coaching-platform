@@ -28,3 +28,43 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
   return NextResponse.json({ title: conv.title, messages: messages || [] })
 }
+
+/** Rename a conversation. Scoped to the authenticated portal client. */
+export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+  const clientId = await getPortalClientId()
+  if (!clientId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const body = await req.json().catch(() => ({}))
+  const title = String(body.title || '').trim().slice(0, 120)
+  if (!title) return NextResponse.json({ error: 'A title is required.' }, { status: 400 })
+
+  const supabase = getSupabaseAdmin()
+  // Filter on client_id in the update itself, so another client's id can never
+  // be renamed even if the ownership read raced.
+  const { data, error } = await supabase
+    .from('portal_conversations')
+    .update({ title })
+    .eq('id', params.id)
+    .eq('client_id', clientId)
+    .select('id, title')
+    .maybeSingle()
+  if (error || !data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  return NextResponse.json({ conversation: data })
+}
+
+/** Delete a conversation (messages cascade). Scoped to the portal client. */
+export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+  const clientId = await getPortalClientId()
+  if (!clientId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const supabase = getSupabaseAdmin()
+  const { data, error } = await supabase
+    .from('portal_conversations')
+    .delete()
+    .eq('id', params.id)
+    .eq('client_id', clientId)
+    .select('id')
+    .maybeSingle()
+  if (error || !data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  return NextResponse.json({ ok: true })
+}

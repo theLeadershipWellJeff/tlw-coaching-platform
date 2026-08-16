@@ -1,11 +1,13 @@
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import { getPortalClientId } from '@/lib/portal/server'
 import { loadPortalOverview, type PortalOverview } from '@/lib/portal/data'
 import { PortalLogoutButton } from './PortalLogoutButton'
 import { ContactCoachCard } from './ContactCoachCard'
 import { FrameworksCard } from './FrameworksCard'
 import { InfoPopover } from './InfoPopover'
-import { PortalOnboarding } from './PortalOnboarding'
+import { PortalShell } from './PortalShell'
+import { BillingCard } from './BillingCard'
 
 export const dynamic = 'force-dynamic'
 
@@ -46,6 +48,15 @@ function fmtDate(ymd: string | null): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+/** Same short form, for a full timestamp (when a note was sent). */
+function fmtSentDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+}
+
 export default async function PortalHome() {
   const clientId = await getPortalClientId()
   if (!clientId) redirect('/portal/login')
@@ -57,20 +68,43 @@ export default async function PortalHome() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10">
-      <PortalOnboarding />
       <div className="flex items-center justify-between">
         <p className="text-[11px] font-medium uppercase tracking-[2px] text-tlw-warm-gray">
           theLeadershipWell
         </p>
-        <PortalLogoutButton />
+        <div className="flex items-center gap-4">
+          <a
+            href="/portal/settings"
+            className="text-[12px] font-medium text-tlw-warm-gray hover:text-tlw-espresso"
+          >
+            Settings
+          </a>
+          <PortalLogoutButton />
+        </div>
       </div>
+      <PortalShell onboarded={data.onboarded} />
 
       <h1 className="mt-8 text-[24px] font-medium text-tlw-navy-deep">Welcome, {firstName}.</h1>
+
+      {/* Booking sits at the top — for most clients this is why they came. */}
+      {data.bookingUrl && (
+        <a
+          href={data.bookingUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-6 flex items-center justify-between rounded-tlw-2xl bg-tlw-navy-deep px-5 py-4 text-white transition-opacity hover:opacity-90"
+        >
+          <span className="text-[15px] font-medium">Schedule your next session</span>
+          <span className="text-[18px] text-tlw-signal-orange" aria-hidden>
+            →
+          </span>
+        </a>
+      )}
 
       <form action="/portal/search" className="mt-6">
         <input
           name="q"
-          placeholder="Search your sessions…"
+          placeholder="Search your sessions and notes…"
           className="w-full rounded-tlw-lg border border-tlw-warm-gray/25 bg-tlw-surface px-4 py-2.5 text-[14px] text-tlw-espresso outline-none focus:border-tlw-signal-orange"
         />
       </form>
@@ -91,15 +125,25 @@ export default async function PortalHome() {
       </a>
 
       <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {/* Next appointment */}
-        <Card title="Next session" info="Your upcoming coaching session. Ask your coach to schedule or change a time.">
-          {data.nextAppointment ? (
-            <p className="text-[15px] text-tlw-espresso">
-              {fmtDateTime(data.nextAppointment.scheduled_at, data.client.timezone)}
-              <span className="text-tlw-warm-gray"> · {data.nextAppointment.duration_minutes} min</span>
-            </p>
-          ) : (
+        {/* Upcoming sessions */}
+        <Card
+          title="Upcoming sessions"
+          info="Your booked coaching sessions. Use “Schedule your next session” up top to book another."
+        >
+          {data.appointments.length === 0 ? (
             <Empty>No upcoming session scheduled yet.</Empty>
+          ) : (
+            <ul className="space-y-1.5">
+              {data.appointments.map((a, i) => (
+                <li
+                  key={a.id}
+                  className={i === 0 ? 'text-[15px] text-tlw-espresso' : 'text-[13px] text-tlw-espresso'}
+                >
+                  {fmtDateTime(a.scheduled_at, data.client.timezone)}
+                  <span className="text-tlw-warm-gray"> · {a.duration_minutes} min</span>
+                </li>
+              ))}
+            </ul>
           )}
         </Card>
 
@@ -128,26 +172,67 @@ export default async function PortalHome() {
           )}
         </Card>
 
-        {/* Session records */}
-        <Card title="Your sessions" info="A record of your past sessions. Use the search box up top to find a moment.">
+        {/* Session records — each opens the full transcript */}
+        <Card
+          title="Your sessions"
+          info="A record of your past sessions. Open one to read it in full, or search up top to find a moment."
+        >
           {data.transcripts.length === 0 ? (
             <Empty>Your session records will appear here.</Empty>
           ) : (
             <ul className="space-y-1.5">
               {data.transcripts.map((t) => (
-                <li key={t.id} className="flex items-baseline justify-between gap-3">
-                  <span className="min-w-0 truncate text-[13px] text-tlw-espresso">
-                    {t.title || 'Session'}
-                  </span>
-                  <span className="shrink-0 text-[12px] text-tlw-warm-gray">{fmtDate(t.session_date)}</span>
+                <li key={t.id}>
+                  <Link
+                    href={`/portal/sessions/${t.id}`}
+                    className="flex items-baseline justify-between gap-3 rounded-tlw-md px-1 py-0.5 -mx-1 transition-colors hover:bg-tlw-canvas"
+                  >
+                    <span className="min-w-0 truncate text-[13px] text-tlw-espresso">
+                      {t.title || 'Session'}
+                    </span>
+                    <span className="shrink-0 text-[12px] text-tlw-warm-gray">{fmtDate(t.session_date)}</span>
+                  </Link>
                 </li>
               ))}
             </ul>
           )}
         </Card>
 
-        {/* Messages from coach */}
-        <Card title="Messages from your coach" info="Notes and nudges your coach has sent you.">
+        {/* Session notes the coach sent — each opens the full note */}
+        <Card
+          title="Your session notes"
+          info="The notes your coach sent you after a session. Open one to read it in full."
+        >
+          {data.sessionNotes.length === 0 ? (
+            <Empty>Notes your coach sends you after a session will appear here.</Empty>
+          ) : (
+            <ul className="space-y-2.5">
+              {data.sessionNotes.map((n) => (
+                <li key={n.id}>
+                  <Link
+                    href={`/portal/notes/${n.id}`}
+                    className="block rounded-tlw-md px-1 py-0.5 -mx-1 transition-colors hover:bg-tlw-canvas"
+                  >
+                    <div className="flex items-baseline justify-between gap-3">
+                      <p className="min-w-0 truncate text-[13px] font-medium text-tlw-navy-deep">
+                        {n.subject || 'Session notes'}
+                      </p>
+                      <span className="shrink-0 text-[12px] text-tlw-warm-gray">
+                        {fmtSentDate(n.sent_at)}
+                      </span>
+                    </div>
+                    {n.preview && (
+                      <p className="mt-0.5 line-clamp-2 text-[12px] text-tlw-warm-gray">{n.preview}</p>
+                    )}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        {/* Everything else the coach sent */}
+        <Card title="Messages from your coach" info="Other emails and nudges your coach has sent you.">
           {data.messages.length === 0 ? (
             <Empty>Messages your coach sends you will appear here.</Empty>
           ) : (
@@ -167,6 +252,11 @@ export default async function PortalHome() {
         {/* Frameworks surfaced to this client (self-hides when none) */}
         <div className="lg:col-span-2">
           <FrameworksCard />
+        </div>
+
+        {/* Billing — self-hides unless this client is their own payer */}
+        <div className="lg:col-span-2">
+          <BillingCard />
         </div>
 
         {/* Contact your coach — interactive */}
