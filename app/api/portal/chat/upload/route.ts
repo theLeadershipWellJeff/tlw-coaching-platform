@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPortalClientId } from '@/lib/portal/server'
 import { extractTranscriptText } from '@/lib/transcripts/extract'
+import { checkPortalRateLimit, logPortalAccess } from '@/lib/portal/access'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -15,6 +16,14 @@ export async function POST(req: NextRequest) {
   const clientId = await getPortalClientId()
   if (!clientId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const limit = await checkPortalRateLimit(clientId, 'upload')
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { error: 'You have uploaded several documents just now — please try again shortly.' },
+      { status: 429 }
+    )
+  }
+
   const form = await req.formData().catch(() => null)
   const file = form?.get('file')
   if (!(file instanceof File)) return NextResponse.json({ error: 'No file provided.' }, { status: 400 })
@@ -28,6 +37,7 @@ export async function POST(req: NextRequest) {
     if (!text) {
       return NextResponse.json({ error: 'Could not read any text from that file.' }, { status: 400 })
     }
+    await logPortalAccess(clientId, 'upload', { detail: file.name })
     return NextResponse.json({
       filename: file.name,
       text: text.slice(0, MAX_TEXT),

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPortalClientId } from '@/lib/portal/server'
+import { checkPortalRateLimit, logPortalAccess } from '@/lib/portal/access'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { resolveClientCoach } from '@/lib/portal/coach'
 import { sendCoachHtmlEmail } from '@/lib/gmail'
@@ -17,6 +18,14 @@ function escapeHtml(s: string): string {
 export async function POST(req: NextRequest) {
   const clientId = await getPortalClientId()
   if (!clientId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const limit = await checkPortalRateLimit(clientId, 'contact')
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { error: 'You have sent several messages already — your coach will be in touch.' },
+      { status: 429 }
+    )
+  }
 
   const body = await req.json().catch(() => ({}))
   const message = String(body.message || '').trim()
@@ -59,6 +68,8 @@ export async function POST(req: NextRequest) {
     preview: message.slice(0, 140),
     status: sent ? 'sent' : 'failed',
   })
+
+  await logPortalAccess(clientId, 'contact', { ok: sent })
 
   if (!sent) return NextResponse.json({ error: 'Could not send your message.' }, { status: 502 })
   return NextResponse.json({ ok: true })

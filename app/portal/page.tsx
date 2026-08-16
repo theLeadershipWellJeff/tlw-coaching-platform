@@ -6,7 +6,8 @@ import { PortalLogoutButton } from './PortalLogoutButton'
 import { ContactCoachCard } from './ContactCoachCard'
 import { FrameworksCard } from './FrameworksCard'
 import { InfoPopover } from './InfoPopover'
-import { PortalOnboarding } from './PortalOnboarding'
+import { PortalShell } from './PortalShell'
+import { BillingCard } from './BillingCard'
 
 export const dynamic = 'force-dynamic'
 
@@ -67,13 +68,21 @@ export default async function PortalHome() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10">
-      <PortalOnboarding />
       <div className="flex items-center justify-between">
         <p className="text-[11px] font-medium uppercase tracking-[2px] text-tlw-warm-gray">
           theLeadershipWell
         </p>
-        <PortalLogoutButton />
+        <div className="flex items-center gap-4">
+          <a
+            href="/portal/settings"
+            className="text-[12px] font-medium text-tlw-warm-gray hover:text-tlw-espresso"
+          >
+            Settings
+          </a>
+          <PortalLogoutButton />
+        </div>
       </div>
+      <PortalShell onboarded={data.onboarded} />
 
       <h1 className="mt-8 text-[24px] font-medium text-tlw-navy-deep">Welcome, {firstName}.</h1>
 
@@ -243,6 +252,11 @@ export default async function PortalHome() {
         {/* Frameworks surfaced to this client (self-hides when none) */}
         <div className="lg:col-span-2">
           <FrameworksCard />
+        </div>
+
+        {/* Billing — self-hides unless this client is their own payer */}
+        <div className="lg:col-span-2">
+          <BillingCard />
         </div>
 
         {/* Contact your coach — interactive */}

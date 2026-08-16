@@ -93,6 +93,9 @@ export type Client = {
   agreement_on_file: boolean
   recording_authorized: boolean | null
   agreement_id: string | null
+  // Client Portal first-visit tour taken (migration 053). Stored per client
+  // rather than per browser, so it doesn't re-fire on every new device.
+  portal_onboarded: boolean
   created_at: Timestamp
   updated_at: Timestamp
 }
@@ -417,6 +420,50 @@ export type Communication = {
   sent_at: Timestamp
 }
 
+// Client Portal audit trail + rate-limit counter (migration 053). One row per
+// notable portal action. `detail` never holds message content — only an id or a
+// short reason.
+export type PortalAccessLog = {
+  id: string
+  org_id: string
+  client_id: string
+  action: string
+  detail: string | null
+  ok: boolean
+  created_at: Timestamp
+}
+
+// Client Portal username + password (migration 054). Kept OUT of `clients` so a
+// `select *` on that table can never carry a password hash into a response.
+export type ClientCredential = {
+  client_id: string
+  org_id: string
+  username: string
+  // scrypt hash — one-way. Never returned to a coach or a client.
+  password_hash: string
+  failed_attempts: number
+  locked_until: Timestamp | null
+  last_login_at: Timestamp | null
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
+// Frameworks surfaced to a client (migration 055). Written when a scored session
+// names a framework, or when a framework nudge is sent, independent of whether a
+// nudge survives the per-window cap. `dismissed_at` is the coach's override.
+export type ClientFramework = {
+  id: string
+  org_id: string
+  client_id: string
+  coach_id: string
+  framework_slug: string
+  source: string // 'mentioned' | 'nudged' | 'coach'
+  transcript_id: string | null
+  dismissed_at: Timestamp | null
+  first_seen_at: Timestamp
+  last_seen_at: Timestamp
+}
+
 // Per-coach customizable dashboard layout (migration 026). One row per coach per
 // surface; `blocks` is the placed-card list (lib/dashboard validates it on r/w).
 export type DashboardLayout = {
@@ -564,7 +611,7 @@ export type SessionReport = {
  * any nullable column is optional too (Postgres fills NULL). Everything else
  * is required.
  */
-type Defaulted = 'id' | 'created_at' | 'updated_at' | 'sent_at' | 'agreement_on_file' | 'client_type' | 'org_id'
+type Defaulted = 'id' | 'created_at' | 'updated_at' | 'sent_at' | 'agreement_on_file' | 'client_type' | 'org_id' | 'portal_onboarded' | 'failed_attempts' | 'first_seen_at' | 'last_seen_at'
 type NullableKeys<T> = { [K in keyof T]-?: null extends T[K] ? K : never }[keyof T]
 type OptionalOnInsert<T> = Defaulted | Extract<keyof T, NullableKeys<T>>
 
@@ -866,9 +913,40 @@ export type Database = {
         Update: Updatable<BillingAuthorizationEvent>
         Relationships: []
       }
+      portal_access_log: {
+        Row: PortalAccessLog
+        Insert: Insertable<PortalAccessLog>
+        Update: Updatable<PortalAccessLog>
+        Relationships: []
+      }
+      client_credentials: {
+        Row: ClientCredential
+        Insert: Insertable<ClientCredential>
+        Update: Updatable<ClientCredential>
+        Relationships: []
+      }
+      client_frameworks: {
+        Row: ClientFramework
+        Insert: Insertable<ClientFramework>
+        Update: Updatable<ClientFramework>
+        Relationships: []
+      }
     }
     Views: Record<string, never>
     Functions: {
+      // Retrieval for the Client Portal AI chat (migration 053): passages from
+      // the client's whole history ranked against the question they asked.
+      portal_chat_context: {
+        Args: { p_client_id: string; p_query: string; p_limit?: number }
+        Returns: {
+          kind: string // 'session' | 'note'
+          id: string
+          title: string
+          occurred_on: DateString | null
+          excerpt: string
+          rank: number
+        }[]
+      }
       // Client Portal ranked search across a client's own transcripts and the
       // session notes their coach sent them (migration 052).
       portal_search: {

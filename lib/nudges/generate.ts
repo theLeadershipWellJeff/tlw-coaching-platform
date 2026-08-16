@@ -15,7 +15,7 @@ import type { CoachingGoal, Database, Nudge } from '@/lib/supabase/types'
 import { extractNudgeCandidates } from './extract'
 import { applyDedupAndCap } from './dedup'
 import { draftNudge } from './draft'
-import { loadSurfaceableLeaves, loadFrameworkContext } from './garden'
+import { loadSurfaceableLeaves, loadFrameworkContext, recordClientFrameworks } from './garden'
 
 // Strip note HTML to plain text (block tags → newlines). Local copy of the
 // helper in lib/notes/sync-actions.ts; kept here to avoid widening that module.
@@ -42,7 +42,7 @@ export async function generateNudgesForClient(
   // --- Load context (NO key_info) ---
   const { data: client } = await supabase
     .from('clients')
-    .select('id, name, email, coaching_goals')
+    .select('id, org_id, name, email, coaching_goals')
     .eq('id', clientId)
     .maybeSingle()
   if (!client) return { created: 0, nudges: [] }
@@ -89,6 +89,22 @@ export async function generateNudgesForClient(
     frameworks,
   })
   if (!candidates.length) return { created: 0, nudges: [] }
+
+  // --- Record framework relationships (migration 055) ---
+  // Every framework the session surfaced is recorded here, BEFORE the cap below
+  // throws most of them away. The cap is about how much mail a client should
+  // get; the Client Portal's Frameworks card is about what they've actually
+  // discussed, which is a different question. Best-effort: this must never break
+  // nudge generation.
+  await recordClientFrameworks(supabase, {
+    clientId,
+    coachId,
+    orgId: client.org_id,
+    transcriptId: sourceSessionId,
+    slugs: candidates
+      .filter((c) => c.type === 'framework' && c.framework_slug)
+      .map((c) => c.framework_slug as string),
+  })
 
   // --- Dedup + cap (before drafting) ---
   const trimmed = await applyDedupAndCap(supabase, clientId, sourceSessionId, candidates)

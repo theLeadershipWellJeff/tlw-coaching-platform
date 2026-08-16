@@ -19,6 +19,8 @@ export type PortalAppointment = { id: string; scheduled_at: string; duration_min
 
 export type PortalOverview = {
   client: { id: string; name: string; timezone: string | null }
+  /** First-visit tour taken (migration 053). */
+  onboarded: boolean
   goals: CoachingGoal[]
   /** Soonest first. The first entry is the "next" session. */
   appointments: PortalAppointment[]
@@ -36,7 +38,7 @@ export async function loadPortalOverview(clientId: string): Promise<PortalOvervi
 
   const { data: client } = await supabase
     .from('clients')
-    .select('id, name, timezone, coaching_goals')
+    .select('id, name, timezone, coaching_goals, portal_onboarded')
     .eq('id', clientId)
     .maybeSingle()
   if (!client) return null
@@ -97,6 +99,7 @@ export async function loadPortalOverview(clientId: string): Promise<PortalOvervi
 
   return {
     client: { id: client.id, name: client.name, timezone: client.timezone },
+    onboarded: !!client.portal_onboarded,
     goals: Array.isArray(client.coaching_goals) ? (client.coaching_goals as CoachingGoal[]) : [],
     appointments: (apptRes.data ?? []).map((a) => ({
       id: a.id,

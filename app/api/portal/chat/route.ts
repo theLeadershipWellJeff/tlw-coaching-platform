@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPortalClientId } from '@/lib/portal/server'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
-import { buildChatContext, generateChatReply, type ChatMsg } from '@/lib/portal/chat'
+import { buildChatContext, streamChatReply, type ChatMsg } from '@/lib/portal/chat'
+import { checkPortalRateLimit, logPortalAccess } from '@/lib/portal/access'
 
 export const runtime = 'nodejs'
-export const maxDuration = 60
+export const maxDuration = 300
 
 /** List this client's conversations (most recently active first). */
 export async function GET() {
@@ -20,11 +21,25 @@ export async function GET() {
   return NextResponse.json({ conversations: data || [] })
 }
 
-/** Send a message. Creates a conversation if none is given, persists the user
- *  message, generates + persists the assistant reply. */
+/**
+ * Send a message. Creates a conversation if none is given, persists the user
+ * message, then STREAMS the assistant reply back as plain text and persists it
+ * once the stream completes.
+ *
+ * The conversation id rides on the `X-Conversation-Id` response header so a new
+ * thread can be adopted by the client without waiting for the body to finish.
+ */
 export async function POST(req: NextRequest) {
   const clientId = await getPortalClientId()
   if (!clientId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const limit = await checkPortalRateLimit(clientId, 'chat')
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { error: 'You have sent a lot of messages just now — please try again in a little while.' },
+      { status: 429 }
+    )
+  }
 
   const body = await req.json().catch(() => ({}))
   const content = String(body.content || '').trim()
@@ -74,8 +89,6 @@ export async function POST(req: NextRequest) {
     conversationId = conv.id
   }
 
-  // Persist the user message (with just a filename marker for any attachment),
-  // then generate against the full thread.
   const persistedContent = attachment ? `${content}\n\n📎 Attached: ${attachment.filename}` : content
   await supabase
     .from('portal_messages')
@@ -91,33 +104,71 @@ export async function POST(req: NextRequest) {
     role: m.role === 'assistant' ? 'assistant' : 'user',
     content: m.content,
   }))
-  // Splice the attachment's extracted text into this turn's last user message.
   if (attachment && msgs.length) {
     const last = msgs[msgs.length - 1]
     last.content = `${last.content}\n\n[Attached document "${attachment.filename}"]:\n${attachment.text}`
   }
 
-  let reply = ''
+  await logPortalAccess(clientId, 'chat', { detail: conversationId ?? undefined })
+
+  let system: string
   try {
-    const { system } = await buildChatContext(clientId)
-    reply = await generateChatReply(system, msgs)
-  } catch {
-    reply = ''
-  }
-  if (!reply) {
+    // The current question drives retrieval across the client's whole history.
+    ;({ system } = await buildChatContext(clientId, content))
+  } catch (e) {
+    console.error('portal chat context failed:', e)
     return NextResponse.json(
       { error: 'The assistant is unavailable right now. Please try again.', conversationId },
       { status: 502 }
     )
   }
 
-  await supabase
-    .from('portal_messages')
-    .insert({ conversation_id: conversationId, org_id: client.org_id, role: 'assistant', content: reply })
-  await supabase
-    .from('portal_conversations')
-    .update({ updated_at: new Date().toISOString() })
-    .eq('id', conversationId)
+  const convId = conversationId
+  const orgId = client.org_id
+  const encoder = new TextEncoder()
 
-  return NextResponse.json({ conversationId, reply })
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      let full = ''
+      try {
+        for await (const delta of streamChatReply(system, msgs)) {
+          full += delta
+          controller.enqueue(encoder.encode(delta))
+        }
+      } catch (e) {
+        console.error('portal chat stream failed:', e)
+        // Mid-stream failure: the client has already rendered a partial reply, so
+        // close cleanly and let what arrived stand rather than throwing it away.
+        if (!full) {
+          controller.enqueue(
+            encoder.encode('The assistant is unavailable right now. Please try again.')
+          )
+        }
+      } finally {
+        controller.close()
+        if (full.trim()) {
+          try {
+            const supabase = getSupabaseAdmin()
+            await supabase
+              .from('portal_messages')
+              .insert({ conversation_id: convId, org_id: orgId, role: 'assistant', content: full })
+            await supabase
+              .from('portal_conversations')
+              .update({ updated_at: new Date().toISOString() })
+              .eq('id', convId)
+          } catch (e) {
+            console.error('portal chat persist failed:', e)
+          }
+        }
+      }
+    },
+  })
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      'X-Conversation-Id': conversationId,
+    },
+  })
 }

@@ -17,11 +17,24 @@ export default function PortalChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
+  const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState('')
   const [attachment, setAttachment] = useState<{ filename: string; text: string } | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [menuFor, setMenuFor] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const endRef = useRef<HTMLDivElement>(null)
+
+  async function refreshConversations() {
+    try {
+      const res = await fetch('/api/portal/chat')
+      const d = res.ok ? await res.json() : { conversations: [] }
+      setConversations(d.conversations || [])
+    } catch {
+      /* ignore */
+    }
+  }
 
   async function uploadFile(file: File) {
     setUploading(true)
@@ -42,10 +55,7 @@ export default function PortalChat() {
   }
 
   useEffect(() => {
-    fetch('/api/portal/chat')
-      .then((r) => (r.ok ? r.json() : { conversations: [] }))
-      .then((d) => setConversations(d.conversations || []))
-      .catch(() => {})
+    refreshConversations()
   }, [])
 
   useEffect(() => {
@@ -56,18 +66,48 @@ export default function PortalChat() {
     setActiveId(null)
     setMessages([])
     setError('')
+    setSidebarOpen(false)
   }
 
   async function openConversation(id: string) {
     setActiveId(id)
     setError('')
     setMessages([])
+    setSidebarOpen(false)
     try {
       const res = await fetch(`/api/portal/chat/${id}`)
       const d = await res.json()
       if (res.ok) setMessages((d.messages || []).map((m: ChatMessage) => ({ role: m.role, content: m.content })))
     } catch {
       /* ignore */
+    }
+  }
+
+  async function renameConversation(id: string, current: string) {
+    setMenuFor(null)
+    const title = window.prompt('Rename this conversation', current)?.trim()
+    if (!title || title === current) return
+    setConversations((cs) => cs.map((c) => (c.id === id ? { ...c, title } : c)))
+    try {
+      await fetch(`/api/portal/chat/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title }),
+      })
+    } catch {
+      refreshConversations()
+    }
+  }
+
+  async function deleteConversation(id: string) {
+    setMenuFor(null)
+    if (!window.confirm('Delete this conversation? This cannot be undone.')) return
+    setConversations((cs) => cs.filter((c) => c.id !== id))
+    if (activeId === id) newChat()
+    try {
+      await fetch(`/api/portal/chat/${id}`, { method: 'DELETE' })
+    } catch {
+      refreshConversations()
     }
   }
 
@@ -89,25 +129,97 @@ export default function PortalChat() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ conversationId: activeId, content, attachment: sentAttachment }),
       })
-      const d = await res.json()
-      if (!res.ok) {
+
+      if (!res.ok || !res.body) {
+        const d = await res.json().catch(() => ({}))
         setError(d.error || 'Something went wrong. Please try again.')
-      } else {
-        setMessages((m) => [...m, { role: 'assistant', content: d.reply }])
-        if (!activeId && d.conversationId) {
-          setActiveId(d.conversationId)
-          fetch('/api/portal/chat')
-            .then((r) => (r.ok ? r.json() : { conversations: [] }))
-            .then((c) => setConversations(c.conversations || []))
-            .catch(() => {})
-        }
+        return
       }
+
+      // Adopt the conversation id straight from the header, so a brand-new thread
+      // is addressable before the reply finishes streaming.
+      const newId = res.headers.get('X-Conversation-Id')
+      const isNew = !activeId && newId
+      if (newId && !activeId) setActiveId(newId)
+
+      // Render the reply as it arrives rather than after the whole call.
+      setStreaming(true)
+      setMessages((m) => [...m, { role: 'assistant', content: '' }])
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        const chunk = decoder.decode(value, { stream: true })
+        setMessages((m) => {
+          const next = [...m]
+          const last = next[next.length - 1]
+          if (last?.role === 'assistant') next[next.length - 1] = { ...last, content: last.content + chunk }
+          return next
+        })
+      }
+      if (isNew) refreshConversations()
     } catch {
       setError('Something went wrong. Please try again.')
     } finally {
       setSending(false)
+      setStreaming(false)
     }
   }
+
+  const sidebar = (
+    <>
+      <button
+        onClick={newChat}
+        className="mb-2 w-full rounded-tlw-lg border border-tlw-warm-gray/25 px-2.5 py-1.5 text-left text-[13px] font-medium text-tlw-signal-orange hover:bg-tlw-canvas"
+      >
+        + New chat
+      </button>
+      {conversations.length === 0 ? (
+        <p className="px-2 text-[12px] text-tlw-warm-gray/70">No past chats yet.</p>
+      ) : (
+        <ul className="space-y-1">
+          {conversations.map((c) => (
+            <li key={c.id} className="group relative">
+              <button
+                onClick={() => openConversation(c.id)}
+                className={`w-full truncate rounded-tlw-md py-1.5 pl-2.5 pr-7 text-left text-[13px] transition-colors ${
+                  activeId === c.id
+                    ? 'bg-tlw-navy-rich/10 text-tlw-navy-rich'
+                    : 'text-tlw-espresso hover:bg-tlw-canvas'
+                }`}
+              >
+                {c.title}
+              </button>
+              <button
+                onClick={() => setMenuFor(menuFor === c.id ? null : c.id)}
+                aria-label={`Options for ${c.title}`}
+                className="absolute right-1 top-1/2 -translate-y-1/2 rounded px-1.5 py-0.5 text-[13px] leading-none text-tlw-warm-gray hover:bg-tlw-warm-gray/15 hover:text-tlw-espresso"
+              >
+                ⋯
+              </button>
+              {menuFor === c.id && (
+                <div className="absolute right-1 top-8 z-10 w-32 overflow-hidden rounded-tlw-md border border-tlw-warm-gray/20 bg-tlw-surface shadow-lg">
+                  <button
+                    onClick={() => renameConversation(c.id, c.title)}
+                    className="block w-full px-3 py-2 text-left text-[12px] text-tlw-espresso hover:bg-tlw-canvas"
+                  >
+                    Rename
+                  </button>
+                  <button
+                    onClick={() => deleteConversation(c.id)}
+                    className="block w-full px-3 py-2 text-left text-[12px] text-tlw-signal-orange hover:bg-tlw-canvas"
+                  >
+                    Delete
+                  </button>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  )
 
   return (
     <div className="mx-auto flex h-screen max-w-5xl flex-col px-4 py-4">
@@ -118,38 +230,27 @@ export default function PortalChat() {
         <p className="text-[11px] font-medium uppercase tracking-[2px] text-tlw-warm-gray">
           Coaching Assistant
         </p>
+        {/* On a phone the sidebar is a drawer, so past chats stay reachable. */}
         <button
-          onClick={newChat}
-          className="text-[13px] font-medium text-tlw-signal-orange hover:underline"
+          onClick={() => setSidebarOpen((v) => !v)}
+          className="text-[13px] font-medium text-tlw-signal-orange hover:underline md:hidden"
         >
+          {sidebarOpen ? 'Close' : 'Chats'}
+        </button>
+        <button onClick={newChat} className="hidden text-[13px] font-medium text-tlw-signal-orange hover:underline md:block">
           + New chat
         </button>
       </div>
 
       <div className="flex min-h-0 flex-1 gap-4">
-        {/* Conversation sidebar */}
-        <aside className="hidden w-52 shrink-0 overflow-y-auto md:block">
-          {conversations.length === 0 ? (
-            <p className="px-2 text-[12px] text-tlw-warm-gray/70">No past chats yet.</p>
-          ) : (
-            <ul className="space-y-1">
-              {conversations.map((c) => (
-                <li key={c.id}>
-                  <button
-                    onClick={() => openConversation(c.id)}
-                    className={`w-full truncate rounded-tlw-md px-2.5 py-1.5 text-left text-[13px] transition-colors ${
-                      activeId === c.id
-                        ? 'bg-tlw-navy-rich/10 text-tlw-navy-rich'
-                        : 'text-tlw-espresso hover:bg-tlw-canvas'
-                    }`}
-                  >
-                    {c.title}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </aside>
+        {/* Conversation sidebar — inline on desktop, drawer on mobile */}
+        <aside className="hidden w-52 shrink-0 overflow-y-auto md:block">{sidebar}</aside>
+        {sidebarOpen && (
+          <div className="fixed inset-0 z-40 flex md:hidden" role="dialog" aria-modal="true">
+            <div className="flex-1 bg-tlw-navy-deep/40" onClick={() => setSidebarOpen(false)} />
+            <div className="w-64 overflow-y-auto bg-tlw-surface p-3 shadow-xl">{sidebar}</div>
+          </div>
+        )}
 
         {/* Chat area */}
         <section className="flex min-h-0 flex-1 flex-col rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface">
@@ -157,7 +258,7 @@ export default function PortalChat() {
             {messages.length === 0 && !sending ? (
               <div className="mt-6 text-center">
                 <p className="text-[15px] text-tlw-espresso">
-                  Ask me anything about your goals or sessions.
+                  Ask me anything about your goals, sessions, or the notes your coach sent you.
                 </p>
                 <div className="mt-4 flex flex-col items-center gap-2">
                   {SUGGESTIONS.map((s) => (
@@ -182,11 +283,15 @@ export default function PortalChat() {
                     }`}
                   >
                     {m.content}
+                    {/* Caret on the streaming reply, so it reads as live typing. */}
+                    {streaming && i === messages.length - 1 && m.role === 'assistant' && (
+                      <span className="ml-0.5 inline-block h-3.5 w-[2px] animate-pulse bg-tlw-warm-gray align-middle" />
+                    )}
                   </div>
                 </div>
               ))
             )}
-            {sending && (
+            {sending && !streaming && (
               <div className="flex justify-start">
                 <div className="rounded-tlw-2xl bg-tlw-canvas px-4 py-2.5 text-[14px] text-tlw-warm-gray">
                   Thinking…
