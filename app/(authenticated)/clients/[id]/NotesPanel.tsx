@@ -1,5 +1,6 @@
 'use client'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import type { Client, Note } from '@/lib/supabase/types'
 import { RichNoteEditor } from './RichNoteEditor'
 import { KeyInfoCard } from './KeyInfoCard'
@@ -270,6 +271,7 @@ function NoteEditor({
   onSaved: (n: Note) => void
   onDeleted: (id: string) => void
 }) {
+  const router = useRouter()
   const [title, setTitle] = useState(note.title || '')
   const [date, setDate] = useState(note.session_date)
   const [duration, setDuration] = useState<number>(note.duration_minutes ?? 60)
@@ -542,13 +544,17 @@ function NoteEditor({
           actions={captures.actions.map((a) => a.text)}
           insights={captures.insights.map((i) => i.text)}
           onClose={() => setSendOpen(false)}
-          onSent={(communicationId) =>
+          onSent={(communicationId) => {
+            // Mark the note sent (migration 050) so the state reflects it…
             onSaved({
               ...note,
               sent_to_client_at: new Date().toISOString(),
               client_communication_id: communicationId,
             })
-          }
+            // …then return to the client workspace rather than staying in the
+            // note editor.
+            router.push(`/clients/${clientId}`)
+          }}
         />
       )}
 
