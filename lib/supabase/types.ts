@@ -343,7 +343,7 @@ export type Nudge = {
   // Library PDF attached to the email when this nudge sends (migration 035;
   // framework nudges in the UI). Defaults from the leaf's garden_notes link.
   pdf_resource_id: string | null
-  status: string // draft | approved | scheduled | sent | skipped | snoozed
+  status: string // draft | approved | scheduled | sent | skipped | snoozed | sending (transient send claim — lib/nudges/send.ts)
   scheduled_for: Timestamp | null
   sent_at: Timestamp | null
   communication_id: string | null
