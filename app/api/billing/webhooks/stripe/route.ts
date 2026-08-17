@@ -196,7 +196,11 @@ async function handlePaidTransition(supabase: Admin, tlwInvoiceId: string, now: 
         .then(() => {}, () => {})
     }
     if (account && !updated.receipt_sent_at) {
-      sendPaymentReceipt(supabase, coach, updated.coach_id, account, {
+      // Awaited: Vercel can freeze the function the moment the response is sent,
+      // and the paid transition is one-shot — an un-awaited receipt dropped here
+      // is never retried. Still best-effort (.catch) so a send failure can't
+      // fail the webhook.
+      await sendPaymentReceipt(supabase, coach, updated.coach_id, account, {
         total: updated.total,
         currency: updated.currency,
         period_start: updated.period_start,
@@ -212,7 +216,7 @@ async function handlePaidTransition(supabase: Admin, tlwInvoiceId: string, now: 
         .catch(() => {})
     }
   } else if (account) {
-    sendPaymentThankYou(supabase, coach, updated.coach_id, account, {
+    await sendPaymentThankYou(supabase, coach, updated.coach_id, account, {
       total: updated.total,
       currency: updated.currency,
       period_start: updated.period_start,
@@ -220,7 +224,7 @@ async function handlePaidTransition(supabase: Admin, tlwInvoiceId: string, now: 
     }).catch(() => {})
   }
 
-  sendPaidNotificationToCoach(coach, account, updated.total, updated.currency, hostedUrl).catch(() => {})
+  await sendPaidNotificationToCoach(coach, account, updated.total, updated.currency, hostedUrl).catch(() => {})
 }
 
 // ── Charge failed (Phase 4) ─────────────────────────────────────────────────────
@@ -239,6 +243,12 @@ async function handleChargeFailed(supabase: Admin, tlwInvoiceId: string, lastErr
       updated_at: now,
     } as any)
     .eq('id', tlwInvoiceId)
+    // Only a live, unpaid invoice can fail: Stripe doesn't guarantee event order,
+    // so a late payment_failed must never stomp a 'paid' (or 'void') invoice.
+    // 'failed' is excluded too — Stripe fires both invoice.* and payment_intent.*
+    // for one failure (and charge.ts records card declines synchronously), so the
+    // echo matches zero rows and exactly one warning is raised per failure.
+    .in('status', ['sent', 'overdue', 'approved', 'draft'])
     .select('coach_id, billing_account_id, period_start, period_end, billing_accounts ( name )')
     .maybeSingle()) as { data: any | null }
 

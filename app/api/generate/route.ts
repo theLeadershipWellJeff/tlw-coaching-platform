@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import Anthropic from '@anthropic-ai/sdk'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
-import { requireSession, readJson, toErrorResponse } from '@/lib/api-handler'
+import { ApiError, requireCoach, readJson, toErrorResponse } from '@/lib/api-handler'
+import { accessibleClientIds, coachCanAccessClient } from '@/lib/client-access'
 import type { CoachingGoal } from '@/lib/supabase/types'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -25,14 +26,25 @@ const PLAN_EMOJIS = ['🧭', '🌱', '🕊️', '🌿', '⚓', '🔥', '💡', '
  * Goals are built with the client in their workspace; session prep renders them
  * rather than inventing a plan each time. Matches by id when given, else by name.
  */
-async function loadGoals(clientId?: string, clientName?: string): Promise<CoachingGoal[]> {
+async function loadGoals(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  coachId: string,
+  clientId?: string,
+  clientName?: string
+): Promise<CoachingGoal[]> {
   try {
-    const supabase = getSupabaseAdmin()
     const query = supabase.from('clients').select('coaching_goals')
-    const { data } = clientId
-      ? await query.eq('id', clientId).maybeSingle()
-      : await query.ilike('name', clientName || '').limit(1).maybeSingle()
-    const goals = (data?.coaching_goals || []) as CoachingGoal[]
+    let data: { coaching_goals: unknown } | null
+    if (clientId) {
+      // The caller has already verified coachCanAccessClient for an explicit id.
+      ;({ data } = await query.eq('id', clientId).maybeSingle())
+    } else {
+      // Name lookups only ever resolve within the coach's own roster.
+      const ids = await accessibleClientIds(supabase, coachId)
+      if (!ids.length) return []
+      ;({ data } = await query.in('id', ids).ilike('name', clientName || '').limit(1).maybeSingle())
+    }
+    const goals = ((data?.coaching_goals as CoachingGoal[] | undefined) || [])
     return goals.filter((g) => g?.title)
   } catch {
     return []
@@ -41,10 +53,17 @@ async function loadGoals(clientId?: string, clientName?: string): Promise<Coachi
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await requireSession()
+    const supabase = getSupabaseAdmin()
+    const coach = await requireCoach(supabase)
     // Voice the prep email as the signed-in coach, not a fixed name.
-    const coachName = (session as any).user?.name || 'the coach'
+    const coachName = coach.name || 'the coach'
     const { clientName, clientId, notes, actions, zoomSummaries } = await readJson(req, GenerateSchema)
+
+    // Tenant gate: goals may only be loaded for a client linked to the signed-in
+    // coach — 404, not 403, so a foreign id is never confirmed to exist.
+    if (clientId && !(await coachCanAccessClient(supabase, coach.id, clientId))) {
+      throw new ApiError(404, 'Client not found')
+    }
 
   const notesText = notes
     .map((n: any) => `[${new Date(n.date).toLocaleDateString()}]\n${n.content}`)
@@ -75,7 +94,7 @@ ${zoomText}`
 
   // The stored goals drive the coaching plan when present; the rest of the email
   // is still drawn from the session context.
-  const goals = await loadGoals(clientId, clientName)
+  const goals = await loadGoals(supabase, coach.id, clientId, clientName)
   const lockedPlan =
     goals.length > 0
       ? goals.map((g, i) => ({
