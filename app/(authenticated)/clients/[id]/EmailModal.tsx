@@ -43,12 +43,25 @@ export function EmailModal({
   const [error, setError] = useState('')
   const [sent, setSent] = useState(false)
   const [signature, setSignature] = useState('')
+  // Recent captures shown as a composing aid at the bottom of the modal —
+  // reference only, never part of the email itself.
+  const [captures, setCaptures] = useState<{
+    actions: { id: string; description: string; status: string }[]
+    insights: string[]
+  } | null>(null)
 
   useEffect(() => {
     let cancelled = false
     fetch('/api/email/signature')
       .then((r) => (r.ok ? r.json() : { html: '' }))
       .then((d) => !cancelled && setSignature(d.html || ''))
+      .catch(() => {})
+    fetch(`/api/clients/${clientId}/captures`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled || !d) return
+        setCaptures({ actions: d.actions || [], insights: d.insights || [] })
+      })
       .catch(() => {})
     fetch('/api/coach')
       .then((r) => (r.ok ? r.json() : null))
@@ -61,7 +74,7 @@ export function EmailModal({
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [clientId])
 
   const canReview = !!to && !!subject.trim() && !!body.trim()
 
@@ -145,6 +158,56 @@ export function EmailModal({
               dangerouslySetInnerHTML={{ __html: signature || '<span style="font-size:12px;color:#8B8680;">Loading signature…</span>' }}
             />
           </div>
+
+          {/* Recent actions + insights, newest first — a memory aid while
+              composing. Reference only; nothing here goes into the email. */}
+          {captures && (captures.actions.length > 0 || captures.insights.length > 0) && (
+            <div className="rounded-tlw-md border border-tlw-warm-gray/20 bg-tlw-canvas/60 px-3 py-2.5">
+              <p className="mb-2 text-[11px] uppercase tracking-[1.5px] text-tlw-warm-gray">
+                For your reference — not included in the email
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {captures.actions.length > 0 && (
+                  <div>
+                    <p className="mb-1 text-[11px] font-medium text-tlw-warm-gray">Actions</p>
+                    <ul className="max-h-32 space-y-1 overflow-y-auto">
+                      {captures.actions.map((a) => (
+                        <li key={a.id} className="flex items-start gap-1.5 text-[12px] leading-snug">
+                          <span
+                            className={`mt-px shrink-0 ${a.status === 'done' ? 'text-tlw-navy-rich' : 'text-tlw-warm-gray'}`}
+                          >
+                            {a.status === 'done' ? '☑' : '☐'}
+                          </span>
+                          <span
+                            className={
+                              a.status === 'done'
+                                ? 'text-tlw-warm-gray line-through'
+                                : 'text-tlw-espresso'
+                            }
+                          >
+                            {a.description}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {captures.insights.length > 0 && (
+                  <div>
+                    <p className="mb-1 text-[11px] font-medium text-tlw-warm-gray">Insights</p>
+                    <ul className="max-h-32 space-y-1 overflow-y-auto">
+                      {captures.insights.map((text, i) => (
+                        <li key={i} className="flex items-start gap-1.5 text-[12px] leading-snug">
+                          <span className="mt-px shrink-0 text-tlw-signal-orange">✦</span>
+                          <span className="text-tlw-espresso">{text}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {error && <p className="text-[12px] text-tlw-signal-orange">{error}</p>}
           <div className="flex items-center justify-end gap-3">
