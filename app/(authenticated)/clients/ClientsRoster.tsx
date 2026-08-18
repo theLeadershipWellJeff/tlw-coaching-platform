@@ -6,6 +6,7 @@ import type { Client } from '@/lib/supabase/types'
 import { formatWhenShort } from '@/lib/datetime'
 import { BulkEmailModal } from './BulkEmailModal'
 import { EditClientModal } from './[id]/EditClientModal'
+import { EmailModal } from './[id]/EmailModal'
 
 const STATUSES = ['active', 'prospect', 'inactive'] as const
 
@@ -38,6 +39,9 @@ export function ClientsRoster() {
   // Client being edited via a card's settings gear (the same modal as the
   // workspace name card's gear).
   const [editing, setEditing] = useState<Client | null>(null)
+  // Client being emailed via a card's envelope button (the same compose modal
+  // as the workspace's Compose Email action).
+  const [emailing, setEmailing] = useState<Client | null>(null)
   // After creating a client, offer to issue the coaching agreement now.
   const [justCreated, setJustCreated] = useState<{ id: string; name: string } | null>(null)
   // Active roster / the inactive list / the long-term archive. Clients keep all
@@ -253,6 +257,7 @@ export function ClientsRoster() {
                 progress={engagementProgress[c.id]}
                 coachTimezone={coachTimezone}
                 onEdit={setEditing}
+                onEmail={setEmailing}
                 quickActions={
                   view === 'inactive'
                     ? [
@@ -278,7 +283,7 @@ export function ClientsRoster() {
               </p>
               <div className="space-y-2">
                 {visibleTeam.map((c) => (
-                  <ClientCard key={c.id} c={c} pendingAgreements={{}} isTeam onEdit={setEditing} />
+                  <ClientCard key={c.id} c={c} pendingAgreements={{}} isTeam onEdit={setEditing} onEmail={setEmailing} />
                 ))}
               </div>
             </div>
@@ -291,6 +296,15 @@ export function ClientsRoster() {
           listLabel={VIEW_LABELS[view]}
           recipients={visible.map((c) => ({ id: c.id, name: c.name, email: c.email }))}
           onClose={() => setShowBulkEmail(false)}
+        />
+      )}
+
+      {emailing && (
+        <EmailModal
+          clientId={emailing.id}
+          to={emailing.email || ''}
+          clientName={emailing.name}
+          onClose={() => setEmailing(null)}
         />
       )}
 
@@ -338,6 +352,7 @@ function ClientCard({
   quickActions,
   onSetStatus,
   onEdit,
+  onEmail,
 }: {
   c: Client
   pendingAgreements: Record<string, number>
@@ -352,6 +367,8 @@ function ClientCard({
   onSetStatus?: (id: string, status: string) => void
   /** Opens the client-settings (edit) modal from the card's gear. */
   onEdit?: (c: Client) => void
+  /** Opens the compose-email modal from the card's envelope button. */
+  onEmail?: (c: Client) => void
 }) {
   const pct =
     progress && progress.total != null && progress.total > 0
@@ -459,6 +476,20 @@ function ClientCard({
           >
             {c.status}
           </span>
+          {onEmail && (
+            <button
+              title={c.email ? `Email ${c.name}` : `Email ${c.name} — no email on file`}
+              aria-label={`Email ${c.name}`}
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                onEmail(c)
+              }}
+              className="rounded-tlw-md p-1.5 text-tlw-warm-gray transition-colors hover:bg-tlw-canvas hover:text-tlw-espresso"
+            >
+              <MailIcon />
+            </button>
+          )}
           {onEdit && (
             <button
               title="Client settings"
@@ -503,6 +534,15 @@ function CalIcon() {
     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.7" className="shrink-0 text-tlw-warm-gray">
       <rect x="3" y="4" width="18" height="18" rx="2" />
       <path d="M16 2v4M8 2v4M3 10h18" />
+    </svg>
+  )
+}
+
+function MailIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <path d="m22 7-10 6L2 7" />
     </svg>
   )
 }
