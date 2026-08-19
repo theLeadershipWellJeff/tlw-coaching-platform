@@ -5,6 +5,7 @@ import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { ApiError, requireCoach, readJson, toErrorResponse } from '@/lib/api-handler'
 import { accessibleClientIds, coachCanAccessClient } from '@/lib/client-access'
 import type { CoachingGoal } from '@/lib/supabase/types'
+import { CLIENT_VOICE_STANDARDS } from '@/lib/writing-standards'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -170,6 +171,8 @@ VOICE:
 - Address ${clientName} DIRECTLY in the second person — "you," "your." NEVER refer to ${clientName} in the third person ("the client," "she/he," "${clientName} has been…").
 - Second person applies to ${clientName} ONLY. Other people named (direct reports, colleagues, spouse, etc.) are referred to normally in the third person — do NOT second-person them.
 - Warm, direct, affirming, plain. Mirror the coach's actual phrasing from the notes — preserve their words where they carry the meaning rather than paraphrasing into generic coaching-speak. Sound like ${coachName}.
+
+${CLIENT_VOICE_STANDARDS}
 
 ${planInstruction}
 

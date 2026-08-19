@@ -18,6 +18,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { htmlToPlainText } from '@/lib/communications'
 import type { CoachingGoal } from '@/lib/supabase/types'
+import { PORTAL_CHAT_VOICE_STANDARDS } from '@/lib/writing-standards'
 
 const MODEL = process.env.PORTAL_CHAT_MODEL || 'claude-sonnet-4-6'
 
@@ -143,6 +144,8 @@ Guidelines:
 - You are a companion for reflection, NOT a replacement for their coach. For anything urgent, sensitive, clinical, or crisis-related, gently encourage them to contact their coach (or an appropriate professional) directly.
 - Never invent facts about their sessions. If something isn't in the material below, say you don't have it. The material below is a relevant selection, not their complete history — if they ask about something you can't see, say so and suggest they search their sessions or ask their coach.
 - Keep a natural, encouraging tone. No clinical or diagnostic language.
+
+${PORTAL_CHAT_VOICE_STANDARDS}
 
 ${clientName}'S COACHING GOALS:
 ${goalsText}

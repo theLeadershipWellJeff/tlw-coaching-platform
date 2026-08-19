@@ -14,8 +14,11 @@ import { complete, parseJsonFrom } from './llm'
 import type { NudgeCandidate, NudgeDraft, GoalsDraftContext } from './types'
 import type { FrameworkDraftContext } from './garden'
 import { formatGoalListForEmail } from './goal-list'
+import { CLIENT_VOICE_STANDARDS } from '@/lib/writing-standards'
 
 const SYSTEM = `You write a single short, warm, between-session email from an executive coach to their client. It must sound like the coach, not like software.
+
+${CLIENT_VOICE_STANDARDS}
 
 Voice rules:
 - Warm, first-name, brief — short enough to read on a phone in ~15 seconds.
