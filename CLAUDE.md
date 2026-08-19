@@ -98,6 +98,28 @@ comment there).
   aggregation. `coach_self_scores`/`coach_overall`/`coach_notes` = the coach's
   parallel assessment, which **never overwrites** the machine score.
 
+## Writing standards — client-facing voice (mandatory)
+
+`spec/theLeadershipWell_Writing_Standards_v1.0.md` is Jeff's tone & voice
+document (living, v1.0). Its client-facing rules are distilled into
+**`lib/writing-standards.ts`**, which every prompt that drafts something a
+client will read MUST include:
+
+- `CLIENT_VOICE_STANDARDS` — anything written **as the coach** to a client.
+  Wired into: nudge drafts (`lib/nudges/draft.ts` SYSTEM — covers the pipeline,
+  manual create, and draft-one), the send-to-client recap
+  (`/api/notes/client-email`), and the session-prep email (`/api/generate`).
+- `PORTAL_CHAT_VOICE_STANDARDS` — the portal reflection chat
+  (`lib/portal/chat.ts#buildChatContext`), which speaks as an assistant, not
+  the coach.
+
+**Adding a new client-facing generation? Include the appropriate block.**
+Task-specific prompt rules layer on top; the block is the shared floor
+(core voice, never-say list, no invented statistics, AI-tell avoidance).
+When Jeff updates the standards doc, update the distilled blocks to match.
+Coach-facing generations (plan-session, goals, scoring, titles) are exempt —
+app/UI copy follows the doc's §5.11 by hand, not via this module.
+
 ## Key pipelines
 
 ### Transcript → scored report

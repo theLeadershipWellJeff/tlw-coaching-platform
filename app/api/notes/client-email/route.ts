@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
+import { CLIENT_VOICE_STANDARDS } from '@/lib/writing-standards'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -51,6 +52,8 @@ Guidelines:
 - Do NOT list the "ACTION:" or "INSIGHT:" items — those are appended separately as an interactive checklist and Insights list; repeating them would duplicate.
 - Do NOT invent anything not in the note. If the note is thin, keep the email very short.
 - Sign off with the coach's first name ("${coachName.split(' ')[0]}"). No subject line inside the body. No AI mention.
+
+${CLIENT_VOICE_STANDARDS}
 
 Return ONLY valid JSON — no markdown fences, no preamble:
 {"subject": "Short, specific subject line", "body": "The email as plain text. Use bullet lists (- item) wherever there are multiple related points."}
