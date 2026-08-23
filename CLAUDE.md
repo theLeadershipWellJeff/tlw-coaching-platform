@@ -1583,7 +1583,8 @@ reflects what was actually discussed. Written by the nudge pipeline before its
 per-window cap discards candidates. Additive; the portal falls back to the
 nudge-derived list when the table is absent. Verified up + down.
 
-**`056_invoice_reminder_ladder.sql` — ⚠️ PENDING.** The invoice reminder ladder
+**`056_invoice_reminder_ladder.sql` — APPLIED (production, 2026-08-23; staging
+skipped — Supabase paused the unused staging project).** The invoice reminder ladder
 (see the Stripe integration section): adds `invoice_reminders.kind` (default
 `nudge_14d` backfills existing rows as the first rung), a **unique index on
 `(invoice_id, kind)`** (dedupes first), and `invoices.reminders_exhausted_at`
