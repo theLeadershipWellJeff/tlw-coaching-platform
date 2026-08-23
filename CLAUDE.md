@@ -162,16 +162,22 @@ session"** checkbox (`/api/transcripts/manual` `autoScore:false` →
 unscored rows as "not scored" with a **"score now"** button (`PATCH` with
 `{rescore:true}`) so an unscored transcript can always be scored later.
 
-**Scoring timeouts (2026-08-14 fix).** Every route that runs the engine
-in-band (`/api/transcripts/ingest`, `/api/transcripts/[id]` PATCH,
-`/api/transcripts/manual`, `/api/reports/[id]/rescore`) sets `maxDuration =
-300` — the engine allows 100 s per Claude attempt with one retry (200 s worst
-case) plus the growth/nudge passes after the report lands. The ingest webhook
-previously capped at 60 s, so Vercel killed auto-scores mid-run and matched
-Plaud transcripts landed "not scored"; the other routes' 120 s couldn't cover
-a retried attempt. The engine also caps output at `max_tokens: 10000` (was
-6000, which truncated long reports into "invalid JSON") and fails loud on
-`stop_reason === 'max_tokens'`.
+**Scoring timeouts (2026-08-14 fix; streaming fix 2026-08-21).** Every route
+that runs the engine in-band (`/api/transcripts/ingest`, `/api/transcripts/[id]`
+PATCH, `/api/transcripts/manual`, `/api/reports/[id]/rescore`) sets
+`maxDuration = 300`. The ingest webhook previously capped at 60 s, so Vercel
+killed auto-scores mid-run and matched Plaud transcripts landed "not scored";
+the other routes' 120 s couldn't cover a retried attempt. The engine also caps
+output at `max_tokens: 10000` (was 6000, which truncated long reports into
+"invalid JSON") and fails loud on `stop_reason === 'max_tokens'`. **The engine
+call STREAMS** (2026-08-21): on a buffered call the SDK `timeout` ran until
+response headers, i.e. until the whole report was generated — after the
+max_tokens raise a full-length report took longer than the 100 s timeout, so
+long sessions died with "Request timed out" on both attempts (manual scores
+showed the error; webhook auto-scores landed silently "not scored"). With
+streaming, `timeout: 100s` covers only connect/first-byte (one retry) and
+generation runs free under `maxDuration`, with a 240 s in-engine guard
+(`GENERATION_GUARD_MS`) aborting a stalled stream as a clean scoring error.
 
 **Background scoring + progress bar (`lib/scoring-jobs.ts`).** Scoring takes
 ~120 s, so "confirm & score" (review queue) and "score now" (client transcripts

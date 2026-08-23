@@ -1009,7 +1009,21 @@ export async function scoreTranscript(
   }
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-  const message = await client.messages.create(
+  // STREAM the response instead of buffering it. On a buffered call the SDK's
+  // `timeout` isn't released until the response headers arrive — which for a
+  // non-streaming completion is only after the ENTIRE report is generated — so
+  // the old 100 s timeout capped total generation time. Raising max_tokens to
+  // 10000 (the truncation fix) made a full-length report take longer than
+  // 100 s to generate, and long sessions started dying with "Request timed
+  // out" (both attempts), even though the function had 300 s to spend. With
+  // streaming, headers arrive up front: `timeout` covers only connect/first
+  // byte (retried once on transient failure) and generation is free to run as
+  // long as it needs under the route's maxDuration 300. GENERATION_GUARD_MS
+  // aborts a genuinely stalled stream so it still fails as a clean scoring
+  // error — with headroom for the growth/nudge/email passes that follow —
+  // rather than as a Vercel-killed function with no response.
+  const GENERATION_GUARD_MS = 240_000
+  const stream = client.messages.stream(
     {
       model: MODEL,
       // The v0.5.3 report JSON (envelopes, taxonomy, evidence moments, quoted
@@ -1019,12 +1033,28 @@ export async function scoreTranscript(
       system: SYSTEM,
       messages: [{ role: 'user', content: buildPrompt(transcript, ctx) }],
     },
-    // Fail before Vercel's function timeout (maxDuration 300 on the calling
-    // routes — room for a timed-out first attempt plus the one retry) so a slow
-    // call surfaces as a clean scoring error, not a killed function. One retry,
-    // not the SDK default of two, to avoid retry storms.
     { timeout: 100_000, maxRetries: 1 }
   )
+
+  let guardFired = false
+  const guard = setTimeout(() => {
+    guardFired = true
+    stream.abort()
+  }, GENERATION_GUARD_MS)
+
+  let message: Anthropic.Message
+  try {
+    message = await stream.finalMessage()
+  } catch (e: any) {
+    if (guardFired) {
+      throw new Error(
+        `Scoring timed out after ${GENERATION_GUARD_MS / 1000}s of generation — retry, and if it persists the transcript may be unusually long.`
+      )
+    }
+    throw e
+  } finally {
+    clearTimeout(guard)
+  }
 
   if (message.stop_reason === 'max_tokens') {
     throw new Error(
