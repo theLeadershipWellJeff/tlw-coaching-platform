@@ -11,6 +11,7 @@ type Invoice = {
   period_end: string | null
   total: number
   received_at: string | null
+  reminders_exhausted_at?: string | null
   billing_accounts: {
     id: string
     name: string
@@ -404,6 +405,14 @@ function InvoicesContent() {
                     title={`Client opened the invoice ${new Date(inv.received_at).toLocaleString()}`}
                   >
                     received ✓
+                  </span>
+                )}
+                {inv.reminders_exhausted_at && ['sent', 'overdue'].includes(inv.status) && (
+                  <span
+                    className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700"
+                    title={`Automated reminders exhausted ${new Date(inv.reminders_exhausted_at).toLocaleString()} — needs a personal follow-up`}
+                  >
+                    needs attention
                   </span>
                 )}
                 <span className="text-[13px] font-medium text-tlw-navy-deep">

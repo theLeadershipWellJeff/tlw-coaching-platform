@@ -1182,7 +1182,32 @@ All Stripe interaction is in `lib/billing/stripe.ts` (singleton + helpers) and
 - **Customer creation:** `getOrCreateStripeCustomer` creates one Stripe customer
   per `billing_accounts` row on first send; persists `stripe_customer_id` back to
   the row so subsequent sends reuse it.
-- **Days until due:** hosted invoices are set to `days_until_due: 30`.
+- **Due on receipt:** hosted invoices are created with `days_until_due: 0`
+  (with a defensive retry at `1` if Stripe ever rejects 0) — invoices are due
+  when received, which is also what the reminder ladder's overdue language
+  assumes.
+- **Invoice reminder ladder (migration 056, `lib/billing/reminders.ts`).**
+  Replaces the old single 14-day reminder with a cadence anchored to the send
+  date, ~14 days apart, driven by the existing hourly
+  `GET /api/cron/billing-reminders`: `nudge_14d` (~day 14, gentle — the legacy
+  copy) → `overdue_1` (~day 28, flips the invoice `sent → overdue` and says
+  "past due") → `overdue_2` (~day 42, final automated client reminder) →
+  `coach_alert` (~day 56, **no client email** — emails the coach a "needs
+  attention" notice and stamps `invoices.reminders_exhausted_at`, shown as a
+  red chip on the invoice list/detail + an audit line). Each rung is claimed
+  before sending AND guarded by a unique index on
+  `invoice_reminders(invoice_id, kind)`, so a rung can never double-fire; the
+  next rung is scheduled at send time (`now + 14d`), so a late-started ladder
+  never bursts. `cancelReminders` on paid/void kills the whole remaining
+  ladder (unchanged call sites). A Gmail transport failure un-claims the rung
+  so it retries next hour (the old code silently marked it sent). Client rungs
+  `nudge_14d`/`overdue_1` carry the Phase-6 **"save a card" block** ("prefer to
+  skip these reminders?") when the account has no active card AND already
+  holds an authorization token — tokens are only minted via the
+  agreement-gated send path, so the §4.2 gate holds by construction; the block
+  is deliberately left off `overdue_2` (by then the ask is personal).
+  Migration 056 also backfills the next rung for outstanding invoices whose
+  old one-shot reminder already fired, scheduled ≥1 day out.
 - **Client note rides with the send.** `invoices.client_message` (migration 031)
   is passed to Stripe as the invoice `description` (the memo shown on the hosted
   page, the emailed invoice, and the PDF) and appears in the branded cover email.
@@ -1199,7 +1224,7 @@ All Stripe interaction is in `lib/billing/stripe.ts` (singleton + helpers) and
   hosted URL (fetched fresh from Stripe, never stored). The Business Center
   shows a **"received ✓"** chip next to `sent`/`overdue` (invoice list + detail +
   audit trail). Same link-scanner false-positive caveat as action-complete links.
-  The 14-day reminder email carries the same tracked button.
+  Every reminder-ladder email carries the same tracked button.
 - **Re-send.** `POST /api/billing/invoices/[id]/resend` (invoice page "Re-send
   invoice email" button; status `sent`/`overdue`/`failed` with a
   `stripe_invoice_id`) calls `stripe.invoices.sendInvoice` on the existing
@@ -1563,6 +1588,20 @@ always works. Verified up + down.
 reflects what was actually discussed. Written by the nudge pipeline before its
 per-window cap discards candidates. Additive; the portal falls back to the
 nudge-derived list when the table is absent. Verified up + down.
+
+**`056_invoice_reminder_ladder.sql` — APPLIED (production, 2026-08-23; staging
+skipped — Supabase paused the unused staging project).** The invoice reminder ladder
+(see the Stripe integration section): adds `invoice_reminders.kind` (default
+`nudge_14d` backfills existing rows as the first rung), a **unique index on
+`(invoice_id, kind)`** (dedupes first), and `invoices.reminders_exhausted_at`
+(the needs-attention stamp). Also backfills the next rung (`overdue_1`,
+scheduled ≥1 day out) for outstanding invoices whose old one-shot reminder
+already fired, so they rejoin the cadence. Additive and defensive — the cron
+code treats a missing `kind` as `nudge_14d` and the exhausted-stamp write is
+best-effort — but **apply before deploying: the reminder scheduling insert
+names the `kind` column, so new invoices sent before the migration would get
+no reminder scheduled** (the insert error is deliberately swallowed).
+Verified up + down + re-up against Postgres 16.
 
 **`048_supervisor_bootstrap_and_signature_unique.sql` — APPLIED (staging + production, 2026-08-14).** (1) Promotes
 the founding coach (email jeff@jeffkholmes.com, else earliest-created) to

@@ -510,6 +510,14 @@ export default function InvoiceDetailPage() {
                 received ✓
               </span>
             )}
+            {invoice?.reminders_exhausted_at && ['sent', 'overdue'].includes(invoice.status) && (
+              <span
+                className="rounded-full bg-red-50 px-3 py-1 text-[12px] font-medium text-red-700"
+                title={`Automated reminders exhausted ${new Date(invoice.reminders_exhausted_at).toLocaleString()} — needs a personal follow-up`}
+              >
+                needs attention
+              </span>
+            )}
           </div>
         }
       />
@@ -604,6 +612,7 @@ export default function InvoiceDetailPage() {
                 {invoice.sent_at && <p>Sent · {new Date(invoice.sent_at).toLocaleString()}</p>}
                 {invoice.last_resent_at && <p>Re-sent · {new Date(invoice.last_resent_at).toLocaleString()}</p>}
                 {invoice.received_at && <p>Received (client opened the invoice) · {new Date(invoice.received_at).toLocaleString()}</p>}
+                {invoice.reminders_exhausted_at && <p>Automated reminders exhausted (needs personal follow-up) · {new Date(invoice.reminders_exhausted_at).toLocaleString()}</p>}
                 {invoice.paid_at && <p>Paid · {new Date(invoice.paid_at).toLocaleString()}</p>}
               </div>
             </section>
