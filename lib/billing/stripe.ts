@@ -83,14 +83,24 @@ export async function createAndSendStripeInvoice(opts: {
 
   // Create the invoice first so we can attach items to it explicitly.
   // This avoids any ambiguity about which pending items Stripe collects.
-  const invoice = await stripe.invoices.create({
+  // Invoices are due on receipt (days_until_due: 0 — Stripe requires a due
+  // date for send_invoice collection, and 0 means due today). Defensive
+  // fallback to 1 in case the pinned API version rejects 0 — a rejected
+  // create must never block a send over a cosmetic due date.
+  const baseParams: Stripe.InvoiceCreateParams = {
     customer: opts.customerId,
     currency: opts.currency,
     description: opts.description,
     collection_method: 'send_invoice',
-    days_until_due: 30,
     metadata: opts.metadata ?? {},
-  })
+  }
+  let invoice: Stripe.Invoice
+  try {
+    invoice = await stripe.invoices.create({ ...baseParams, days_until_due: 0 })
+  } catch (e: any) {
+    if (!/days_until_due|due_date/i.test(e?.message ?? '')) throw e
+    invoice = await stripe.invoices.create({ ...baseParams, days_until_due: 1 })
+  }
 
   // Attach each line item directly to this invoice via the `invoice` param.
   // Negative amounts render as discount/credit lines on the hosted invoice.

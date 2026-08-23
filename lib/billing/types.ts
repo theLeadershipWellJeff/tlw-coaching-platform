@@ -151,6 +151,8 @@ export type Invoice = {
   receipt_token: string | null
   received_at: Timestamp | null
   last_resent_at: Timestamp | null
+  // Reminder ladder exhausted — needs a personal follow-up (migration 056).
+  reminders_exhausted_at?: Timestamp | null
   // Payment on File — charge state + adjustment denormalization (migration 038).
   collection_method?: CollectionMethod | null
   charge_status?: ChargeStatus | null
@@ -188,6 +190,8 @@ export type InvoiceLine = {
 export type InvoiceReminder = {
   id: string
   invoice_id: string
+  // Ladder rung (migration 056): nudge_14d → overdue_1 → overdue_2 → coach_alert.
+  kind?: string
   send_at: Timestamp
   status: ReminderStatus
   channel: 'email'
