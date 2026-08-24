@@ -1144,6 +1144,35 @@ supervisor's one view over every coach on the platform. All of it is gated by
   (`lib/admin/audit.ts`, append-only, best-effort so a missing table never
   blocks the action).
 
+### Coach billing go-live checklist — ⚠️ NOT DONE (deliberately deferred)
+
+The code + schema (057) are deployed, but Jeff is bringing coach billing online
+later. Until every step below is done, "Send billing link" fails with a clear
+error naming `STRIPE_COACH_PRICE_ID`, plan chips stay hand-set, and nothing can
+charge a coach. **Do these in the live Stripe account when ready:**
+
+1. **Create the subscription Price** — Stripe Dashboard → Products → Add
+   product (e.g. "TLW Coaching Platform — Monthly") with a **recurring** price.
+   Copy the `price_…` id → set `STRIPE_COACH_PRICE_ID` in Vercel env vars →
+   redeploy (env changes only take effect on the next deploy).
+2. **Register three webhook events** on the existing endpoint ("TLW Strip
+   Connection", the Vercel URL): `checkout.session.completed`,
+   `customer.subscription.updated`, `customer.subscription.deleted`. Same
+   endpoint, same signing secret — nothing else changes.
+3. **Configure the Customer portal once** — Stripe Dashboard → Settings →
+   Billing → Customer portal → save the default configuration. This is what
+   the Command Center's "Stripe billing portal" button opens (card updates,
+   invoice history, cancel).
+4. **Verify end-to-end** — Command Center → a test coach row → "Send billing
+   link" → complete checkout with a real card (or a 100%-off coupon) → confirm
+   the row shows "Subscription · active" and the plan chip flips to `paying`
+   on its own; then cancel from the billing portal and confirm the plan drops
+   to `free`.
+
+Related but separate: migrations **053 + 054 are still pending** — until
+applied, the client drill-down shows invited/not-invited only (no last-seen,
+no lockout state, and portal-unlock has nothing to act on).
+
 ## Security & pipeline hardening (absorbed from PRs #45/#55)
 
 - **Tenant isolation on sibling routes.** `/api/notes` (CA proxy) now requires a
@@ -1650,18 +1679,16 @@ names the `kind` column, so new invoices sent before the migration would get
 no reminder scheduled** (the insert error is deliberately swallowed).
 Verified up + down + re-up against Postgres 16.
 
-**`057_coach_plans_admin.sql` — ⚠️ PENDING.** The Admin Command Center: adds
-`coaches.plan` (beta|free|paying, default beta) + `plan_note`, the coach
-platform-subscription columns (`stripe_customer_id`/`stripe_subscription_id`/
-`subscription_status` + partial indexes), and the append-only `admin_audit_log`
-table (RLS enabled). Additive, but **apply before deploying — the coaches
-list/PATCH routes select the new columns by name**, so the Command Center 500s
-without it. Also: create a recurring Price in Stripe and set
-`STRIPE_COACH_PRICE_ID`, register `checkout.session.completed` +
-`customer.subscription.updated` + `customer.subscription.deleted` on the
-existing webhook endpoint, and configure the Customer portal (Stripe Dashboard
-→ Settings → Billing) if the "Stripe billing portal" button will be used.
-Reversible via `057_coach_plans_admin_down.sql`.
+**`057_coach_plans_admin.sql` — APPLIED (production, 2026-08-24).** The Admin
+Command Center: adds `coaches.plan` (beta|free|paying, default beta) +
+`plan_note`, the coach platform-subscription columns (`stripe_customer_id`/
+`stripe_subscription_id`/`subscription_status` + partial indexes), and the
+append-only `admin_audit_log` table (RLS enabled). Reversible via
+`057_coach_plans_admin_down.sql`. ⚠️ The schema is in, but **coach billing is
+NOT yet live** — the remaining Stripe setup is tracked in the "Coach billing
+go-live checklist" in the Admin Command Center section above. Until those steps
+are done, "Send billing link" fails with a clear `STRIPE_COACH_PRICE_ID` error
+and no coach can be charged.
 
 **`048_supervisor_bootstrap_and_signature_unique.sql` — APPLIED (staging + production, 2026-08-14).** (1) Promotes
 the founding coach (email jeff@jeffkholmes.com, else earliest-created) to
