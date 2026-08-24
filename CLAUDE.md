@@ -1169,9 +1169,8 @@ charge a coach. **Do these in the live Stripe account when ready:**
    on its own; then cancel from the billing portal and confirm the plan drops
    to `free`.
 
-Related but separate: migrations **053 + 054 are still pending** — until
-applied, the client drill-down shows invited/not-invited only (no last-seen,
-no lockout state, and portal-unlock has nothing to act on).
+(053 + 054 are applied as of 2026-08-24, so the client drill-down shows full
+portal state — last-seen, lockouts, and portal-unlock all live.)
 
 ## Security & pipeline hardening (absorbed from PRs #45/#55)
 
@@ -1524,7 +1523,12 @@ units with a 1-hour minimum, rounding up once past 15 min into a half hour
 (`lib/billing.ts`). Past-week revenue uses each note's logged `duration_minutes`;
 the projection uses the scheduled calendar-event length.
 
-**Pending — apply in Supabase:** `014_note_duration.sql`,
+**Migration status note (2026-08-24): Jeff confirmed ALL migrations through
+057 are applied in production.** The "pending" language below and in older
+per-migration entries is historical — kept for the apply-order caveats it
+records, not as a live to-do list.
+
+**Pending — apply in Supabase (historical):** `014_note_duration.sql`,
 `015_coach_clients.sql`, `016_appointments.sql`, and
 `017_email_signatures_communications.sql`, `018_agreement_system.sql`,
 `019_library_labels.sql`, `020_scheduling_settings.sql` (adds the two jsonb
@@ -1625,14 +1629,14 @@ reads to show only the notes a coach actually sent. Reversible via
 `050_note_sent_to_client_down.sql` (which deliberately keeps the
 `type='session_note'` communications rows — they are the record of real sends).
 
-**`051_coach_booking_url.sql` — ⚠️ PENDING.** Adds `coaches.booking_url` (the
+**`051_coach_booking_url.sql` — APPLIED (production, confirmed 2026-08-24).** Adds `coaches.booking_url` (the
 client-facing HubSpot/Calendly scheduler link shown at the top of the Client
 Portal) and seeds the founding coach's existing HubSpot link — the one already
 hand-written into the seeded email signature — so the button works on day one.
 Additive/nullable; NULL just hides the button, and reads are defensive, so the
 app runs without it. Set per coach in Account → Scheduling.
 
-**`052_portal_search.sql` — ⚠️ PENDING.** Client Portal full-text search: adds a
+**`052_portal_search.sql` — APPLIED (production, confirmed 2026-08-24).** Client Portal full-text search: adds a
 generated `search_vector` to `transcripts` and `communications`, compound
 `btree_gin` GIN indexes on `(client_id, search_vector)`, and the `portal_search`
 SQL function that ranks one query across a client's transcripts + sent session
@@ -1643,7 +1647,7 @@ for existing rows during the migration. Requires the `btree_gin` extension
 to the old ILIKE path if the function is absent**, so deploy order is not
 critical here. Verified up + down against Postgres 16.
 
-**`053_portal_access_log.sql` — ⚠️ PENDING.** Three additive pieces for the
+**`053_portal_access_log.sql` — APPLIED (production, confirmed 2026-08-24).** Three additive pieces for the
 Client Portal: `portal_access_log` (audit trail + the durable counter behind
 per-client rate limiting — in-process counters are useless on serverless),
 `clients.portal_onboarded` (the first-visit tour flag, moved off localStorage),
@@ -1652,14 +1656,14 @@ and the `portal_chat_context` SQL function (retrieval for the AI chat, reusing
 tour re-offers itself, and the chat degrades to recency-only context — so the app
 runs without it, just with the old truncation behavior. Verified up + down.
 
-**`054_client_credentials.sql` — ⚠️ PENDING.** Optional Client Portal username +
+**`054_client_credentials.sql` — APPLIED (production, confirmed 2026-08-24).** Optional Client Portal username +
 password (scrypt hash) in its own table, kept off `clients` so a `select *` can
 never carry a hash into a response. Magic-link sign-in is unaffected and remains
 the recovery path; without this migration the password tab simply always fails.
 Down drops every stored password — nobody is locked out, since the emailed link
 always works. Verified up + down.
 
-**`055_client_frameworks.sql` — ⚠️ PENDING.** Records frameworks a scored session
+**`055_client_frameworks.sql` — APPLIED (production, confirmed 2026-08-24).** Records frameworks a scored session
 **named**, not just ones a nudge was sent about, so the portal's Frameworks card
 reflects what was actually discussed. Written by the nudge pipeline before its
 per-window cap discards candidates. Additive; the portal falls back to the
