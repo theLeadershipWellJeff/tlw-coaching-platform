@@ -282,8 +282,35 @@ export type Coach = {
   // null = no booking button. Bookings made through it land on the coach's
   // Google Calendar and are captured by the existing calendar-watch sync.
   booking_url: string | null
+  // Command Center plan label (migration 057): 'beta' | 'free' | 'paying'.
+  // Hand-set by the supervisor; the coach-subscription webhook auto-promotes to
+  // 'paying' (active/trialing) and demotes to 'free' (canceled). Read
+  // defensively — pre-057 databases return undefined.
+  plan?: string
+  plan_note?: string | null
+  // Coach billing (migration 057): the coach's own Stripe subscription for
+  // using the platform (distinct from billing_accounts, which is the coach
+  // billing THEIR clients). subscription_status mirrors Stripe's status.
+  stripe_customer_id?: string | null
+  stripe_subscription_id?: string | null
+  subscription_status?: string | null
   created_at: Timestamp
   updated_at: Timestamp
+}
+
+// Supervisor admin actions, append-only (migration 057). Actor/targets are
+// SET NULL on delete so the trail outlives the rows it references.
+export type AdminAuditLog = {
+  id: string
+  org_id: string
+  actor_coach_id: string | null
+  // 'plan_change' | 'portal_invite_resend' | 'portal_unlock'
+  // | 'billing_checkout_link' | 'coach_added' | 'coach_removed'
+  action: string
+  target_coach_id: string | null
+  target_client_id: string | null
+  detail: Record<string, unknown> | null
+  created_at: Timestamp
 }
 
 export type CoachClient = {
@@ -917,6 +944,12 @@ export type Database = {
         Row: PortalAccessLog
         Insert: Insertable<PortalAccessLog>
         Update: Updatable<PortalAccessLog>
+        Relationships: []
+      }
+      admin_audit_log: {
+        Row: AdminAuditLog
+        Insert: Insertable<AdminAuditLog>
+        Update: Updatable<AdminAuditLog>
         Relationships: []
       }
       client_credentials: {

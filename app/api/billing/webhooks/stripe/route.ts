@@ -16,6 +16,8 @@
  *   credit_note.created                 → reconcile invoice_adjustments + denorm totals (Phase 5)
  *   charge.refunded                     → confirm refund settled
  *   charge.dispute.created              → log 'charge_disputed', surface loudly
+ *   checkout.session.completed          → coach platform subscription started (057)
+ *   customer.subscription.updated/deleted → coach subscription status / plan sync (057)
  *
  * All events matched to our records via metadata (tlw_invoice_id /
  * tlw_billing_account_id) or a stored Stripe id. Unknown types return 200.
@@ -136,6 +138,24 @@ export async function POST(req: NextRequest) {
 
       case 'charge.dispute.created': {
         await handleDisputeCreated(supabase, event.data.object as Stripe.Dispute)
+        break
+      }
+
+      // ── Coach platform subscription (migration 057) ──────────────────────
+      case 'checkout.session.completed': {
+        const session = event.data.object as Stripe.Checkout.Session
+        if (session.mode === 'subscription' && session.metadata?.tlw_coach_id) {
+          await handleCoachSubscriptionStarted(supabase, session, now)
+        }
+        break
+      }
+
+      case 'customer.subscription.updated':
+      case 'customer.subscription.deleted': {
+        const sub = event.data.object as Stripe.Subscription
+        if (sub.metadata?.tlw_coach_id) {
+          await handleCoachSubscriptionChanged(supabase, sub, now)
+        }
         break
       }
 
@@ -446,6 +466,61 @@ async function handleDisputeCreated(supabase: Admin, dispute: Stripe.Dispute) {
       subject: `⚠ Payment dispute opened — respond promptly`,
       html: `<p style="font-family:sans-serif;">A card dispute (chargeback) was opened for ${(dispute.amount / 100).toLocaleString('en-US', { style: 'currency', currency: (dispute.currency || 'usd').toUpperCase() })}. Reason: ${dispute.reason}. The authorization snapshot is recorded for your response. Log into Stripe to submit evidence before the deadline.</p>`,
     }).catch(() => {})
+  }
+}
+
+// ── Coach platform subscription (migration 057) ─────────────────────────────────
+//
+// These events concern a COACH's own subscription to the platform, not a
+// client invoice. They are matched via the tlw_coach_id metadata stamped by
+// createCoachSubscriptionCheckout (on both the Checkout session and the
+// subscription itself), so a client-billing checkout can never reach them.
+
+/** Statuses under which the coach is considered paying. `past_due` keeps the
+ *  plan — Stripe retries the charge; a hard cancel demotes below. */
+const PAYING_STATUSES = ['active', 'trialing', 'past_due']
+
+async function handleCoachSubscriptionStarted(supabase: Admin, session: Stripe.Checkout.Session, now: string) {
+  const coachId = session.metadata!.tlw_coach_id
+  const subId = typeof session.subscription === 'string' ? session.subscription : session.subscription?.id
+  const customerId = typeof session.customer === 'string' ? session.customer : session.customer?.id
+  if (!subId) return
+
+  await supabase
+    .from('coaches')
+    .update({
+      stripe_customer_id: customerId ?? undefined,
+      stripe_subscription_id: subId,
+      subscription_status: 'active',
+      plan: 'paying',
+      updated_at: now,
+    } as any)
+    .eq('id', coachId)
+}
+
+async function handleCoachSubscriptionChanged(supabase: Admin, sub: Stripe.Subscription, now: string) {
+  const coachId = sub.metadata!.tlw_coach_id
+  const status = sub.status
+
+  const updates: Record<string, unknown> = {
+    stripe_subscription_id: sub.id,
+    subscription_status: status,
+    updated_at: now,
+  }
+  if (PAYING_STATUSES.includes(status)) {
+    updates.plan = 'paying'
+  }
+
+  await supabase.from('coaches').update(updates as any).eq('id', coachId)
+
+  // A dead subscription demotes 'paying' → 'free', but never stomps a hand-set
+  // 'beta'/'free' — the supervisor's label survives everything but real payment.
+  if (!PAYING_STATUSES.includes(status)) {
+    await supabase
+      .from('coaches')
+      .update({ plan: 'free', updated_at: now } as any)
+      .eq('id', coachId)
+      .eq('plan', 'paying')
   }
 }
 

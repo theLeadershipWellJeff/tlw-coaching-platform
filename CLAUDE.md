@@ -1100,6 +1100,50 @@ post-beta (Tier 3 of the plan).
   strings, the stale `OPEN ACTION ITEMS FROM COACH ACCOUNTABLE` prompt header,
   and README's old CA flow narration are gone. Provenance columns stay.
 
+## Admin Command Center (migration 057) — supervisor-only
+
+`/business-center/coaches` is the **Command Center** (formerly "My Team"): the
+supervisor's one view over every coach on the platform. All of it is gated by
+`requireSupervisor`; a regular coach gets the access notice / 403s.
+
+- **Firm pulse strip** — coaches (open vs. awaiting first sign-in), total
+  clients, portal adoption (invited / active), plan breakdown.
+- **Coach rows** — the existing usage rollup plus: a **plan chip**
+  (`coaches.plan` beta|free|paying + `coaches.plan_note`, hand-set via
+  `PATCH /api/coaches/[id]`; a live subscription auto-promotes to paying, see
+  below), a **Portal** stat (`portal_active_count/client_count`), and billing
+  actions.
+- **Client drill-down** — `GET /api/coaches/[id]/clients` (deliberately
+  cross-tenant, the ONE supervised window over `requireClientCoach`'s
+  boundary; never selects `key_info`). Per client: portal state from
+  `lib/admin/portal-status.ts#loadPortalStates` (invited = any `client_tokens`
+  row; active = successful sign-in in `portal_access_log`/`client_credentials`;
+  locked = live `locked_until`) — reads are defensive, pre-053/054 DBs degrade
+  to invited-only. Actions: **resend portal invite**
+  (`POST /api/coaches/[id]/clients/[clientId]/portal-invite` — sends from the
+  OWNING coach's Gmail when they've signed in, the acting supervisor's
+  otherwise; same 5/hour rate limit; logged to `communications`) and
+  **unlock** (`POST .../portal-unlock` — clears the password lockout only,
+  never the password).
+- **Coach billing (platform subscription).** Distinct from `billing_accounts`
+  (a coach billing THEIR clients): this is TLW billing a COACH. "Send billing
+  link" (`POST /api/coaches/[id]/billing/checkout`) mints a Stripe hosted
+  Checkout session in **subscription mode** (price = `STRIPE_COACH_PRICE_ID`,
+  a recurring Price created in the Stripe Dashboard) and emails it to the
+  coach from the supervisor's Gmail. The webhook (`checkout.session.completed`
+  + `customer.subscription.updated/deleted`, matched via `tlw_coach_id`
+  metadata) stores `coaches.stripe_customer_id`/`stripe_subscription_id`/
+  `subscription_status` and moves `plan`: active/trialing/past_due → `paying`;
+  a dead subscription demotes `paying` → `free` but never stomps a hand-set
+  beta/free. "Stripe billing portal" (`POST .../billing/portal`) opens the
+  customer portal (configure once: Stripe Dashboard → Settings → Billing →
+  Customer portal). **Register the three new webhook events on the existing
+  endpoint** in the Stripe Dashboard.
+- **Audit trail** — every admin action (plan change, invite resend, unlock,
+  billing link, coach add/remove) writes `admin_audit_log`
+  (`lib/admin/audit.ts`, append-only, best-effort so a missing table never
+  blocks the action).
+
 ## Security & pipeline hardening (absorbed from PRs #45/#55)
 
 - **Tenant isolation on sibling routes.** `/api/notes` (CA proxy) now requires a
@@ -1139,7 +1183,10 @@ set one in Account → Scheduling; falls back to `DEFAULT_MEETING_LINK` in code)
 Stripe (billing): `STRIPE_SECRET_KEY` (from Stripe Dashboard → Developers → API keys;
 use the test key `sk_test_…` in dev, live key `sk_live_…` in production),
 `STRIPE_WEBHOOK_SECRET` (from Stripe Dashboard → Developers → Webhooks → signing
-secret for the `POST /api/billing/webhooks/stripe` endpoint).
+secret for the `POST /api/billing/webhooks/stripe` endpoint),
+`STRIPE_COACH_PRICE_ID` (the recurring Price id for the coach platform
+subscription — Command Center "Send billing link"; without it coach billing
+links fail with a clear error).
 See `.env.example`.
 
 ## Stripe integration
@@ -1602,6 +1649,19 @@ best-effort — but **apply before deploying: the reminder scheduling insert
 names the `kind` column, so new invoices sent before the migration would get
 no reminder scheduled** (the insert error is deliberately swallowed).
 Verified up + down + re-up against Postgres 16.
+
+**`057_coach_plans_admin.sql` — ⚠️ PENDING.** The Admin Command Center: adds
+`coaches.plan` (beta|free|paying, default beta) + `plan_note`, the coach
+platform-subscription columns (`stripe_customer_id`/`stripe_subscription_id`/
+`subscription_status` + partial indexes), and the append-only `admin_audit_log`
+table (RLS enabled). Additive, but **apply before deploying — the coaches
+list/PATCH routes select the new columns by name**, so the Command Center 500s
+without it. Also: create a recurring Price in Stripe and set
+`STRIPE_COACH_PRICE_ID`, register `checkout.session.completed` +
+`customer.subscription.updated` + `customer.subscription.deleted` on the
+existing webhook endpoint, and configure the Customer portal (Stripe Dashboard
+→ Settings → Billing) if the "Stripe billing portal" button will be used.
+Reversible via `057_coach_plans_admin_down.sql`.
 
 **`048_supervisor_bootstrap_and_signature_unique.sql` — APPLIED (staging + production, 2026-08-14).** (1) Promotes
 the founding coach (email jeff@jeffkholmes.com, else earliest-created) to
