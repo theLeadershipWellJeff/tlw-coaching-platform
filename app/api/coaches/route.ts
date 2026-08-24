@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { requireSupervisor, toErrorResponse } from '@/lib/api-handler'
+import { loadPortalStates } from '@/lib/admin/portal-status'
+import { logAdminAction } from '@/lib/admin/audit'
 
 export const runtime = 'nodejs'
 
@@ -40,7 +42,9 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from('coaches')
-    .select('id, name, email, role, created_at, timezone, google_refresh_token')
+    .select(
+      'id, name, email, role, created_at, timezone, google_refresh_token, plan, plan_note, subscription_status, stripe_subscription_id'
+    )
     .order('created_at', { ascending: true })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -109,8 +113,22 @@ export async function GET() {
     later(lastActive, row.coach_id, row.sent_at)
   }
 
+  // Portal adoption: which of each coach's clients have been invited to the
+  // Client Portal, and which have actually signed in. Shared clients count for
+  // every linked coach, mirroring the notes attribution below.
+  const allClientIdsForPortal = Object.keys(coachesByClient)
+  const portalStates = await loadPortalStates(supabase, allClientIdsForPortal)
+  const portalInvitedByCoach: Record<string, number> = {}
+  const portalActiveByCoach: Record<string, number> = {}
+  for (const [clientId, state] of Object.entries(portalStates)) {
+    for (const cid of coachesByClient[clientId] ?? []) {
+      if (state.invitedAt) bump(portalInvitedByCoach, cid)
+      if (state.lastSeenAt) bump(portalActiveByCoach, cid)
+    }
+  }
+
   // Notes are client-scoped (no coach_id) — attribute through coach_clients.
-  const allClientIds = Object.keys(coachesByClient)
+  const allClientIds = allClientIdsForPortal
   if (allClientIds.length > 0) {
     const { data: noteRows } = await supabase
       .from('notes')
@@ -133,6 +151,13 @@ export async function GET() {
     timezone: c.timezone,
     client_count: clientsByCoach[c.id] ?? 0,
     account_count: accountsByCoach[c.id] ?? 0,
+    // Command Center (migration 057): plan label + coach-subscription state.
+    plan: c.plan ?? 'beta',
+    plan_note: c.plan_note ?? null,
+    subscription_status: c.subscription_status ?? null,
+    has_subscription: !!c.stripe_subscription_id,
+    portal_invited_count: portalInvitedByCoach[c.id] ?? 0,
+    portal_active_count: portalActiveByCoach[c.id] ?? 0,
     // A coach row can be pre-created from the Add-coach modal; the refresh token
     // only exists once they've actually signed in with Google and consented.
     has_signed_in: !!c.google_refresh_token,
@@ -153,8 +178,9 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const supabase = getSupabaseAdmin()
+  let actor
   try {
-    await requireSupervisor(supabase)
+    actor = await requireSupervisor(supabase)
   } catch (e) {
     return toErrorResponse(e)
   }
@@ -171,7 +197,7 @@ export async function POST(req: NextRequest) {
   const { data, error } = await supabase
     .from('coaches')
     .insert({ name, email, role, timezone: '' } as any)
-    .select('id, name, email, role, created_at, timezone')
+    .select('id, name, email, role, created_at, timezone, plan, plan_note, subscription_status')
     .single()
 
   if (error) {
@@ -179,6 +205,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'A coach with that email already exists' }, { status: 409 })
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+
+  await logAdminAction(supabase, {
+    actorCoachId: actor.id,
+    action: 'coach_added',
+    targetCoachId: (data as any).id,
+    detail: { email, role },
+  })
 
   return NextResponse.json({ coach: data }, { status: 201 })
 }

@@ -380,6 +380,78 @@ export async function hostedInvoiceUrl(stripeInvoiceId: string): Promise<string 
   }
 }
 
+// ── Coach billing: platform subscription (migration 057) ─────────────────────
+//
+// Distinct from everything above (a coach billing THEIR clients): this is
+// theLeadershipWell billing a COACH for using the platform. One Stripe
+// subscription per coach, collected via hosted Checkout in `subscription`
+// mode — card entry never touches a TLW page. The recurring price lives in
+// Stripe (env STRIPE_COACH_PRICE_ID names it) so pricing changes are a
+// dashboard edit, not a deploy.
+
+/** The Stripe Price id for the coach platform subscription. */
+export function coachPriceId(): string {
+  const id = process.env.STRIPE_COACH_PRICE_ID
+  if (!id) throw new Error('STRIPE_COACH_PRICE_ID is not set — create a recurring Price in Stripe and set its id.')
+  return id
+}
+
+/**
+ * Get or create the Stripe customer for a COACH row. The caller persists the
+ * returned id back to coaches.stripe_customer_id.
+ */
+export async function getOrCreateCoachStripeCustomer(opts: {
+  stripeCustomerId: string | null
+  coachId: string
+  name: string
+  email: string
+}): Promise<string> {
+  const stripe = getStripe()
+  if (opts.stripeCustomerId) return opts.stripeCustomerId
+  const customer = await stripe.customers.create({
+    name: opts.name,
+    email: opts.email,
+    metadata: { source: 'tlw-coaching-platform', tlw_coach_id: opts.coachId },
+  })
+  return customer.id
+}
+
+/**
+ * Create a hosted Checkout session that starts the coach's subscription.
+ * tlw_coach_id rides on the session AND the subscription so the
+ * checkout.session.completed / customer.subscription.* webhooks can resolve
+ * the coach without a lookup.
+ */
+export async function createCoachSubscriptionCheckout(opts: {
+  customerId: string
+  coachId: string
+  successUrl: string
+  cancelUrl: string
+}): Promise<Stripe.Checkout.Session> {
+  const stripe = getStripe()
+  return stripe.checkout.sessions.create({
+    mode: 'subscription',
+    customer: opts.customerId,
+    line_items: [{ price: coachPriceId(), quantity: 1 }],
+    success_url: opts.successUrl,
+    cancel_url: opts.cancelUrl,
+    subscription_data: { metadata: { tlw_coach_id: opts.coachId } },
+    metadata: { tlw_coach_id: opts.coachId },
+  })
+}
+
+/**
+ * Stripe customer Billing Portal session — where a subscribed coach updates
+ * their card or cancels. Requires the portal to be configured once in the
+ * Stripe Dashboard (Settings → Billing → Customer portal).
+ */
+export async function createBillingPortalSession(
+  customerId: string,
+  returnUrl: string,
+): Promise<Stripe.BillingPortal.Session> {
+  return getStripe().billingPortal.sessions.create({ customer: customerId, return_url: returnUrl })
+}
+
 // ── Webhook signature verification ───────────────────────────────────────────
 
 export function constructWebhookEvent(

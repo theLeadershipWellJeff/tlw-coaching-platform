@@ -1,6 +1,14 @@
 'use client'
+/**
+ * Admin Command Center (supervisor-only). One place to see every coach on the
+ * platform — account state, usage, plan (beta/free/paying), coach-subscription
+ * billing — and to drill into each coach's clients: portal adoption, resend
+ * portal invites, clear lockouts. All data comes from the supervisor-gated
+ * /api/coaches* routes; a regular coach sees the access notice below.
+ */
 import { useEffect, useState } from 'react'
 import { PageHeader } from '@/app/components/layout/PageHeader'
+import { CoachClientsPanel } from './CoachClientsPanel'
 
 type CoachUsage = {
   transcript_count: number
@@ -21,6 +29,12 @@ type Coach = {
   timezone: string | null
   client_count: number
   account_count: number
+  plan: 'beta' | 'free' | 'paying'
+  plan_note: string | null
+  subscription_status: string | null
+  has_subscription: boolean
+  portal_invited_count: number
+  portal_active_count: number
   has_signed_in: boolean
   usage: CoachUsage
   is_me: boolean
@@ -62,6 +76,212 @@ const ROLE_STYLES: Record<string, string> = {
   supervisor: 'bg-tlw-navy-deep/10 text-tlw-navy-deep',
 }
 
+const PLAN_STYLES: Record<string, string> = {
+  beta: 'bg-violet-100 text-violet-700',
+  free: 'bg-tlw-canvas text-tlw-warm-gray',
+  paying: 'bg-emerald-100 text-emerald-700',
+}
+
+const PLANS = ['beta', 'free', 'paying'] as const
+
+// ── Firm pulse ────────────────────────────────────────────────────────────────
+
+function PulseStat({ value, label, sub }: { value: string; label: string; sub?: string }) {
+  return (
+    <div className="rounded-tlw-xl border border-tlw-warm-gray/15 bg-tlw-surface px-4 py-3">
+      <p className="text-[20px] font-semibold tabular-nums text-tlw-navy-deep">{value}</p>
+      <p className="text-[11px] font-medium uppercase tracking-wider text-tlw-warm-gray">{label}</p>
+      {sub && <p className="mt-0.5 text-[11px] text-tlw-warm-gray">{sub}</p>}
+    </div>
+  )
+}
+
+function FirmPulse({ coaches }: { coaches: Coach[] }) {
+  const open = coaches.filter((c) => c.has_signed_in).length
+  const pending = coaches.length - open
+  const clients = coaches.reduce((s, c) => s + c.client_count, 0)
+  const invited = coaches.reduce((s, c) => s + c.portal_invited_count, 0)
+  const active = coaches.reduce((s, c) => s + c.portal_active_count, 0)
+  const paying = coaches.filter((c) => c.plan === 'paying').length
+  const beta = coaches.filter((c) => c.plan === 'beta').length
+  const free = coaches.filter((c) => c.plan === 'free').length
+
+  return (
+    <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <PulseStat
+        value={String(coaches.length)}
+        label="Coaches"
+        sub={pending > 0 ? `${open} open · ${pending} awaiting sign-in` : 'all signed in'}
+      />
+      <PulseStat value={String(clients)} label="Clients" sub="across all coaches" />
+      <PulseStat
+        value={`${active}/${clients || 0}`}
+        label="In portal"
+        sub={`${invited} invited · ${active} active`}
+      />
+      <PulseStat
+        value={String(paying)}
+        label="Paying"
+        sub={`${beta} beta · ${free} free`}
+      />
+    </div>
+  )
+}
+
+// ── Plan chip + editor ────────────────────────────────────────────────────────
+
+function PlanChip({ coach, onUpdated }: { coach: Coach; onUpdated: (c: Coach) => void }) {
+  const [open, setOpen] = useState(false)
+  const [note, setNote] = useState(coach.plan_note ?? '')
+  const [saving, setSaving] = useState(false)
+
+  async function save(plan: Coach['plan']) {
+    setSaving(true)
+    const res = await fetch(`/api/coaches/${coach.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plan, plan_note: note }),
+    })
+    const d = await res.json().catch(() => ({}))
+    setSaving(false)
+    if (res.ok) {
+      onUpdated({ ...coach, plan: d.coach.plan, plan_note: d.coach.plan_note })
+      setOpen(false)
+    }
+  }
+
+  return (
+    <span className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        title={coach.plan_note ?? 'Set plan'}
+        className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${PLAN_STYLES[coach.plan] ?? PLAN_STYLES.free}`}
+      >
+        {coach.plan}
+      </button>
+      {open && (
+        <div className="absolute left-0 top-6 z-20 w-56 rounded-tlw-lg border border-tlw-warm-gray/25 bg-white p-3 shadow-lg">
+          <div className="flex gap-1.5">
+            {PLANS.map((p) => (
+              <button
+                key={p}
+                onClick={() => save(p)}
+                disabled={saving}
+                className={`flex-1 rounded-tlw-md border px-2 py-1 text-[11px] font-medium capitalize transition-colors disabled:opacity-50 ${
+                  coach.plan === p
+                    ? 'border-tlw-navy-deep bg-tlw-navy-deep text-white'
+                    : 'border-tlw-warm-gray/30 text-tlw-espresso hover:bg-tlw-canvas'
+                }`}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+          <input
+            type="text"
+            placeholder="Note (e.g. comped through Q4)"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') save(coach.plan) }}
+            className="mt-2 w-full rounded-tlw-md border border-tlw-warm-gray/30 bg-tlw-canvas px-2 py-1 text-[11px] text-tlw-espresso focus:outline-none"
+          />
+          <p className="mt-1.5 text-[10px] leading-snug text-tlw-warm-gray">
+            A live subscription sets this to paying automatically.
+          </p>
+        </div>
+      )}
+    </span>
+  )
+}
+
+// ── Billing actions ───────────────────────────────────────────────────────────
+
+function BillingActions({ coach }: { coach: Coach }) {
+  const [busy, setBusy] = useState(false)
+  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null)
+  const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null)
+
+  const live = coach.has_subscription &&
+    ['active', 'trialing', 'past_due'].includes(coach.subscription_status ?? '')
+
+  async function sendBillingLink() {
+    setBusy(true)
+    setNote(null)
+    const res = await fetch(`/api/coaches/${coach.id}/billing/checkout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: true }),
+    })
+    const d = await res.json().catch(() => ({}))
+    setBusy(false)
+    if (res.ok) {
+      setCheckoutUrl(d.url ?? null)
+      setNote({ ok: true, text: d.emailed ? `Billing link emailed to ${coach.email}` : 'Link created (email not sent)' })
+    } else {
+      setNote({ ok: false, text: d.error ?? 'Could not create billing link' })
+    }
+  }
+
+  async function openStripePortal() {
+    setBusy(true)
+    setNote(null)
+    const res = await fetch(`/api/coaches/${coach.id}/billing/portal`, { method: 'POST' })
+    const d = await res.json().catch(() => ({}))
+    setBusy(false)
+    if (res.ok && d.url) window.open(d.url, '_blank', 'noopener')
+    else setNote({ ok: false, text: d.error ?? 'Could not open the billing portal' })
+  }
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+      {coach.subscription_status && (
+        <span
+          className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
+            coach.subscription_status === 'active' || coach.subscription_status === 'trialing'
+              ? 'bg-emerald-100 text-emerald-700'
+              : coach.subscription_status === 'past_due'
+                ? 'bg-amber-100 text-amber-700'
+                : 'bg-tlw-canvas text-tlw-warm-gray'
+          }`}
+        >
+          Subscription · {coach.subscription_status.replace('_', ' ')}
+        </span>
+      )}
+      {!live && (
+        <button
+          onClick={sendBillingLink}
+          disabled={busy}
+          className="text-[11px] font-medium text-tlw-navy-deep hover:underline disabled:opacity-50"
+        >
+          {busy ? 'Working…' : 'Send billing link'}
+        </button>
+      )}
+      {coach.has_subscription && (
+        <button
+          onClick={openStripePortal}
+          disabled={busy}
+          className="text-[11px] font-medium text-tlw-navy-deep hover:underline disabled:opacity-50"
+        >
+          Stripe billing portal
+        </button>
+      )}
+      {note && (
+        <span className={`text-[11px] ${note.ok ? 'text-emerald-700' : 'text-red-600'}`}>{note.text}</span>
+      )}
+      {checkoutUrl && (
+        <button
+          onClick={() => navigator.clipboard?.writeText(checkoutUrl)}
+          className="text-[11px] text-tlw-warm-gray hover:underline"
+        >
+          Copy link
+        </button>
+      )}
+    </div>
+  )
+}
+
+// ── Add coach ─────────────────────────────────────────────────────────────────
+
 function AddCoachModal({ onAdded, onClose }: { onAdded: (c: Coach) => void; onClose: () => void }) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -84,6 +304,12 @@ function AddCoachModal({ onAdded, onClose }: { onAdded: (c: Coach) => void; onCl
       ...d.coach,
       client_count: 0,
       account_count: 0,
+      plan: d.coach.plan ?? 'beta',
+      plan_note: d.coach.plan_note ?? null,
+      subscription_status: null,
+      has_subscription: false,
+      portal_invited_count: 0,
+      portal_active_count: 0,
       has_signed_in: false,
       usage: EMPTY_USAGE,
       is_me: false,
@@ -158,12 +384,15 @@ function AddCoachModal({ onAdded, onClose }: { onAdded: (c: Coach) => void; onCl
   )
 }
 
+// ── Coach row ─────────────────────────────────────────────────────────────────
+
 function CoachRow({ coach, onUpdated, onRemoved }: {
   coach: Coach
   onUpdated: (c: Coach) => void
   onRemoved: (id: string) => void
 }) {
   const [editing, setEditing] = useState(false)
+  const [showClients, setShowClients] = useState(false)
   const [name, setName] = useState(coach.name)
   const [role, setRole] = useState<'coach' | 'supervisor'>(coach.role)
   const [saving, setSaving] = useState(false)
@@ -193,7 +422,7 @@ function CoachRow({ coach, onUpdated, onRemoved }: {
     <div className="px-5 py-4">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <p className="text-[14px] font-medium text-tlw-navy-deep truncate">{coach.name}</p>
             {coach.is_me && (
               <span className="shrink-0 rounded-full bg-tlw-orange/15 px-2 py-0.5 text-[10px] font-semibold text-tlw-orange">YOU</span>
@@ -201,6 +430,7 @@ function CoachRow({ coach, onUpdated, onRemoved }: {
             <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium capitalize ${ROLE_STYLES[coach.role] ?? ''}`}>
               {coach.role}
             </span>
+            <PlanChip coach={coach} onUpdated={onUpdated} />
             {!coach.has_signed_in && (
               <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
                 HASN&apos;T SIGNED IN YET
@@ -213,33 +443,44 @@ function CoachRow({ coach, onUpdated, onRemoved }: {
             {' · '}
             {coach.has_signed_in ? lastActiveLabel(coach.usage.last_active_at) : 'awaiting first sign-in'}
             {coach.timezone && ` · ${coach.timezone}`}
+            {coach.plan_note && ` · ${coach.plan_note}`}
           </p>
+          <BillingActions coach={coach} />
         </div>
-        {!coach.is_me && (
-          <div className="flex shrink-0 items-center gap-2">
-            <button onClick={() => { setEditing((o) => !o); setConfirmRemove(false) }} className="text-[11px] font-medium text-tlw-navy-deep hover:underline">
-              {editing ? 'Cancel' : 'Edit'}
-            </button>
-            {!confirmRemove ? (
-              <button onClick={() => setConfirmRemove(true)} className="text-[11px] text-tlw-warm-gray hover:text-red-600 hover:underline">
-                Remove
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            onClick={() => setShowClients((o) => !o)}
+            className="text-[11px] font-medium text-tlw-navy-deep hover:underline"
+          >
+            {showClients ? 'Hide clients' : `Clients (${coach.client_count})`}
+          </button>
+          {!coach.is_me && (
+            <>
+              <button onClick={() => { setEditing((o) => !o); setConfirmRemove(false) }} className="text-[11px] font-medium text-tlw-navy-deep hover:underline">
+                {editing ? 'Cancel' : 'Edit'}
               </button>
-            ) : (
-              <span className="flex items-center gap-1">
-                <button onClick={remove} disabled={removing} className="text-[11px] font-medium text-red-600 hover:underline disabled:opacity-50">
-                  {removing ? 'Removing…' : 'Confirm'}
+              {!confirmRemove ? (
+                <button onClick={() => setConfirmRemove(true)} className="text-[11px] text-tlw-warm-gray hover:text-red-600 hover:underline">
+                  Remove
                 </button>
-                <button onClick={() => setConfirmRemove(false)} className="text-[11px] text-tlw-warm-gray hover:underline">cancel</button>
-              </span>
-            )}
-          </div>
-        )}
+              ) : (
+                <span className="flex items-center gap-1">
+                  <button onClick={remove} disabled={removing} className="text-[11px] font-medium text-red-600 hover:underline disabled:opacity-50">
+                    {removing ? 'Removing…' : 'Confirm'}
+                  </button>
+                  <button onClick={() => setConfirmRemove(false)} className="text-[11px] text-tlw-warm-gray hover:underline">cancel</button>
+                </span>
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       {/* Usage rollup — how much this coach is actually using the platform. */}
-      <div className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-8">
+      <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-9">
         {[
           { label: 'Clients', value: coach.client_count },
+          { label: 'Portal', value: `${coach.portal_active_count}/${coach.client_count}` },
           { label: 'Accounts', value: coach.account_count },
           { label: 'Transcripts', value: coach.usage.transcript_count },
           { label: 'Scorecards', value: coach.usage.report_count },
@@ -254,6 +495,8 @@ function CoachRow({ coach, onUpdated, onRemoved }: {
           </div>
         ))}
       </div>
+
+      {showClients && <CoachClientsPanel coachId={coach.id} />}
 
       {editing && (
         <div className="mt-3 space-y-3 rounded-tlw-lg border border-tlw-warm-gray/20 bg-tlw-canvas p-4">
@@ -296,7 +539,9 @@ function CoachRow({ coach, onUpdated, onRemoved }: {
   )
 }
 
-export default function CoachesPage() {
+// ── Page ──────────────────────────────────────────────────────────────────────
+
+export default function CommandCenterPage() {
   const [coaches, setCoaches] = useState<Coach[]>([])
   const [loading, setLoading] = useState(true)
   const [forbidden, setForbidden] = useState(false)
@@ -313,6 +558,14 @@ export default function CoachesPage() {
       .finally(() => setLoading(false))
   }, [])
 
+  // A returning ?billing=success from Stripe Checkout — the webhook does the
+  // real state change; this is just a friendly banner. Read in an effect so
+  // server and first client render agree (no hydration mismatch).
+  const [billingReturn, setBillingReturn] = useState<string | null>(null)
+  useEffect(() => {
+    setBillingReturn(new URLSearchParams(window.location.search).get('billing'))
+  }, [])
+
   // Coach management is supervisor-only (the API enforces it) — show a clear
   // notice instead of a misleading empty roster + an Add button that would fail.
   if (forbidden) {
@@ -321,13 +574,13 @@ export default function CoachesPage() {
         <PageHeader
           backHref="/business-center/accounts"
           backLabel="Accounts"
-          title="My Team"
-          subtitle="Coaches working under theLeadershipWell"
+          title="Command Center"
+          subtitle="Coaches, plans, and client portal adoption across the platform"
         />
         <div className="rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface px-6 py-10 text-center">
           <p className="text-[14px] font-medium text-tlw-navy-deep">Supervisor access required</p>
           <p className="mt-1 text-[13px] text-tlw-warm-gray">
-            Managing the coach roster is limited to supervisors. Ask your practice lead if you need access.
+            The Command Center is limited to supervisors. Ask your practice lead if you need access.
           </p>
         </div>
       </>
@@ -342,8 +595,8 @@ export default function CoachesPage() {
       <PageHeader
         backHref="/business-center/accounts"
         backLabel="Accounts"
-        title="My Team"
-        subtitle="Coaches working under theLeadershipWell"
+        title="Command Center"
+        subtitle="Coaches, plans, and client portal adoption across the platform"
         actions={
           <button
             onClick={() => setShowAdd(true)}
@@ -354,12 +607,19 @@ export default function CoachesPage() {
         }
       />
 
+      {billingReturn === 'success' && (
+        <div className="mb-6 rounded-tlw-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[13px] text-emerald-800">
+          Billing setup completed — the subscription will show here as soon as Stripe confirms it.
+        </div>
+      )}
+
       {loading && <div className="h-32 animate-pulse rounded-tlw-2xl bg-tlw-surface/70" />}
 
       {!loading && (
         <div className="space-y-8">
+          <FirmPulse coaches={coaches} />
 
-          {/* My coaches */}
+          {/* Coaches */}
           <section>
             <h2 className="mb-3 text-[13px] font-semibold uppercase tracking-wider text-tlw-warm-gray">
               Coaches on my team {myCoaches.length > 0 && `(${myCoaches.length})`}
