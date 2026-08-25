@@ -1,5 +1,6 @@
 'use client'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { TimeWheelInput } from '@/app/components/shared/TimeWheelInput'
 import { UpcomingSessions } from './UpcomingSessions'
 
 const DURATIONS = [30, 45, 60, 90]
@@ -139,15 +140,10 @@ export function ScheduleCard({
                 className="rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-surface px-2.5 py-1.5 text-[14px] text-tlw-espresso outline-none focus:border-tlw-signal-orange"
               />
             </label>
-            <label className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1">
               <span className="text-[11px] font-medium uppercase tracking-[1px] text-tlw-warm-gray">Time</span>
-              <input
-                type="time"
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-                className="rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-surface px-2.5 py-1.5 text-[14px] text-tlw-espresso outline-none focus:border-tlw-signal-orange"
-              />
-            </label>
+              <TimeWheelInput value={time} onChange={setTime} />
+            </div>
             <label className="flex flex-col gap-1">
               <span className="text-[11px] font-medium uppercase tracking-[1px] text-tlw-warm-gray">Length</span>
               <select
@@ -246,8 +242,8 @@ export function ScheduleCard({
           )}
 
           <p className="mt-3 text-[11px] text-tlw-warm-gray">
-            Times you pick are in your coaching timezone. We&apos;ll add the session to your calendar and email a
-            confirmation.
+            Type or scroll the time — AM/PM follows the hour as you scroll. Times you pick are in your coaching
+            timezone. We&apos;ll add the session to your calendar and email a confirmation.
           </p>
           {error && <p className="mt-2 text-[13px] text-tlw-signal-orange">{error}</p>}
         </div>
