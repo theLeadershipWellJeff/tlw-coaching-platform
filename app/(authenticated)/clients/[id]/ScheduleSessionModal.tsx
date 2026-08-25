@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { Modal } from '@/app/components/shared/Modal'
+import { TimeWheelInput } from '@/app/components/shared/TimeWheelInput'
 
 const DURATIONS = [30, 45, 60, 90]
 
@@ -67,15 +68,10 @@ export function ScheduleSessionModal({
                 className="rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-surface px-2.5 py-1.5 text-[14px] text-tlw-espresso outline-none focus:border-tlw-signal-orange"
               />
             </label>
-            <label className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1">
               <span className="text-[11px] font-medium uppercase tracking-[1px] text-tlw-warm-gray">Time</span>
-              <input
-                type="time"
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-                className="rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-surface px-2.5 py-1.5 text-[14px] text-tlw-espresso outline-none focus:border-tlw-signal-orange"
-              />
-            </label>
+              <TimeWheelInput value={time} onChange={setTime} />
+            </div>
             <label className="flex flex-col gap-1">
               <span className="text-[11px] font-medium uppercase tracking-[1px] text-tlw-warm-gray">Length</span>
               <select
