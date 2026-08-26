@@ -187,7 +187,7 @@ export function NotesPanel({ clientId, autoNew = false }: { clientId: string; au
           <PlanSessionCard clientId={clientId} clientName={client?.name || ''} />
 
           {/* Most recent session notes (5), with the rest a click away. */}
-          <RecentNotes notes={notes} activeId={activeId} onSelect={setActiveId} />
+          <RecentNotes clientId={clientId} notes={notes} activeId={activeId} onSelect={setActiveId} />
 
           {/* The prep sheet we send out, alongside the notes. */}
           <PrepSheetCard clientId={clientId} />
@@ -197,11 +197,30 @@ export function NotesPanel({ clientId, autoNew = false }: { clientId: string; au
   )
 }
 
+// Open a prior note read-only in its own small browser window (not a tab), so
+// the coach can drag it beside the note they're writing. The window is named
+// per note — clicking again refocuses the existing window instead of stacking
+// duplicates. Falls back to a tab where the browser refuses popups.
+function openNoteWindow(clientId: string, noteId: string) {
+  const width = 560
+  const height = Math.min(760, window.screen.availHeight - 80)
+  // Start it toward the right edge of the current window, clear of the editor.
+  const left = Math.max(0, window.screenX + window.outerWidth - width - 24)
+  const top = Math.max(0, window.screenY + 60)
+  window.open(
+    `/note-window/${clientId}/${noteId}`,
+    `tlw-note-${noteId}`,
+    `popup=yes,width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+  )
+}
+
 function RecentNotes({
+  clientId,
   notes,
   activeId,
   onSelect,
 }: {
+  clientId: string
   notes: Note[]
   activeId: string | null
   onSelect: (id: string) => void
@@ -226,30 +245,46 @@ function RecentNotes({
       </div>
       <div className="divide-y divide-tlw-warm-gray/10">
         {visible.map((n) => (
-          <button
+          <div
             key={n.id}
-            onClick={() => onSelect(n.id)}
-            className={`flex w-full items-center justify-between gap-3 px-1 py-2 text-left transition-colors hover:bg-tlw-canvas/50 ${
+            className={`flex items-center gap-2 px-1 transition-colors hover:bg-tlw-canvas/50 ${
               n.id === activeId ? 'bg-tlw-canvas/60' : ''
             }`}
           >
-            <span className="flex min-w-0 items-center gap-1.5">
-              <span className="truncate text-[13px] text-tlw-navy-deep">{n.title?.trim() || 'Untitled note'}</span>
-              {/* Sent notes are the ones that will surface in the client portal. */}
-              {n.sent_to_client_at && (
-                <span
-                  title="Sent to the client"
-                  className="shrink-0 text-[11px] leading-none text-tlw-warm-gray"
-                  aria-label="Sent to client"
-                >
-                  📝
-                </span>
-              )}
-            </span>
-            <span className="shrink-0 text-[11px] text-tlw-warm-gray">{formatDate(n.session_date)}</span>
-          </button>
+            <button
+              onClick={() => onSelect(n.id)}
+              className="flex min-w-0 flex-1 items-center justify-between gap-3 py-2 text-left"
+              title="Edit this note here"
+            >
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span className="truncate text-[13px] text-tlw-navy-deep">{n.title?.trim() || 'Untitled note'}</span>
+                {/* Sent notes are the ones that will surface in the client portal. */}
+                {n.sent_to_client_at && (
+                  <span
+                    title="Sent to the client"
+                    className="shrink-0 text-[11px] leading-none text-tlw-warm-gray"
+                    aria-label="Sent to client"
+                  >
+                    📝
+                  </span>
+                )}
+              </span>
+              <span className="shrink-0 text-[11px] text-tlw-warm-gray">{formatDate(n.session_date)}</span>
+            </button>
+            <button
+              onClick={() => openNoteWindow(clientId, n.id)}
+              title="Open in a separate window — drag it beside the note you're writing"
+              aria-label={`Open "${n.title?.trim() || 'Untitled note'}" in a separate window`}
+              className="shrink-0 rounded-tlw-md border border-tlw-warm-gray/25 px-1.5 py-0.5 text-[11px] font-medium text-tlw-warm-gray transition-colors hover:border-tlw-signal-orange hover:text-tlw-signal-orange"
+            >
+              ↗
+            </button>
+          </div>
         ))}
       </div>
+      <p className="mt-2 text-[11px] text-tlw-warm-gray/70">
+        ↗ opens a note in its own movable window, so you can read it while you write.
+      </p>
     </div>
   )
 }
