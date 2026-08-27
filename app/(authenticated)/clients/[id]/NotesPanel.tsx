@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Client, Note } from '@/lib/supabase/types'
 import { RichNoteEditor } from './RichNoteEditor'
+import { FloatingNoteWindow } from './FloatingNoteWindow'
 import { KeyInfoCard } from './KeyInfoCard'
 import { CoachingMapCard } from './CoachingMapCard'
 import { EngagementGoalsCard } from './EngagementGoalsCard'
@@ -62,7 +63,18 @@ export function NotesPanel({ clientId, autoNew = false }: { clientId: string; au
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [activeId, setActiveId] = useState<string | null>(null)
+  // Past notes open in floating windows (ordered back → front; last = on top).
+  const [floatingIds, setFloatingIds] = useState<string[]>([])
   const autoNewDone = useRef(false)
+
+  // Open a note in a floating window (or bring its window to the front).
+  function openFloating(id: string) {
+    setFloatingIds((prev) => [...prev.filter((f) => f !== id), id])
+  }
+
+  function closeFloating(id: string) {
+    setFloatingIds((prev) => prev.filter((f) => f !== id))
+  }
 
   // The session-notes panel surfaces persistent, per-client context (key info,
   // coaching map, engagement goals) alongside the live capture, so load the
@@ -133,6 +145,7 @@ export function NotesPanel({ clientId, autoNew = false }: { clientId: string; au
   async function onDeleted(id: string) {
     setNotes((prev) => prev.filter((n) => n.id !== id))
     setActiveId((prev) => (prev === id ? null : prev))
+    closeFloating(id)
   }
 
   const active = notes.find((n) => n.id === activeId) || null
@@ -186,11 +199,42 @@ export function NotesPanel({ clientId, autoNew = false }: { clientId: string; au
           {/* Plan next session — same prep card as the workspace action bar. */}
           <PlanSessionCard clientId={clientId} clientName={client?.name || ''} />
 
-          {/* Most recent session notes (5), with the rest a click away. */}
-          <RecentNotes notes={notes} activeId={activeId} onSelect={setActiveId} />
+          {/* Most recent session notes (5), with the rest a click away. Clicking
+              a note opens it in a floating window so it can sit beside the note
+              being written; the Edit button loads it into the editor instead. */}
+          <RecentNotes
+            notes={notes}
+            activeId={activeId}
+            onOpen={openFloating}
+            onEdit={(id) => {
+              setActiveId(id)
+              closeFloating(id)
+            }}
+          />
 
           {/* The prep sheet we send out, alongside the notes. */}
           <PrepSheetCard clientId={clientId} />
+
+          {/* Floating read-only windows over the workspace. */}
+          {floatingIds.map((id, i) => {
+            const n = notes.find((note) => note.id === id)
+            if (!n) return null
+            return (
+              <FloatingNoteWindow
+                key={id}
+                note={n}
+                clientId={clientId}
+                stackIndex={i}
+                zIndex={40 + i}
+                onFocus={() => openFloating(id)}
+                onEdit={() => {
+                  setActiveId(id)
+                  closeFloating(id)
+                }}
+                onClose={() => closeFloating(id)}
+              />
+            )
+          })}
         </div>
       )}
     </div>
@@ -200,11 +244,13 @@ export function NotesPanel({ clientId, autoNew = false }: { clientId: string; au
 function RecentNotes({
   notes,
   activeId,
-  onSelect,
+  onOpen,
+  onEdit,
 }: {
   notes: Note[]
   activeId: string | null
-  onSelect: (id: string) => void
+  onOpen: (id: string) => void
+  onEdit: (id: string) => void
 }) {
   const [showAll, setShowAll] = useState(false)
   const visible = showAll ? notes : notes.slice(0, 5)
@@ -226,30 +272,45 @@ function RecentNotes({
       </div>
       <div className="divide-y divide-tlw-warm-gray/10">
         {visible.map((n) => (
-          <button
+          <div
             key={n.id}
-            onClick={() => onSelect(n.id)}
-            className={`flex w-full items-center justify-between gap-3 px-1 py-2 text-left transition-colors hover:bg-tlw-canvas/50 ${
+            className={`group flex w-full items-center gap-3 px-1 py-2 transition-colors hover:bg-tlw-canvas/50 ${
               n.id === activeId ? 'bg-tlw-canvas/60' : ''
             }`}
           >
-            <span className="flex min-w-0 items-center gap-1.5">
-              <span className="truncate text-[13px] text-tlw-navy-deep">{n.title?.trim() || 'Untitled note'}</span>
-              {/* Sent notes are the ones that will surface in the client portal. */}
-              {n.sent_to_client_at && (
-                <span
-                  title="Sent to the client"
-                  className="shrink-0 text-[11px] leading-none text-tlw-warm-gray"
-                  aria-label="Sent to client"
-                >
-                  📝
-                </span>
-              )}
-            </span>
-            <span className="shrink-0 text-[11px] text-tlw-warm-gray">{formatDate(n.session_date)}</span>
-          </button>
+            <button
+              onClick={() => onOpen(n.id)}
+              title="Open in a floating window"
+              className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
+            >
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span className="truncate text-[13px] text-tlw-navy-deep">{n.title?.trim() || 'Untitled note'}</span>
+                {/* Sent notes are the ones that will surface in the client portal. */}
+                {n.sent_to_client_at && (
+                  <span
+                    title="Sent to the client"
+                    className="shrink-0 text-[11px] leading-none text-tlw-warm-gray"
+                    aria-label="Sent to client"
+                  >
+                    📝
+                  </span>
+                )}
+              </span>
+              <span className="shrink-0 text-[11px] text-tlw-warm-gray">{formatDate(n.session_date)}</span>
+            </button>
+            <button
+              onClick={() => onEdit(n.id)}
+              title="Open this note in the editor"
+              className="shrink-0 rounded-tlw-md border border-tlw-warm-gray/25 px-2 py-0.5 text-[11px] font-medium text-tlw-espresso opacity-0 transition-opacity hover:border-tlw-warm-gray/50 focus:opacity-100 group-hover:opacity-100"
+            >
+              Edit
+            </button>
+          </div>
         ))}
       </div>
+      <p className="mt-2 text-[11px] text-tlw-warm-gray/70">
+        Click a note to open it in a movable window beside the one you&apos;re writing.
+      </p>
     </div>
   )
 }

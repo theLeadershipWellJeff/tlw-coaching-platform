@@ -409,6 +409,20 @@ New note titles default to `"<client name> · <date>"` (`NotesPanel#newNote`).
 The editor toolbar has a **Templates** dropdown (`RichNoteEditor`, gated by
 `enableTemplates`) that inserts a saved Library template at the cursor.
 
+**Floating note windows (`FloatingNoteWindow.tsx`).** Clicking a note in the
+"Last session notes" list opens it read-only in a **draggable, resizable
+floating window** (portaled to `document.body`, staggered when several are
+open, click brings to front) so the coach can read a past note beside the note
+they're writing; a per-row hover **Edit** button (and the window's Edit button)
+loads the note into the editor instead — row click no longer switches the
+editor. Each window's **⧉ pop-out** button reopens the note via `window.open`
+as a real OS-level browser window (movable anywhere on the desktop, e.g. next
+to Zoom) rendering the chromeless page `app/popout/notes/[id]/[noteId]` —
+deliberately outside `(authenticated)` so it skips the app shell, but guarded
+by the same `requireClientCoach` tenant gate (static page `<title>` only, so an
+unauthenticated hit leaks nothing). Deleting a note closes its window. No
+migration, no new API route.
+
 **Custom Library labels (migration 019).** A coach can rename the fixed Library
 home nodes (the Templates / PDF Resources / Coaching Agreement tiles) and the
 virtual **Unfiled** bucket via an inline pencil on each (`LibrarySpace#HomeNode` /
