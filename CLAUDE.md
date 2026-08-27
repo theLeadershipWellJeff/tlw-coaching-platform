@@ -350,8 +350,20 @@ Plaud" picker (`/api/drive/transcripts` + `/api/clients/[id]/import-transcripts`
 and `lib/drive.ts` were removed; the Zapier ingest webhook and its Drive archive
 are unaffected).
 
-**Plan next session (`PlanSessionModal`).** An action-bar button (orange, first
-in the bar in `ClientDetail`) opens a prep card **over** the workspace. On open it
+**Plan next session (floating window — `app/components/plan/`).** An action-bar
+button (orange, first in the bar in `ClientDetail`) and the notes-page
+`PlanSessionCard` open the prep brief in a **movable, resizable floating
+window** (shared chrome `app/components/shared/FloatingWindow.tsx`, same as the
+floating note windows). `PlanSessionWindowProvider` mounts **in the
+`(authenticated)` layout**, above the pages, so an open plan window (and its
+already-generated content) **survives navigating** from the client workspace
+into the session notes editor; one window per client, click brings to front.
+Its ⧉ button pops the brief out via `window.open` to the chromeless
+`app/popout/plan/[id]` page — a real OS-level window movable anywhere on the
+desktop (auth = the plan-session API's own `requireClientCoach`; an
+unauthorized hit only ever sees the error state). `PlanSessionContent.tsx`
+holds the shared body + `usePlanSession` fetch hook (the old
+`PlanSessionModal` is deleted). On open it
 POSTs `/api/clients/[id]/plan-session`, which pulls the client's goals, still-open
 actions, recent `INSIGHT:` lines, and — surfaced **at the front** — any
 `NEXT TIME` / `NEXT SESSION` flags left in prior notes (parsed by
