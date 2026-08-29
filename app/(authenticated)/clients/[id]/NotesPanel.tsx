@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Client, Note } from '@/lib/supabase/types'
 import { RichNoteEditor } from './RichNoteEditor'
-import { FloatingNoteWindow } from './FloatingNoteWindow'
+import { FloatingNoteWindow, openNotePopout } from './FloatingNoteWindow'
 import { KeyInfoCard } from './KeyInfoCard'
 import { CoachingMapCard } from './CoachingMapCard'
 import { EngagementGoalsCard } from './EngagementGoalsCard'
@@ -201,13 +201,18 @@ export function NotesPanel({ clientId, autoNew = false }: { clientId: string; au
 
           {/* Most recent session notes (5), with the rest a click away. Clicking
               a note opens it in a floating window so it can sit beside the note
-              being written; the Edit button loads it into the editor instead. */}
+              being written; the Edit button loads it into the editor instead,
+              and ⧉ pops it straight out to a separate browser window. */}
           <RecentNotes
             notes={notes}
             activeId={activeId}
             onOpen={openFloating}
             onEdit={(id) => {
               setActiveId(id)
+              closeFloating(id)
+            }}
+            onPopOut={(id) => {
+              openNotePopout(clientId, id)
               closeFloating(id)
             }}
           />
@@ -246,11 +251,13 @@ function RecentNotes({
   activeId,
   onOpen,
   onEdit,
+  onPopOut,
 }: {
   notes: Note[]
   activeId: string | null
   onOpen: (id: string) => void
   onEdit: (id: string) => void
+  onPopOut: (id: string) => void
 }) {
   const [showAll, setShowAll] = useState(false)
   const visible = showAll ? notes : notes.slice(0, 5)
@@ -305,11 +312,20 @@ function RecentNotes({
             >
               Edit
             </button>
+            <button
+              onClick={() => onPopOut(n.id)}
+              title="Open in its own browser window (move it anywhere on your desktop)"
+              aria-label={`Open "${n.title?.trim() || 'Untitled note'}" in a separate window`}
+              className="shrink-0 rounded-tlw-md px-1.5 py-0.5 text-[13px] leading-none text-tlw-warm-gray opacity-0 transition-opacity hover:text-tlw-espresso focus:opacity-100 group-hover:opacity-100"
+            >
+              ⧉
+            </button>
           </div>
         ))}
       </div>
       <p className="mt-2 text-[11px] text-tlw-warm-gray/70">
-        Click a note to open it in a movable window beside the one you&apos;re writing.
+        Click a note to open it in a movable window beside the one you&apos;re writing — or ⧉ to
+        pop it out to its own browser window.
       </p>
     </div>
   )

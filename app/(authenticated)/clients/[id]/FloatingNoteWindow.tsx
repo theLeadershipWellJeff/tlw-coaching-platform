@@ -9,6 +9,18 @@ import { FloatingWindow } from '@/app/components/shared/FloatingWindow'
 
 const DEFAULT_W = 440
 
+// Open a note as a real OS-level browser popup — movable anywhere on the
+// desktop, next to Zoom. Named per note so re-opening refocuses the existing
+// window instead of stacking duplicates. Shared with the notes list's ⧉
+// button, which pops a note out directly without the floating window first.
+export function openNotePopout(clientId: string, noteId: string) {
+  window.open(
+    `/popout/notes/${clientId}/${noteId}`,
+    `tlw-note-${noteId}`,
+    `width=${DEFAULT_W + 80},height=640,left=120,top=120`
+  )
+}
+
 function formatDate(d: string): string {
   const [y, m, day] = d.split('-').map(Number)
   return new Date(y, m - 1, day).toLocaleDateString('en-US', {
@@ -38,11 +50,7 @@ export function FloatingNoteWindow({
 }) {
   // A real OS-level window — movable anywhere on the desktop, next to Zoom.
   function popOut() {
-    window.open(
-      `/popout/notes/${clientId}/${note.id}`,
-      `tlw-note-${note.id}`,
-      `width=${DEFAULT_W + 80},height=640,left=120,top=120`
-    )
+    openNotePopout(clientId, note.id)
     onClose()
   }
 
