@@ -42,7 +42,7 @@ export function TimeWheelInput({ value, onChange }: { value: string; onChange: (
     commitTimer.current = null
   }
 
-  const base = () => parsed ?? nextHalfHour()
+  const base = () => parsed ?? topOfHour()
 
   function commitHour(h12: number) {
     const b = base()
@@ -61,7 +61,7 @@ export function TimeWheelInput({ value, onChange }: { value: string; onChange: (
     (seg: Seg, dir: 1 | -1) => {
       if (!parsed) {
         // First spin on an empty picker lands on a sensible starting point.
-        const b = nextHalfHour()
+        const b = topOfHour()
         set(b.h, b.m)
         return
       }
@@ -288,7 +288,7 @@ export function TimeWheelInput({ value, onChange }: { value: string; onChange: (
         aria-label="AM or PM"
         aria-valuetext={meridiemText}
         onKeyDown={handleKeyDown('meridiem')}
-        onClick={() => (parsed ? setMeridiem(parsed.h < 12) : set(nextHalfHour().h, nextHalfHour().m))}
+        onClick={() => (parsed ? setMeridiem(parsed.h < 12) : set(topOfHour().h, topOfHour().m))}
         className={`${segClass} ml-1 cursor-pointer text-[12px] font-medium text-tlw-warm-gray focus:text-tlw-espresso`}
       >
         {meridiemText}
@@ -310,10 +310,22 @@ function formatValue(h: number, m: number) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
 }
 
-// An empty picker's first interaction starts at the next half-hour from now
-// (the coach's browser clock), not midnight.
-function nextHalfHour(): { h: number; m: number } {
-  const now = new Date()
-  if (now.getMinutes() < 30) return { h: now.getHours(), m: 30 }
-  return { h: (now.getHours() + 1) % 24, m: 0 }
+// An empty picker's first interaction starts at the top of the current hour
+// (the coach's browser clock) — sessions start on the hour, not midnight or
+// the half-hour.
+function topOfHour(): { h: number; m: number } {
+  return { h: new Date().getHours(), m: 0 }
+}
+
+/**
+ * Default slot for the schedule forms: two weeks out from now — the same
+ * weekday, at the top of the current hour. The next session is typically
+ * booked from inside the current one, so "same day and time in two weeks"
+ * is the likeliest pick; the coach just adjusts from there.
+ */
+export function defaultScheduleSlot(): { date: string; time: string } {
+  const d = new Date()
+  d.setDate(d.getDate() + 14)
+  const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return { date, time: formatValue(d.getHours(), 0) }
 }

@@ -1,6 +1,6 @@
 'use client'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { TimeWheelInput } from '@/app/components/shared/TimeWheelInput'
+import { TimeWheelInput, defaultScheduleSlot } from '@/app/components/shared/TimeWheelInput'
 import { UpcomingSessions } from './UpcomingSessions'
 
 const DURATIONS = [30, 45, 60, 90]
@@ -120,7 +120,15 @@ export function ScheduleCard({
         <p className="text-[11px] font-medium uppercase tracking-[2px] text-tlw-warm-gray">Sessions</p>
         {!open && (
           <button
-            onClick={() => setOpen(true)}
+            onClick={() => {
+              // Prefill the likeliest slot: same day & time two weeks out,
+              // top of the hour. Only when the fields aren't already set, so
+              // reopening after Cancel keeps an in-progress pick.
+              const slot = defaultScheduleSlot()
+              if (!date) setDate(slot.date)
+              if (!time) setTime(slot.time)
+              setOpen(true)
+            }}
             className="rounded-tlw-lg bg-tlw-navy-rich px-3 py-1.5 text-[12px] font-medium text-tlw-cream transition-opacity hover:opacity-90"
           >
             + Schedule next session
