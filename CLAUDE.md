@@ -350,8 +350,20 @@ Plaud" picker (`/api/drive/transcripts` + `/api/clients/[id]/import-transcripts`
 and `lib/drive.ts` were removed; the Zapier ingest webhook and its Drive archive
 are unaffected).
 
-**Plan next session (`PlanSessionModal`).** An action-bar button (orange, first
-in the bar in `ClientDetail`) opens a prep card **over** the workspace. On open it
+**Plan next session (floating window — `app/components/plan/`).** An action-bar
+button (orange, first in the bar in `ClientDetail`) and the notes-page
+`PlanSessionCard` open the prep brief in a **movable, resizable floating
+window** (shared chrome `app/components/shared/FloatingWindow.tsx`, same as the
+floating note windows). `PlanSessionWindowProvider` mounts **in the
+`(authenticated)` layout**, above the pages, so an open plan window (and its
+already-generated content) **survives navigating** from the client workspace
+into the session notes editor; one window per client, click brings to front.
+Its ⧉ button pops the brief out via `window.open` to the chromeless
+`app/popout/plan/[id]` page — a real OS-level window movable anywhere on the
+desktop (auth = the plan-session API's own `requireClientCoach`; an
+unauthorized hit only ever sees the error state). `PlanSessionContent.tsx`
+holds the shared body + `usePlanSession` fetch hook (the old
+`PlanSessionModal` is deleted). On open it
 POSTs `/api/clients/[id]/plan-session`, which pulls the client's goals, still-open
 actions, recent `INSIGHT:` lines, and — surfaced **at the front** — any
 `NEXT TIME` / `NEXT SESSION` flags left in prior notes (parsed by
@@ -408,6 +420,20 @@ persists it.
 New note titles default to `"<client name> · <date>"` (`NotesPanel#newNote`).
 The editor toolbar has a **Templates** dropdown (`RichNoteEditor`, gated by
 `enableTemplates`) that inserts a saved Library template at the cursor.
+
+**Floating note windows (`FloatingNoteWindow.tsx`).** Clicking a note in the
+"Last session notes" list opens it read-only in a **draggable, resizable
+floating window** (portaled to `document.body`, staggered when several are
+open, click brings to front) so the coach can read a past note beside the note
+they're writing; a per-row hover **Edit** button (and the window's Edit button)
+loads the note into the editor instead — row click no longer switches the
+editor. Each window's **⧉ pop-out** button reopens the note via `window.open`
+as a real OS-level browser window (movable anywhere on the desktop, e.g. next
+to Zoom) rendering the chromeless page `app/popout/notes/[id]/[noteId]` —
+deliberately outside `(authenticated)` so it skips the app shell, but guarded
+by the same `requireClientCoach` tenant gate (static page `<title>` only, so an
+unauthenticated hit leaks nothing). Deleting a note closes its window. No
+migration, no new API route.
 
 **Custom Library labels (migration 019).** A coach can rename the fixed Library
 home nodes (the Templates / PDF Resources / Coaching Agreement tiles) and the
@@ -1144,6 +1170,34 @@ supervisor's one view over every coach on the platform. All of it is gated by
   (`lib/admin/audit.ts`, append-only, best-effort so a missing table never
   blocks the action).
 
+### Coach billing go-live checklist — ⚠️ NOT DONE (deliberately deferred)
+
+The code + schema (057) are deployed, but Jeff is bringing coach billing online
+later. Until every step below is done, "Send billing link" fails with a clear
+error naming `STRIPE_COACH_PRICE_ID`, plan chips stay hand-set, and nothing can
+charge a coach. **Do these in the live Stripe account when ready:**
+
+1. **Create the subscription Price** — Stripe Dashboard → Products → Add
+   product (e.g. "TLW Coaching Platform — Monthly") with a **recurring** price.
+   Copy the `price_…` id → set `STRIPE_COACH_PRICE_ID` in Vercel env vars →
+   redeploy (env changes only take effect on the next deploy).
+2. **Register three webhook events** on the existing endpoint ("TLW Strip
+   Connection", the Vercel URL): `checkout.session.completed`,
+   `customer.subscription.updated`, `customer.subscription.deleted`. Same
+   endpoint, same signing secret — nothing else changes.
+3. **Configure the Customer portal once** — Stripe Dashboard → Settings →
+   Billing → Customer portal → save the default configuration. This is what
+   the Command Center's "Stripe billing portal" button opens (card updates,
+   invoice history, cancel).
+4. **Verify end-to-end** — Command Center → a test coach row → "Send billing
+   link" → complete checkout with a real card (or a 100%-off coupon) → confirm
+   the row shows "Subscription · active" and the plan chip flips to `paying`
+   on its own; then cancel from the billing portal and confirm the plan drops
+   to `free`.
+
+(053 + 054 are applied as of 2026-08-24, so the client drill-down shows full
+portal state — last-seen, lockouts, and portal-unlock all live.)
+
 ## Security & pipeline hardening (absorbed from PRs #45/#55)
 
 - **Tenant isolation on sibling routes.** `/api/notes` (CA proxy) now requires a
@@ -1495,7 +1549,12 @@ units with a 1-hour minimum, rounding up once past 15 min into a half hour
 (`lib/billing.ts`). Past-week revenue uses each note's logged `duration_minutes`;
 the projection uses the scheduled calendar-event length.
 
-**Pending — apply in Supabase:** `014_note_duration.sql`,
+**Migration status note (2026-08-24): Jeff confirmed ALL migrations through
+057 are applied in production.** The "pending" language below and in older
+per-migration entries is historical — kept for the apply-order caveats it
+records, not as a live to-do list.
+
+**Pending — apply in Supabase (historical):** `014_note_duration.sql`,
 `015_coach_clients.sql`, `016_appointments.sql`, and
 `017_email_signatures_communications.sql`, `018_agreement_system.sql`,
 `019_library_labels.sql`, `020_scheduling_settings.sql` (adds the two jsonb
@@ -1596,14 +1655,14 @@ reads to show only the notes a coach actually sent. Reversible via
 `050_note_sent_to_client_down.sql` (which deliberately keeps the
 `type='session_note'` communications rows — they are the record of real sends).
 
-**`051_coach_booking_url.sql` — ⚠️ PENDING.** Adds `coaches.booking_url` (the
+**`051_coach_booking_url.sql` — APPLIED (production, confirmed 2026-08-24).** Adds `coaches.booking_url` (the
 client-facing HubSpot/Calendly scheduler link shown at the top of the Client
 Portal) and seeds the founding coach's existing HubSpot link — the one already
 hand-written into the seeded email signature — so the button works on day one.
 Additive/nullable; NULL just hides the button, and reads are defensive, so the
 app runs without it. Set per coach in Account → Scheduling.
 
-**`052_portal_search.sql` — ⚠️ PENDING.** Client Portal full-text search: adds a
+**`052_portal_search.sql` — APPLIED (production, confirmed 2026-08-24).** Client Portal full-text search: adds a
 generated `search_vector` to `transcripts` and `communications`, compound
 `btree_gin` GIN indexes on `(client_id, search_vector)`, and the `portal_search`
 SQL function that ranks one query across a client's transcripts + sent session
@@ -1614,7 +1673,7 @@ for existing rows during the migration. Requires the `btree_gin` extension
 to the old ILIKE path if the function is absent**, so deploy order is not
 critical here. Verified up + down against Postgres 16.
 
-**`053_portal_access_log.sql` — ⚠️ PENDING.** Three additive pieces for the
+**`053_portal_access_log.sql` — APPLIED (production, confirmed 2026-08-24).** Three additive pieces for the
 Client Portal: `portal_access_log` (audit trail + the durable counter behind
 per-client rate limiting — in-process counters are useless on serverless),
 `clients.portal_onboarded` (the first-visit tour flag, moved off localStorage),
@@ -1623,14 +1682,14 @@ and the `portal_chat_context` SQL function (retrieval for the AI chat, reusing
 tour re-offers itself, and the chat degrades to recency-only context — so the app
 runs without it, just with the old truncation behavior. Verified up + down.
 
-**`054_client_credentials.sql` — ⚠️ PENDING.** Optional Client Portal username +
+**`054_client_credentials.sql` — APPLIED (production, confirmed 2026-08-24).** Optional Client Portal username +
 password (scrypt hash) in its own table, kept off `clients` so a `select *` can
 never carry a hash into a response. Magic-link sign-in is unaffected and remains
 the recovery path; without this migration the password tab simply always fails.
 Down drops every stored password — nobody is locked out, since the emailed link
 always works. Verified up + down.
 
-**`055_client_frameworks.sql` — ⚠️ PENDING.** Records frameworks a scored session
+**`055_client_frameworks.sql` — APPLIED (production, confirmed 2026-08-24).** Records frameworks a scored session
 **named**, not just ones a nudge was sent about, so the portal's Frameworks card
 reflects what was actually discussed. Written by the nudge pipeline before its
 per-window cap discards candidates. Additive; the portal falls back to the
@@ -1650,18 +1709,16 @@ names the `kind` column, so new invoices sent before the migration would get
 no reminder scheduled** (the insert error is deliberately swallowed).
 Verified up + down + re-up against Postgres 16.
 
-**`057_coach_plans_admin.sql` — ⚠️ PENDING.** The Admin Command Center: adds
-`coaches.plan` (beta|free|paying, default beta) + `plan_note`, the coach
-platform-subscription columns (`stripe_customer_id`/`stripe_subscription_id`/
-`subscription_status` + partial indexes), and the append-only `admin_audit_log`
-table (RLS enabled). Additive, but **apply before deploying — the coaches
-list/PATCH routes select the new columns by name**, so the Command Center 500s
-without it. Also: create a recurring Price in Stripe and set
-`STRIPE_COACH_PRICE_ID`, register `checkout.session.completed` +
-`customer.subscription.updated` + `customer.subscription.deleted` on the
-existing webhook endpoint, and configure the Customer portal (Stripe Dashboard
-→ Settings → Billing) if the "Stripe billing portal" button will be used.
-Reversible via `057_coach_plans_admin_down.sql`.
+**`057_coach_plans_admin.sql` — APPLIED (production, 2026-08-24).** The Admin
+Command Center: adds `coaches.plan` (beta|free|paying, default beta) +
+`plan_note`, the coach platform-subscription columns (`stripe_customer_id`/
+`stripe_subscription_id`/`subscription_status` + partial indexes), and the
+append-only `admin_audit_log` table (RLS enabled). Reversible via
+`057_coach_plans_admin_down.sql`. ⚠️ The schema is in, but **coach billing is
+NOT yet live** — the remaining Stripe setup is tracked in the "Coach billing
+go-live checklist" in the Admin Command Center section above. Until those steps
+are done, "Send billing link" fails with a clear `STRIPE_COACH_PRICE_ID` error
+and no coach can be charged.
 
 **`048_supervisor_bootstrap_and_signature_unique.sql` — APPLIED (staging + production, 2026-08-14).** (1) Promotes
 the founding coach (email jeff@jeffkholmes.com, else earliest-created) to
