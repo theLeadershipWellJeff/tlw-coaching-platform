@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { Modal } from '@/app/components/shared/Modal'
-import { TimeWheelInput } from '@/app/components/shared/TimeWheelInput'
+import { TimeWheelInput, defaultScheduleSlot } from '@/app/components/shared/TimeWheelInput'
 
 const DURATIONS = [30, 45, 60, 90]
 
@@ -22,8 +22,10 @@ export function ScheduleSessionModal({
   onClose: () => void
   onScheduled?: () => void
 }) {
-  const [date, setDate] = useState('')
-  const [time, setTime] = useState('')
+  // Prefilled with the likeliest slot: same day & time two weeks out, top of
+  // the hour.
+  const [date, setDate] = useState(() => defaultScheduleSlot().date)
+  const [time, setTime] = useState(() => defaultScheduleSlot().time)
   const [duration, setDuration] = useState(60)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
