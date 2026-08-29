@@ -60,6 +60,13 @@ export type Organization = {
   updated_at: Timestamp
 }
 
+// Per-client portal feature flags (migration 058). Absent key = off.
+export type PortalFeatures = {
+  assessments?: boolean
+  goals?: boolean
+  [key: string]: boolean | undefined
+}
+
 export type Client = {
   id: string
   // Tenant (migration 042). Every client belongs to exactly one organization.
@@ -85,8 +92,11 @@ export type Client = {
   // Flat per-session fee, in dollars. Drives the Practice revenue cards.
   session_fee: number | null
   // Distinguishes regular coaching clients from team coaches kept here for
-  // note/transcript history (migration 030). Default 'client'.
-  client_type: 'client' | 'coach'
+  // note/transcript history (migration 030), plus — migration 058 — 'portal':
+  // a standalone assessment-portal participant with no coaching relationship.
+  // Default 'client'. NOTE: 'client' is what the ZF build brief calls
+  // "coaching"; the flag below, NOT this discriminator, gates the 360 card.
+  client_type: 'client' | 'coach' | 'portal'
   // Agreement state (migration 018) — the source of truth the workspace and the
   // scoring engine's Gate 1 read. recording_authorized: true = consented,
   // false = explicit decline (compliance flag), null = unknown / no decision.
@@ -96,6 +106,17 @@ export type Client = {
   // Client Portal first-visit tour taken (migration 053). Stored per client
   // rather than per browser, so it doesn't re-fire on every new device.
   portal_onboarded: boolean
+  // Assessment debrief portal (migration 058). cohort_id/company_id are
+  // nullable and INDEPENDENTLY nullable — a standalone participant has
+  // neither, an enterprise cohort participant has both, a coaching client
+  // with a 360 usually has neither.
+  cohort_id: string | null
+  company_id: string | null
+  // Per-client portal feature flags, e.g. {"assessments": true}. Orthogonal
+  // to client_type; {} = today's portal unchanged.
+  portal_features: PortalFeatures
+  // Denormalised from the cohort at activation; NULL = no expiry.
+  portal_access_expires_at: Timestamp | null
   created_at: Timestamp
   updated_at: Timestamp
 }
@@ -638,7 +659,7 @@ export type SessionReport = {
  * any nullable column is optional too (Postgres fills NULL). Everything else
  * is required.
  */
-type Defaulted = 'id' | 'created_at' | 'updated_at' | 'sent_at' | 'agreement_on_file' | 'client_type' | 'org_id' | 'portal_onboarded' | 'failed_attempts' | 'first_seen_at' | 'last_seen_at'
+type Defaulted = 'id' | 'created_at' | 'updated_at' | 'sent_at' | 'agreement_on_file' | 'client_type' | 'org_id' | 'portal_onboarded' | 'failed_attempts' | 'first_seen_at' | 'last_seen_at' | 'portal_features' | 'seats_purchased' | 'extraction_status' | 'uploader_role' | 'visible_to_coach' | 'is_active' | 'version'
 type NullableKeys<T> = { [K in keyof T]-?: null extends T[K] ? K : never }[keyof T]
 type OptionalOnInsert<T> = Defaulted | Extract<keyof T, NullableKeys<T>>
 
@@ -697,6 +718,114 @@ export type CoachingHoursEntry = {
   created_at: Timestamp
 }
 
+// --- Assessment debrief portal (migration 058) -----------------------------
+
+// A client company (a cohort's sponsor). Vision/values feed cohort
+// participants' chat context — additive when present, absent when null.
+export type Company = {
+  id: string
+  org_id: string
+  name: string
+  vision: string | null
+  values: string | null
+  notes: string | null
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
+// A contracted program at a company. Billing is on seats PURCHASED; activated
+// seats are counted live from clients.cohort_id. debrief_coach_name is
+// deliberately text, not a coaches FK — debrief coaches have no app access.
+export type Cohort = {
+  id: string
+  org_id: string
+  company_id: string
+  name: string
+  seats_purchased: number
+  access_starts_at: Timestamp | null
+  access_expires_at: Timestamp | null
+  debrief_coach_name: string | null
+  status: string // active | closed
+  created_at: Timestamp
+}
+
+// A kind-discriminated uploaded document. structured_data (validated JSON from
+// the deterministic extraction pass) is the SOLE source of truth for any
+// number; extracted_text (rater names stripped) covers labels and verbatims.
+// extraction_status != 'complete' → never client-visible, never in chat
+// context — but the file itself stays downloadable by its owner regardless.
+export type ClientDocument = {
+  id: string
+  org_id: string
+  client_id: string
+  kind: string // assessment_360 | personnel_review | company_doc
+  title: string | null
+  storage_path: string
+  size_bytes: number | null
+  extracted_text: string | null
+  structured_data: Record<string, unknown> | null
+  extraction_status: string // pending | complete | failed | unsupported
+  extraction_error: string | null
+  uploaded_by: string | null
+  uploader_role: string // coach | client
+  // Visibility is kind + client choice, enforced at the query layer:
+  // personnel_review is ALWAYS false; a client-uploaded assessment_360 is the
+  // client's call, changeable any time.
+  visible_to_coach: boolean
+  // The ordering key for longitudinal comparison — never order by created_at.
+  assessment_date: DateString | null
+  instrument: string | null
+  format_version: string | null
+  supersedes_document_id: string | null
+  created_at: Timestamp
+}
+
+// Versioned interpretation brief per document kind (e.g. 'assessment_360_zf').
+// Instrument-specific knowledge lives here, editable without a deploy; at most
+// one active version per slug.
+export type PromptBrief = {
+  id: string
+  org_id: string
+  slug: string
+  version: number
+  title: string
+  body: string
+  is_active: boolean
+  created_at: Timestamp
+}
+
+// "Contact support" for coach-less portal participants.
+export type SupportTicket = {
+  id: string
+  org_id: string
+  client_id: string
+  subject: string
+  body: string
+  status: string // open | closed
+  assigned_to: string | null
+  created_at: Timestamp
+  closed_at: Timestamp | null
+}
+
+export type SupportTicketMessage = {
+  id: string
+  org_id: string
+  ticket_id: string
+  author_role: string // client | admin
+  body: string
+  created_at: Timestamp
+}
+
+// Outcomes instrumentation — append-only, captured from day one.
+export type PortalEvent = {
+  id: string
+  org_id: string
+  client_id: string
+  event_type: string
+  metadata: Record<string, unknown> | null
+  created_at: Timestamp
+}
+
 export type Database = {
   public: {
     Tables: {
@@ -728,6 +857,48 @@ export type Database = {
         Row: CoachingHoursEntry
         Insert: Insertable<CoachingHoursEntry>
         Update: Updatable<CoachingHoursEntry>
+        Relationships: []
+      }
+      companies: {
+        Row: Company
+        Insert: Insertable<Company>
+        Update: Updatable<Company>
+        Relationships: []
+      }
+      cohorts: {
+        Row: Cohort
+        Insert: Insertable<Cohort>
+        Update: Updatable<Cohort>
+        Relationships: []
+      }
+      client_documents: {
+        Row: ClientDocument
+        Insert: Insertable<ClientDocument>
+        Update: Updatable<ClientDocument>
+        Relationships: []
+      }
+      prompt_briefs: {
+        Row: PromptBrief
+        Insert: Insertable<PromptBrief>
+        Update: Updatable<PromptBrief>
+        Relationships: []
+      }
+      support_tickets: {
+        Row: SupportTicket
+        Insert: Insertable<SupportTicket>
+        Update: Updatable<SupportTicket>
+        Relationships: []
+      }
+      support_ticket_messages: {
+        Row: SupportTicketMessage
+        Insert: Insertable<SupportTicketMessage>
+        Update: Updatable<SupportTicketMessage>
+        Relationships: []
+      }
+      portal_events: {
+        Row: PortalEvent
+        Insert: Insertable<PortalEvent>
+        Update: Updatable<PortalEvent>
         Relationships: []
       }
       clients: {

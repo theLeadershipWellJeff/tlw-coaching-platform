@@ -1076,6 +1076,41 @@ is never accepted here, and vice-versa.
   `dismissed_at` is the coach's override for a false positive. Reads are
   defensive: no table → the old nudge-derived list.
 
+## Assessment debrief portal (ZF 360) — IN BUILD (2026-08, target 2026-11-01)
+
+A document-grounded assessment debrief capability as a **per-client feature
+flag on the existing Client Portal** — same login, same chat, same middleware;
+NOT a second portal. First document kind is the Zenger Folkman *Extraordinary
+Leader* 360. Build brief: the ZF_360_PORTAL_BUILD_PROMPT doc (Jeff's chat
+brief); ~113 seats across multiple companies go live 2026-11-01.
+
+**Non-negotiables (from the brief):** instrument-agnostic naming everywhere
+(no `zf_*` tables/routes — ZF-specific knowledge lives ONLY in the versioned
+`prompt_briefs` row); the flag (`clients.portal_features.assessments`) is
+**orthogonal** to `client_type` — never gate the 360 card on `client_type`;
+`structured_data` (deterministic extraction) is the sole numeric source of
+truth (raw ZF text extraction scrambles table columns; percentile bands exist
+only as bar colour/marker geometry); rater names never enter stored
+extraction or AI context; participant download of their own report can never
+be disabled; the AI reflects, never prescribes goals; a coaching client's
+portal must stay byte-identical until the flag is switched on.
+
+**Phase 1 state (this branch):** migration `058_assessment_portal.sql` (see
+ledger) + types, and `lib/transactional-email.ts` — the Resend seam for
+portal-system mail (magic links, invitations, support replies) behind
+`RESEND_API_KEY`/`PORTAL_FROM_EMAIL`; unset = the three portal
+magic-link/invite routes fall back to the coach's Gmail exactly as before.
+Coach-authored mail (`sendCoachHtmlEmail` call sites for coaching clients) is
+deliberately untouched.
+
+**Codebase deltas vs. the brief** (decided in-session, flagged to Jeff):
+`client_type` already existed (migration 031, `client|coach`) — the brief's
+`'coaching'|'portal'` became a third value `'portal'` (existing `'client'` =
+the brief's "coaching"); and the §5 geometry pass cannot use `pdfplumber`
+(Python — this app is a Node/Vercel runtime): it will be built on the pdf.js
+operator list via `unpdf` (same deterministic rect/colour data), which is a
+tooling swap, not a design change.
+
 ## Multi-coach beta (2026-08 — coach onboarding readiness)
 
 Plan: `docs/BETA_COACH_ONBOARDING_PLAN.md`. Beta scope decision: **transcript
@@ -1719,6 +1754,19 @@ NOT yet live** — the remaining Stripe setup is tracked in the "Coach billing
 go-live checklist" in the Admin Command Center section above. Until those steps
 are done, "Send billing link" fails with a clear `STRIPE_COACH_PRICE_ID` error
 and no coach can be charged.
+
+**`058_assessment_portal.sql` — NOT YET APPLIED.** The assessment debrief
+portal data model (see the "Assessment debrief portal" section): `companies`,
+`cohorts`, `client_documents`, `prompt_briefs` (seeds a placeholder ZF brief),
+`support_tickets` + `support_ticket_messages`, `portal_events`; adds
+`clients.cohort_id`/`company_id`/`portal_features` (jsonb, default `{}`)/
+`portal_access_expires_at`, and extends the `client_type` CHECK with a third
+value `'portal'`. Additive — `portal_features` defaults `{}` so every existing
+client's portal is unchanged. **Apply before deploying any code that selects
+the new columns/tables.** Reversible via `058_assessment_portal_down.sql`
+(folds `portal` clients back to `client`; Storage objects in the
+`client-documents` bucket are not auto-removed). Verified up + down + re-up
+against Postgres 16.
 
 **`048_supervisor_bootstrap_and_signature_unique.sql` — APPLIED (staging + production, 2026-08-14).** (1) Promotes
 the founding coach (email jeff@jeffkholmes.com, else earliest-created) to

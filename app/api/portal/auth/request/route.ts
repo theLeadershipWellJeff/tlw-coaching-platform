@@ -3,7 +3,7 @@ import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { createLoginToken, recentLoginTokenCount, MAX_LINKS_PER_HOUR } from '@/lib/portal/tokens'
 import { resolveClientCoach } from '@/lib/portal/coach'
 import { buildMagicLinkEmailHtml } from '@/lib/portal/email'
-import { sendCoachHtmlEmail } from '@/lib/gmail'
+import { sendPortalEmail } from '@/lib/transactional-email'
 import { getBaseUrl } from '@/lib/url'
 import { logPortalAccess } from '@/lib/portal/access'
 
@@ -41,9 +41,8 @@ export async function POST(req: NextRequest) {
 
     await logPortalAccess(client.id, 'login_request')
 
-    await sendCoachHtmlEmail(coach, {
+    await sendPortalEmail(coach, {
       to: client.email,
-      cc: '',
       subject: 'Your sign-in link',
       html: buildMagicLinkEmailHtml({ firstName, link, coachName: coach.name }),
     })

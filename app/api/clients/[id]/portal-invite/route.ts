@@ -3,7 +3,7 @@ import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { requireClientCoach } from '@/lib/client-access'
 import { createLoginToken } from '@/lib/portal/tokens'
 import { buildMagicLinkEmailHtml } from '@/lib/portal/email'
-import { sendCoachHtmlEmail } from '@/lib/gmail'
+import { sendPortalEmail } from '@/lib/transactional-email'
 import { getBaseUrl } from '@/lib/url'
 import { toErrorResponse } from '@/lib/api-handler'
 import { getPortalLoginStatus } from '@/lib/portal/credentials'
@@ -70,9 +70,8 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
     const link = `${getBaseUrl()}/portal/verify?token=${raw}`
     const firstName = (client.name || '').split(' ')[0] || 'there'
 
-    const sent = await sendCoachHtmlEmail(coach, {
+    const sent = await sendPortalEmail(coach, {
       to: client.email,
-      cc: '',
       subject: 'Your coaching portal invitation',
       html: buildMagicLinkEmailHtml({ firstName, link, coachName: coach.name }),
     })

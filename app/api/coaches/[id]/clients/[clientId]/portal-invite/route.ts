@@ -3,7 +3,7 @@ import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { requireSupervisor, toErrorResponse } from '@/lib/api-handler'
 import { createLoginToken, recentLoginTokenCount, MAX_LINKS_PER_HOUR } from '@/lib/portal/tokens'
 import { buildMagicLinkEmailHtml } from '@/lib/portal/email'
-import { sendCoachHtmlEmail } from '@/lib/gmail'
+import { sendPortalEmail, transactionalEmailConfigured } from '@/lib/transactional-email'
 import { getBaseUrl } from '@/lib/url'
 import { logCommunication } from '@/lib/communications'
 import { logAdminAction } from '@/lib/admin/audit'
@@ -66,7 +66,7 @@ export async function POST(
   }
 
   const sender: Coach = (owner as Coach).google_refresh_token ? (owner as Coach) : actor
-  if (!sender.google_refresh_token) {
+  if (!sender.google_refresh_token && !transactionalEmailConfigured()) {
     return NextResponse.json(
       { error: 'Neither the coach nor your account has Gmail access — sign out and back in.' },
       { status: 400 }
@@ -79,7 +79,7 @@ export async function POST(
   const subject = 'Your coaching portal invitation'
   const html = buildMagicLinkEmailHtml({ firstName, link: link_, coachName: (owner as Coach).name })
 
-  const sent = await sendCoachHtmlEmail(sender, { to: client.email, cc: '', subject, html })
+  const sent = await sendPortalEmail(sender, { to: client.email, subject, html })
 
   // Attributed to the OWNING coach either way — it's their client relationship.
   await logCommunication(supabase, {
@@ -91,7 +91,7 @@ export async function POST(
     preview: 'Client Portal sign-in link',
     body_html: null,
     status: sent ? 'sent' : 'failed',
-    error_detail: sent ? null : 'Gmail send failed',
+    error_detail: sent ? null : 'Email send failed',
   } as any)
 
   if (!sent) return NextResponse.json({ error: 'Could not send the invite email.' }, { status: 502 })
