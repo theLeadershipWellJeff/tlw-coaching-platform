@@ -26,7 +26,7 @@ export default function PlanPopoutPage({ params }: { params: { id: string } }) {
         {data?.clientName && <p className="text-[12px] text-tlw-warm-gray">{data.clientName}</p>}
       </header>
       <div className="px-5 py-4">
-        <PlanSessionContent loading={loading} error={error} data={data} onReload={reload} />
+        <PlanSessionContent clientId={params.id} loading={loading} error={error} data={data} onReload={reload} />
       </div>
     </main>
   )
