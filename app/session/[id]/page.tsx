@@ -14,6 +14,11 @@ function SessionPage() {
   const clientEmail = params.get('clientEmail') || ''
   const start = params.get('start') || ''
   const duration = params.get('duration') || '55'
+  // Set when opened from the client workspace: an exact goals match for
+  // /api/generate, and where "back" leads (default = the dashboard).
+  const clientId = params.get('clientId') || ''
+  const backHref = params.get('back') || '/'
+  const backLabel = params.get('back') ? '← Back to client' : '← Back to dashboard'
 
   const [step, setStep] = useState<Step>('loading-notes')
   const [content, setContent] = useState<PrepContent | null>(null)
@@ -57,7 +62,7 @@ function SessionPage() {
       const genRes = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientName, zoomSummaries }),
+        body: JSON.stringify({ clientName, ...(clientId ? { clientId } : {}), zoomSummaries }),
       })
       const genData = await genRes.json()
       if (genData.error) throw new Error(genData.error)
@@ -190,7 +195,7 @@ function SessionPage() {
       <div className="min-h-screen flex flex-col items-center justify-center p-8 text-center">
         <p className="text-red-400 mb-4">Something went wrong: {error}</p>
         <button onClick={run} className="text-tlw-cream underline text-sm">Try again</button>
-        <button onClick={() => router.push('/')} className="text-tlw-warm-gray text-sm mt-2">← Back to dashboard</button>
+        <button onClick={() => router.push(backHref)} className="text-tlw-warm-gray text-sm mt-2">{backLabel}</button>
       </div>
     )
   }
@@ -202,7 +207,7 @@ function SessionPage() {
         <h2 className="font-serif text-3xl font-light text-tlw-cream mt-6 mb-3">Sent ✓</h2>
         <p className="text-tlw-warm-gray text-sm mb-2">Session prep delivered to {clientName}</p>
         <p className="text-tlw-warm-gray text-xs mb-8">A copy was CC&apos;d to your inbox</p>
-        <button onClick={() => router.push('/')} className="text-tlw-cream underline text-sm">← Back to dashboard</button>
+        <button onClick={() => router.push(backHref)} className="text-tlw-cream underline text-sm">{backLabel}</button>
       </div>
     )
   }
@@ -224,7 +229,7 @@ function SessionPage() {
       {/* Top bar */}
       <div className="sticky top-0 z-50 bg-tlw-navy-deep/95 backdrop-blur border-b border-tlw-warm-gray/20 px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <TLWLogo size={28} light onClick={() => router.push("/")} style={{cursor:"pointer"}} />
+          <TLWLogo size={28} light onClick={() => router.push(backHref)} style={{cursor:"pointer"}} />
           <div>
             <p className="text-tlw-cream text-sm font-semibold">{clientName}</p>
             <p className="text-tlw-warm-gray text-xs">{clientEmail}</p>
@@ -233,10 +238,10 @@ function SessionPage() {
         <div className="flex items-center gap-3">
           <span className="text-tlw-warm-gray text-xs hidden sm:block">Click any field to edit</span>
           <button
-            onClick={() => router.push('/')}
+            onClick={() => router.push(backHref)}
             className="px-4 py-2 text-xs text-tlw-warm-gray border border-tlw-warm-gray/30 rounded-lg hover:text-tlw-cream transition-colors"
           >
-            ← Dashboard
+            {params.get('back') ? '← Client' : '← Dashboard'}
           </button>
           <button
             onClick={run}

@@ -117,6 +117,32 @@ export function ClientDetail({ clientId }: { clientId: string }) {
         >
           <span aria-hidden>✦</span> Plan next session
         </button>
+        {/* The client-facing prep sheet: /session generates the personalized
+            prep email (goals/notes/Zoom context) for review, then sends it to
+            the client. Distinct from "Plan next session", which is the coach's
+            own private brief. */}
+        {client.email ? (
+          <Link
+            href={`/session/${clientId}?${new URLSearchParams({
+              clientName: client.name,
+              clientEmail: client.email,
+              clientId,
+              back: `/clients/${clientId}`,
+            }).toString()}`}
+            className="inline-flex items-center gap-1.5 rounded-tlw-lg bg-tlw-navy-rich px-4 py-2 text-[13px] font-medium text-tlw-cream transition-opacity hover:opacity-90"
+            title={`Generate a personalized prep sheet and email it to ${client.name.split(' ')[0]}`}
+          >
+            <span aria-hidden>✉</span> Send session prep
+          </Link>
+        ) : (
+          <button
+            disabled
+            title="No email on file for this client — add one via the gear on the name card"
+            className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-tlw-lg bg-tlw-navy-rich px-4 py-2 text-[13px] font-medium text-tlw-cream opacity-40"
+          >
+            <span aria-hidden>✉</span> Send session prep
+          </button>
+        )}
         <Link
           href={`/clients/${clientId}/notes?new=1`}
           className="rounded-tlw-lg bg-tlw-navy-rich px-4 py-2 text-[13px] font-medium text-tlw-cream transition-opacity hover:opacity-90"
