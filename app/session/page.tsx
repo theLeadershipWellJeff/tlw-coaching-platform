@@ -36,14 +36,15 @@ function SessionPage() {
   }, [clientName])
 
   async function run() {
-    // Generate content. The coaching plan is drawn from the client's stored
-    // engagement goals (server-side in /api/generate); no external notes source.
+    // Generate content. The server resolves the roster client (email first,
+    // then name) and draws the coaching plan from stored engagement goals plus
+    // the session history from in-app notes + open actions.
     setStep('generating')
     try {
       const genRes = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientName }),
+        body: JSON.stringify({ clientName, clientEmail }),
       })
       const genData = await genRes.json()
       if (genData.error) throw new Error(genData.error)

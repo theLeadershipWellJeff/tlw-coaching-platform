@@ -698,7 +698,11 @@ which renders a "Help shape our agenda" CTA at the bottom of the prep email. The
 prompts (`lib/agenda.ts#AGENDA_PROMPTS`); `GET/POST /api/agenda/[token]` load and
 submit (stores `items` = `[{q,a}]`, status → submitted). The workspace
 `AgendaCard` (`/api/clients/[id]/agenda`, latest request) shows the client's
-answers (or "awaiting their response").
+answers (or "awaiting their response"). **On submit the coach is emailed the
+answers** (2026-08) — best-effort via `sendCoachHtmlEmail` (the row's
+`coach_id`, else the client's primary coach), subject says "updated" on a
+re-submission, and the send is logged to `communications` as an inbound row so
+it also surfaces on the Recent Communication card.
 
 ### Between-session nudges (`nudges`; migration 022) — Phase A
 A nudge is a short, warm, client-facing message the system **drafts** after a
@@ -932,10 +936,19 @@ description, metrics?}` (`metrics` = up to three measures of fulfillment).
 Edited in two places that share `GoalRows.tsx` (the rows editor + `toDrafts`/
 `cleanGoals`/`emptyGoal` helpers — both preserve metrics on save): the workspace
 `GoalsCard` (inline) and the notes-panel `EngagementGoalsCard` (modal). Session
-prep is wired to them: `/api/generate` loads the client's goals (by `clientId`
-or name) and renders them as the email's fixed **coachingPlan** instead of
-inventing one — the rest of the email is still drawn from notes/Zoom. With no
-goals stored it falls back to generating the plan from notes.
+prep is wired to them: `/api/generate` resolves the roster client server-side
+(explicit `clientId`, else email-first then exact name via
+`findClientByEmailOrName` + a `coachCanAccessClient` gate) and renders the
+goals as the email's fixed **coachingPlan** instead of inventing one. The rest
+of the email (exploring/insights/actions) is drawn from the client's **in-app
+`notes` + open `actions`, loaded server-side in the route** (2026-08 fix — the
+Phase-0 CA decommission had removed the page's notes fetch without a
+replacement, so preps were generating off goals alone) plus any Zoom summaries
+the page passes. With no goals stored it falls back to generating the plan
+from notes; with no notes it returns empty sections rather than inventing
+history. The prep preview also shows the "Help Shape Our Agenda" section —
+the live link is minted at send time by `/api/send` when the recipient
+matches a roster client.
 
 ### Names vs initials
 `client_initials` stays the stored, privacy-preserving label (transcripts,

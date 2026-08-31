@@ -55,14 +55,15 @@ function SessionPage() {
       // Zoom is additive — continue without it
     }
 
-    // 2. Generate content. The coaching plan comes from the client's stored
-    //    engagement goals (server-side in /api/generate).
+    // 2. Generate content. The server resolves the roster client (email first,
+    //    then name) and pulls the coaching plan from stored engagement goals plus
+    //    the session history from in-app notes + open actions.
     setStep('generating')
     try {
       const genRes = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientName, ...(clientId ? { clientId } : {}), zoomSummaries }),
+        body: JSON.stringify({ clientName, clientEmail, ...(clientId ? { clientId } : {}), zoomSummaries }),
       })
       const genData = await genRes.json()
       if (genData.error) throw new Error(genData.error)
@@ -364,6 +365,17 @@ function SessionPage() {
                   <Editable value={q.question} onChange={v => updateQuestion(i, 'question', v)} style={{ fontSize: 15, color: '#F2F2F0', fontFamily: 'Cormorant Garamond, Georgia, serif', fontStyle: 'italic', lineHeight: 1.8, display: 'block' }} tag="div" />
                 </div>
               ))}
+            </div>
+
+            {/* Agenda CTA — the link itself is minted at send time when the
+                client matches the roster; shown here so the coach can see the
+                section the client will receive. */}
+            <div style={{ height: 1, margin: '0 44px', background: '#e5e0d8' }} />
+            <div style={{ padding: '22px 44px', textAlign: 'center' }}>
+              <p style={{ fontSize: 9, letterSpacing: 4, textTransform: 'uppercase', color: '#8B8680', fontWeight: 700, marginBottom: 6 }}>Help Shape Our Agenda</p>
+              <p style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.6, marginBottom: 14 }}>Tell me what you&rsquo;d like to focus on — a minute now means we make the most of our time together.</p>
+              <span style={{ display: 'inline-block', background: '#0C1940', color: '#F2F2F0', fontSize: 13, fontWeight: 600, padding: '11px 24px', borderRadius: 8 }}>Set the agenda →</span>
+              <p style={{ fontSize: 10, color: '#8B8680', marginTop: 10 }}>Included automatically when {clientEmail || 'the recipient'} matches a client on your roster — the personal link is created when you hit send.</p>
             </div>
 
             {/* Closing */}

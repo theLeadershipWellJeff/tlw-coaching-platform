@@ -3,7 +3,8 @@ import { z } from 'zod'
 import Anthropic from '@anthropic-ai/sdk'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { ApiError, requireCoach, readJson, toErrorResponse } from '@/lib/api-handler'
-import { accessibleClientIds, coachCanAccessClient } from '@/lib/client-access'
+import { coachCanAccessClient } from '@/lib/client-access'
+import { findClientByEmailOrName } from '@/lib/client-lookup'
 import type { CoachingGoal } from '@/lib/supabase/types'
 import { CLIENT_VOICE_STANDARDS } from '@/lib/writing-standards'
 
@@ -11,6 +12,7 @@ const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 const GenerateSchema = z.object({
   clientName: z.string().trim().min(1, 'clientName required'),
+  clientEmail: z.string().optional(),
   clientId: z.string().optional(),
   notes: z
     .array(z.object({ date: z.union([z.string(), z.number()]).optional(), content: z.string() }))
@@ -19,32 +21,40 @@ const GenerateSchema = z.object({
   zoomSummaries: z.array(z.any()).optional(),
 })
 
+// Strip rich-text HTML to plain text, keeping line structure (block tags →
+// newlines) so ACTION:/INSIGHT: capture lines stay on their own lines for the
+// model. Same approach as the plan-session route.
+function noteToText(html: string): string {
+  return (html || '')
+    .replace(/<\/(p|div|li|h[1-6]|ul|ol)>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\n{2,}/g, '\n')
+    .trim()
+}
+
 // Emojis for the prep email's coaching-plan rows, assigned by position.
 const PLAN_EMOJIS = ['🧭', '🌱', '🕊️', '🌿', '⚓', '🔥', '💡', '🎯']
 
 /**
  * Look up the client's stored coaching goals — the sacred source of the plan.
  * Goals are built with the client in their workspace; session prep renders them
- * rather than inventing a plan each time. Matches by id when given, else by name.
+ * rather than inventing a plan each time. The caller resolves + tenant-gates
+ * the client id before calling.
  */
 async function loadGoals(
   supabase: ReturnType<typeof getSupabaseAdmin>,
-  coachId: string,
-  clientId?: string,
-  clientName?: string
+  clientId: string
 ): Promise<CoachingGoal[]> {
   try {
-    const query = supabase.from('clients').select('coaching_goals')
-    let data: { coaching_goals: unknown } | null
-    if (clientId) {
-      // The caller has already verified coachCanAccessClient for an explicit id.
-      ;({ data } = await query.eq('id', clientId).maybeSingle())
-    } else {
-      // Name lookups only ever resolve within the coach's own roster.
-      const ids = await accessibleClientIds(supabase, coachId)
-      if (!ids.length) return []
-      ;({ data } = await query.in('id', ids).ilike('name', clientName || '').limit(1).maybeSingle())
-    }
+    const { data } = await supabase
+      .from('clients')
+      .select('coaching_goals')
+      .eq('id', clientId)
+      .maybeSingle()
     const goals = ((data?.coaching_goals as CoachingGoal[] | undefined) || [])
     return goals.filter((g) => g?.title)
   } catch {
@@ -58,7 +68,7 @@ export async function POST(req: NextRequest) {
     const coach = await requireCoach(supabase)
     // Voice the prep email as the signed-in coach, not a fixed name.
     const coachName = coach.name || 'the coach'
-    const { clientName, clientId, notes, actions, zoomSummaries } = await readJson(req, GenerateSchema)
+    const { clientName, clientEmail, clientId, notes, actions, zoomSummaries } = await readJson(req, GenerateSchema)
 
     // Tenant gate: goals may only be loaded for a client linked to the signed-in
     // coach — 404, not 403, so a foreign id is never confirmed to exist.
@@ -66,12 +76,67 @@ export async function POST(req: NextRequest) {
       throw new ApiError(404, 'Client not found')
     }
 
-  const notesText = notes
-    .map((n: any) => `[${new Date(n.date).toLocaleDateString()}]\n${n.content}`)
-    .join('\n\n---\n\n')
+  // Resolve the roster client. Explicit id wins (already gated above); else
+  // match email-first, then exact name, and only accept a client this coach is
+  // linked to — a foreign match is treated as no-match.
+  let resolvedClientId: string | null = clientId || null
+  if (!resolvedClientId) {
+    try {
+      const row = await findClientByEmailOrName(supabase, { email: clientEmail, name: clientName })
+      if (row?.id && (await coachCanAccessClient(supabase, coach.id, row.id))) {
+        resolvedClientId = row.id
+      }
+    } catch {
+      // Resolution is best-effort — an unmatched client still gets a prep email,
+      // just without history.
+    }
+  }
 
-  const actionsText = actions?.length
-    ? actions.map((a: any) => `• ${a.description}${a.dueDate ? ` (due ${a.dueDate})` : ''}`).join('\n')
+  // The session history behind the email. Callers used to pass notes/actions in
+  // the request (the old Coach Accountable flow); nothing does anymore, so load
+  // the client's in-app notes + open actions here. Posted values still win for
+  // backward compatibility.
+  let sourceNotes: { date?: string | number; content: string }[] = notes
+  let sourceActions: { description: string; dueDate?: string | null }[] = actions || []
+  if (resolvedClientId) {
+    if (sourceNotes.length === 0) {
+      const { data: noteRows } = await supabase
+        .from('notes')
+        .select('session_date, title, content, created_at')
+        .eq('client_id', resolvedClientId)
+        .order('session_date', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(10)
+      sourceNotes = (noteRows || []).map((n) => ({
+        date: n.session_date || n.created_at,
+        content: [n.title, noteToText(n.content)].filter(Boolean).join('\n'),
+      }))
+    }
+    if (sourceActions.length === 0) {
+      const { data: actionRows } = await supabase
+        .from('actions')
+        .select('description, due_date')
+        .eq('client_id', resolvedClientId)
+        .neq('status', 'done')
+        .neq('status', 'dropped')
+        .order('created_at', { ascending: false })
+        .limit(10)
+      sourceActions = (actionRows || []).map((a) => ({ description: a.description, dueDate: a.due_date }))
+    }
+  }
+
+  const notesText = sourceNotes.length
+    ? sourceNotes
+        .map((n) => {
+          const d = n.date ? new Date(n.date) : null
+          const label = d && !isNaN(d.getTime()) ? `[${d.toLocaleDateString()}]\n` : ''
+          return `${label}${n.content}`
+        })
+        .join('\n\n---\n\n')
+    : '(no session notes on file)'
+
+  const actionsText = sourceActions.length
+    ? sourceActions.map((a) => `• ${a.description}${a.dueDate ? ` (due ${a.dueDate})` : ''}`).join('\n')
     : 'None recorded'
 
   let zoomSection = ''
@@ -95,7 +160,7 @@ ${zoomText}`
 
   // The stored goals drive the coaching plan when present; the rest of the email
   // is still drawn from the session context.
-  const goals = await loadGoals(supabase, coach.id, clientId, clientName)
+  const goals = resolvedClientId ? await loadGoals(supabase, resolvedClientId) : []
   const lockedPlan =
     goals.length > 0
       ? goals.map((g, i) => ({
@@ -166,6 +231,7 @@ SOURCE PRECEDENCE:
 - The coach's SESSION NOTES are the PRIMARY substance for every section — build the content from them first.
 - The ZOOM AI MEETING SUMMARIES are corroborating/supporting ONLY: use them to fill gaps, surface ${clientName}'s own language, and confirm. They never override or contradict the notes.
 - On any conflict, the NOTES WIN. If a summary implies something the notes don't support, defer to the notes.
+- NEVER invent history. If the notes and summaries contain no real material for "exploring", "insights", or "actions", return an EMPTY array for that section rather than fabricating plausible-sounding content.
 
 VOICE:
 - Address ${clientName} DIRECTLY in the second person — "you," "your." NEVER refer to ${clientName} in the third person ("the client," "she/he," "${clientName} has been…").
@@ -207,6 +273,13 @@ ${jsonShape}`
       const content = JSON.parse(match ? match[0] : clean)
       // The stored goals are authoritative — overlay them onto the plan.
       if (lockedPlan) content.coachingPlan = lockedPlan
+      // The preview + email template map over these unconditionally — make sure
+      // an omitted section comes back as an empty array, not undefined.
+      for (const key of ['coachingPlan', 'exploring', 'insights', 'actions', 'questions'] as const) {
+        if (!Array.isArray(content[key])) content[key] = []
+      }
+      if (!content.quote?.text) content.quote = { text: '', author: '' }
+      if (typeof content.closingLine !== 'string') content.closingLine = ''
       return NextResponse.json({ content })
     } catch {
       return NextResponse.json({ error: 'Failed to parse AI response', raw }, { status: 500 })
