@@ -383,18 +383,28 @@ newest-first, 5 visible with a "Show all" expander; the notes list does the same
 **plus** persistent, per-client context loaded from the client record: **Key info**
 (`clients.key_info`,
 freeform reference — boss/spouse/kids), **Coaching map** (`clients.coaching_map`,
-a pulldown of the practice's maps — registry in `CoachingMapCard.tsx#MAPS`: The 6
-Components / The Airplane Model / First 90 Days / Who I Am Becoming / The Becoming
-Map. Clicking the assigned map's name opens a **structure pop-up** (portaled to
-`document.body` — the sticky rail's stacking context would otherwise trap it under
-the note editor; the Client goals modal is portaled for the same reason). The
-displayed structure is **drawn live from the vault repo**: `GET /api/vault/map?name=…`
-→ `lib/vault/maps.ts#getMapFromVault` finds the vault note by **title** (filename
-match anywhere in the repo, 5-min in-memory cache) and parses `### NN · Component`
-sections + `> [!question]` callouts into `{name, description, question}`. The
-hard-coded `MAPS` entries are the pulldown registry + **offline fallback only** —
+a pulldown of the practice's maps — **mirrored live from the vault repo's `Maps/`
+folder**, currently `06-Wissensgarten-Knowledge-Base/Maps/` — Map 1 The 6
+Components / Map 2 The Airplane Model / Map 3 First 90 Days / Map 4 Building
+PsyCap in Your Organization / Map 5 Who You Are Becoming; add/rename/remove a
+note there and the pulldown follows. Names come from `GET /api/vault/maps` →
+`lib/vault/maps.ts#listVaultMapNames` (frontmatter `title`, ordered by
+`map-number`), consumed via `CoachingMapCard.tsx#useCoachingMapNames` (shared
+with the edit-client modal's map select). Clicking the assigned map's name opens
+a **structure pop-up** (portaled to `document.body` — the sticky rail's stacking
+context would otherwise trap it under the note editor; the Client goals modal is
+portaled for the same reason). The displayed structure is **drawn live from the
+vault repo**: `GET /api/vault/map?name=…` → `lib/vault/maps.ts#getMapFromVault`
+matches the stored name against the Maps-folder notes' frontmatter title,
+**aliases**, and filename with/without the `Map N - ` series prefix (plus a
+legacy remap: "Who I Am Becoming" → "Who You Are Becoming", so clients assigned
+under retired names keep working; repo-wide filename match as fallback; 5-min
+in-memory cache) and parses `### NN · Component` sections + `> [!question]`
+callouts into `{name, description, question}` (body preamble → blurb, frontmatter
+`summary` as blurb fallback; code fences/hrules/embeds skipped). The hard-coded
+`MAPS` entries in `CoachingMapCard.tsx` are the **offline fallback only** —
 vault unconfigured / note missing / no `###` sections degrades to the built-in
-copy, never a blank card), and **Engagement
+copy, never a blank card — and should track the vault notes if they drift), and **Engagement
 goals** (the same `clients.coaching_goals` as the workspace card, edited via the
 "Client goals" modal). All three save with PATCH `/api/clients/[id]`
 (`KeyInfoCard`, `CoachingMapCard`, `EngagementGoalsCard`).

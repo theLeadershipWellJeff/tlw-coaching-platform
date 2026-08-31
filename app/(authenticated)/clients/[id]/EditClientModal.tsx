@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import type { Client } from '@/lib/supabase/types'
 import { Modal } from '@/app/components/shared/Modal'
 import { TimezoneCombobox } from '@/app/components/shared/TimezoneCombobox'
-import { COACHING_MAP_NAMES } from './CoachingMapCard'
+import { useCoachingMapNames } from './CoachingMapCard'
 
 const FIELDS: { key: keyof Client; label: string; type?: string; placeholder?: string }[] = [
   { key: 'name', label: 'Name' },
@@ -53,6 +53,8 @@ export function EditClientModal({
   onIssueAgreement?: () => void
 }) {
   const router = useRouter()
+  // The map pulldown mirrors the vault repo's Maps/ folder (built-ins offline).
+  const mapNames = useCoachingMapNames()
   const [form, setForm] = useState<Record<string, string>>(() => {
     const f: Record<string, string> = {
       status: client.status || 'active',
@@ -353,9 +355,9 @@ export function EditClientModal({
             className="mt-1 w-full rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-surface px-3 py-2 text-[13px] text-tlw-espresso outline-none focus:border-tlw-signal-orange"
           >
             <option value="">— no map —</option>
-            {(COACHING_MAP_NAMES.includes(form.coaching_map) || !form.coaching_map
-              ? COACHING_MAP_NAMES
-              : [...COACHING_MAP_NAMES, form.coaching_map]
+            {(mapNames.includes(form.coaching_map) || !form.coaching_map
+              ? mapNames
+              : [...mapNames, form.coaching_map]
             ).map((name) => (
               <option key={name} value={name}>
                 {name}

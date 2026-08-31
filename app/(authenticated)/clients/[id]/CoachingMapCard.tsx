@@ -6,10 +6,13 @@ import type { Client } from '@/lib/supabase/types'
 type Component = { name: string; description: string; question?: string }
 type CoachingMap = { name: string; blurb?: string; components: Component[] }
 
-// The pulldown's map registry + offline fallback. The DISPLAYED structure is
-// drawn live from the vault repo (GET /api/vault/map — a note titled like the
-// map, parsed by lib/vault/maps.ts); these built-in copies render only when the
-// vault is unconfigured/unreachable or has no matching note.
+// OFFLINE FALLBACK ONLY — the vault repo's Maps/ folder is the source of truth.
+// The pulldown names come live from GET /api/vault/maps (useCoachingMapNames)
+// and the DISPLAYED structure from GET /api/vault/map (a Maps-folder note
+// matched by title/alias, parsed by lib/vault/maps.ts); these built-in copies
+// render only when the vault is unconfigured/unreachable. They mirror the vault
+// notes (condensed) — when a map changes in Obsidian, the app follows on its
+// own; only update this copy if the fallback has drifted badly.
 const MAPS: CoachingMap[] = [
   {
     name: 'The 6 Components',
@@ -60,48 +63,198 @@ const MAPS: CoachingMap[] = [
   },
   {
     name: 'The Airplane Model',
-    blurb: 'Wings / Engines / Fuel / Fuselage — the structural picture',
+    blurb:
+      'A simplified view of a complex business — six structural components, each with a distinct role, that must work together for the organization to fly further, faster, and higher.',
     components: [
-      { name: 'Wings', description: 'Vision and direction — the lift that keeps you moving forward and sets the trajectory.' },
-      { name: 'Engines', description: 'Drive and motivation — what powers you and keeps momentum even in resistance.' },
-      { name: 'Fuel', description: 'Resources, energy, and support — what you need to sustain the journey without burning out.' },
-      { name: 'Fuselage', description: 'Your core structure — the values, character, and integrity that hold everything together.' },
+      {
+        name: 'The Cockpit',
+        description:
+          'Leadership and direction. The leader sits in the Cockpit — determining the destination, how high and how fast the company will fly, and monitoring its overall health. A leader without clarity, vision, and metrics is flying blind.',
+        question:
+          'Are you spending most of your time in the Cockpit — setting direction and monitoring health — or are you down in the cabin fixing seats? What would change if you stayed in the Cockpit more?',
+      },
+      {
+        name: 'The Wings',
+        description:
+          'Products and offerings. The wings generate lift — what allows the business to get off the ground and stay airborne. The more efficiently shaped the wings, the further, faster, and higher the company can fly; bloated or unfocused product lines create drag.',
+        question:
+          'Are your products and offerings generating real lift — or are some creating drag? Which offering, if refined or eliminated, would most improve your altitude?',
+      },
+      {
+        name: 'Engine 1 — Marketing',
+        description:
+          'Thrust: creating attention and demand. The first engine provides the thrust that gets the plane airborne and keeps it there — visibility, demand, a legible pathway to purchase. Not too little (the plane won’t fly) and not too much (resources diverted from other components).',
+        question:
+          'Is your marketing engine powerful enough to get you off the ground and keep you there — or is it either underpowered or consuming resources that should go elsewhere?',
+      },
+      {
+        name: 'Engine 2 — Sales',
+        description:
+          'Thrust: converting demand into revenue. The second engine converts marketing’s attention into actual clients. A proven sales process removes uncertainty — for the leader and the client; an improvised, inconsistent process makes the engine sputter.',
+        question:
+          'Do you have a proven, repeatable sales process — or does each deal feel like you’re figuring it out again? Where in the process do deals most often stall?',
+      },
+      {
+        name: 'The Fuselage',
+        description:
+          'Operations and client delivery. The airframe that holds everything together and carries the payload — how clients are served, how the work gets done, how the team is structured. The lighter and stronger the fuselage, the better the plane performs.',
+        question:
+          'Where is your fuselage carrying unnecessary weight — overhead, complexity, or operations that don’t serve your clients or your team? What could you remove without losing structural integrity?',
+      },
+      {
+        name: 'The Fuel Tank',
+        description:
+          'Cash and financial health. Nothing flies without fuel — cash is the resource that makes all other components possible. Three indicators matter most: how much fuel is in the tank right now, how fast is it burning, and how long until it runs dry?',
+        question:
+          'Do you know your current fuel state — runway, burn rate, and replenishment rate? What would give you more confidence in your financial instruments?',
+      },
     ],
   },
   {
     name: 'First 90 Days',
+    blurb:
+      'A structured four-part framework for leaders entering a new role — learn the business, map your stakeholders, define early wins, and align with the person who hired you.',
     components: [
-      { name: 'Listen & Learn', description: 'Resist the urge to act. Gather data, build relationships, and understand the real landscape.' },
-      { name: 'Diagnose', description: 'Identify the critical challenges and opportunities based on what you\'ve heard and observed.' },
-      { name: 'Build Allies', description: 'Cultivate key relationships across the organization — up, across, and down.' },
-      { name: 'Early Wins', description: 'Choose a visible, achievable win that builds credibility and signals your leadership style.' },
-      { name: 'Set Direction', description: 'Communicate a clear vision and priorities so the team knows where you\'re headed together.' },
+      {
+        name: 'Business Knowledge Plan',
+        description:
+          'Learn the business at every level, from the inside out: your team (how we do business here), the organization (strategy, culture, how decisions actually get made), and the market and industry (the bigger picture).',
+        question:
+          'What is your structured learning plan for your first 30 days — and are you moving from the inside out, or jumping straight to strategy before you understand your own team?',
+      },
+      {
+        name: 'Key Stakeholders',
+        description:
+          'Map the people who determine your impact on a 2×2 grid — power to help vs. knowledge of the work — and build an engagement plan for the priority few: their role, what they need from you, what you need from them, and your first move.',
+        question:
+          'Who are the two or three people whose support will most determine your success — and what is your specific plan to earn it in the first 30 days?',
+      },
+      {
+        name: 'Wins & Key Value Deliverables',
+        description:
+          'Define what success looks like across 30, 60, and 90 days — value wins (tangible deliverables that demonstrate competence) and relational wins (trust, credibility, connection), matched to the STARS scenario you inherited.',
+        question:
+          'What is the single most important win you can deliver in the first 30 days — the one that builds momentum for everything else?',
+      },
+      {
+        name: 'Key Conversations',
+        description:
+          'Align early — your biggest advocate is the person who hired you. Three structured conversations (days 1–5, 30, and 60) mine expectations, check performance, and keep the definition of success shared.',
+        question:
+          'Have you explicitly asked your boss what "outrageously successful" looks like in 90 days — and have you confirmed you both mean the same thing?',
+      },
     ],
   },
   {
-    name: 'Who I Am Becoming',
+    name: 'Building PsyCap in Your Organization',
+    blurb:
+      'Four moves a leader makes to build Psychological Capital — Hope, Efficacy, Resilience, and Optimism — in the people they lead.',
     components: [
-      { name: 'The Gap', description: 'The honest distance between who you are today and the leader you sense yourself becoming.' },
-      { name: 'Core Convictions', description: 'The non-negotiable beliefs and values that anchor your identity through change.' },
-      { name: 'Formative Experiences', description: 'The moments — good and hard — that have shaped you most deeply as a person and leader.' },
-      { name: 'Emerging Self', description: 'The qualities, capacities, and ways of being you are actively growing into.' },
-      { name: 'Legacy', description: 'What you want to be true of you — the lasting mark of how you led and lived.' },
+      {
+        name: 'Hope — Generate it through vision casting and agency',
+        description:
+          'Hope is agency (the willpower to pursue a goal) plus pathways (the ability to find multiple routes there). Vision casting builds pathways; delegation builds agency; ambiguity is hope’s silent assassin.',
+        question:
+          'If you asked each person on your team to state the top three organizational goals right now, would they give the same answer? Where is ambiguity leaking hope from your team?',
+      },
+      {
+        name: 'Efficacy — Build it through small wins',
+        description:
+          'Efficacy is task-specific confidence, built through experience. Engineer opportunities for earned wins, give specific feedback that names the repeatable move, and make peer success visible and credited.',
+        question:
+          'Where on your team is someone being held back by doubt that doesn’t match their actual track record? What is the next small win you could architect for them?',
+      },
+      {
+        name: 'Resilience — Shape it by crafting the stories we tell',
+        description:
+          'Resilience is the capacity to bounce forward — to carry a capability out of a setback. The leader is the primary narrator: name the hard thing honestly, locate the capability that emerged, and point forward.',
+        question:
+          'What is the last significant setback your team faced — and what story are they currently telling about it? Does that story leave them with a capability, or with a wound?',
+      },
+      {
+        name: 'Optimism — Cultivate it by examining our explanations',
+        description:
+          'Optimism is a trained explanatory style — whether setbacks read as permanent or passing, pervasive or specific, personal or situational. The leader models the explanation first, and helps people read their wins accurately.',
+        question:
+          'Think about how your team explained your last significant failure — did the explanation lock in something permanent, or open up something passable? Where do you land on that axis?',
+      },
     ],
   },
   {
-    name: 'The Becoming Map',
+    name: 'Who You Are Becoming',
+    blurb:
+      'Identity development for leaders at an inflection point — six components that move a leader from the story they’ve been living to the self they’re growing into.',
     components: [
-      { name: 'Origin', description: 'Where you come from — the background, story, and experiences that formed your foundation.' },
-      { name: 'Anchors', description: 'The values, people, and commitments that keep you grounded when everything is shifting.' },
-      { name: 'Tensions', description: 'The creative friction between who you\'ve been and who you\'re called to become.' },
-      { name: 'Threshold', description: 'The liminal space of transformation — what it feels like to be in between.' },
-      { name: 'Horizon', description: 'The vision of the person and leader you are moving toward — not yet arrived, but clearly sensed.' },
+      {
+        name: 'Story — Who have I been?',
+        description:
+          'Every leader is a story walking around. The throughline across chapters — the domains that have shaped who this person is — is the raw material the rest of the map works with.',
+        question: 'Looking across all the chapters — what has been true of you in all of them?',
+      },
+      {
+        name: 'Possible Selves — Who am I becoming?',
+        description:
+          'A leader is pulled forward by images of who they might become: the hoped-for self, the feared self, and the expected self — then mental contrasting (WOOP) converts imagination into commitment.',
+        question: 'On your current path, who will you probably become — and is that who you want to be?',
+      },
+      {
+        name: 'Reckoning — The honest present',
+        description:
+          'See clearly, then surface the grip: the hidden competing commitment your goal-defeating behavior is faithfully serving, and the big assumption behind it — named as a hypothesis, not a fact.',
+        question:
+          'What’s a change you genuinely want and haven’t been able to make — and if you imagine doing the opposite of what you’re doing, what’s the scariest feeling that comes up?',
+      },
+      {
+        name: 'Experiments — Provisional selves',
+        description:
+          'Knowing follows doing. The big assumption and the hoped-for self become small, safe, real-world probes — craft, connect, narrate — each followed by the debrief that turns experience into learning.',
+        question: 'What’s the smallest real thing you could do this week to learn about this — not decide, just learn?',
+      },
+      {
+        name: 'The Crossing — The messy middle',
+        description:
+          'The liminal space after the old identity is named as over and before the new one is real. The coach builds a container strong enough that the client can stay in the not-yet until the new self emerges.',
+        question:
+          'If you’re not who you were and not yet who you’re becoming — how would you describe where you are right now?',
+      },
+      {
+        name: 'Legacy — Beyond self',
+        description:
+          'The final turn is outward: from who am I becoming? to what am I giving? Generativity, then integrity — giving the self away is the documented path to a good ending.',
+        question: 'When you’re gone, what continues because you were here?',
+      },
     ],
   },
 ]
 
-/** The pulldown registry's names — reused by the edit-client modal's map select. */
+/** The built-in fallback names (offline copy of the vault's Maps folder). */
 export const COACHING_MAP_NAMES = MAPS.map((m) => m.name)
+
+/**
+ * The map pulldown's options, mirrored live from the vault repo's Maps/ folder
+ * (GET /api/vault/maps) so adding/renaming/removing a map note in Obsidian
+ * updates the app. Falls back to the built-in names while loading or when the
+ * vault is unconfigured/unreachable. Shared by this card's edit select and the
+ * edit-client modal's map pulldown.
+ */
+export function useCoachingMapNames(): string[] {
+  const [names, setNames] = useState<string[] | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/vault/maps')
+      .then((res) => (res.ok ? res.json() : { names: null }))
+      .then((data) => {
+        if (!cancelled && Array.isArray(data.names) && data.names.length) {
+          setNames(data.names.filter((n: unknown) => typeof n === 'string'))
+        }
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+  return names ?? COACHING_MAP_NAMES
+}
 
 type Size = 'small' | 'medium' | 'large'
 
@@ -125,7 +278,8 @@ export function CoachingMapCard({
   const [viewOpen, setViewOpen] = useState(false)
   const [vaultMap, setVaultMap] = useState<CoachingMap | null>(null)
 
-  const options = MAPS.some((m) => m.name === value) || !value ? MAPS : [...MAPS, { name: value, components: [] }]
+  const mapNames = useCoachingMapNames()
+  const options = mapNames.includes(value) || !value ? mapNames : [...mapNames, value]
   // Live vault content wins; the built-in copy is the offline fallback.
   const selectedMap = vaultMap ?? MAPS.find((m) => m.name === value)
   const fromVault = vaultMap !== null
@@ -230,9 +384,9 @@ export function CoachingMapCard({
             className="w-full rounded-tlw-md border border-tlw-warm-gray/20 bg-tlw-surface px-2 py-1.5 text-[12px] text-tlw-espresso outline-none focus:border-tlw-signal-orange"
           >
             <option value="">— select a map —</option>
-            {options.map((m) => (
-              <option key={m.name} value={m.name}>
-                {m.name}
+            {options.map((name) => (
+              <option key={name} value={name}>
+                {name}
               </option>
             ))}
           </select>
