@@ -350,6 +350,15 @@ Plaud" picker (`/api/drive/transcripts` + `/api/clients/[id]/import-transcripts`
 and `lib/drive.ts` were removed; the Zapier ingest webhook and its Drive archive
 are unaffected).
 
+**Send session prep (action bar).** Next to "Plan next session" sits **"Send
+session prep"** — the CLIENT-facing counterpart (plan = the coach's private
+brief; prep = the sheet emailed to the client). It links into the existing
+standalone generator `/session/[id]` with `clientName`/`clientEmail` plus
+`clientId` (exact goals match in `/api/generate` instead of the name lookup) and
+`back=/clients/[id]` (the page's back/logo/sent navigation returns to the
+workspace instead of the dashboard; dashboard "Up next" links are unchanged).
+Disabled with a tooltip when the client has no email on file.
+
 **Plan next session (floating window — `app/components/plan/`).** An action-bar
 button (orange, first in the bar in `ClientDetail`) and the notes-page
 `PlanSessionCard` open the prep brief in a **movable, resizable floating
