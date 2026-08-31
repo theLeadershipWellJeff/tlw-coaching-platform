@@ -689,7 +689,11 @@ which renders a "Help shape our agenda" CTA at the bottom of the prep email. The
 prompts (`lib/agenda.ts#AGENDA_PROMPTS`); `GET/POST /api/agenda/[token]` load and
 submit (stores `items` = `[{q,a}]`, status → submitted). The workspace
 `AgendaCard` (`/api/clients/[id]/agenda`, latest request) shows the client's
-answers (or "awaiting their response").
+answers (or "awaiting their response"). **On submit the coach is emailed the
+answers** (2026-08) — best-effort via `sendCoachHtmlEmail` (the row's
+`coach_id`, else the client's primary coach), subject says "updated" on a
+re-submission, and the send is logged to `communications` as an inbound row so
+it also surfaces on the Recent Communication card.
 
 ### Between-session nudges (`nudges`; migration 022) — Phase A
 A nudge is a short, warm, client-facing message the system **drafts** after a
