@@ -100,7 +100,7 @@ function PlanWindow({
       }
     >
       <div className="px-4 py-3">
-        <PlanSessionContent loading={loading} error={error} data={data} onReload={reload} />
+        <PlanSessionContent clientId={clientId} loading={loading} error={error} data={data} onReload={reload} />
       </div>
     </FloatingWindow>
   )

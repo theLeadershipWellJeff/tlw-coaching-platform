@@ -1,12 +1,13 @@
 'use client'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 // The "Plan next session" prep brief — data hook + presentational body, shared
 // by the floating plan window (PlanSessionWindows) and the desktop pop-out page
 // (app/popout/plan/[id]). On load it calls POST /api/clients/[id]/plan-session,
 // which pulls the client's goals, open actions, recent insights, and any
 // "NEXT TIME / NEXT SESSION" flags from prior notes and asks Claude for a quick
-// summary + three opening questions. Ephemeral: nothing is saved.
+// summary + three opening questions. The generated brief is ephemeral; only the
+// coach's own notepad at the top persists (localStorage, per client).
 
 export interface PlanGoal {
   title: string
@@ -54,6 +55,86 @@ export function usePlanSession(clientId: string) {
 }
 
 export function PlanSessionContent({
+  clientId,
+  loading,
+  error,
+  data,
+  onReload,
+}: {
+  clientId: string
+  loading: boolean
+  error: string
+  data: PlanResult | null
+  onReload: () => void
+}) {
+  return (
+    <div className="space-y-5">
+      <PlanNotepad clientId={clientId} />
+      <PlanBody loading={loading} error={error} data={data} onReload={onReload} />
+    </div>
+  )
+}
+
+// The coach's private scratchpad for this client's next session — saved per
+// client in localStorage (never sent anywhere), so it survives closing the
+// window, navigating, and the pop-out; the storage listener keeps the floating
+// window and the pop-out in step when both are open.
+function PlanNotepad({ clientId }: { clientId: string }) {
+  const storageKey = `tlw-plan-notes-${clientId}`
+  const [text, setText] = useState('')
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    try {
+      setText(localStorage.getItem(storageKey) || '')
+    } catch {}
+  }, [storageKey])
+
+  useEffect(() => {
+    function onStorage(e: StorageEvent) {
+      if (e.key !== storageKey || document.activeElement === textareaRef.current) return
+      setText(e.newValue || '')
+    }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [storageKey])
+
+  function update(value: string) {
+    setText(value)
+    try {
+      if (value) localStorage.setItem(storageKey, value)
+      else localStorage.removeItem(storageKey)
+    } catch {}
+  }
+
+  return (
+    <section className="rounded-tlw-lg border border-tlw-warm-gray/20 bg-tlw-canvas px-4 py-3">
+      <div className="mb-1.5 flex items-baseline justify-between">
+        <p className="text-[11px] font-semibold uppercase tracking-[1.5px] text-tlw-navy-deep">
+          My notes
+        </p>
+        {text && (
+          <button
+            onClick={() => update('')}
+            className="text-[11px] font-medium text-tlw-warm-gray hover:text-tlw-espresso"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+      <textarea
+        ref={textareaRef}
+        value={text}
+        onChange={(e) => update(e.target.value)}
+        rows={3}
+        placeholder="Jot reminders or talking points for this session — saved automatically, just for you."
+        className="w-full resize-y rounded-tlw-md border border-tlw-warm-gray/20 bg-white px-2.5 py-2 text-[13px] leading-relaxed text-tlw-espresso placeholder:text-tlw-warm-gray/60 focus:border-tlw-navy-rich focus:outline-none"
+      />
+    </section>
+  )
+}
+
+function PlanBody({
   loading,
   error,
   data,
