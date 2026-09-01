@@ -7,6 +7,10 @@ import { SidebarItem } from './SidebarItem'
 interface SidebarProps {
   collapsed: boolean
   onToggle: () => void
+  /** Mobile: the expanded sidebar floats over the content instead of squeezing it. */
+  floating?: boolean
+  /** Mobile: called when a destination is picked, so the overlay can close. */
+  onNavigate?: () => void
 }
 
 interface NavDestination {
@@ -97,23 +101,56 @@ const destinations: NavDestination[] = [
   { href: '/business-center', label: 'Business Center', icon: icons.business },
 ]
 
-export function Sidebar({ collapsed, onToggle }: SidebarProps) {
+const toggleChevron = (collapsed: boolean) => (
+  <svg
+    viewBox="0 0 24 24"
+    width="16"
+    height="16"
+    {...stroke}
+    className={`shrink-0 transition-transform duration-tlw-base ${collapsed ? 'rotate-180' : ''}`}
+  >
+    <path d="M15 6l-6 6 6 6" />
+  </svg>
+)
+
+export function Sidebar({ collapsed, onToggle, floating, onNavigate }: SidebarProps) {
   const pathname = usePathname()
 
   return (
     <aside
       className={`flex h-screen shrink-0 flex-col border-r border-tlw-warm-gray/15 bg-tlw-surface transition-all duration-tlw-base ${
         collapsed ? 'w-16' : 'w-[200px]'
-      }`}
+      } ${floating ? 'fixed inset-y-0 left-0 z-40 shadow-xl' : ''}`}
     >
       <div className="flex h-16 items-center gap-2 border-b border-tlw-warm-gray/15 px-4">
         <TLWLogo size={26} />
         {!collapsed && (
-          <span className="truncate text-[13px] font-semibold tracking-tight text-tlw-navy-deep">
-            theLeadershipWell
-          </span>
+          <>
+            <span className="truncate text-[13px] font-semibold tracking-tight text-tlw-navy-deep">
+              theLeadershipWell
+            </span>
+            <button
+              onClick={onToggle}
+              title="Collapse sidebar"
+              aria-label="Collapse sidebar"
+              className="ml-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-tlw-md text-tlw-warm-gray transition-colors duration-tlw-base hover:bg-tlw-warm-gray/[0.08] hover:text-tlw-espresso"
+            >
+              {toggleChevron(false)}
+            </button>
+          </>
         )}
       </div>
+
+      {collapsed && (
+        <button
+          onClick={onToggle}
+          title="Expand sidebar"
+          aria-label="Expand sidebar"
+          className="mx-2 mt-2 flex items-center justify-center rounded-tlw-md py-2 text-tlw-warm-gray transition-colors duration-tlw-base hover:bg-tlw-warm-gray/[0.08] hover:text-tlw-espresso"
+        >
+          {toggleChevron(true)}
+        </button>
+      )}
 
       <nav className="flex-1 space-y-1 overflow-y-auto px-2 py-3">
         {destinations.map((d) => {
@@ -129,6 +166,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               collapsed={collapsed}
               disabled={d.disabled}
               badge={d.badge}
+              onNavigate={onNavigate}
             />
           )
         })}
@@ -139,15 +177,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         className="flex items-center gap-3 border-t border-tlw-warm-gray/15 px-4 py-3 text-[12px] text-tlw-warm-gray transition-colors duration-tlw-base hover:text-tlw-espresso"
         title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
       >
-        <svg
-          viewBox="0 0 24 24"
-          width="16"
-          height="16"
-          {...stroke}
-          className={`shrink-0 transition-transform duration-tlw-base ${collapsed ? 'rotate-180' : ''}`}
-        >
-          <path d="M15 6l-6 6 6 6" />
-        </svg>
+        {toggleChevron(collapsed)}
         {!collapsed && <span>Collapse</span>}
       </button>
     </aside>

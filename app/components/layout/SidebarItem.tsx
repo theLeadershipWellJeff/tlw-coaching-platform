@@ -10,6 +10,7 @@ interface SidebarItemProps {
   collapsed: boolean
   disabled?: boolean
   badge?: string
+  onNavigate?: () => void
 }
 
 const base =
@@ -23,6 +24,7 @@ export function SidebarItem({
   collapsed,
   disabled,
   badge,
+  onNavigate,
 }: SidebarItemProps) {
   const iconEl = (
     <span className="flex h-5 w-5 shrink-0 items-center justify-center">{icon}</span>
@@ -52,6 +54,7 @@ export function SidebarItem({
   return (
     <Link
       href={href}
+      onClick={onNavigate}
       title={collapsed ? label : undefined}
       className={`${base} ${
         active
