@@ -697,6 +697,22 @@ export type CoachingHoursEntry = {
   created_at: Timestamp
 }
 
+// Saved "Plan next session" briefs (migration 058). `plan` is the generated
+// PlanResult JSON (summary, questions, context lists) frozen at save time;
+// `notes` is the coach's own plan typed in the window's notepad, autosaved on
+// edit. Coach-private — nothing here is ever client-facing.
+export type SessionPlan = {
+  id: string
+  org_id: string
+  coach_id: string
+  client_id: string
+  title: string
+  plan: Record<string, unknown>
+  notes: string
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
 export type Database = {
   public: {
     Tables: {
@@ -962,6 +978,12 @@ export type Database = {
         Row: ClientFramework
         Insert: Insertable<ClientFramework>
         Update: Updatable<ClientFramework>
+        Relationships: []
+      }
+      session_plans: {
+        Row: SessionPlan
+        Insert: Insertable<SessionPlan>
+        Update: Updatable<SessionPlan>
         Relationships: []
       }
     }
