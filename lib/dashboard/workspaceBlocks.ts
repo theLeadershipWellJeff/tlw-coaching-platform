@@ -101,6 +101,13 @@ export const WORKSPACE_BLOCK_META: Record<string, WorkspaceBlockMeta> = {
     defaultSize: 'standard',
     selfHeader: true,
   },
+  'ws-session-plans': {
+    id: 'ws-session-plans',
+    title: 'Session plans',
+    supportedSizes: ['compact', 'standard', 'expanded'],
+    defaultSize: 'standard',
+    selfHeader: true,
+  },
 }
 
 /** Workspace blocks not already placed in the layout — feeds the add-card menu. */

@@ -382,9 +382,33 @@ isn't captured). Those lists are computed deterministically and always returned;
 Claude (`PLAN_SESSION_MODEL` env or a sonnet default) then synthesizes a **quick
 summary** and **three opening questions**. The card leads with the next-time
 callout, then summary, then the numbered questions, with goals/actions/insights in
-a collapsible "supporting context". Fully **ephemeral** — nothing is persisted, no
-migration; if the AI call fails the lists still render (graceful `aiError`). A
+a collapsible "supporting context". The generated brief is ephemeral until saved;
+if the AI call fails the lists still render (graceful `aiError`). A
 client with no goals/actions/insights/notes shows an empty-state hint.
+
+**Savable plans + "My notes" notepad (migration 058, `session_plans`).** The
+window opens with a **"My notes" notepad at the top** — the coach's OWN plan for
+the session, above the generated brief. Unsaved, the notepad drafts to
+localStorage per client (`tlw-plan-notes-<clientId>`, synced across the floating
+window and pop-out via a `storage` listener). **"Save plan"** (under the notepad)
+persists the generated brief (`plan` jsonb = the PlanResult) + the notes as a
+`session_plans` row (POST `/api/clients/[id]/plans`; title defaults server-side
+to "Session plan · <date>" in the coach's timezone), clears the local draft, and
+from then on the **notepad autosaves to the row** (debounced PATCH, keepalive
+flush on window close). The workspace **Session plans card** (`SessionPlansCard`,
+block `ws-session-plans` — in the default layout after Sessions; existing coaches
+add it via "+ Add card") lists saved plans newest-first (title, notes first-line
+preview, updated date) with **Open** (reopens that exact document in the floating
+window — `openPlanWindow(clientId, name, planId)`; the pop-out carries
+`?planId=`), hover **✕ delete** (confirm), and **✦ New plan**. Regenerate on a
+saved plan refreshes the stored brief in place (notes untouched). Saves/deletes
+notify the card via the `tlw-session-plans-changed` window event. Routes:
+GET/POST `/api/clients/[id]/plans`, GET/PATCH/DELETE
+`/api/clients/[id]/plans/[planId]`, all `requireClientCoach`-gated and scoped to
+the client id. Deploy-safe before the migration: the list GET degrades to
+`{plans: [], unavailable: true}` (the card explains itself) and the save button
+surfaces a clear "apply migration 058" error. Coach-private — nothing here is
+client-facing.
 
 ### Session-notes panel (`clients/[id]/NotesPanel.tsx`)
 The right-hand rail carries the live ACTION/INSIGHT capture (`CaptureGroup` —
@@ -1751,6 +1775,16 @@ NOT yet live** — the remaining Stripe setup is tracked in the "Coach billing
 go-live checklist" in the Admin Command Center section above. Until those steps
 are done, "Send billing link" fails with a clear `STRIPE_COACH_PRICE_ID` error
 and no coach can be charged.
+
+**`058_session_plans.sql` — PENDING (apply in Supabase).** Saved session plans:
+the `session_plans` table (generated PlanResult jsonb + the coach's own notepad
+`notes`, coach/client FKs, org_id default, RLS enabled) behind the plan window's
+"Save plan" button and the workspace Session plans card. Additive and
+deploy-safe in either order: before the migration the card reports the feature
+unavailable and the save button fails with a clear "apply migration 058" error —
+the ephemeral plan window and localStorage notepad keep working. Reversible via
+`058_session_plans_down.sql` (drops all saved plans). Verified up + insert +
+down + re-up against Postgres 16.
 
 **`048_supervisor_bootstrap_and_signature_unique.sql` — APPLIED (staging + production, 2026-08-14).** (1) Promotes
 the founding coach (email jeff@jeffkholmes.com, else earliest-created) to

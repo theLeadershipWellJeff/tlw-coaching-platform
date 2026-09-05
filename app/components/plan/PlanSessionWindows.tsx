@@ -7,10 +7,14 @@ import { PlanSessionContent, usePlanSession } from './PlanSessionContent'
 // (authenticated) layout — ABOVE the pages — so an open plan window survives
 // navigating from the client workspace to the session notes page (and anywhere
 // else in the app). One window per client; opening again brings it to front.
+// Pass a planId to reopen a SAVED plan (from the workspace Session plans card)
+// instead of generating a fresh brief.
 
-type OpenPlan = { clientId: string; clientName: string }
+type OpenPlan = { clientId: string; clientName: string; planId?: string }
 
-const Ctx = createContext<{ openPlanWindow: (clientId: string, clientName: string) => void } | null>(null)
+const Ctx = createContext<{
+  openPlanWindow: (clientId: string, clientName: string, planId?: string) => void
+} | null>(null)
 
 export function usePlanSessionWindows() {
   const ctx = useContext(Ctx)
@@ -22,8 +26,11 @@ export function PlanSessionWindowProvider({ children }: { children: React.ReactN
   // Ordered back → front; last = on top.
   const [windows, setWindows] = useState<OpenPlan[]>([])
 
-  function openPlanWindow(clientId: string, clientName: string) {
-    setWindows((prev) => [...prev.filter((w) => w.clientId !== clientId), { clientId, clientName }])
+  function openPlanWindow(clientId: string, clientName: string, planId?: string) {
+    setWindows((prev) => [
+      ...prev.filter((w) => w.clientId !== clientId),
+      { clientId, clientName, planId },
+    ])
   }
 
   function close(clientId: string) {
@@ -35,12 +42,15 @@ export function PlanSessionWindowProvider({ children }: { children: React.ReactN
       {children}
       {windows.map((w, i) => (
         <PlanWindow
-          key={w.clientId}
+          // planId in the key so opening a saved plan over a fresh window (or
+          // a different saved plan) remounts and loads the right document.
+          key={`${w.clientId}:${w.planId ?? 'new'}`}
           clientId={w.clientId}
           clientName={w.clientName}
+          planId={w.planId}
           stackIndex={i}
           zIndex={40 + i}
-          onFocus={() => openPlanWindow(w.clientId, w.clientName)}
+          onFocus={() => openPlanWindow(w.clientId, w.clientName, w.planId)}
           onClose={() => close(w.clientId)}
         />
       ))}
@@ -51,6 +61,7 @@ export function PlanSessionWindowProvider({ children }: { children: React.ReactN
 function PlanWindow({
   clientId,
   clientName,
+  planId,
   stackIndex,
   zIndex,
   onFocus,
@@ -58,6 +69,7 @@ function PlanWindow({
 }: {
   clientId: string
   clientName: string
+  planId?: string
   stackIndex: number
   zIndex: number
   onFocus: () => void
@@ -65,12 +77,15 @@ function PlanWindow({
 }) {
   // The window stays mounted across navigation, so the generated plan persists
   // until the coach closes it (or hits Regenerate).
-  const { loading, error, data, reload } = usePlanSession(clientId)
+  const state = usePlanSession(clientId, planId)
 
   // A real OS-level window — movable anywhere on the desktop, next to Zoom.
+  // A plan saved in THIS window carries its id along, so the pop-out reopens
+  // the same saved document instead of generating a new brief.
   function popOut() {
+    const id = state.saved?.id ?? planId
     window.open(
-      `/popout/plan/${clientId}`,
+      `/popout/plan/${clientId}${id ? `?planId=${id}` : ''}`,
       `tlw-plan-${clientId}`,
       'width=560,height=680,left=140,top=100'
     )
@@ -100,7 +115,7 @@ function PlanWindow({
       }
     >
       <div className="px-4 py-3">
-        <PlanSessionContent clientId={clientId} loading={loading} error={error} data={data} onReload={reload} />
+        <PlanSessionContent clientId={clientId} state={state} />
       </div>
     </FloatingWindow>
   )
