@@ -1819,10 +1819,8 @@ go-live checklist" in the Admin Command Center section above. Until those steps
 are done, "Send billing link" fails with a clear `STRIPE_COACH_PRICE_ID` error
 and no coach can be charged.
 
-**`058_assessment_debrief_foundation.sql` — PENDING (apply before deploying the
-Phase 1 transport code; the portal invite routes read `clients` columns that
-exist regardless, so the app runs without it, but nothing in the Assessment
-debrief add-on can be configured until it's in).** Adds `companies`, `cohorts`,
+**`058_assessment_debrief_foundation.sql` — APPLIED (production, confirmed
+2026-09-05).** Adds `companies`, `cohorts`,
 `client_documents`, `prompt_briefs` (seeds the placeholder `assessment_360` v1
 brief), `support_tickets` + `support_ticket_messages`, `portal_events`; widens
 `clients.client_type` to allow `portal`; adds `clients.company_id/cohort_id/
