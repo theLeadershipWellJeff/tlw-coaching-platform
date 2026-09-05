@@ -1,5 +1,5 @@
--- Migration 058 — Assessment debrief foundation  (DOWN)
--- Reverses 058_assessment_debrief_foundation.sql. Drops the seven new tables and
+-- Migration 059 — Assessment debrief foundation  (DOWN)
+-- Reverses 059_assessment_debrief_foundation.sql. Drops the seven new tables and
 -- the new columns, and restores the two-value client_type check. Any client
 -- already set to client_type='portal' is reset to 'client' first so the
 -- narrower check can be re-added.

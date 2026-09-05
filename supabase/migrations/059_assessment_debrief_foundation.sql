@@ -1,4 +1,4 @@
--- Migration 058 — Assessment debrief foundation  (UP)
+-- Migration 059 — Assessment debrief foundation  (UP)
 --
 -- Phase 1 of the document-grounded assessment debrief capability (first
 -- instrument: the Zenger Folkman Extraordinary Leader 360). This is a FEATURE
@@ -23,7 +23,7 @@
 --
 -- All new tables: org_id (042 pattern) + RLS enabled, no policies (service-role
 -- only, consistent with the schema). Reversible via
--- 058_assessment_debrief_foundation_down.sql.
+-- 059_assessment_debrief_foundation_down.sql.
 
 -- ---------------------------------------------------------------------------
 -- 1. companies — a client company. vision/values are plain text the chat

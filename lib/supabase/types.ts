@@ -86,9 +86,9 @@ export type Client = {
   session_fee: number | null
   // 'client' = a coaching client; 'coach' = a team coach kept here for
   // note/transcript history (migration 030); 'portal' = a standalone assessment
-  // participant with no coaching relationship (migration 058). Default 'client'.
+  // participant with no coaching relationship (migration 059). Default 'client'.
   client_type: 'client' | 'coach' | 'portal'
-  // Assessment debrief links + flag (migration 058). company_id/cohort_id are
+  // Assessment debrief links + flag (migration 059). company_id/cohort_id are
   // independently nullable — a coaching client who takes a 360 has neither.
   company_id: string | null
   cohort_id: string | null
@@ -489,7 +489,7 @@ export type ClientCredential = {
 // names a framework, or when a framework nudge is sent, independent of whether a
 // nudge survives the per-window cap. `dismissed_at` is the coach's override.
 // ---------------------------------------------------------------------------
-// Assessment debrief foundation (migration 058). Instrument-agnostic: nothing
+// Assessment debrief foundation (migration 059). Instrument-agnostic: nothing
 // here is named after a specific 360 vendor — instrument specifics live in a
 // versioned prompt_briefs row.
 // ---------------------------------------------------------------------------
@@ -796,7 +796,7 @@ export type PortalMessage = {
   conversation_id: string
   role: string // user | assistant
   content: string
-  // e.g. {"brief_slug":"assessment_360","brief_version":1} (migration 058)
+  // e.g. {"brief_slug":"assessment_360","brief_version":1} (migration 059)
   metadata: Record<string, unknown> | null
   created_at: Timestamp
 }
@@ -816,6 +816,22 @@ export type CoachingHoursEntry = {
   paid: boolean
   source: string // manual | csv
   created_at: Timestamp
+}
+
+// Saved "Plan next session" briefs (migration 058). `plan` is the generated
+// PlanResult JSON (summary, questions, context lists) frozen at save time;
+// `notes` is the coach's own plan typed in the window's notepad, autosaved on
+// edit. Coach-private — nothing here is ever client-facing.
+export type SessionPlan = {
+  id: string
+  org_id: string
+  coach_id: string
+  client_id: string
+  title: string
+  plan: Record<string, unknown>
+  notes: string
+  created_at: Timestamp
+  updated_at: Timestamp
 }
 
 export type Database = {
@@ -1125,6 +1141,12 @@ export type Database = {
         Row: PortalEvent
         Insert: Insertable<PortalEvent>
         Update: Updatable<PortalEvent>
+        Relationships: []
+      }
+      session_plans: {
+        Row: SessionPlan
+        Insert: Insertable<SessionPlan>
+        Update: Updatable<SessionPlan>
         Relationships: []
       }
     }

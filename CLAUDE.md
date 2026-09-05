@@ -382,9 +382,33 @@ isn't captured). Those lists are computed deterministically and always returned;
 Claude (`PLAN_SESSION_MODEL` env or a sonnet default) then synthesizes a **quick
 summary** and **three opening questions**. The card leads with the next-time
 callout, then summary, then the numbered questions, with goals/actions/insights in
-a collapsible "supporting context". Fully **ephemeral** — nothing is persisted, no
-migration; if the AI call fails the lists still render (graceful `aiError`). A
+a collapsible "supporting context". The generated brief is ephemeral until saved;
+if the AI call fails the lists still render (graceful `aiError`). A
 client with no goals/actions/insights/notes shows an empty-state hint.
+
+**Savable plans + "My notes" notepad (migration 058, `session_plans`).** The
+window opens with a **"My notes" notepad at the top** — the coach's OWN plan for
+the session, above the generated brief. Unsaved, the notepad drafts to
+localStorage per client (`tlw-plan-notes-<clientId>`, synced across the floating
+window and pop-out via a `storage` listener). **"Save plan"** (under the notepad)
+persists the generated brief (`plan` jsonb = the PlanResult) + the notes as a
+`session_plans` row (POST `/api/clients/[id]/plans`; title defaults server-side
+to "Session plan · <date>" in the coach's timezone), clears the local draft, and
+from then on the **notepad autosaves to the row** (debounced PATCH, keepalive
+flush on window close). The workspace **Session plans card** (`SessionPlansCard`,
+block `ws-session-plans` — in the default layout after Sessions; existing coaches
+add it via "+ Add card") lists saved plans newest-first (title, notes first-line
+preview, updated date) with **Open** (reopens that exact document in the floating
+window — `openPlanWindow(clientId, name, planId)`; the pop-out carries
+`?planId=`), hover **✕ delete** (confirm), and **✦ New plan**. Regenerate on a
+saved plan refreshes the stored brief in place (notes untouched). Saves/deletes
+notify the card via the `tlw-session-plans-changed` window event. Routes:
+GET/POST `/api/clients/[id]/plans`, GET/PATCH/DELETE
+`/api/clients/[id]/plans/[planId]`, all `requireClientCoach`-gated and scoped to
+the client id. Deploy-safe before the migration: the list GET degrades to
+`{plans: [], unavailable: true}` (the card explains itself) and the save button
+surfaces a clear "apply migration 058" error. Coach-private — nothing here is
+client-facing.
 
 ### Session-notes panel (`clients/[id]/NotesPanel.tsx`)
 The right-hand rail carries the live ACTION/INSIGHT capture (`CaptureGroup` —
@@ -1108,7 +1132,7 @@ is never accepted here, and vice-versa.
   `dismissed_at` is the coach's override for a false positive. Reads are
   defensive: no table → the old nudge-derived list.
 
-## Assessment debrief add-on (ZF 360 first; migration 058) — Phase 1 shipped
+## Assessment debrief add-on (ZF 360 first; migration 059) — Phase 1 shipped
 
 A **document-grounded assessment debrief** as a per-client FEATURE FLAG on the
 existing Client Portal — same login, same chat, same middleware, same `clients`
@@ -1119,7 +1143,7 @@ Zenger Folkman; ZF-specific logic lives only in a versioned `prompt_briefs` row.
 
 **Two orthogonal axes.** `clients.client_type` (`client` = coaching client,
 `coach` = team coach in the roster, **`portal`** = standalone assessment
-participant, added by 058 to the existing 031 check) and
+participant, added by 059 to the existing 031 check) and
 `clients.portal_features` jsonb (`{"assessments": true}` switches the 360 card +
 chat grounding on). **Never gate the 360 surfaces on `client_type`** — a coaching
 client turning a 360 on is the common case and must be a toggle on their existing
@@ -1819,15 +1843,27 @@ go-live checklist" in the Admin Command Center section above. Until those steps
 are done, "Send billing link" fails with a clear `STRIPE_COACH_PRICE_ID` error
 and no coach can be charged.
 
-**`058_assessment_debrief_foundation.sql` — APPLIED (production, confirmed
-2026-09-05).** Adds `companies`, `cohorts`,
+**`058_session_plans.sql` — APPLIED (production, confirmed 2026-09-05).** Saved session plans:
+the `session_plans` table (generated PlanResult jsonb + the coach's own notepad
+`notes`, coach/client FKs, org_id default, RLS enabled) behind the plan window's
+"Save plan" button and the workspace Session plans card. Additive and
+deploy-safe in either order: before the migration the card reports the feature
+unavailable and the save button fails with a clear "apply migration 058" error —
+the ephemeral plan window and localStorage notepad keep working. Reversible via
+`058_session_plans_down.sql` (drops all saved plans). Verified up + insert +
+down + re-up against Postgres 16.
+
+**`059_assessment_debrief_foundation.sql` — APPLIED (production, confirmed
+2026-09-05; Jeff ran it under the working name 058 before `058_session_plans`
+landed on main the same day — identical SQL, renumbered to keep the ledger
+strict).** Adds `companies`, `cohorts`,
 `client_documents`, `prompt_briefs` (seeds the placeholder `assessment_360` v1
 brief), `support_tickets` + `support_ticket_messages`, `portal_events`; widens
 `clients.client_type` to allow `portal`; adds `clients.company_id/cohort_id/
 portal_features/portal_access_expires_at` and `portal_messages.metadata`. All
 additive/defaulted — every existing client reads `portal_features = {}`.
 Verified up + down + re-up against Postgres 16. Reversible via
-`058_assessment_debrief_foundation_down.sql` (resets any `portal` client to
+`059_assessment_debrief_foundation_down.sql` (resets any `portal` client to
 `client` first).
 
 **`048_supervisor_bootstrap_and_signature_unique.sql` — APPLIED (staging + production, 2026-08-14).** (1) Promotes
