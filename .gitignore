@@ -26,3 +26,7 @@ yarn-error.log*
 
 # npm
 package-lock.json
+
+# Real assessment reports used as parser fixtures — contain rater PII, never commit
+fixtures/private/
+.spike-build/

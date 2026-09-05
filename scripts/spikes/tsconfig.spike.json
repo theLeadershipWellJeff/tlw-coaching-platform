@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "es2020",
+    "module": "node16",
+    "moduleResolution": "node16",
+    "outDir": "../../.spike-build",
+    "rootDir": "../..",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noEmit": false,
+    "declaration": false,
+    "sourceMap": false
+  },
+  "include": ["../../lib/documents/geometry.ts", "../../lib/documents/assessment-360/**/*.ts"]
+}

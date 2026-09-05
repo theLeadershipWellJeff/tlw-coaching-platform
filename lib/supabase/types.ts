@@ -498,6 +498,9 @@ export type ClientCredential = {
 export type PortalFeatures = {
   assessments?: boolean
   goals?: boolean
+  /** Per-client cap overrides (default 5 assessments / 10 documents). */
+  max_assessments?: number
+  max_documents?: number
 }
 
 export type Company = {
