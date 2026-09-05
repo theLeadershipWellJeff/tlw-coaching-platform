@@ -2,10 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { requireSupervisor, toErrorResponse } from '@/lib/api-handler'
 import { createLoginToken, recentLoginTokenCount, MAX_LINKS_PER_HOUR } from '@/lib/portal/tokens'
-import { buildMagicLinkEmailHtml } from '@/lib/portal/email'
-import { sendCoachHtmlEmail } from '@/lib/gmail'
+import { sendPortalLoginEmail } from '@/lib/portal/send'
 import { getBaseUrl } from '@/lib/url'
-import { logCommunication } from '@/lib/communications'
 import { logAdminAction } from '@/lib/admin/audit'
 import type { Coach } from '@/lib/supabase/types'
 
@@ -16,12 +14,12 @@ export const runtime = 'nodejs'
  * Center's on-behalf resend: a supervisor re-sends a portal sign-in link for
  * ANOTHER coach's client.
  *
- * The email goes out from the OWNING coach's Gmail whenever they've signed in
- * (their refresh token is on file), so the client always hears from their own
- * coach — the acting supervisor's Gmail is only the fallback for a coach who
- * has never completed sign-in. Rate-limited with the same per-client cap as
- * every other magic-link path, logged to communications (it shows on the
- * client's Recent Communication card) and to the admin audit trail.
+ * Sent via lib/portal/send.ts: Resend when configured (Reply-To the owning
+ * coach); on the Gmail fallback it goes out from the OWNING coach's Gmail
+ * whenever they've signed in, with the acting supervisor's Gmail as the last
+ * resort for a coach who has never completed sign-in. Rate-limited with the
+ * same per-client cap as every other magic-link path, logged to communications
+ * (attributed to the owning coach) and to the admin audit trail.
  */
 export async function POST(
   _req: NextRequest,
@@ -65,44 +63,39 @@ export async function POST(
     )
   }
 
-  const sender: Coach = (owner as Coach).google_refresh_token ? (owner as Coach) : actor
-  if (!sender.google_refresh_token) {
-    return NextResponse.json(
-      { error: 'Neither the coach nor your account has Gmail access — sign out and back in.' },
-      { status: 400 }
-    )
-  }
+  const owningCoach = owner as Coach
+  const sender: Coach = owningCoach.google_refresh_token ? owningCoach : actor
 
   const raw = await createLoginToken(client.id, client.org_id)
   const link_ = `${getBaseUrl()}/portal/verify?token=${raw}`
-  const firstName = (client.name || '').split(' ')[0] || 'there'
-  const subject = 'Your coaching portal invitation'
-  const html = buildMagicLinkEmailHtml({ firstName, link: link_, coachName: (owner as Coach).name })
-
-  const sent = await sendCoachHtmlEmail(sender, { to: client.email, cc: '', subject, html })
 
   // Attributed to the OWNING coach either way — it's their client relationship.
-  await logCommunication(supabase, {
-    coach_id: params.id,
-    client_id: client.id,
-    type: 'email',
-    direction: 'outbound',
-    subject,
-    preview: 'Client Portal sign-in link',
-    body_html: null,
-    status: sent ? 'sent' : 'failed',
-    error_detail: sent ? null : 'Gmail send failed',
-  } as any)
+  const sent = await sendPortalLoginEmail({
+    client: { id: client.id, name: client.name, email: client.email },
+    link: link_,
+    kind: 'invite',
+    coach: owningCoach,
+    sender,
+    attributeToCoachId: params.id,
+  })
 
-  if (!sent) return NextResponse.json({ error: 'Could not send the invite email.' }, { status: 502 })
+  if (!sent.ok) {
+    return NextResponse.json({ error: `Could not send the invite email. ${sent.error ?? ''}`.trim() }, { status: 502 })
+  }
 
+  const sentFrom =
+    sent.via === 'resend' ? 'transactional' : sender.id === actor.id ? 'supervisor' : 'owning_coach'
   await logAdminAction(supabase, {
     actorCoachId: actor.id,
     action: 'portal_invite_resend',
     targetCoachId: params.id,
     targetClientId: client.id,
-    detail: { sent_from: sender.id === actor.id ? 'supervisor' : 'owning_coach' },
+    detail: { sent_from: sentFrom },
   })
 
-  return NextResponse.json({ ok: true, sentTo: client.email, sentFrom: sender.email })
+  return NextResponse.json({
+    ok: true,
+    sentTo: client.email,
+    sentFrom: sent.via === 'resend' ? process.env.PORTAL_FROM_EMAIL : sender.email,
+  })
 }
