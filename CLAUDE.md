@@ -1108,6 +1108,70 @@ is never accepted here, and vice-versa.
   `dismissed_at` is the coach's override for a false positive. Reads are
   defensive: no table → the old nudge-derived list.
 
+## Assessment debrief add-on (ZF 360 first; migration 058) — Phase 1 shipped
+
+A **document-grounded assessment debrief** as a per-client FEATURE FLAG on the
+existing Client Portal — same login, same chat, same middleware, same `clients`
+table. Not a second portal. Build prompt: "ZF 360 AI Debrief Portal" (target live
+2026-11-01, ~113 seats across several client companies at $100/seat purchased).
+**Instrument-agnostic by design:** no table/column/route/component is named after
+Zenger Folkman; ZF-specific logic lives only in a versioned `prompt_briefs` row.
+
+**Two orthogonal axes.** `clients.client_type` (`client` = coaching client,
+`coach` = team coach in the roster, **`portal`** = standalone assessment
+participant, added by 058 to the existing 031 check) and
+`clients.portal_features` jsonb (`{"assessments": true}` switches the 360 card +
+chat grounding on). **Never gate the 360 surfaces on `client_type`** — a coaching
+client turning a 360 on is the common case and must be a toggle on their existing
+record, no re-onboarding. `company_id` / `cohort_id` are independently nullable;
+company vision/values are additive when present and absent without a trace when
+not. Default `portal_features = {}` keeps every existing client's portal
+byte-identical.
+
+**House-coach ownership (§7).** Every portal client carries a `coach_clients`
+link to Jeff so the existing gates keep working; the roster already filters on
+`client_type = 'client'`, so `portal` rows stay out of it. The debrief coaches
+have **no app access** in v1 — `cohorts.debrief_coach_name` is text.
+
+**Phase 1 (this section) = data model + email transport.** Tables: `companies`,
+`cohorts` (seats purchased; seats activated is COUNTED from `clients.cohort_id`),
+`client_documents` (kind `assessment_360|personnel_review|company_doc`,
+`structured_data` = the sole numeric source of truth, `assessment_date` = the
+longitudinal ordering key, `visible_to_coach` enforced at the query layer —
+`personnel_review` is always false), `prompt_briefs` (one active row per slug;
+placeholder `assessment_360` v1 seeded — Jeff replaces the body from the command
+center as a new version), `support_tickets` + `support_ticket_messages` ("Contact
+support" for coach-less clients), `portal_events` (outcomes instrumentation,
+separate from the prunable `portal_access_log`), plus `portal_messages.metadata`
+(brief version stamp). PDFs will live in a private `client-documents` bucket
+(`${clientId}/${documentId}.pdf`, created in code on first upload — not
+`library-pdfs`).
+
+**Transactional email (`lib/email/transactional.ts` + `lib/portal/send.ts`).**
+Portal sign-in links and invitations go through **Resend** (bare `fetch`, no SDK)
+from a verified subdomain when `RESEND_API_KEY` + `PORTAL_FROM_EMAIL` are set —
+Reply-To the client's coach when one exists — else fall back to the coach's Gmail
+(today's behavior). `sendPortalLoginEmail` is the ONE path (used by
+`/api/portal/auth/request`, `/api/clients/[id]/portal-invite`, and the Command
+Center on-behalf resend); every send logs to `communications`. A coach-less
+client can only be reached via Resend — with it unconfigured the send fails loud.
+`buildMagicLinkEmailHtml` signs off with the firm when `coachName` is null.
+**Coach-initiated client email is untouched** — never route `sendCoachHtmlEmail`
+call sites for coaching clients through Resend. Warm-up: no bulk send in Phase 1;
+invite a few real portal clients per day through the per-client button for two
+weeks before any cohort blast (Phase 4).
+
+**Remaining phases:** 2 document pipeline (upload, text + **pdfjs geometry** pass
+for bands/norms — pdfplumber is Python and can't run on the Node runtime, so the
+same bar-x1/fill-colour logic is ported to `pdfjs-dist` via `unpdf`; cross-check,
+format-version detection, development-target model, longitudinal comparison,
+download), 3 portal surfaces (360 card, chat context layering with the active
+brief + company context, starters, portal goals write path with `author` stamp,
+save-as-goal, presence-aware cards, contact-support card), 4 command center
+(companies, cohorts, portal users, documents, support queue, brief editor, CTA),
+5 dry run. Non-goals stand: no chat tool-use, no debrief-coach logins, no sponsor
+dashboards, no download toggle, no "most improved" lists.
+
 ## Multi-coach beta (2026-08 — coach onboarding readiness)
 
 Plan: `docs/BETA_COACH_ONBOARDING_PLAN.md`. Beta scope decision: **transcript
@@ -1273,6 +1337,9 @@ secret for the `POST /api/billing/webhooks/stripe` endpoint),
 `STRIPE_COACH_PRICE_ID` (the recurring Price id for the coach platform
 subscription — Command Center "Send billing link"; without it coach billing
 links fail with a clear error).
+Transactional email (Client Portal sign-in links/invitations — see the Assessment
+debrief section): `RESEND_API_KEY`, `PORTAL_FROM_EMAIL`, optional
+`PORTAL_FROM_NAME`; unset = portal links fall back to the coach's Gmail.
 See `.env.example`.
 
 ## Stripe integration
@@ -1751,6 +1818,19 @@ NOT yet live** — the remaining Stripe setup is tracked in the "Coach billing
 go-live checklist" in the Admin Command Center section above. Until those steps
 are done, "Send billing link" fails with a clear `STRIPE_COACH_PRICE_ID` error
 and no coach can be charged.
+
+**`058_assessment_debrief_foundation.sql` — PENDING (apply before deploying the
+Phase 1 transport code; the portal invite routes read `clients` columns that
+exist regardless, so the app runs without it, but nothing in the Assessment
+debrief add-on can be configured until it's in).** Adds `companies`, `cohorts`,
+`client_documents`, `prompt_briefs` (seeds the placeholder `assessment_360` v1
+brief), `support_tickets` + `support_ticket_messages`, `portal_events`; widens
+`clients.client_type` to allow `portal`; adds `clients.company_id/cohort_id/
+portal_features/portal_access_expires_at` and `portal_messages.metadata`. All
+additive/defaulted — every existing client reads `portal_features = {}`.
+Verified up + down + re-up against Postgres 16. Reversible via
+`058_assessment_debrief_foundation_down.sql` (resets any `portal` client to
+`client` first).
 
 **`048_supervisor_bootstrap_and_signature_unique.sql` — APPLIED (staging + production, 2026-08-14).** (1) Promotes
 the founding coach (email jeff@jeffkholmes.com, else earliest-created) to

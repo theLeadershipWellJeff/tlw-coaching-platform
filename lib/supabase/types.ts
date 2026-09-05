@@ -84,9 +84,19 @@ export type Client = {
   coaching_map: string | null
   // Flat per-session fee, in dollars. Drives the Practice revenue cards.
   session_fee: number | null
-  // Distinguishes regular coaching clients from team coaches kept here for
-  // note/transcript history (migration 030). Default 'client'.
-  client_type: 'client' | 'coach'
+  // 'client' = a coaching client; 'coach' = a team coach kept here for
+  // note/transcript history (migration 030); 'portal' = a standalone assessment
+  // participant with no coaching relationship (migration 058). Default 'client'.
+  client_type: 'client' | 'coach' | 'portal'
+  // Assessment debrief links + flag (migration 058). company_id/cohort_id are
+  // independently nullable — a coaching client who takes a 360 has neither.
+  company_id: string | null
+  cohort_id: string | null
+  // Per-client portal feature flags, ORTHOGONAL to client_type. {} = today's
+  // portal, byte-identical. e.g. {"assessments": true}.
+  portal_features: PortalFeatures
+  // Denormalised from the cohort at activation; per-client extensions allowed.
+  portal_access_expires_at: Timestamp | null
   // Agreement state (migration 018) — the source of truth the workspace and the
   // scoring engine's Gate 1 read. recording_authorized: true = consented,
   // false = explicit decline (compliance flag), null = unknown / no decision.
@@ -478,6 +488,115 @@ export type ClientCredential = {
 // Frameworks surfaced to a client (migration 055). Written when a scored session
 // names a framework, or when a framework nudge is sent, independent of whether a
 // nudge survives the per-window cap. `dismissed_at` is the coach's override.
+// ---------------------------------------------------------------------------
+// Assessment debrief foundation (migration 058). Instrument-agnostic: nothing
+// here is named after a specific 360 vendor — instrument specifics live in a
+// versioned prompt_briefs row.
+// ---------------------------------------------------------------------------
+
+/** Per-client portal feature flags (clients.portal_features). */
+export type PortalFeatures = {
+  assessments?: boolean
+  goals?: boolean
+}
+
+export type Company = {
+  id: string
+  org_id: string
+  name: string
+  vision: string | null
+  values: string | null
+  notes: string | null
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
+export type Cohort = {
+  id: string
+  org_id: string
+  company_id: string
+  name: string
+  seats_purchased: number
+  access_starts_at: Timestamp | null
+  access_expires_at: Timestamp | null
+  // Text on purpose — debrief coaches have no app access in v1.
+  debrief_coach_name: string | null
+  status: string // 'active' | 'closed'
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
+export type ClientDocumentKind = 'assessment_360' | 'personnel_review' | 'company_doc'
+export type ExtractionStatus = 'pending' | 'complete' | 'failed' | 'unsupported'
+
+export type ClientDocument = {
+  id: string
+  org_id: string
+  client_id: string
+  kind: ClientDocumentKind
+  title: string | null
+  storage_path: string
+  size_bytes: number | null
+  extracted_text: string | null
+  structured_data: Record<string, unknown> | null
+  extraction_status: ExtractionStatus
+  extraction_error: string | null
+  uploaded_by: string | null
+  uploader_role: 'coach' | 'client'
+  // Enforced at the QUERY layer on every coach-side read; personnel_review is
+  // always false.
+  visible_to_coach: boolean
+  // The ordering key for longitudinal comparison — never created_at.
+  assessment_date: DateString | null
+  instrument: string | null
+  format_version: string | null
+  supersedes_document_id: string | null
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
+export type PromptBrief = {
+  id: string
+  org_id: string
+  slug: string
+  version: number
+  title: string
+  body: string
+  is_active: boolean
+  created_at: Timestamp
+}
+
+export type SupportTicket = {
+  id: string
+  org_id: string
+  client_id: string
+  subject: string
+  body: string
+  status: string // 'open' | 'closed'
+  assigned_to: string | null
+  created_at: Timestamp
+  closed_at: Timestamp | null
+}
+
+export type SupportTicketMessage = {
+  id: string
+  org_id: string
+  ticket_id: string
+  author_role: 'client' | 'staff'
+  author_id: string | null
+  body: string
+  created_at: Timestamp
+}
+
+export type PortalEvent = {
+  id: string
+  org_id: string
+  client_id: string
+  event_type: string
+  metadata: Record<string, unknown> | null
+  created_at: Timestamp
+}
+
 export type ClientFramework = {
   id: string
   org_id: string
@@ -638,7 +757,7 @@ export type SessionReport = {
  * any nullable column is optional too (Postgres fills NULL). Everything else
  * is required.
  */
-type Defaulted = 'id' | 'created_at' | 'updated_at' | 'sent_at' | 'agreement_on_file' | 'client_type' | 'org_id' | 'portal_onboarded' | 'failed_attempts' | 'first_seen_at' | 'last_seen_at'
+type Defaulted = 'id' | 'created_at' | 'updated_at' | 'sent_at' | 'agreement_on_file' | 'client_type' | 'org_id' | 'portal_onboarded' | 'failed_attempts' | 'first_seen_at' | 'last_seen_at' | 'portal_features' | 'seats_purchased' | 'status' | 'version' | 'is_active' | 'extraction_status' | 'visible_to_coach'
 type NullableKeys<T> = { [K in keyof T]-?: null extends T[K] ? K : never }[keyof T]
 type OptionalOnInsert<T> = Defaulted | Extract<keyof T, NullableKeys<T>>
 
@@ -677,6 +796,8 @@ export type PortalMessage = {
   conversation_id: string
   role: string // user | assistant
   content: string
+  // e.g. {"brief_slug":"assessment_360","brief_version":1} (migration 058)
+  metadata: Record<string, unknown> | null
   created_at: Timestamp
 }
 
@@ -962,6 +1083,48 @@ export type Database = {
         Row: ClientFramework
         Insert: Insertable<ClientFramework>
         Update: Updatable<ClientFramework>
+        Relationships: []
+      }
+      companies: {
+        Row: Company
+        Insert: Insertable<Company>
+        Update: Updatable<Company>
+        Relationships: []
+      }
+      cohorts: {
+        Row: Cohort
+        Insert: Insertable<Cohort>
+        Update: Updatable<Cohort>
+        Relationships: []
+      }
+      client_documents: {
+        Row: ClientDocument
+        Insert: Insertable<ClientDocument>
+        Update: Updatable<ClientDocument>
+        Relationships: []
+      }
+      prompt_briefs: {
+        Row: PromptBrief
+        Insert: Insertable<PromptBrief>
+        Update: Updatable<PromptBrief>
+        Relationships: []
+      }
+      support_tickets: {
+        Row: SupportTicket
+        Insert: Insertable<SupportTicket>
+        Update: Updatable<SupportTicket>
+        Relationships: []
+      }
+      support_ticket_messages: {
+        Row: SupportTicketMessage
+        Insert: Insertable<SupportTicketMessage>
+        Update: Updatable<SupportTicketMessage>
+        Relationships: []
+      }
+      portal_events: {
+        Row: PortalEvent
+        Insert: Insertable<PortalEvent>
+        Update: Updatable<PortalEvent>
         Relationships: []
       }
     }

@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { requireClientCoach } from '@/lib/client-access'
 import { createLoginToken } from '@/lib/portal/tokens'
-import { buildMagicLinkEmailHtml } from '@/lib/portal/email'
-import { sendCoachHtmlEmail } from '@/lib/gmail'
+import { sendPortalLoginEmail } from '@/lib/portal/send'
 import { getBaseUrl } from '@/lib/url'
 import { toErrorResponse } from '@/lib/api-handler'
 import { getPortalLoginStatus } from '@/lib/portal/credentials'
@@ -50,7 +49,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 }
 
 /** Coach-initiated Client Portal invite: mint a magic-link and email it to the
- *  client from the coach's Gmail. Tenant-gated via requireClientCoach. */
+ *  client (Resend when configured, else the coach's Gmail — lib/portal/send.ts).
+ *  Tenant-gated via requireClientCoach. */
 export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const supabase = getSupabaseAdmin()
@@ -68,15 +68,16 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
 
     const raw = await createLoginToken(client.id, client.org_id)
     const link = `${getBaseUrl()}/portal/verify?token=${raw}`
-    const firstName = (client.name || '').split(' ')[0] || 'there'
 
-    const sent = await sendCoachHtmlEmail(coach, {
-      to: client.email,
-      cc: '',
-      subject: 'Your coaching portal invitation',
-      html: buildMagicLinkEmailHtml({ firstName, link, coachName: coach.name }),
+    const sent = await sendPortalLoginEmail({
+      client: { id: client.id, name: client.name, email: client.email },
+      link,
+      kind: 'invite',
+      coach,
     })
-    if (!sent) return NextResponse.json({ error: 'Could not send the invite email.' }, { status: 502 })
+    if (!sent.ok) {
+      return NextResponse.json({ error: `Could not send the invite email. ${sent.error ?? ''}`.trim() }, { status: 502 })
+    }
 
     return NextResponse.json({ ok: true, sentTo: client.email })
   } catch (e) {
