@@ -1643,9 +1643,9 @@ credential (see `APP_STATE.md`); the `043` policies stay applied + dormant.
 **`044_client_tokens.sql` — APPLIED (staging + production, 2026-08).** The Client
 Portal magic-link auth table (see the Client Portal section). Additive.
 
-**`045_portal_chat.sql` — `portal_conversations` + `portal_messages`** (Client
-Portal AI chat). Additive; **apply before the chat is used — the chat routes
-select/insert these tables.**
+**`045_portal_chat.sql` — APPLIED (production, confirmed 2026-09-05).**
+`portal_conversations` + `portal_messages` (Client Portal AI chat). Additive; the
+chat routes select/insert these tables.
 
 **`046_signature_owner.sql` — APPLIED (staging + production, 2026-08-14).** Attaches the seeded global email
 signature (coach_id NULL) to Jeff's coach row, since signature resolution no
