@@ -1776,7 +1776,7 @@ go-live checklist" in the Admin Command Center section above. Until those steps
 are done, "Send billing link" fails with a clear `STRIPE_COACH_PRICE_ID` error
 and no coach can be charged.
 
-**`058_session_plans.sql` — PENDING (apply in Supabase).** Saved session plans:
+**`058_session_plans.sql` — APPLIED (production, confirmed 2026-09-05).** Saved session plans:
 the `session_plans` table (generated PlanResult jsonb + the coach's own notepad
 `notes`, coach/client FKs, org_id default, RLS enabled) behind the plan window's
 "Save plan" button and the workspace Session plans card. Additive and
