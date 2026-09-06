@@ -49,7 +49,7 @@ const STEPS: Step[] = [
   },
   {
     icon: '🎯',
-    title: 'Your goals and sessions',
+    title: 'Your goals and session transcripts',
     body: 'Your coaching goals, a record of every session, and the notes your coach sent after each one. Open any of them to read in full.',
   },
   {

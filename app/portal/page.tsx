@@ -231,11 +231,11 @@ export default async function PortalHome() {
         {/* Session records — each opens the full transcript */}
         {showTranscripts && (
         <Card
-          title="Your sessions"
-          info="A record of your past sessions. Open one to read it in full, or search up top to find a moment."
+          title="Session transcripts"
+          info="The transcript of each past session. Open one to read it in full, or search up top to find a moment."
         >
           {data.transcripts.length === 0 ? (
-            <Empty>Your session records will appear here.</Empty>
+            <Empty>Your session transcripts will appear here.</Empty>
           ) : (
             <ul className="space-y-1.5">
               {data.transcripts.map((t) => (
