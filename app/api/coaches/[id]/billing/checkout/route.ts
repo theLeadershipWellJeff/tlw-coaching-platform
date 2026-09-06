@@ -66,8 +66,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const session = await createCoachSubscriptionCheckout({
       customerId,
       coachId: coach.id,
-      successUrl: `${base}/business-center/coaches?billing=success`,
-      cancelUrl: `${base}/business-center/coaches?billing=cancelled`,
+      successUrl: `${base}/command-center?billing=success`,
+      cancelUrl: `${base}/command-center?billing=cancelled`,
     })
     if (!session.url) throw new Error('Stripe returned no checkout URL')
 

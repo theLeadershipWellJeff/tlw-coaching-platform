@@ -272,7 +272,7 @@ function ParticipantList({ users }: { users: PortalUser[] }) {
       {users.map((u) => (
         <li key={u.id} className="flex flex-wrap items-center justify-between gap-2 py-1.5 text-[12px]">
           <span className="min-w-0">
-            <Link href={`/business-center/portal/users/${u.id}`} className="font-medium text-tlw-navy-deep hover:text-tlw-signal-orange hover:underline">{u.name}</Link>
+            <Link href={`/command-center/portal/users/${u.id}`} className="font-medium text-tlw-navy-deep hover:text-tlw-signal-orange hover:underline">{u.name}</Link>
             <span className="ml-2 text-tlw-warm-gray">{u.email || 'no email'}</span>
           </span>
           <span className="flex shrink-0 items-center gap-2 text-tlw-warm-gray">

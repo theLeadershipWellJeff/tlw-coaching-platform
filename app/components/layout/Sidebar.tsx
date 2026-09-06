@@ -11,6 +11,8 @@ interface SidebarProps {
   floating?: boolean
   /** Mobile: called when a destination is picked, so the overlay can close. */
   onNavigate?: () => void
+  /** Supervisor (super-admin) session — shows the Command Center entry. */
+  isSupervisor?: boolean
 }
 
 interface NavDestination {
@@ -19,6 +21,8 @@ interface NavDestination {
   icon: ReactNode
   disabled?: boolean
   badge?: string
+  /** Only rendered for a supervisor session. */
+  supervisorOnly?: boolean
 }
 
 const stroke = {
@@ -89,6 +93,13 @@ const icons = {
       <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
     </svg>
   ),
+  command: (
+    <svg viewBox="0 0 24 24" width="18" height="18" {...stroke}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 3.5v3M12 17.5v3M3.5 12h3M17.5 12h3" />
+      <circle cx="12" cy="12" r="2.5" />
+    </svg>
+  ),
 }
 
 const destinations: NavDestination[] = [
@@ -99,6 +110,7 @@ const destinations: NavDestination[] = [
   { href: '/groups', label: 'Groups', icon: icons.groups },
   { href: '/library', label: 'Library', icon: icons.library },
   { href: '/business-center', label: 'Business Center', icon: icons.business },
+  { href: '/command-center', label: 'Command Center', icon: icons.command, supervisorOnly: true },
 ]
 
 const toggleChevron = (collapsed: boolean) => (
@@ -113,8 +125,9 @@ const toggleChevron = (collapsed: boolean) => (
   </svg>
 )
 
-export function Sidebar({ collapsed, onToggle, floating, onNavigate }: SidebarProps) {
+export function Sidebar({ collapsed, onToggle, floating, onNavigate, isSupervisor = false }: SidebarProps) {
   const pathname = usePathname()
+  const visible = destinations.filter((d) => !d.supervisorOnly || isSupervisor)
 
   return (
     <aside
@@ -153,7 +166,7 @@ export function Sidebar({ collapsed, onToggle, floating, onNavigate }: SidebarPr
       )}
 
       <nav className="flex-1 space-y-1 overflow-y-auto px-2 py-3">
-        {destinations.map((d) => {
+        {visible.map((d) => {
           const active =
             !d.disabled && (pathname === d.href || pathname.startsWith(d.href + '/'))
           return (

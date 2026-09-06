@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 
-/** The debrief center moved under the Client Portal admin page. */
+/** The debrief center moved under the Command Center's Client Portal page. */
 export default function DebriefRedirect() {
-  redirect('/business-center/portal')
+  redirect('/command-center/portal')
 }
