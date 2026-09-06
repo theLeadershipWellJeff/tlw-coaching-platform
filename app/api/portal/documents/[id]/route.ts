@@ -3,6 +3,7 @@ import { getPortalClientId } from '@/lib/portal/server'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { logPortalAccess } from '@/lib/portal/access'
 import { logPortalEvent } from '@/lib/portal/events'
+import { deleteClientDocument, DocumentError } from '@/lib/documents/pipeline'
 
 export const runtime = 'nodejs'
 
@@ -35,4 +36,20 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   await logPortalAccess(clientId, 'document_visibility', { detail: `${doc.id}:${body.visibleToCoach ? 'visible' : 'hidden'}` })
   await logPortalEvent(clientId, 'document_visibility_changed', { document_id: doc.id, visible_to_coach: body.visibleToCoach })
   return NextResponse.json({ ok: true, visible_to_coach: body.visibleToCoach })
+}
+
+/** Remove one of the client's OWN documents (row + file). Scoped to the session client. */
+export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+  const clientId = await getPortalClientId()
+  if (!clientId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const supabase = getSupabaseAdmin()
+  const { data: doc } = await supabase.from('client_documents').select('id, storage_path, kind').eq('id', params.id).eq('client_id', clientId).maybeSingle()
+  if (!doc) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  try {
+    await deleteClientDocument(supabase, doc)
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof DocumentError ? e.message : 'Could not remove the document.' }, { status: 500 })
+  }
+  await logPortalAccess(clientId, 'document_visibility', { detail: `${doc.id}:deleted` })
+  return NextResponse.json({ ok: true })
 }

@@ -1331,7 +1331,7 @@ mounted; the goals card stays the read-only server-rendered one).
 
 ### Phase 4 — command center (shipped 2026-09-06)
 
-**`/business-center/debrief`** (linked from the Command Center header;
+**`/business-center/portal`** (linked from the Command Center header;
 supervisor-only — every `/api/admin/*` route goes through
 `lib/admin/route.ts#adminContext` → `requireSupervisor`, and every action
 writes `admin_audit_log`). Five tabs, each a client component:
@@ -1373,6 +1373,39 @@ writes `admin_audit_log`). Five tabs, each a client component:
   activate): saving creates a **new version and activates it** (old versions
   kept; exactly one active per slug via the partial unique index); effective
   on the next chat message, no deploy. Roll back by activating an older one.
+
+### Dry-run feedback round 1 (2026-09-06; migration 060)
+
+Jeff's first pass through the command center reshaped the admin IA to match
+the product's two layers. **Command Center → "Client Portal"**
+(`/business-center/portal`; the old `/business-center/debrief` redirects):
+
+- **Portal users** tab = EVERY portal user across the four use cases, with a
+  `kind` filter (`lib/admin/debrief.ts#PortalUserKind`): `coaching` (general
+  portal, flag off — included once a sign-in link was ever minted),
+  `coaching_zf` (flag on), `standalone` (client_type portal, no company/
+  cohort), `enterprise` (portal with company/cohort). "Add a ZF participant"
+  takes company + cohort, both optional — empty = standalone.
+- **ZF Portal** tab = `CompaniesPanel`: per company, **company documents**
+  (`company_documents`, migration 060 — PDF/Word/text; `lib/documents/company.ts`;
+  routes `GET/POST /api/admin/companies/[id]/documents`, `PATCH/DELETE
+  …/[docId]`; `include_in_chat` toggle) plus **+ Add participant** (under the
+  company, cohort optional) and **+ New cohort**. Company documents' extracted
+  text joins the chat context of that company's participants only
+  (`lib/portal/company.ts`, `COMPANY_DOCS_CHAR_BUDGET` 16k), rendered inside the
+  COMPANY CONTEXT section by `prompt.ts`. Fails soft before 060 is applied
+  (vision/values still work; the documents list shows an error).
+- **Reports** / **Support** / **Brief** tabs unchanged.
+
+**Portal side — "Your documents" card (`app/portal/DocumentsCard.tsx`)**, on
+every client's home (coach or not): upload a 360 (PDF, name-gated; a complete
+one switches the assessment flag on, same as a coach upload), a personnel
+review (never coach-visible), or an **"Other document"** (kind `general`,
+PDF/Word/text — the pipeline now accepts non-PDF for non-360 kinds and keeps
+the extension in the storage path); download; "Shared with coach" toggle;
+remove (`DELETE /api/portal/documents/[id]`). General documents' text joins
+that client's chat context (`chat.ts#loadClientDocumentsForChat`, 16k budget,
+own section in the prompt) so the portal works as a general coaching tool.
 
 ### Phase 5 — dry run kit (shipped 2026-09-06; the rehearsal itself is Jeff's)
 
@@ -2075,6 +2108,13 @@ additive/defaulted — every existing client reads `portal_features = {}`.
 Verified up + down + re-up against Postgres 16. Reversible via
 `059_assessment_debrief_foundation_down.sql` (resets any `portal` client to
 `client` first).
+
+**`060_company_documents.sql` — PENDING (apply before uploading company
+documents; everything else runs without it).** `company_documents` table
+(sponsor material per company: file in the `client-documents` bucket under
+`companies/<company_id>/`, extracted text for chat, `include_in_chat`
+toggle). Additive, RLS enabled. Verified up + down + re-up against Postgres
+16. Reversible via `060_company_documents_down.sql`.
 
 **`048_supervisor_bootstrap_and_signature_unique.sql` — APPLIED (staging + production, 2026-08-14).** (1) Promotes
 the founding coach (email jeff@jeffkholmes.com, else earliest-created) to

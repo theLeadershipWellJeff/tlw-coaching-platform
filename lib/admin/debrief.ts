@@ -31,11 +31,21 @@ export async function resolveHouseCoach(supabase: SupabaseClient<Database>, fall
   return fallback
 }
 
+/**
+ * Which portal use case a client is:
+ *  - coaching:    a coaching client using the general portal (flag off)
+ *  - coaching_zf: a coaching client with the 360 switched on
+ *  - standalone:  a portal-only participant with no company/cohort
+ *  - enterprise:  a portal-only participant bought by a company (company or cohort set)
+ */
+export type PortalUserKind = 'coaching' | 'coaching_zf' | 'standalone' | 'enterprise'
+
 export type PortalUserRow = {
   id: string
   name: string
   email: string | null
   client_type: string
+  kind: PortalUserKind
   status: string
   company_id: string | null
   company_name: string | null
@@ -53,20 +63,34 @@ export type PortalUserRow = {
 }
 
 /**
- * Portal users = standalone participants (client_type 'portal') PLUS coaching
- * clients whose assessment flag is on. Separate from the coaching roster.
+ * Portal users across every use case: portal-only participants (client_type
+ * 'portal'), coaching clients with the 360 switched on, and coaching clients
+ * who have ever been invited to the portal. Separate from the coaching roster.
  */
-export async function listPortalUsers(supabase: SupabaseClient<Database>, opts: { cohortId?: string; companyId?: string } = {}): Promise<PortalUserRow[]> {
+export async function listPortalUsers(supabase: SupabaseClient<Database>, opts: { cohortId?: string; companyId?: string; kind?: PortalUserKind } = {}): Promise<PortalUserRow[]> {
+  // Coaching clients count as portal users once a sign-in link has been minted.
+  const { data: invited } = await supabase.from('client_tokens').select('client_id').eq('purpose', 'login')
+  const invitedIds = Array.from(new Set((invited || []).map((t) => t.client_id)))
+  const filters = ['client_type.eq.portal', 'portal_features->>assessments.eq.true']
+  if (invitedIds.length) filters.push(`id.in.(${invitedIds.join(',')})`)
   let q = supabase
     .from('clients')
     .select('id, name, email, client_type, status, company_id, cohort_id, portal_features, portal_access_expires_at, created_at')
-    .or('client_type.eq.portal,portal_features->>assessments.eq.true')
+    .or(filters.join(','))
+    .neq('client_type', 'coach')
+    .neq('status', 'archived')
     .order('created_at', { ascending: false })
   if (opts.cohortId) q = q.eq('cohort_id', opts.cohortId)
   if (opts.companyId) q = q.eq('company_id', opts.companyId)
   const { data: rows, error } = await q
   if (error) throw new AdminError(500, error.message)
-  const clients = rows || []
+  let clients = rows || []
+  const kindOf = (c: { client_type: string; company_id: string | null; cohort_id: string | null; portal_features: unknown }): PortalUserKind => {
+    const f = (c.portal_features || {}) as PortalFeatures
+    if (c.client_type === 'portal') return c.company_id || c.cohort_id ? 'enterprise' : 'standalone'
+    return f.assessments === true ? 'coaching_zf' : 'coaching'
+  }
+  if (opts.kind) clients = clients.filter((c) => kindOf(c) === opts.kind)
   if (!clients.length) return []
   const ids = clients.map((c) => c.id)
 
@@ -110,6 +134,7 @@ export async function listPortalUsers(supabase: SupabaseClient<Database>, opts: 
       name: c.name,
       email: c.email,
       client_type: c.client_type,
+      kind: kindOf(c),
       status: c.status,
       company_id: c.company_id,
       company_name: c.company_id ? companyName.get(c.company_id) || null : null,

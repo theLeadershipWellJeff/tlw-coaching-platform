@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { adminContext, adminErrorResponse } from '@/lib/admin/route'
-import { createPortalParticipant, listPortalUsers } from '@/lib/admin/debrief'
+import { createPortalParticipant, listPortalUsers, type PortalUserKind } from '@/lib/admin/debrief'
 import { logAdminAction } from '@/lib/admin/audit'
 
 export const runtime = 'nodejs'
@@ -11,7 +11,8 @@ export async function GET(req: NextRequest) {
     const { supabase } = await adminContext()
     const cohortId = req.nextUrl.searchParams.get('cohortId') || undefined
     const companyId = req.nextUrl.searchParams.get('companyId') || undefined
-    const users = await listPortalUsers(supabase, { cohortId, companyId })
+    const kind = (req.nextUrl.searchParams.get('kind') || undefined) as PortalUserKind | undefined
+    const users = await listPortalUsers(supabase, { cohortId, companyId, kind })
     return NextResponse.json({ users })
   } catch (e) {
     return adminErrorResponse(e)

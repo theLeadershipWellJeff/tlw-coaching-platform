@@ -533,7 +533,9 @@ export type Cohort = {
   updated_at: Timestamp
 }
 
-export type ClientDocumentKind = 'assessment_360' | 'personnel_review' | 'company_doc'
+// 'general' = any other document a client (or coach) adds to the client's own
+// portal — text is extracted and joins that client's chat context.
+export type ClientDocumentKind = 'assessment_360' | 'personnel_review' | 'company_doc' | 'general'
 export type ExtractionStatus = 'pending' | 'complete' | 'failed' | 'unsupported'
 
 export type ClientDocument = {
@@ -570,6 +572,23 @@ export type PromptBrief = {
   title: string
   body: string
   is_active: boolean
+  created_at: Timestamp
+}
+
+// Sponsor-supplied material per company (migration 060). Extracted text is fed
+// to the chat of every client whose company_id points here — never anyone else.
+export type CompanyDocument = {
+  id: string
+  org_id: string
+  company_id: string
+  title: string
+  storage_path: string
+  size_bytes: number | null
+  extracted_text: string | null
+  extraction_status: string // 'pending' | 'complete' | 'failed'
+  extraction_error: string | null
+  include_in_chat: boolean
+  uploaded_by: string | null
   created_at: Timestamp
 }
 
@@ -764,7 +783,7 @@ export type SessionReport = {
  * any nullable column is optional too (Postgres fills NULL). Everything else
  * is required.
  */
-type Defaulted = 'id' | 'created_at' | 'updated_at' | 'sent_at' | 'agreement_on_file' | 'client_type' | 'org_id' | 'portal_onboarded' | 'failed_attempts' | 'first_seen_at' | 'last_seen_at' | 'portal_features' | 'seats_purchased' | 'status' | 'version' | 'is_active' | 'extraction_status' | 'visible_to_coach'
+type Defaulted = 'id' | 'created_at' | 'updated_at' | 'sent_at' | 'agreement_on_file' | 'client_type' | 'org_id' | 'portal_onboarded' | 'failed_attempts' | 'first_seen_at' | 'last_seen_at' | 'portal_features' | 'seats_purchased' | 'status' | 'version' | 'is_active' | 'extraction_status' | 'visible_to_coach' | 'include_in_chat'
 type NullableKeys<T> = { [K in keyof T]-?: null extends T[K] ? K : never }[keyof T]
 type OptionalOnInsert<T> = Defaulted | Extract<keyof T, NullableKeys<T>>
 
@@ -1124,6 +1143,12 @@ export type Database = {
         Row: ClientDocument
         Insert: Insertable<ClientDocument>
         Update: Updatable<ClientDocument>
+        Relationships: []
+      }
+      company_documents: {
+        Row: CompanyDocument
+        Insert: Insertable<CompanyDocument>
+        Update: Updatable<CompanyDocument>
         Relationships: []
       }
       prompt_briefs: {

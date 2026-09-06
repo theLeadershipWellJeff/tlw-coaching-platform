@@ -39,6 +39,34 @@ const RECENT_SESSION_CHARS = 6000
 const RETRIEVED_CHAR_BUDGET = 24000
 /** Sent notes are short and dense — the coach's own summary of a session. */
 const NOTES_CHAR_BUDGET = 8000
+/** The client's own uploaded documents (kind 'general'), total and per document. */
+const CLIENT_DOCS_CHAR_BUDGET = 16000
+const CLIENT_DOC_CHARS = 8000
+
+/** Text of the documents the client added to their own portal (never a 360 —
+ *  that comes in structured — and never a personnel review, which is private
+ *  reading, not chat material unless the client chooses to share it later). */
+async function loadClientDocumentsForChat(clientId: string): Promise<Array<{ title: string; text: string }>> {
+  const supabase = getSupabaseAdmin()
+  const { data } = await supabase
+    .from('client_documents')
+    .select('title, extracted_text')
+    .eq('client_id', clientId)
+    .eq('kind', 'general')
+    .eq('extraction_status', 'complete')
+    .order('created_at', { ascending: false })
+    .limit(10)
+  const out: Array<{ title: string; text: string }> = []
+  let budget = CLIENT_DOCS_CHAR_BUDGET
+  for (const d of data || []) {
+    if (budget <= 0) break
+    const text = clip(d.extracted_text || '', Math.min(CLIENT_DOC_CHARS, budget))
+    if (!text) continue
+    budget -= text.length
+    out.push({ title: d.title || 'Document', text })
+  }
+  return out
+}
 
 export type ChatMsg = { role: 'user' | 'assistant'; content: string }
 
@@ -77,7 +105,7 @@ export async function buildChatContext(
     ? (client!.coaching_goals as CoachingGoal[])
     : []
 
-  const [{ data: recent }, { data: sentNotes }, { data: coachLinks }, assessment, company] = await Promise.all([
+  const [{ data: recent }, { data: sentNotes }, { data: coachLinks }, assessment, company, clientDocuments] = await Promise.all([
     supabase
       .from('transcripts')
       .select('id, title, session_date, raw_md')
@@ -99,6 +127,7 @@ export async function buildChatContext(
       return null
     }),
     loadCompanyContext(clientId).catch(() => null),
+    loadClientDocumentsForChat(clientId).catch(() => []),
   ])
   const hasCoach = (coachLinks?.length ?? 0) > 0
   const brief = assessment && client?.org_id ? await loadActiveBrief(client.org_id, 'assessment_360').catch(() => null) : null
@@ -160,7 +189,8 @@ export async function buildChatContext(
     clientName,
     hasCoach,
     brief: brief ? { slug: brief.slug, version: brief.version, body: brief.body } : null,
-    company: company ? { name: company.name, vision: company.vision, values: company.values } : null,
+    company: company ? { name: company.name, vision: company.vision, values: company.values, documents: company.documents } : null,
+    clientDocuments,
     assessment: assessment ? { data: assessment.data, assessmentCount: assessment.assessmentCount } : null,
     goals,
     noteParts,

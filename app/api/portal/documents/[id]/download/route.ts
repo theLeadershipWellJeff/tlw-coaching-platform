@@ -26,7 +26,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     .maybeSingle()
   if (!doc) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   const url = await signedDocumentUrl(supabase, doc.storage_path, {
-    downloadAs: `${(doc.title || 'report').replace(/[^\w.-]+/g, '_')}.pdf`,
+    downloadAs: `${(doc.title || 'document').replace(/[^\w.-]+/g, '_')}.${doc.storage_path.split('.').pop() || 'pdf'}`,
   })
   if (!url) return NextResponse.json({ error: 'Could not open the file.' }, { status: 502 })
   await logPortalAccess(clientId, 'document_download', { detail: doc.id })
