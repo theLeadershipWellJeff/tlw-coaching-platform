@@ -2193,6 +2193,16 @@ Verified up + down + re-up against Postgres 16. Reversible via
 toggle). Additive, RLS enabled. Verified up + down + re-up against Postgres
 16. Reversible via `060_company_documents_down.sql`.
 
+**`062_client_documents_reconcile.sql` — PENDING (apply now; the first portal
+upload failed on it).** Production's `client_documents` was created by hand
+before 059's final column list and lacks `updated_at` ("Could not find the
+'updated_at' column … in the schema cache"). 062 is idempotent: `ADD COLUMN IF
+NOT EXISTS` for every 059/060 column on `client_documents` (+ `updated_at` on
+companies/cohorts/support_tickets, `include_in_chat` on company_documents), the
+two 059 indexes, then `NOTIFY pgrst, 'reload schema'`. The down-script is a
+deliberate no-op. Until it is applied, `pipeline.ts#persist` retries the save
+without the timestamp when the error names `updated_at`, so uploads still land.
+
 **`061_portal_profile_weekly_plans.sql` — APPLIED (production, confirmed 2026-09-06).**
 Adds `clients.preferred_name`, `portal_conversations.mode` (default
 `general`), the `weekly_plans` table (RLS; unique `(client_id, week_start)`),
