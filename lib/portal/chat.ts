@@ -13,12 +13,22 @@
  *      (`portal_chat_context`, migration 053).
  * If the retrieval function is missing, this degrades to the old recency-only
  * behaviour rather than failing.
+ *
+ * Assessment debrief (Phase 3): when `portal_features.assessments` is on and a
+ * completed assessment exists, the prompt additionally carries the grounding
+ * rules, the active interpretation brief, company vision/values (only when the
+ * client has a company), and the most recent report's structured data + verbatims
+ * — layered by lib/portal/prompt.ts. The 360 is another grounded source blended
+ * with notes and transcripts, never a separate mode.
  */
 import Anthropic from '@anthropic-ai/sdk'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { htmlToPlainText } from '@/lib/communications'
 import type { CoachingGoal } from '@/lib/supabase/types'
-import { PORTAL_CHAT_VOICE_STANDARDS } from '@/lib/writing-standards'
+import { loadLatestAssessmentForChat } from './assessments'
+import { loadActiveBrief } from './briefs'
+import { loadCompanyContext } from './company'
+import { composeChatSystem } from './prompt'
 
 const MODEL = process.env.PORTAL_CHAT_MODEL || 'claude-sonnet-4-6'
 
@@ -44,15 +54,22 @@ function clip(text: string, max: number): string {
  * (a fresh conversation), the context is recency-only, which is the right
  * default for "what have we been working on lately".
  */
+export type ChatContextMeta = {
+  brief_slug?: string
+  brief_version?: number
+  assessment_document_id?: string
+  has_comparison?: boolean
+}
+
 export async function buildChatContext(
   clientId: string,
   query?: string
-): Promise<{ clientName: string; system: string }> {
+): Promise<{ clientName: string; system: string; meta: ChatContextMeta }> {
   const supabase = getSupabaseAdmin()
 
   const { data: client } = await supabase
     .from('clients')
-    .select('id, name, coaching_goals')
+    .select('id, org_id, name, coaching_goals')
     .eq('id', clientId)
     .maybeSingle()
   const clientName = client?.name || 'the client'
@@ -60,7 +77,7 @@ export async function buildChatContext(
     ? (client!.coaching_goals as CoachingGoal[])
     : []
 
-  const [{ data: recent }, { data: sentNotes }] = await Promise.all([
+  const [{ data: recent }, { data: sentNotes }, { data: coachLinks }, assessment, company] = await Promise.all([
     supabase
       .from('transcripts')
       .select('id, title, session_date, raw_md')
@@ -76,7 +93,15 @@ export async function buildChatContext(
       .eq('status', 'sent')
       .order('sent_at', { ascending: false })
       .limit(20),
+    supabase.from('coach_clients').select('coach_id').eq('client_id', clientId).limit(1),
+    loadLatestAssessmentForChat(clientId).catch((e) => {
+      console.error('assessment context unavailable:', e)
+      return null
+    }),
+    loadCompanyContext(clientId).catch(() => null),
   ])
+  const hasCoach = (coachLinks?.length ?? 0) > 0
+  const brief = assessment && client?.org_id ? await loadActiveBrief(client.org_id, 'assessment_360').catch(() => null) : null
 
   const recentIds = new Set((recent ?? []).map((t) => t.id))
   const recentParts = (recent ?? [])
@@ -131,38 +156,29 @@ export async function buildChatContext(
     noteParts.push(`## Notes${date ? ` — ${date}` : ''}${n.subject ? ` (${n.subject})` : ''}\n${chunk}`)
   }
 
-  const goalsText = goals.length
-    ? goals.map((g) => `- ${g.title}${g.description ? `: ${g.description}` : ''}`).join('\n')
-    : '(no goals recorded yet)'
+  const system = composeChatSystem({
+    clientName,
+    hasCoach,
+    brief: brief ? { slug: brief.slug, version: brief.version, body: brief.body } : null,
+    company: company ? { name: company.name, vision: company.vision, values: company.values } : null,
+    assessment: assessment ? { data: assessment.data, assessmentCount: assessment.assessmentCount } : null,
+    goals,
+    noteParts,
+    recentParts,
+    retrievedParts,
+  })
 
-  const system = `You are a warm, insightful coaching assistant for ${clientName}, a client of theLeadershipWell coaching practice. You help them reflect between sessions, drawing on their own coaching goals and session history below.
+  const meta: ChatContextMeta = {}
+  if (brief) {
+    meta.brief_slug = brief.slug
+    meta.brief_version = brief.version
+  }
+  if (assessment) {
+    meta.assessment_document_id = assessment.documentId
+    meta.has_comparison = !!assessment.data.comparison
+  }
 
-Guidelines:
-- Be supportive, concise, and reflective. Ask thoughtful questions that help ${clientName} think for themselves rather than just giving answers.
-- Ground responses in their goals and sessions when relevant; refer to specifics from the material.
-- When you draw on a specific session or set of notes, say which one (by date or title) so they can go read it themselves.
-- You are a companion for reflection, NOT a replacement for their coach. For anything urgent, sensitive, clinical, or crisis-related, gently encourage them to contact their coach (or an appropriate professional) directly.
-- Never invent facts about their sessions. If something isn't in the material below, say you don't have it. The material below is a relevant selection, not their complete history — if they ask about something you can't see, say so and suggest they search their sessions or ask their coach.
-- Keep a natural, encouraging tone. No clinical or diagnostic language.
-
-${PORTAL_CHAT_VOICE_STANDARDS}
-
-${clientName}'S COACHING GOALS:
-${goalsText}
-
-SESSION NOTES ${clientName} RECEIVED FROM THEIR COACH:
-${noteParts.join('\n\n') || '(no session notes sent yet)'}
-
-MOST RECENT SESSIONS:
-${recentParts.join('\n\n') || '(no sessions on file yet)'}
-
-${
-  retrievedParts.length
-    ? `EARLIER SESSIONS AND NOTES RELEVANT TO THIS QUESTION:\n${retrievedParts.join('\n\n')}`
-    : ''
-}`
-
-  return { clientName, system }
+  return { clientName, system, meta }
 }
 
 function anthropic(): Anthropic {

@@ -1132,7 +1132,7 @@ is never accepted here, and vice-versa.
   `dismissed_at` is the coach's override for a false positive. Reads are
   defensive: no table → the old nudge-derived list.
 
-## Assessment debrief add-on (ZF 360 first; migration 059) — Phase 1 shipped
+## Assessment debrief add-on (ZF 360 first; migration 059) — Phases 1–3 shipped
 
 A **document-grounded assessment debrief** as a per-client FEATURE FLAG on the
 existing Client Portal — same login, same chat, same middleware, same `clients`
@@ -1185,16 +1185,155 @@ call sites for coaching clients through Resend. Warm-up: no bulk send in Phase 1
 invite a few real portal clients per day through the per-client button for two
 weeks before any cohort blast (Phase 4).
 
-**Remaining phases:** 2 document pipeline (upload, text + **pdfjs geometry** pass
-for bands/norms — pdfplumber is Python and can't run on the Node runtime, so the
-same bar-x1/fill-colour logic is ported to `pdfjs-dist` via `unpdf`; cross-check,
-format-version detection, development-target model, longitudinal comparison,
-download), 3 portal surfaces (360 card, chat context layering with the active
-brief + company context, starters, portal goals write path with `author` stamp,
-save-as-goal, presence-aware cards, contact-support card), 4 command center
-(companies, cohorts, portal users, documents, support queue, brief editor, CTA),
-5 dry run. Non-goals stand: no chat tool-use, no debrief-coach logins, no sponsor
-dashboards, no download toggle, no "most improved" lists.
+### Phase 2 — document pipeline (shipped 2026-09-05)
+
+**Extraction is deterministic vector geometry in Node** (`lib/documents/`). The
+build prompt named `pdfplumber` (Python); the same bar-x1 / fill-colour logic is
+implemented on pdf.js (which `unpdf` bundles — no new dependency), verified on
+the reference report to ~±0.01. No OCR, no vision model.
+
+- **`geometry.ts#readPage`** — per page: every FILLED shape with its hex colour
+  and top-down page-space bbox (tracks the CTM stack across save/restore/
+  transform; the paint op is folded into `constructPath`'s first arg in pdf.js
+  ≥4; `setFillRGBColor` carries a "#rrggbb" string) + positioned text items.
+  `rowsOf` groups items into visual rows; `linearFit` is the calibration.
+- **`assessment-360/parse.ts`** — sections keyed off page titles, tables read by
+  **x-position columns from the printed header** (never the flat text stream,
+  which scrambles column order and glues digits). Bands = bar fill colour
+  looked up against the **legend the rankings page prints** (fallback constant
+  map + a note if absent). Norms = the two amber markers on THAT row (left =
+  75th, right = 90th) through a per-chart fit of bar-end x against the printed
+  scores; **every row must agree within 0.03 (`CROSS_CHECK_TOLERANCE`) or the
+  extraction fails** (`ParseError`). Tent poles are vertical bars (fit on bar
+  top). Verbatims: group labels sit at x≈51, responses at x≈63, sections span
+  pages, gap >14pt = new response. Importance/passions: blocks by y, votes by
+  column, the `|` glyph at x<50 = passion. Rater names (the "Your Raters"
+  table) are returned separately for the absence assertion and never stored;
+  `extractedText` starts at the first results page and drops that table.
+- **`targets.ts`** — the three-circle development model. Weights
+  (`DEFAULT_TARGET_WEIGHTS`: manager 3, peers 2, others/direct 1.5, self 0.5)
+  are config, never in output copy; competencies at/above their 90th are
+  excluded from the proximity circle; ranked circles → weighted need →
+  distance. Reference report yields Strategic Perspective, Learning Agility,
+  Technical Acumen on top (Jeff's confirmed acceptance test).
+- **`compare.ts`** — longitudinal block on the newer document: band movement +
+  distance-to-90th delta are the headline, raw delta secondary, comparability
+  caveats (rater sets / norm vintage) carried. Deliberately no totals, no
+  ranking of deltas, no overall change score.
+- **`validate.ts`** — ranges, band+norms on every competency, band-not-by-score
+  warning, **rater-name absence** in payload + text, non-empty sections,
+  `namesMatch` (first + last token of the shorter name in the longer).
+- **`fingerprint.ts`** — structural layout check (required section titles,
+  legend, vector bars/markers, table header). Unknown → `unsupported`, never
+  parsed. One layout: `extraordinary-leader/2024`.
+- **`index.ts#extractAssessment360`** — pure entry (bytes → outcome). Under 1 s.
+- **`pipeline.ts`** — the ONE persistence path (coach upload, client
+  self-upload, retry): PDF header + 4 MB check, per-client caps (5 assessments /
+  10 documents, overridable via `portal_features.max_*`), bucket
+  `client-documents` (`storage.ts`, `${clientId}/${docId}.pdf`, created on first
+  upload), in-band extraction, the **name gate** (`name_mismatch` → `failed`,
+  nothing surfaced until `confirmName`), `supersedes_document_id` + `comparison`
+  against the latest prior complete assessment on the same instrument ordered
+  by `assessment_date`. `personnel_review` is forced `visible_to_coach=false`.
+  `listCoachVisibleDocuments` is the coach-side query (visibility enforced at
+  the query, never the UI).
+- **Routes.** Coach: `GET/POST /api/clients/[id]/documents` (POST multipart
+  `file`, `kind`, `title`, `confirmName`, `enableAssessments` — a completed
+  assessment upload flips `portal_features.assessments` on unless told not to:
+  the upload IS the switch), `GET ?download=1 / DELETE
+  /api/clients/[id]/documents/[docId]`, `POST .../[docId]/retry`
+  (`{confirmName}`). Portal: `GET/POST /api/portal/documents` (self-upload,
+  `document_upload` rate limit 10/h, visibility prompt via `visibleToCoach`),
+  `PATCH /api/portal/documents/[id]` (client flips coach visibility; never for a
+  personnel review), `GET /api/portal/documents/[id]/download` (302 to a signed
+  URL with `Content-Disposition: attachment`; **always available, no toggle
+  exists anywhere**). All portal routes scoped to the session `clientId`, 404
+  never 403. `lib/portal/events.ts#logPortalEvent` writes `portal_events`.
+- **Verification.** `scripts/spikes/verify-assessment-360.js` runs 62 checks
+  against the private reference report (`fixtures/private/`, gitignored — it
+  contains rater names): `node_modules/.bin/tsc -p scripts/spikes/tsconfig.spike.json
+  && PDF=fixtures/private/reference-360.pdf node scripts/spikes/verify-assessment-360.js`.
+  Facts it pins: Inspires 4.38 = Profound vs Integrity 4.58 = Promising;
+  Technical 4.35 = Above Average vs Collaboration 4.09 = Promising;
+  Interpersonal 4.40 = Profound vs Character 4.58 = Promising (tent poles);
+  Manager/Self below 75th, Peers/Others at/above 90th; Engagement absent (2
+  direct reports); 60 items across 19 competencies. Ask Jeff to re-share the
+  PDF in a new session — it is not in the repo.
+- **Not in Phase 2:** no portal card, no chat grounding, no command-center UI.
+
+### Phase 3 — portal surfaces (shipped 2026-09-05)
+
+**The gate everywhere is `portal_features.assessments === true` + a completed
+assessment document, never `client_type`.** A coaching client with the flag
+off gets a home page byte-identical to before (the report card isn't even
+mounted; the goals card stays the read-only server-rendered one).
+
+- **Presence-aware home (`app/portal/page.tsx`, `lib/portal/data.ts` returns
+  `hasCoach` + `assessmentsEnabled`).** Sessions / session-records / notes /
+  messages cards render when the client has a coach OR already has that data;
+  a coach-less participant never sees a card that can only be empty. Contact
+  card = `ContactCoachCard` when a coach is linked, else **`ContactSupportCard`**
+  (→ `POST /api/portal/support`: `support_tickets` + first
+  `support_ticket_messages` row, `contact` rate limit, best-effort Resend
+  notice to `SUPPORT_NOTIFY_EMAIL` or `DEFAULT_COACH_EMAIL` so a ticket is
+  never silent before the Phase 4 queue). Chat CTA copy adapts ("thinking
+  partner" when coach-less).
+- **"Your 360 report" (`AssessmentCard`, `GET /api/portal/assessments` →
+  `lib/portal/assessments.ts`).** Every completed assessment newest first by
+  `assessment_date`, "Download PDF" (→ the always-available download route,
+  logs `report_viewed`), "Work through it in the chat", and **"Talk to a
+  coach"** → the primary coach's `booking_url` (the house coach's HubSpot link
+  for portal clients) logging `talk_to_coach_clicked` via `POST
+  /api/portal/events` (allowlist: `talk_to_coach_clicked`, `report_viewed`,
+  `comparison_viewed`).
+- **Chat context (`lib/portal/prompt.ts#composeChatSystem`, pure; wired by
+  `lib/portal/chat.ts#buildChatContext`).** Layered exactly per the build
+  prompt: preamble → `PORTAL_CHAT_VOICE_STANDARDS` → **`ASSESSMENT_GROUNDING_RULES`**
+  (the non-negotiable floor: perception not ability, numbers only from the
+  data, band-then-score ranking, no rater attribution in any framing, no
+  prescribing goals, weights/"closest to green" never mentioned, absent
+  sections are absent, comparison offered gently with caveats) → the **active
+  brief** (`lib/portal/briefs.ts`, `prompt_briefs` where `is_active`) → **company
+  vision/values** (`lib/portal/company.ts`, strictly via `clients.company_id`;
+  OMITTED entirely when null) → the most recent report's **structured data**
+  (+ its `comparison` block; never every historical report) → **verbatims** →
+  goals / sent notes / sessions, each omitted when empty. ~12k tokens with a
+  full 360. `buildChatContext` returns `meta` (brief slug/version, document id,
+  has_comparison); the chat route stamps it into
+  **`portal_messages.metadata`** on the assistant turn and logs `chat_started`
+  / `chat_message` / `comparison_viewed` (heuristic on the question) to
+  `portal_events`.
+- **Starters (`app/portal/chat/page.tsx`).** With a report on file the four
+  360 starters replace the default three, plus "What's changed since my last
+  360?" only when a comparison exists (buttons, never auto-sent). **"Save as a
+  goal"** under every finished assistant turn seeds `GoalEditorModal` (first
+  sentence → title, reply → why) — the client edits and saves; **no tool-use,
+  no autonomous writes**.
+- **Portal goals write path (`/api/portal/goals` GET/POST/PATCH/DELETE →
+  `lib/portal/goals.ts`).** Writes the same `clients.coaching_goals` with
+  **`author: 'client'`** (+ `source: 'manual'`); **metrics required**; index-
+  addressed; the client can only edit/remove goals they authored. UI =
+  `PortalGoalsCard` (mounted when the flag is on OR no coach) + the shared
+  `GoalEditorModal`. **Coach-side merge guard:** `PATCH /api/clients/[id]`
+  runs `mergeCoachGoalSave` — every incoming goal is stamped (`client` kept
+  when the title matches a client goal, else `coach`/`ai`), and client goals
+  the coach's editor didn't have loaded are put back. Goal-generate already
+  preserved `source !== 'generated'`, so client goals survive it too.
+- **Verification.** `scripts/spikes/verify-portal-phase3.js` (no key needed):
+  goal-authorship rules, prompt layering/omissions/confidentiality (rater
+  names + `key_info` never present), and the **cross-company isolation test**
+  run against a real Postgres (two companies, two clients, rollback) — `PG=env
+  PGHOST=… PGPORT=… PGDATABASE=… PGUSERNAME=…`. `verify-portal-chat-guardrails.js`
+  (needs `ANTHROPIC_API_KEY`) asks the live model factual score/band
+  questions, three rater-attribution framings, and three escalating
+  prescription asks, with heuristic asserts + full replies for a human read —
+  **not run in CI; run before the dry run.**
+
+**Remaining phases:** 4 command center (companies, cohorts, portal users,
+documents + bulk upload with the verification gate, support queue, brief
+editor, per-client flag toggle), 5 dry run. Non-goals stand: no chat tool-use,
+no debrief-coach logins, no sponsor dashboards, no download toggle, no "most
+improved" lists.
 
 ## Multi-coach beta (2026-08 — coach onboarding readiness)
 
@@ -1364,6 +1503,8 @@ links fail with a clear error).
 Transactional email (Client Portal sign-in links/invitations — see the Assessment
 debrief section): `RESEND_API_KEY`, `PORTAL_FROM_EMAIL`, optional
 `PORTAL_FROM_NAME`; unset = portal links fall back to the coach's Gmail.
+Optional `SUPPORT_NOTIFY_EMAIL` (portal "Contact support" notices; defaults to
+`DEFAULT_COACH_EMAIL`).
 See `.env.example`.
 
 ## Stripe integration

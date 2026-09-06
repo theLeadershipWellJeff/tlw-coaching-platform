@@ -31,6 +31,10 @@ export type PortalOverview = {
   messages: { id: string; type: string; subject: string | null; preview: string | null; sent_at: string }[]
   /** The coach's client-facing scheduler link (migration 051), or null. */
   bookingUrl: string | null
+  /** A coach is linked (coach_clients). Decides which cards make sense to show. */
+  hasCoach: boolean
+  /** portal_features.assessments (migration 059) — the 360 surfaces are on. */
+  assessmentsEnabled: boolean
 }
 
 export async function loadPortalOverview(clientId: string): Promise<PortalOverview | null> {
@@ -55,6 +59,16 @@ export async function loadPortalOverview(clientId: string): Promise<PortalOvervi
     .maybeSingle()
     .then(
       (r) => !!r.data?.portal_onboarded,
+      () => false
+    )
+  // Same defensive read for the assessment flag (migration 059). Absent = off.
+  const assessmentsEnabled = await supabase
+    .from('clients')
+    .select('portal_features')
+    .eq('id', clientId)
+    .maybeSingle()
+    .then(
+      (r) => (r.data?.portal_features as { assessments?: boolean } | null)?.assessments === true,
       () => false
     )
 
@@ -125,6 +139,8 @@ export async function loadPortalOverview(clientId: string): Promise<PortalOvervi
     sessionNotes: notesRes.data ?? [],
     messages: commRes.data ?? [],
     bookingUrl,
+    hasCoach: links.length > 0,
+    assessmentsEnabled,
   }
 }
 

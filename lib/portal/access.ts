@@ -23,12 +23,18 @@ export type PortalAction =
   | 'note_view'
   | 'session_view'
   | 'pdf_view'
+  | 'document_upload'
+  | 'document_download'
+  | 'document_visibility'
+  | 'goal_write'
 
 /** Per-client ceilings, per rolling window. */
 const LIMITS: Partial<Record<PortalAction, { max: number; windowMinutes: number }>> = {
   chat: { max: 60, windowMinutes: 60 },
   contact: { max: 10, windowMinutes: 60 },
   upload: { max: 20, windowMinutes: 60 },
+  document_upload: { max: 10, windowMinutes: 60 },
+  goal_write: { max: 30, windowMinutes: 60 },
   login_password: { max: 10, windowMinutes: 15 },
 }
 

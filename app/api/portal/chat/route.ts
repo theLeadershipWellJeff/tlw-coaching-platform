@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPortalClientId } from '@/lib/portal/server'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
-import { buildChatContext, streamChatReply, type ChatMsg } from '@/lib/portal/chat'
+import { buildChatContext, streamChatReply, type ChatContextMeta, type ChatMsg } from '@/lib/portal/chat'
 import { checkPortalRateLimit, logPortalAccess } from '@/lib/portal/access'
+import { logPortalEvent } from '@/lib/portal/events'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -67,6 +68,7 @@ export async function POST(req: NextRequest) {
   if (!client) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   // Verify ownership of an existing conversation, or start a new one.
+  const isNewConversation = !conversationId
   if (conversationId) {
     const { data: conv } = await supabase
       .from('portal_conversations')
@@ -112,9 +114,10 @@ export async function POST(req: NextRequest) {
   await logPortalAccess(clientId, 'chat', { detail: conversationId ?? undefined })
 
   let system: string
+  let meta: ChatContextMeta = {}
   try {
     // The current question drives retrieval across the client's whole history.
-    ;({ system } = await buildChatContext(clientId, content))
+    ;({ system, meta } = await buildChatContext(clientId, content))
   } catch (e) {
     console.error('portal chat context failed:', e)
     return NextResponse.json(
@@ -123,9 +126,19 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  // Outcomes instrumentation (portal_events) — never blocks the reply.
+  if (isNewConversation) await logPortalEvent(clientId, 'chat_started', { conversation_id: conversationId, ...meta })
+  await logPortalEvent(clientId, 'chat_message', { conversation_id: conversationId, brief_version: meta.brief_version ?? null })
+  if (meta.has_comparison && /\b(chang|since (my|the) last|previous|prior|earlier|compar|progress|improv|better|worse)/i.test(content)) {
+    await logPortalEvent(clientId, 'comparison_viewed', { conversation_id: conversationId, document_id: meta.assessment_document_id })
+  }
+
   const convId = conversationId
   const orgId = client.org_id
   const encoder = new TextEncoder()
+  // Which brief version produced this reply — stamped on the assistant message
+  // so engagement can later be compared across brief revisions.
+  const messageMeta = Object.keys(meta).length ? meta : null
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -151,7 +164,7 @@ export async function POST(req: NextRequest) {
             const supabase = getSupabaseAdmin()
             await supabase
               .from('portal_messages')
-              .insert({ conversation_id: convId, org_id: orgId, role: 'assistant', content: full })
+              .insert({ conversation_id: convId, org_id: orgId, role: 'assistant', content: full, metadata: messageMeta })
             await supabase
               .from('portal_conversations')
               .update({ updated_at: new Date().toISOString() })
