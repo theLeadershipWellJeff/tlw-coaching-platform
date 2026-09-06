@@ -257,7 +257,16 @@ async function runExtraction(
 }
 
 async function persist(supabase: SupabaseClient<Database>, id: string, patch: Partial<ClientDocument>): Promise<ClientDocument> {
-  const { data, error } = await supabase.from('client_documents').update(patch).eq('id', id).select('*').single()
+  let { data, error } = await supabase.from('client_documents').update(patch).eq('id', id).select('*').single()
+  // A client_documents table created before migration 059's final column list
+  // (or a stale PostgREST schema cache) rejects the updated_at stamp. The
+  // extraction result matters more than the timestamp: retry without it so
+  // the upload lands, and let migration 062 reconcile the column.
+  if (error && /updated_at/.test(error.message) && 'updated_at' in patch) {
+    const { updated_at: _u, ...rest } = patch as Partial<ClientDocument> & { updated_at?: string }
+    console.error('client_documents.updated_at missing — saving without it (apply migration 062):', error.message)
+    ;({ data, error } = await supabase.from('client_documents').update(rest).eq('id', id).select('*').single())
+  }
   if (error || !data) throw new DocumentError(500, `Could not save the extraction: ${error?.message || 'update failed'}`)
   return data as ClientDocument
 }
