@@ -21,9 +21,9 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
     const raw = await createLoginToken(client.id, client.org_id)
     const link = `${getBaseUrl()}/portal/verify?token=${raw}`
     const r = await sendPortalLoginEmail({ client: { id: client.id, name: client.name, email: client.email }, link, kind: 'invite', sender: actor })
-    await logAdminAction(supabase, { actorCoachId: actor.id, action: 'portal_invite_sent', targetClientId: client.id, detail: { via: r.via, ok: r.ok } })
+    await logAdminAction(supabase, { actorCoachId: actor.id, action: 'portal_invite_sent', targetClientId: client.id, detail: { via: r.via, ok: r.ok, warning: r.warning ?? null } })
     if (!r.ok) throw new AdminError(502, `Could not send the invite. ${r.error || ''}`.trim())
-    return NextResponse.json({ ok: true, sentTo: client.email, via: r.via })
+    return NextResponse.json({ ok: true, sentTo: client.email, via: r.via, warning: r.warning })
   } catch (e) {
     return adminErrorResponse(e)
   }

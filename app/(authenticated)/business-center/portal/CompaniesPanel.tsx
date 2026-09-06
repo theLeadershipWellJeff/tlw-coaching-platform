@@ -15,7 +15,28 @@ export type Cohort = {
 }
 export type Company = { id: string; name: string; vision: string | null; values: string | null; notes: string | null; cohorts: Cohort[] }
 
-function CohortRow({ cohort, onChanged }: { cohort: Cohort; onChanged: (c: Cohort) => void }) {
+/** Cohort lifecycle. The legacy 'closed' value reads as inactive. */
+export type CohortStatus = 'active' | 'inactive' | 'archived'
+export const COHORT_STATUSES: CohortStatus[] = ['active', 'inactive', 'archived']
+export function cohortStatus(status: string | null | undefined): CohortStatus {
+  if (status === 'archived') return 'archived'
+  if (status === 'inactive' || status === 'closed') return 'inactive'
+  return 'active'
+}
+
+export function CohortRow({
+  cohort,
+  onChanged,
+  companyName,
+  onViewParticipants,
+}: {
+  cohort: Cohort
+  onChanged: (c: Cohort) => void
+  /** Shown when the row is listed outside its company (the Cohorts tab). */
+  companyName?: string
+  /** Jump to the Portal users tab filtered to this cohort. */
+  onViewParticipants?: () => void
+}) {
   const [edit, setEdit] = useState(false)
   const [form, setForm] = useState({
     name: cohort.name,
@@ -23,7 +44,7 @@ function CohortRow({ cohort, onChanged }: { cohort: Cohort; onChanged: (c: Cohor
     accessStartsAt: cohort.access_starts_at?.slice(0, 10) || '',
     accessExpiresAt: cohort.access_expires_at?.slice(0, 10) || '',
     debriefCoachName: cohort.debrief_coach_name || '',
-    status: cohort.status,
+    status: cohortStatus(cohort.status) as string,
   })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -93,8 +114,7 @@ function CohortRow({ cohort, onChanged }: { cohort: Cohort; onChanged: (c: Cohor
           <label className="text-[11px] text-tlw-warm-gray">
             Status
             <select className={input} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-              <option value="active">active</option>
-              <option value="closed">closed</option>
+              {COHORT_STATUSES.map((st) => <option key={st} value={st}>{st}</option>)}
             </select>
           </label>
           <div className="flex gap-2 sm:col-span-3">
@@ -106,7 +126,9 @@ function CohortRow({ cohort, onChanged }: { cohort: Cohort; onChanged: (c: Cohor
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
             <p className="text-[14px] font-medium text-tlw-navy-deep">
-              {cohort.name} {cohort.status === 'closed' && <Chip>closed</Chip>}
+              {cohort.name}
+              {companyName && <span className="ml-2 text-[12px] font-normal text-tlw-warm-gray">{companyName}</span>}
+              {cohortStatus(cohort.status) !== 'active' && <span className="ml-2"><Chip tone={cohortStatus(cohort.status) === 'archived' ? 'gray' : 'amber'}>{cohortStatus(cohort.status)}</Chip></span>}
             </p>
             <p className="mt-0.5 text-[12px] text-tlw-warm-gray">
               <Chip tone={seatTone}>{cohort.seats_activated} / {cohort.seats_purchased} seats</Chip>
@@ -122,6 +144,7 @@ function CohortRow({ cohort, onChanged }: { cohort: Cohort; onChanged: (c: Cohor
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <button className={btnLink} onClick={() => setEdit(true)}>Edit</button>
+            {onViewParticipants && <button className={btnLink} onClick={onViewParticipants}>Participants</button>}
             <a className={btnLink} href={`/api/admin/cohorts/${cohort.id}/roster`}>Roster CSV</a>
             <button className={btnLink} disabled={inviting} onClick={() => sendInvites(true)}>{inviting ? 'Sending…' : 'Send invitations'}</button>
             <button className={btnLink} disabled={inviting} onClick={() => sendInvites(false)}>Re-send all</button>

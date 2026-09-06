@@ -17,7 +17,11 @@ Phases 1–4 built. Do not skip it, and do not schedule into the buffer week.
 - [ ] Migrations 059 and 060 applied.
 - [ ] Vercel env: `RESEND_API_KEY`, `PORTAL_FROM_EMAIL`, `PORTAL_FROM_NAME`,
       `DEFAULT_COACH_EMAIL` (the house coach), optional `SUPPORT_NOTIFY_EMAIL`.
-- [ ] Resend domain `mail.theleadershipwell.online` shows **Verified**.
+- [ ] Resend domain `mail.theleadershipwell.online` shows **Verified** (Resend
+      → Domains → the domain → **Verify DNS records**; the records must live
+      on the same domain name as `PORTAL_FROM_EMAIL`). Until it does, invites
+      still go out over Gmail with a "sent via Gmail because…" notice — fine
+      for testing, not for a cohort.
 - [ ] `coaches.booking_url` is set on the house coach (Account → Scheduling).
       This is the "Talk to a coach" link every participant sees.
 - [ ] Deliverability spot-check done: one invite each to Gmail, Outlook, and a
@@ -54,7 +58,9 @@ ZF Portal tab.
       title — the assistant should refer to it.
 - [ ] Add the cohort: seats purchased (from the contract), access ends
       (purchase date + 1 year), debrief coach's name.
-- [ ] Seats activated reads 0/N.
+- [ ] Seats activated reads 0/N. The **Cohorts** tab lists it under Active;
+      a finished cohort goes to Inactive, and Archived takes it out of the
+      working lists (Edit → Status).
 
 ## 3. Add ten test participants (10 min)
 

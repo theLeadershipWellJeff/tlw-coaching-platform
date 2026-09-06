@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useMemo, useState } from 'react'
 import { api, btnLink, btnPrimary, btnSecondary, Chip, ErrorLine, fmtDate, input, Section, statusTone } from './ui'
-import type { Company } from './CompaniesPanel'
+import { cohortStatus, type Company } from './CompaniesPanel'
 
 type PortalUser = {
   id: string
@@ -22,10 +22,11 @@ type PortalUser = {
   has_coach_relationship: boolean
 }
 
-export function PortalUsersPanel({ companies }: { companies: Company[] }) {
+export function PortalUsersPanel({ companies, initialCohortId = '' }: { companies: Company[]; initialCohortId?: string }) {
   const [users, setUsers] = useState<PortalUser[] | null>(null)
   const [error, setError] = useState('')
-  const [filterCohort, setFilterCohort] = useState('')
+  const [notice, setNotice] = useState('')
+  const [filterCohort, setFilterCohort] = useState(initialCohortId)
   const [filterKind, setFilterKind] = useState<'' | PortalUser['kind']>('')
   const [form, setForm] = useState({ name: '', email: '', companyId: '', cohortId: '' })
   const [creating, setCreating] = useState(false)
@@ -85,8 +86,10 @@ export function PortalUsersPanel({ companies }: { companies: Company[] }) {
   async function invite(u: PortalUser) {
     setBusy(u.id)
     setError('')
+    setNotice('')
     try {
-      await api(`/api/admin/portal-users/${u.id}/invite`, { method: 'POST' })
+      const d = await api<{ sentTo: string; via: string; warning?: string }>(`/api/admin/portal-users/${u.id}/invite`, { method: 'POST' })
+      setNotice(`Invitation sent to ${d.sentTo} via ${d.via === 'resend' ? 'the portal address' : 'Gmail'}.${d.warning ? ` ${d.warning}` : ''}`)
       await load()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not send.')
@@ -128,7 +131,7 @@ export function PortalUsersPanel({ companies }: { companies: Company[] }) {
           </select>
           <select className={input} value={form.cohortId} onChange={(e) => setForm({ ...form, cohortId: e.target.value })} disabled={!form.companyId}>
             <option value="">No cohort</option>
-            {cohorts.filter((c) => c.company_id === form.companyId).map((c) => (
+            {cohorts.filter((c) => c.company_id === form.companyId && cohortStatus(c.status) !== 'archived').map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
@@ -156,6 +159,7 @@ export function PortalUsersPanel({ companies }: { companies: Company[] }) {
           </div>
         }
       >
+        {notice && <p className="mb-2 text-[12px] text-emerald-700">{notice}</p>}
         {users === null ? (
           <p className="text-[13px] text-tlw-warm-gray">Loading…</p>
         ) : users.length === 0 ? (
@@ -230,7 +234,7 @@ export function PortalUsersPanel({ companies }: { companies: Company[] }) {
               <label className="block text-[11px] text-tlw-warm-gray">Cohort
                 <select className={input} value={editForm.cohortId} onChange={(e) => setEditForm({ ...editForm, cohortId: e.target.value })}>
                   <option value="">None</option>
-                  {cohorts.map((c) => <option key={c.id} value={c.id}>{c.company_name} · {c.name}</option>)}
+                  {cohorts.filter((c) => cohortStatus(c.status) !== 'archived' || c.id === editForm.cohortId).map((c) => <option key={c.id} value={c.id}>{c.company_name} · {c.name}</option>)}
                 </select>
               </label>
               <label className="block text-[11px] text-tlw-warm-gray">Company

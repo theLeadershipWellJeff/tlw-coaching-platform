@@ -1,4 +1,5 @@
 'use client'
+import Link from 'next/link'
 /**
  * Admin Command Center (supervisor-only). One place to see every coach on the
  * platform — account state, usage, plan (beta/free/paying), coach-subscription
@@ -86,14 +87,23 @@ const PLANS = ['beta', 'free', 'paying'] as const
 
 // ── Firm pulse ────────────────────────────────────────────────────────────────
 
-function PulseStat({ value, label, sub }: { value: string; label: string; sub?: string }) {
-  return (
-    <div className="rounded-tlw-xl border border-tlw-warm-gray/15 bg-tlw-surface px-4 py-3">
+function PulseStat({ value, label, sub, href }: { value: string; label: string; sub?: string; href?: string }) {
+  const body = (
+    <>
       <p className="text-[20px] font-semibold tabular-nums text-tlw-navy-deep">{value}</p>
       <p className="text-[11px] font-medium uppercase tracking-wider text-tlw-warm-gray">{label}</p>
       {sub && <p className="mt-0.5 text-[11px] text-tlw-warm-gray">{sub}</p>}
-    </div>
+    </>
   )
+  const cls = 'rounded-tlw-xl border border-tlw-warm-gray/15 bg-tlw-surface px-4 py-3'
+  if (href) {
+    return (
+      <Link href={href} className={`${cls} block transition-colors hover:border-tlw-signal-orange/60 hover:bg-tlw-canvas`} title="Open the Client Portal admin">
+        {body}
+      </Link>
+    )
+  }
+  return <div className={cls}>{body}</div>
 }
 
 function FirmPulse({ coaches }: { coaches: Coach[] }) {
@@ -117,7 +127,8 @@ function FirmPulse({ coaches }: { coaches: Coach[] }) {
       <PulseStat
         value={`${active}/${clients || 0}`}
         label="In portal"
-        sub={`${invited} invited · ${active} active`}
+        sub={`${invited} invited · ${active} active →`}
+        href="/business-center/portal"
       />
       <PulseStat
         value={String(paying)}
@@ -480,7 +491,7 @@ function CoachRow({ coach, onUpdated, onRemoved }: {
       <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-9">
         {[
           { label: 'Clients', value: coach.client_count },
-          { label: 'Portal', value: `${coach.portal_active_count}/${coach.client_count}` },
+          { label: 'Portal', value: `${coach.portal_active_count}/${coach.client_count}`, href: '/business-center/portal' },
           { label: 'Accounts', value: coach.account_count },
           { label: 'Transcripts', value: coach.usage.transcript_count },
           { label: 'Scorecards', value: coach.usage.report_count },
@@ -488,12 +499,19 @@ function CoachRow({ coach, onUpdated, onRemoved }: {
           { label: 'Emails', value: coach.usage.email_count },
           { label: 'Sessions', value: coach.usage.appointment_count },
           { label: 'Nudges', value: coach.usage.nudge_sent_count },
-        ].map((s) => (
-          <div key={s.label} className="rounded-tlw-lg bg-tlw-canvas px-2 py-1.5 text-center">
-            <p className="text-[14px] font-semibold tabular-nums text-tlw-navy-deep">{s.value}</p>
-            <p className="text-[10px] text-tlw-warm-gray">{s.label}</p>
-          </div>
-        ))}
+        ].map((s: { label: string; value: string | number; href?: string }) =>
+          s.href ? (
+            <Link key={s.label} href={s.href} className="rounded-tlw-lg bg-tlw-canvas px-2 py-1.5 text-center transition-colors hover:bg-tlw-navy-deep/10" title="Open the Client Portal admin">
+              <p className="text-[14px] font-semibold tabular-nums text-tlw-navy-deep">{s.value}</p>
+              <p className="text-[10px] text-tlw-warm-gray">{s.label} →</p>
+            </Link>
+          ) : (
+            <div key={s.label} className="rounded-tlw-lg bg-tlw-canvas px-2 py-1.5 text-center">
+              <p className="text-[14px] font-semibold tabular-nums text-tlw-navy-deep">{s.value}</p>
+              <p className="text-[10px] text-tlw-warm-gray">{s.label}</p>
+            </div>
+          )
+        )}
       </div>
 
       {showClients && <CoachClientsPanel coachId={coach.id} />}
