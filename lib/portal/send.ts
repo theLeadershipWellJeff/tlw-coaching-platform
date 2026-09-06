@@ -8,9 +8,12 @@
  *   2. Otherwise the client's coach's Gmail (today's behavior) — keeps local
  *      dev and any coach-only install working with no new env.
  *
- * A client with NO coach (a standalone assessment participant) can only be
- * reached through Resend; with it unconfigured the send fails loud so the
- * gap is visible instead of a silent non-delivery.
+ * When Resend is configured but refuses a send (unverified domain, bad key,
+ * outage) the message is carried over Gmail instead and the result carries a
+ * `warning` naming the Resend error, so a dry run is never blocked on DNS
+ * while the problem stays visible. A client with NO coach (a standalone
+ * assessment participant) can only be reached through Resend; with it
+ * unconfigured or failing the send fails loud.
  *
  * Every send, success or failure, is logged to `communications` so it shows on
  * the client's Recent Communication card and a failed invite is never lost.
@@ -30,6 +33,8 @@ export type PortalSendResult = {
   /** 'resend' | 'gmail' — which transport carried it. */
   via: 'resend' | 'gmail' | 'none'
   error?: string
+  /** Set when the send succeeded on a fallback transport — worth surfacing. */
+  warning?: string
 }
 
 /**
@@ -58,38 +63,46 @@ export async function sendPortalLoginEmail(opts: {
     coachName: coach?.name || null,
   })
 
-  let result: PortalSendResult
-  if (isTransactionalEmailConfigured()) {
-    const r = await sendTransactionalEmail({
-      to: opts.client.email,
-      subject,
-      html,
-      replyTo: coach?.email || undefined,
-    })
-    result = r.ok ? { ok: true, via: 'resend' } : { ok: false, via: 'resend', error: r.error }
-  } else {
-    const gmailSender = opts.sender?.google_refresh_token ? opts.sender : coach
-    if (!gmailSender?.google_refresh_token) {
-      result = {
+  // Gmail fallback sender: the explicit on-behalf sender when they have Gmail
+  // access, else the client's coach (the house coach for portal participants).
+  const gmailSender = opts.sender?.google_refresh_token ? opts.sender : coach?.google_refresh_token ? coach : null
+
+  async function viaGmail(): Promise<PortalSendResult> {
+    if (!gmailSender) {
+      return {
         ok: false,
         via: 'none',
         error: coach
           ? 'The coach has no Gmail access on file — sign out and back in.'
           : 'This client has no coach and transactional email is not configured.',
       }
-    } else {
-      try {
-        const sent = await sendCoachHtmlEmail(gmailSender, {
-          to: opts.client.email,
-          cc: '',
-          subject,
-          html,
-        })
-        result = sent ? { ok: true, via: 'gmail' } : { ok: false, via: 'gmail', error: 'Gmail send failed' }
-      } catch (e) {
-        result = { ok: false, via: 'gmail', error: e instanceof Error ? e.message : String(e) }
-      }
     }
+    try {
+      const sent = await sendCoachHtmlEmail(gmailSender, { to: opts.client.email, cc: '', subject, html })
+      return sent ? { ok: true, via: 'gmail' } : { ok: false, via: 'gmail', error: 'Gmail send failed' }
+    } catch (e) {
+      return { ok: false, via: 'gmail', error: e instanceof Error ? e.message : String(e) }
+    }
+  }
+
+  let result: PortalSendResult
+  if (isTransactionalEmailConfigured()) {
+    const r = await sendTransactionalEmail({ to: opts.client.email, subject, html, replyTo: coach?.email || undefined })
+    if (r.ok) {
+      result = { ok: true, via: 'resend' }
+    } else if (gmailSender) {
+      // Resend refused (an unverified domain, a bad key, an outage). Don't
+      // strand the client: carry it over Gmail and say so, so the Resend
+      // problem is visible without blocking the invite.
+      const g = await viaGmail()
+      result = g.ok
+        ? { ...g, warning: `Sent via Gmail because the portal address failed: ${r.error}` }
+        : { ok: false, via: 'gmail', error: `Portal address failed (${r.error}); Gmail fallback failed too (${g.error})` }
+    } else {
+      result = { ok: false, via: 'resend', error: r.error }
+    }
+  } else {
+    result = await viaGmail()
   }
 
   await logCommunication(supabase, {
@@ -101,7 +114,7 @@ export async function sendPortalLoginEmail(opts: {
     preview: opts.kind === 'invite' ? 'Client Portal invitation' : 'Client Portal sign-in link',
     body_html: null,
     status: result.ok ? 'sent' : 'failed',
-    error_detail: result.ok ? null : result.error ?? 'send failed',
+    error_detail: result.ok ? result.warning ?? null : result.error ?? 'send failed',
   } as any)
 
   return result

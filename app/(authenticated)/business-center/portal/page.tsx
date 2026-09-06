@@ -3,6 +3,7 @@
  * Client Portal admin (supervisor-only). Two layers, mirroring the product:
  *   - Portal users — every client using the portal, across all four use cases
  *     (coaching, coaching + ZF, standalone ZF participant, enterprise cohort)
+ *   - Cohorts — every cohort across companies, split active / inactive / archived
  *   - ZF Portal — the assessment-debrief set-up: companies (with their
  *     documents and participants), cohorts, report uploads, support, brief
  * All data comes from /api/admin/*, each gated by requireSupervisor and
@@ -13,12 +14,14 @@ import { PageHeader } from '@/app/components/layout/PageHeader'
 import { api } from './ui'
 import { CompaniesPanel, type Company } from './CompaniesPanel'
 import { PortalUsersPanel } from './PortalUsersPanel'
+import { CohortsPanel } from './CohortsPanel'
 import { DocumentsPanel } from './DocumentsPanel'
 import { SupportPanel } from './SupportPanel'
 import { BriefPanel } from './BriefPanel'
 
 const TABS = [
   ['users', 'Portal users'],
+  ['cohorts', 'Cohorts'],
   ['zf', 'ZF Portal'],
   ['documents', 'Reports'],
   ['support', 'Support'],
@@ -30,6 +33,8 @@ export default function ClientPortalAdmin() {
   const [tab, setTab] = useState<Tab>('users')
   const [companies, setCompanies] = useState<Company[] | null>(null)
   const [denied, setDenied] = useState(false)
+  /** Cohort the Portal users tab should open filtered to (set from the Cohorts tab). */
+  const [usersCohort, setUsersCohort] = useState<string>('')
 
   useEffect(() => {
     api<{ companies: Company[] }>('/api/admin/companies')
@@ -65,7 +70,15 @@ export default function ClientPortalAdmin() {
               </button>
             ))}
           </div>
-          {tab === 'users' && <PortalUsersPanel companies={companies || []} />}
+          {tab === 'users' && <PortalUsersPanel companies={companies || []} initialCohortId={usersCohort} />}
+          {tab === 'cohorts' && (
+            <CohortsPanel
+              onViewParticipants={(cohortId) => {
+                setUsersCohort(cohortId)
+                setTab('users')
+              }}
+            />
+          )}
           {tab === 'zf' && <CompaniesPanel />}
           {tab === 'documents' && <DocumentsPanel companies={companies || []} />}
           {tab === 'support' && <SupportPanel />}

@@ -1395,7 +1395,24 @@ the product's two layers. **Command Center → "Client Portal"**
   (`lib/portal/company.ts`, `COMPANY_DOCS_CHAR_BUDGET` 16k), rendered inside the
   COMPANY CONTEXT section by `prompt.ts`. Fails soft before 060 is applied
   (vision/values still work; the documents list shows an error).
+- **Cohorts** tab (`CohortsPanel`, round 2) = every cohort across companies
+  in one list, segmented **Active / Inactive / Archived** (counts). Cohort
+  `status` is now `active | inactive | archived` (the pre-tab `closed` reads
+  as inactive; `PATCH /api/admin/cohorts/[id]` maps it — column is
+  unconstrained text, no migration). Rows reuse `CohortRow` (edit / roster
+  CSV / invitations) plus a **Participants** link that opens the Portal users
+  tab filtered to that cohort (`initialCohortId`). Archived cohorts drop out
+  of the participant-assignment pulldowns (create + edit) but stay in the
+  users filter. The Command Center's **"In portal"** pulse stat and each
+  coach row's **Portal** cell link to `/business-center/portal`.
 - **Reports** / **Support** / **Brief** tabs unchanged.
+- **Resend refusal → Gmail fallback (`lib/portal/send.ts`).** When Resend is
+  configured but rejects a send (e.g. the 403 "domain is not verified" Jeff
+  hit mid-dry-run), the link goes out over the sender's / coach's Gmail and
+  the result carries a `warning` naming the Resend error (surfaced in the
+  Portal users invite notice, the admin audit detail, and the
+  `communications` row's `error_detail` on a `sent` row). A coach-less
+  client with no Gmail path still fails loud.
 
 **Portal side — "Your documents" card (`app/portal/DocumentsCard.tsx`)**, on
 every client's home (coach or not): upload a 360 (PDF, name-gated; a complete

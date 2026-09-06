@@ -26,8 +26,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if ('accessExpiresAt' in body) patch.access_expires_at = body.accessExpiresAt || null
     if ('debriefCoachName' in body) patch.debrief_coach_name = body.debriefCoachName ? String(body.debriefCoachName).trim() : null
     if ('status' in body) {
-      if (!['active', 'closed'].includes(body.status as string)) throw new AdminError(400, 'Status must be active or closed.')
-      patch.status = body.status
+      // Lifecycle: active (running) → inactive (finished, reference) → archived
+      // (out of the working lists). 'closed' is the pre-cohorts-tab spelling.
+      const status = body.status === 'closed' ? 'inactive' : body.status
+      if (!['active', 'inactive', 'archived'].includes(status as string)) throw new AdminError(400, 'Status must be active, inactive, or archived.')
+      patch.status = status
     }
     const { data, error } = await supabase.from('cohorts').update(patch).eq('id', params.id).select('*').maybeSingle()
     if (error) throw new AdminError(500, error.message)
