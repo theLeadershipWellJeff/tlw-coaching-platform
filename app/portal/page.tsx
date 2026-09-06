@@ -99,7 +99,7 @@ export default async function PortalHome() {
           <PortalLogoutButton />
         </div>
       </div>
-      <PortalShell onboarded={data.onboarded} />
+      <PortalShell onboarded={data.onboarded} hasCoach={hasCoach} />
 
       <h1 className="mt-8 text-[24px] font-medium text-tlw-navy-deep">Welcome, {firstName}.</h1>
 
@@ -326,9 +326,10 @@ export default async function PortalHome() {
           <BillingCard />
         </div>
 
-        {/* Contact — the coach when there is one, otherwise support */}
+        {/* Contact — their coach when someone is coaching them; otherwise a
+            theLeadershipWell coach (book on the house scheduler, or a note) */}
         <div className="lg:col-span-2">
-          {hasCoach ? <ContactCoachCard /> : <ContactSupportCard />}
+          {hasCoach ? <ContactCoachCard /> : <ContactSupportCard bookingUrl={data.bookingUrl} />}
         </div>
       </div>
     </div>
