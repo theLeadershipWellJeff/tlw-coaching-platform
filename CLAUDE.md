@@ -2109,8 +2109,7 @@ Verified up + down + re-up against Postgres 16. Reversible via
 `059_assessment_debrief_foundation_down.sql` (resets any `portal` client to
 `client` first).
 
-**`060_company_documents.sql` — PENDING (apply before uploading company
-documents; everything else runs without it).** `company_documents` table
+**`060_company_documents.sql` — APPLIED (production, confirmed 2026-09-06).** `company_documents` table
 (sponsor material per company: file in the `client-documents` bucket under
 `companies/<company_id>/`, extracted text for chat, `include_in_chat`
 toggle). Additive, RLS enabled. Verified up + down + re-up against Postgres
