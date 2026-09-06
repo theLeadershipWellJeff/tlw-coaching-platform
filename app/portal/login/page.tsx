@@ -170,6 +170,12 @@ export default function PortalLogin() {
             )}
           </>
         )}
+        <p className="mt-6 text-[12px] text-tlw-warm-gray">
+          New here?{' '}
+          <a href="/portal/privacy" className="font-medium text-tlw-signal-orange hover:underline">
+            How your report and conversations are handled
+          </a>
+        </p>
       </div>
     </div>
   )

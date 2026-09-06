@@ -10,6 +10,7 @@ export function buildMagicLinkEmailHtml(opts: {
   coachName: string | null
 }): string {
   const { firstName, link, coachName } = opts
+  const privacyUrl = `${link.split('/portal/')[0]}/portal/privacy`
   const signoff = coachName ? `— ${escapeHtml(coachName)}` : '— theLeadershipWell'
   return `
   <div style="font-family:Georgia,'Times New Roman',serif;color:#111226;line-height:1.55;">
@@ -28,6 +29,10 @@ export function buildMagicLinkEmailHtml(opts: {
     </p>
     <p style="margin:20px 0 0;font-size:13px;color:#6b6b73;">
       This link works once and expires in 24 hours. If you didn't request it, you can ignore this email.
+    </p>
+    <p style="margin:12px 0 0;font-size:13px;color:#6b6b73;">
+      Before you sign in, here is
+      <a href="${privacyUrl}" style="color:#F5821F;">how your report and conversations are handled</a>.
     </p>
     <p style="margin:20px 0 0;">${signoff}</p>
   </div>`
