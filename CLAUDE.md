@@ -1132,7 +1132,7 @@ is never accepted here, and vice-versa.
   `dismissed_at` is the coach's override for a false positive. Reads are
   defensive: no table → the old nudge-derived list.
 
-## Assessment debrief add-on (ZF 360 first; migration 059) — Phases 1–4 shipped
+## Assessment debrief add-on (ZF 360 first; migration 059) — Phases 1–5 shipped
 
 A **document-grounded assessment debrief** as a per-client FEATURE FLAG on the
 existing Client Portal — same login, same chat, same middleware, same `clients`
@@ -1374,12 +1374,35 @@ writes `admin_audit_log`). Five tabs, each a client component:
   kept; exactly one active per slug via the partial unique index); effective
   on the next chat message, no deploy. Roll back by activating an older one.
 
-**Remaining:** Phase 5 dry run (one real cohort end to end, ten test
-participants, staggered sends rehearsed, extraction verified on every real
-report, Caleb on the support runbook; run
-`scripts/spikes/verify-portal-chat-guardrails.js` with a key first). Non-goals
-stand: no chat tool-use, no debrief-coach logins, no sponsor dashboards, no
-download toggle, no "most improved" lists.
+### Phase 5 — dry run kit (shipped 2026-09-06; the rehearsal itself is Jeff's)
+
+Phase 5 is a rehearsal, not code. What ships to support it:
+
+- **`docs/DEBRIEF_DRY_RUN.md`** — the step-by-step checklist for loading one
+  real cohort end to end through the Phase 4 UI: verify every real report
+  offline first, company + cohort, ten test participants, bulk upload with a
+  deliberate wrong-person report, the staggered send rehearsed (and the
+  two-week low-volume warm-up rule for the real cohort), the participant
+  walk-through including the three questions the assistant must decline,
+  support round-trip, brief edit without a deploy, sign-off table.
+- **`docs/DEBRIEF_SUPPORT_RUNBOOK.md`** — Caleb's first-line support guide:
+  the eight things participants ask, what to do for each, the never list,
+  and when to escalate.
+- **`docs/DEBRIEF_DATA_HANDLING.md`** — the one-page data-handling summary for
+  sponsor procurement / IT (what is held, who sees what, processors,
+  retention, deletion).
+- **`/portal/privacy`** (`app/portal/privacy/page.tsx`, public in
+  `middleware.ts`) — the participant-facing confidentiality statement, linked
+  from the sign-in page and the foot of every invitation / sign-in email
+  (`lib/portal/email.ts`).
+- **`scripts/spikes/verify-batch-360.js <folder>`** — runs extraction on every
+  PDF in a folder (kept out of git) and prints per-report status, rater
+  counts, band spread, the band-vs-score inversion presence, a rater-name
+  leak check, and the top development candidates. Exit non-zero if any report
+  is not `complete`. Run before any real cohort is uploaded.
+
+Non-goals stand: no chat tool-use, no debrief-coach logins, no sponsor
+dashboards, no download toggle, no "most improved" lists.
 
 ## Multi-coach beta (2026-08 — coach onboarding readiness)
 
