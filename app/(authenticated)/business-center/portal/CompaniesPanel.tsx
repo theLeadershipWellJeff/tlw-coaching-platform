@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api, btnLink, btnPrimary, btnSecondary, Chip, ErrorLine, fmtDate, input, Section } from './ui'
 
 export type Cohort = {
@@ -132,12 +132,154 @@ function CohortRow({ cohort, onChanged }: { cohort: Cohort; onChanged: (c: Cohor
   )
 }
 
+type CompanyDoc = { id: string; title: string; extraction_status: string; extraction_error: string | null; include_in_chat: boolean; text_chars: number; created_at: string }
+
+/** Sponsor material for one company — feeds the chat of this company's participants only. */
+function CompanyDocuments({ companyId }: { companyId: string }) {
+  const [docs, setDocs] = useState<CompanyDoc[] | null>(null)
+  const [title, setTitle] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  async function load() {
+    try {
+      const d = await api<{ documents: CompanyDoc[] }>(`/api/admin/companies/${companyId}/documents`)
+      setDocs(d.documents)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not load documents.')
+      setDocs([])
+    }
+  }
+  useEffect(() => {
+    load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId])
+
+  async function upload() {
+    const file = fileRef.current?.files?.[0]
+    if (!file) return
+    setBusy(true)
+    setError('')
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      if (title.trim()) fd.append('title', title.trim())
+      const res = await fetch(`/api/admin/companies/${companyId}/documents`, { method: 'POST', body: fd })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.error || 'Upload failed.')
+      setTitle('')
+      if (fileRef.current) fileRef.current.value = ''
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Upload failed.')
+    } finally {
+      setBusy(false)
+    }
+  }
+  async function toggle(doc: CompanyDoc) {
+    setBusy(true)
+    try {
+      await api(`/api/admin/companies/${companyId}/documents/${doc.id}`, { method: 'PATCH', body: JSON.stringify({ includeInChat: !doc.include_in_chat }) })
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not update.')
+    } finally {
+      setBusy(false)
+    }
+  }
+  async function remove(doc: CompanyDoc) {
+    if (!window.confirm(`Remove "${doc.title}"?`)) return
+    setBusy(true)
+    try {
+      await api(`/api/admin/companies/${companyId}/documents/${doc.id}`, { method: 'DELETE' })
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not remove.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="mt-4">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-tlw-warm-gray">Company documents</p>
+      <p className="mt-0.5 text-[12px] text-tlw-warm-gray">Vision decks, values, a leadership framework, strategy — anything that should shape the assistant for this company&apos;s people. PDF, Word, or text. Only this company&apos;s participants ever see it.</p>
+      <ul className="mt-2 space-y-1">
+        {docs === null ? (
+          <li className="text-[12px] text-tlw-warm-gray">Loading…</li>
+        ) : docs.length === 0 ? (
+          <li className="text-[12px] text-tlw-warm-gray">No documents yet.</li>
+        ) : (
+          docs.map((d) => (
+            <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 text-[12px]">
+              <span className="text-tlw-espresso">
+                {d.title} <Chip tone={d.extraction_status === 'complete' ? 'green' : 'red'}>{d.extraction_status === 'complete' ? `${Math.round(d.text_chars / 1000)}k chars` : d.extraction_status}</Chip>
+                {d.extraction_error && <span className="ml-1 text-tlw-warm-gray">{d.extraction_error}</span>}
+              </span>
+              <span className="flex items-center gap-3">
+                <button className={btnLink} disabled={busy} onClick={() => toggle(d)}>{d.include_in_chat ? 'In chat ✓' : 'Reference only'}</button>
+                <button className={btnLink} disabled={busy} onClick={() => remove(d)}>Remove</button>
+              </span>
+            </li>
+          ))
+        )}
+      </ul>
+      <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <input className={input} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title (optional)" />
+        <input ref={fileRef} type="file" accept=".pdf,.docx,.txt,.md" className={input} />
+        <button className={btnSecondary} disabled={busy} onClick={upload}>{busy ? 'Working…' : '+ Upload document'}</button>
+      </div>
+      <ErrorLine error={error} />
+    </div>
+  )
+}
+
+/** Add a participant directly under a company (cohort optional). */
+function AddParticipant({ company, onAdded }: { company: Company; onAdded: () => void }) {
+  const [open, setOpen] = useState(false)
+  const [form, setForm] = useState({ name: '', email: '', cohortId: '' })
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  async function create() {
+    setBusy(true)
+    setError('')
+    try {
+      await api('/api/admin/portal-users', { method: 'POST', body: JSON.stringify({ name: form.name, email: form.email, companyId: company.id, cohortId: form.cohortId || null }) })
+      setForm({ name: '', email: '', cohortId: form.cohortId })
+      setOpen(false)
+      onAdded()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not add.')
+    } finally {
+      setBusy(false)
+    }
+  }
+  if (!open) return <button className={btnLink} onClick={() => setOpen(true)}>+ Add participant</button>
+  return (
+    <div className="mt-2 grid grid-cols-1 gap-2 rounded-tlw-xl border border-dashed border-tlw-warm-gray/30 p-3 sm:grid-cols-4">
+      <input className={input} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Full name (as on their report)" />
+      <input className={input} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="Email" />
+      <select className={input} value={form.cohortId} onChange={(e) => setForm({ ...form, cohortId: e.target.value })}>
+        <option value="">No cohort</option>
+        {company.cohorts.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+      </select>
+      <div className="flex gap-2">
+        <button className={btnPrimary} disabled={busy || !form.name.trim() || !form.email.trim()} onClick={create}>{busy ? 'Adding…' : 'Add'}</button>
+        <button className={btnSecondary} onClick={() => setOpen(false)}>Cancel</button>
+      </div>
+      {error && <p className="text-[12px] text-tlw-signal-orange sm:col-span-4">{error}</p>}
+    </div>
+  )
+}
+
 function CompanyCard({ company, onChanged }: { company: Company; onChanged: (c: Company) => void }) {
   const [edit, setEdit] = useState(false)
   const [form, setForm] = useState({ name: company.name, vision: company.vision || '', values: company.values || '', notes: company.notes || '' })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [newCohort, setNewCohort] = useState<{ name: string; seatsPurchased: string; accessExpiresAt: string; debriefCoachName: string } | null>(null)
+  const [participantsAdded, setParticipantsAdded] = useState(0)
 
   async function save() {
     setBusy(true)
@@ -196,12 +338,18 @@ function CompanyCard({ company, onChanged }: { company: Company; onChanged: (c: 
       )}
       <ErrorLine error={error} />
 
-      <div className="mt-4 flex items-center justify-between">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-tlw-warm-gray">Cohorts</p>
-        {!newCohort && (
-          <button className={btnLink} onClick={() => setNewCohort({ name: '', seatsPurchased: '', accessExpiresAt: '', debriefCoachName: '' })}>+ New cohort</button>
-        )}
+      <CompanyDocuments companyId={company.id} />
+
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-tlw-warm-gray">Cohorts &amp; participants</p>
+        <div className="flex items-center gap-3">
+          <AddParticipant company={company} onAdded={() => setParticipantsAdded((n) => n + 1)} />
+          {!newCohort && (
+            <button className={btnLink} onClick={() => setNewCohort({ name: '', seatsPurchased: '', accessExpiresAt: '', debriefCoachName: '' })}>+ New cohort</button>
+          )}
+        </div>
       </div>
+      {participantsAdded > 0 && <p className="mt-1 text-[12px] text-emerald-700">{participantsAdded} participant{participantsAdded > 1 ? 's' : ''} added — see the Portal users tab to invite them.</p>}
       {newCohort && (
         <div className="mt-2 grid grid-cols-1 gap-2 rounded-tlw-xl border border-dashed border-tlw-warm-gray/30 p-3 sm:grid-cols-4">
           <input className={input} value={newCohort.name} onChange={(e) => setNewCohort({ ...newCohort, name: e.target.value })} placeholder="Cohort name" />
@@ -259,7 +407,7 @@ export function CompaniesPanel() {
 
   return (
     <div className="space-y-4">
-      <Section title="Companies & cohorts" sub="Billing is on seats purchased; seats activated is counted from participants assigned to the cohort. Debrief coaches are a name on the cohort — they have no app access.">
+      <Section title="ZF Portal — companies, cohorts, participants" sub="Enterprise sponsors live here: their documents shape the assistant for their people, cohorts carry seats purchased vs activated, and participants can be added under the company with or without a cohort. Standalone participants (no company) are added from the Portal users tab. Debrief coaches are a name on the cohort — they have no app access.">
         <div className="flex gap-2">
           <input className={input} value={name} onChange={(e) => setName(e.target.value)} placeholder="New company name" onKeyDown={(e) => e.key === 'Enter' && name.trim() && create()} />
           <button className={btnPrimary} disabled={creating || !name.trim()} onClick={create}>+ Add company</button>

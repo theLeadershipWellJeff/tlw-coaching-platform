@@ -600,10 +600,10 @@ export default function CommandCenterPage() {
         actions={
           <div className="flex items-center gap-2">
             <a
-              href="/business-center/debrief"
+              href="/business-center/portal"
               className="rounded-tlw-lg border border-tlw-navy-deep/30 px-3 py-1.5 text-[13px] font-medium text-tlw-navy-deep transition-colors hover:bg-tlw-navy-deep/[0.06]"
             >
-              Assessment Debrief
+              Client Portal
             </a>
             <button
               onClick={() => setShowAdd(true)}

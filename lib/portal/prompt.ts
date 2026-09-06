@@ -20,7 +20,14 @@ import type { CoachingGoal } from '../supabase/types'
 import { PORTAL_CHAT_VOICE_STANDARDS } from '../writing-standards'
 
 export type PromptBrief = { slug: string; version: number; body: string }
-export type PromptCompany = { name: string; vision: string | null; values: string | null }
+export type PromptCompany = {
+  name: string
+  vision: string | null
+  values: string | null
+  /** Sponsor-uploaded material (migration 060), already budgeted by the loader. */
+  documents?: Array<{ title: string; text: string }>
+}
+export type PromptClientDocument = { title: string; text: string }
 
 export type PromptParts = {
   clientName: string
@@ -30,6 +37,8 @@ export type PromptParts = {
   company: PromptCompany | null
   assessment: { data: Assessment360Data; assessmentCount: number } | null
   goals: CoachingGoal[]
+  /** Documents the client added to their own portal (kind 'general'), budgeted. */
+  clientDocuments?: PromptClientDocument[]
   noteParts: string[]
   recentParts: string[]
   retrievedParts: string[]
@@ -100,10 +109,12 @@ Guidelines:
   }
 
   // 4. Company context — omitted entirely when absent
-  if (p.company && (p.company.vision || p.company.values)) {
+  const companyDocs = p.company?.documents?.filter((d) => d.text.trim()) || []
+  if (p.company && (p.company.vision || p.company.values || companyDocs.length)) {
     const lines = [`COMPANY CONTEXT (${p.company.name}) — use only to connect the work to the organisation; never to judge the person against it:`]
     if (p.company.vision) lines.push(`Vision: ${p.company.vision.trim()}`)
     if (p.company.values) lines.push(`Values: ${p.company.values.trim()}`)
+    for (const d of companyDocs) lines.push(`\n## Company document: ${d.title}\n${d.text.trim()}`)
     sections.push(lines.join('\n'))
   }
 
@@ -127,6 +138,14 @@ Guidelines:
       })
       .join('\n')
     sections.push(`${clientName.toUpperCase()}'S COACHING GOALS:\n${goalsText}`)
+  }
+  const clientDocs = (p.clientDocuments || []).filter((d) => d.text.trim())
+  if (clientDocs.length) {
+    sections.push(
+      `DOCUMENTS ${clientName.toUpperCase()} ADDED TO THEIR PORTAL (their own material; refer to it by title when you draw on it):\n${clientDocs
+        .map((d) => `## ${d.title}\n${d.text.trim()}`)
+        .join('\n\n')}`
+    )
   }
   if (p.noteParts.length) sections.push(`SESSION NOTES ${clientName.toUpperCase()} RECEIVED FROM THEIR COACH:\n${p.noteParts.join('\n\n')}`)
   if (p.recentParts.length) sections.push(`MOST RECENT SESSIONS:\n${p.recentParts.join('\n\n')}`)

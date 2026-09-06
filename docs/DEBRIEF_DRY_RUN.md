@@ -7,14 +7,14 @@ Phases 1–4 built. Do not skip it, and do not schedule into the buffer week.
 **Who.** Jeff runs it. Caleb shadows the support steps using
 `docs/DEBRIEF_SUPPORT_RUNBOOK.md`.
 
-**Where.** Business Center → Command Center → **Assessment Debrief**
-(`/business-center/debrief`). Supervisor sign-in required.
+**Where.** Business Center → Command Center → **Client Portal**
+(`/business-center/portal`). The ZF set-up lives in its **ZF Portal** tab. Supervisor sign-in required.
 
 ---
 
 ## 0. Before you start (one-time)
 
-- [ ] Migration 059 applied (confirmed 2026-09-05).
+- [ ] Migrations 059 and 060 applied.
 - [ ] Vercel env: `RESEND_API_KEY`, `PORTAL_FROM_EMAIL`, `PORTAL_FROM_NAME`,
       `DEFAULT_COACH_EMAIL` (the house coach), optional `SUPPORT_NOTIFY_EMAIL`.
 - [ ] Resend domain `mail.theleadershipwell.online` shows **Verified**.
@@ -44,18 +44,22 @@ node scripts/spikes/verify-batch-360.js /path/to/folder-of-cohort-pdfs/
 
 ## 2. Set up the company and cohort (5 min)
 
-Companies & cohorts tab.
+ZF Portal tab.
 
 - [ ] Add the company. Paste vision and values if the sponsor supplied them.
       Leave blank otherwise — the assistant then carries no company context,
       which is correct.
+- [ ] Upload one company document (a values deck or framework, PDF/Word).
+      It shows "in chat ✓". Later, in a participant's chat, ask about it by
+      title — the assistant should refer to it.
 - [ ] Add the cohort: seats purchased (from the contract), access ends
       (purchase date + 1 year), debrief coach's name.
 - [ ] Seats activated reads 0/N.
 
 ## 3. Add ten test participants (10 min)
 
-Portal users tab → Add a participant. Use real names from the cohort roster
+Portal users tab → Add a ZF participant (pick the company and cohort), or
+**+ Add participant** under the company on the ZF Portal tab. Use real names from the cohort roster
 for the ones whose reports you have, and your own aliases (e.g. `jeff+t1@…`)
 for the rest so invitations reach inboxes you control.
 
@@ -65,7 +69,7 @@ for the rest so invitations reach inboxes you control.
 
 ## 4. Upload the reports (5 min)
 
-Documents tab → Bulk upload. Choose the cohort, select the verified PDFs,
+Reports tab → Bulk upload. Choose the cohort, select the verified PDFs,
 **Upload & verify**.
 
 - [ ] Every report you expected lands under **Placed** with status `complete`.
@@ -75,7 +79,7 @@ Documents tab → Bulk upload. Choose the cohort, select the verified PDFs,
 
 ## 5. Rehearse the staggered send (15 min, over two days)
 
-Companies & cohorts tab → the cohort → **Send invitations**.
+ZF Portal tab → the cohort → **Send invitations**.
 
 - [ ] First call: sends to at most 25, throttled. The row under the cohort
       reports sent/failed/skipped/remaining.
@@ -114,8 +118,10 @@ Open one of your alias invitations.
       required → saves → appears on the home page marked "yours".
 - [ ] Contact support → sends → the ticket appears in the Support tab and the
       notice email arrives.
-- [ ] Upload your own PDF (the 360 again) → the name gate accepts it; upload a
-      colleague's report → it is held with the mismatch message.
+- [ ] **Your documents** card: upload your own PDF (the 360 again) → the name
+      gate accepts it; upload a colleague's report → it is held with the
+      mismatch message; upload a Word or text document as "Other document" →
+      it appears, downloads, and the assistant can refer to it by title in chat.
 
 ## 7. Support round-trip (5 min)
 

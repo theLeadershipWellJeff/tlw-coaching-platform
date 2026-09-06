@@ -5,7 +5,7 @@ import { checkPortalRateLimit, logPortalAccess } from '@/lib/portal/access'
 import { logPortalEvent } from '@/lib/portal/events'
 import { resolveClientCoach } from '@/lib/portal/coach'
 import { createClientDocument, DocumentError } from '@/lib/documents/pipeline'
-import type { ClientDocumentKind } from '@/lib/supabase/types'
+import type { ClientDocumentKind, PortalFeatures } from '@/lib/supabase/types'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -47,22 +47,24 @@ export async function POST(req: NextRequest) {
   const file = form?.get('file')
   if (!(file instanceof File)) return NextResponse.json({ error: 'Choose a PDF to upload.' }, { status: 400 })
   const kind = String(form?.get('kind') || 'assessment_360') as ClientDocumentKind
-  if (!['assessment_360', 'personnel_review'].includes(kind)) {
+  if (!['assessment_360', 'personnel_review', 'general'].includes(kind)) {
     return NextResponse.json({ error: 'Unsupported document type.' }, { status: 400 })
   }
 
   const supabase = getSupabaseAdmin()
-  const { data: client } = await supabase.from('clients').select('id, org_id').eq('id', clientId).maybeSingle()
+  const { data: client } = await supabase.from('clients').select('id, org_id, portal_features').eq('id', clientId).maybeSingle()
   if (!client) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   // Visibility: kind + client choice (build prompt §4). Default for an
-  // assessment = visible when a coach exists; the client may switch it any time.
+  // assessment or a general document = visible when a coach exists; the client
+  // may switch it any time. A personnel review is never coach-visible.
   let visibleToCoach = false
-  if (kind === 'assessment_360') {
+  if (kind !== 'personnel_review') {
     const coach = await resolveClientCoach(clientId)
     const choice = form?.get('visibleToCoach')
     visibleToCoach = choice === null || choice === undefined ? Boolean(coach) : String(choice) === '1'
   }
+  const title = String(form?.get('title') || '').trim() || null
 
   try {
     const result = await createClientDocument(supabase, {
@@ -71,10 +73,17 @@ export async function POST(req: NextRequest) {
       kind,
       bytes: Buffer.from(await file.arrayBuffer()),
       filename: file.name,
+      title,
       uploaderRole: 'client',
       uploadedBy: null,
       visibleToCoach,
     })
+    // A name-verified, complete 360 the client added themselves switches the
+    // assessment surfaces on — same rule as a coach upload.
+    if (kind === 'assessment_360' && result.document.extraction_status === 'complete') {
+      const f = ((client.portal_features as PortalFeatures) || {}) as PortalFeatures
+      if (!f.assessments) await supabase.from('clients').update({ portal_features: { ...f, assessments: true } }).eq('id', client.id)
+    }
     await logPortalAccess(clientId, 'document_upload', { detail: `${kind}:${result.document.id}`, ok: result.document.extraction_status === 'complete' })
     await logPortalEvent(clientId, 'document_uploaded', { document_id: result.document.id, kind, status: result.document.extraction_status })
     const d = result.document
@@ -87,7 +96,7 @@ export async function POST(req: NextRequest) {
           : d.extraction_status === 'unsupported'
             ? 'We could not read this report layout automatically. Your file is saved and downloadable; support has been notified to review it.'
             : d.extraction_status === 'complete'
-              ? 'Your report has been added.'
+              ? kind === 'assessment_360' ? 'Your report has been added.' : 'Your document has been added.'
               : 'Your file is saved, but we could not read it automatically. Support has been notified.',
       },
       { status: 201 }

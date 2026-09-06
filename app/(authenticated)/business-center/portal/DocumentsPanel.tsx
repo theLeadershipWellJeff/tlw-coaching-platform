@@ -99,7 +99,7 @@ export function DocumentsPanel({ companies }: { companies: Company[] }) {
 
   return (
     <div className="space-y-4">
-      <Section title="Bulk upload" sub="Pick a cohort and the reports. Each PDF is read first and matched by the participant name on its cover; exactly one match files it, anything else is held for you to place by hand. Nothing becomes client-visible unless extraction completes.">
+      <Section title="Bulk upload 360 reports" sub="Pick a cohort and the reports. Each PDF is read first and matched by the participant name on its cover; exactly one match files it, anything else is held for you to place by hand. Nothing becomes client-visible unless extraction completes.">
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           <select className={input} value={cohortId} onChange={(e) => setCohortId(e.target.value)}>
             <option value="">Match against all portal users</option>

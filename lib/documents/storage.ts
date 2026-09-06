@@ -18,8 +18,8 @@ export async function ensureDocumentsBucket(supabase: SupabaseClient<Database>):
   if (error && !/exist/i.test(error.message)) throw error
 }
 
-export function documentStoragePath(clientId: string, documentId: string): string {
-  return `${clientId}/${documentId}.pdf`
+export function documentStoragePath(clientId: string, documentId: string, ext = 'pdf'): string {
+  return `${clientId}/${documentId}.${ext}`
 }
 
 /**

@@ -62,6 +62,24 @@ export function checkPdfBytes(bytes: Buffer, filename: string): void {
   }
 }
 
+const TEXT_DOC_EXTENSIONS = new Set(['pdf', 'docx', 'txt', 'md', 'markdown', 'text'])
+function extOf(filename: string): string {
+  return (filename.split('.').pop() || '').toLowerCase()
+}
+
+/** Assessments must be PDFs; other kinds may be PDF, Word, or text. */
+function checkDocumentBytes(bytes: Buffer, filename: string, kind: ClientDocumentKind): string {
+  if (kind === 'assessment_360') {
+    checkPdfBytes(bytes, filename)
+    return 'pdf'
+  }
+  if (bytes.length > MAX_DOCUMENT_BYTES) throw new DocumentError(400, `"${filename}" is larger than 4 MB.`)
+  const ext = extOf(filename)
+  if (!TEXT_DOC_EXTENSIONS.has(ext)) throw new DocumentError(400, `"${filename}" isn't a supported format. Use PDF, Word (.docx), or a text file.`)
+  if (ext === 'pdf' && bytes.subarray(0, 5).toString('latin1') !== '%PDF-') throw new DocumentError(400, `"${filename}" isn't a valid PDF.`)
+  return ext
+}
+
 async function loadCaps(supabase: SupabaseClient<Database>, clientId: string): Promise<{ maxAssessments: number; maxDocuments: number; features: PortalFeatures }> {
   const { data } = await supabase.from('clients').select('portal_features').eq('id', clientId).maybeSingle()
   const f = ((data?.portal_features as PortalFeatures) || {}) as PortalFeatures & { max_assessments?: number; max_documents?: number }
@@ -92,15 +110,16 @@ export async function createClientDocument(
   input: UploadInput,
   opts: { confirmName?: boolean } = {}
 ): Promise<UploadResult> {
-  checkPdfBytes(input.bytes, input.filename)
+  const ext = checkDocumentBytes(input.bytes, input.filename, input.kind)
   await enforceCaps(supabase, input.clientId, input.kind)
   await ensureDocumentsBucket(supabase)
 
   const id = randomUUID()
-  const storagePath = documentStoragePath(input.clientId, id)
+  const storagePath = documentStoragePath(input.clientId, id, ext)
+  const contentType = ext === 'pdf' ? 'application/pdf' : ext === 'docx' ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : 'text/plain'
   const { error: upErr } = await supabase.storage
     .from(DOCUMENTS_BUCKET)
-    .upload(storagePath, input.bytes, { contentType: 'application/pdf', upsert: false })
+    .upload(storagePath, input.bytes, { contentType, upsert: false })
   if (upErr) throw new DocumentError(500, `Could not store the file: ${upErr.message}`)
 
   const { data: row, error } = await supabase
@@ -110,7 +129,7 @@ export async function createClientDocument(
       org_id: input.orgId,
       client_id: input.clientId,
       kind: input.kind,
-      title: input.title || input.filename.replace(/\.pdf$/i, ''),
+      title: input.title || input.filename.replace(/\.[^.]+$/, ''),
       storage_path: storagePath,
       size_bytes: input.bytes.length,
       extraction_status: 'pending',
@@ -169,9 +188,10 @@ async function runExtraction(
   const patch: Partial<ClientDocument> & { updated_at: string } = { updated_at: new Date().toISOString() }
 
   if (row.kind !== 'assessment_360') {
-    // Text-only kinds: no structured pass, no name gate.
+    // Text-only kinds: no structured pass, no name gate. The stored path's
+    // extension tells the extractor which reader to use.
     try {
-      patch.extracted_text = await extractTranscriptText(`${row.id}.pdf`, bytes)
+      patch.extracted_text = await extractTranscriptText(row.storage_path.split('/').pop() || `${row.id}.pdf`, bytes)
       patch.extraction_status = 'complete'
       patch.extraction_error = null
     } catch (e) {

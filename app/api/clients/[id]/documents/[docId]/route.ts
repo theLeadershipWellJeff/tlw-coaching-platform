@@ -30,7 +30,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string; 
     const doc = await loadVisible(params.id, params.docId)
     if (!doc) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     if (req.nextUrl.searchParams.get('download') === '1') {
-      const url = await signedDocumentUrl(supabase, doc.storage_path, { downloadAs: `${(doc.title || 'report').replace(/[^\w.-]+/g, '_')}.pdf` })
+      const url = await signedDocumentUrl(supabase, doc.storage_path, { downloadAs: `${(doc.title || 'document').replace(/[^\w.-]+/g, '_')}.${doc.storage_path.split('.').pop() || 'pdf'}` })
       if (!url) return NextResponse.json({ error: 'Could not open the file.' }, { status: 502 })
       return NextResponse.redirect(url)
     }

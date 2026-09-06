@@ -8,6 +8,7 @@ type PortalUser = {
   name: string
   email: string | null
   client_type: string
+  kind: 'coaching' | 'coaching_zf' | 'standalone' | 'enterprise'
   company_id: string | null
   company_name: string | null
   cohort_id: string | null
@@ -25,7 +26,8 @@ export function PortalUsersPanel({ companies }: { companies: Company[] }) {
   const [users, setUsers] = useState<PortalUser[] | null>(null)
   const [error, setError] = useState('')
   const [filterCohort, setFilterCohort] = useState('')
-  const [form, setForm] = useState({ name: '', email: '', cohortId: '' })
+  const [filterKind, setFilterKind] = useState<'' | PortalUser['kind']>('')
+  const [form, setForm] = useState({ name: '', email: '', companyId: '', cohortId: '' })
   const [creating, setCreating] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [editing, setEditing] = useState<PortalUser | null>(null)
@@ -35,7 +37,10 @@ export function PortalUsersPanel({ companies }: { companies: Company[] }) {
 
   async function load() {
     try {
-      const d = await api<{ users: PortalUser[] }>(`/api/admin/portal-users${filterCohort ? `?cohortId=${filterCohort}` : ''}`)
+      const qs = new URLSearchParams()
+      if (filterCohort) qs.set('cohortId', filterCohort)
+      if (filterKind) qs.set('kind', filterKind)
+      const d = await api<{ users: PortalUser[] }>(`/api/admin/portal-users${qs.toString() ? `?${qs}` : ''}`)
       setUsers(d.users)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load.')
@@ -45,7 +50,7 @@ export function PortalUsersPanel({ companies }: { companies: Company[] }) {
   useEffect(() => {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterCohort])
+  }, [filterCohort, filterKind])
 
   function replace(u: PortalUser | null) {
     if (!u) return load()
@@ -56,8 +61,8 @@ export function PortalUsersPanel({ companies }: { companies: Company[] }) {
     setCreating(true)
     setError('')
     try {
-      await api('/api/admin/portal-users', { method: 'POST', body: JSON.stringify({ name: form.name, email: form.email, cohortId: form.cohortId || null }) })
-      setForm({ name: '', email: '', cohortId: form.cohortId })
+      await api('/api/admin/portal-users', { method: 'POST', body: JSON.stringify({ name: form.name, email: form.email, companyId: form.companyId || null, cohortId: form.cohortId || null }) })
+      setForm({ name: '', email: '', companyId: form.companyId, cohortId: form.cohortId })
       await load()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not create.')
@@ -113,14 +118,18 @@ export function PortalUsersPanel({ companies }: { companies: Company[] }) {
 
   return (
     <div className="space-y-4">
-      <Section title="Add a participant" sub="Standalone portal participants are linked to the house coach automatically and never appear in the coaching roster.">
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
+      <Section title="Add a ZF participant" sub="Leave company and cohort empty for a standalone participant (bought their own report, no coach). Pick a company for an enterprise participant; a cohort is optional. Either way they are linked to the house coach automatically and never appear in the coaching roster. Existing coaching clients get the 360 by toggling the flag in the list below, not here.">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-5">
           <input className={input} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Full name (as on their report)" />
           <input className={input} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="Email" />
-          <select className={input} value={form.cohortId} onChange={(e) => setForm({ ...form, cohortId: e.target.value })}>
+          <select className={input} value={form.companyId} onChange={(e) => setForm({ ...form, companyId: e.target.value, cohortId: '' })}>
+            <option value="">No company (standalone)</option>
+            {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <select className={input} value={form.cohortId} onChange={(e) => setForm({ ...form, cohortId: e.target.value })} disabled={!form.companyId}>
             <option value="">No cohort</option>
-            {cohorts.map((c) => (
-              <option key={c.id} value={c.id}>{c.company_name} · {c.name}</option>
+            {cohorts.filter((c) => c.company_id === form.companyId).map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
           <button className={btnPrimary} disabled={creating || !form.name.trim() || !form.email.trim()} onClick={create}>{creating ? 'Adding…' : '+ Add participant'}</button>
@@ -130,14 +139,21 @@ export function PortalUsersPanel({ companies }: { companies: Company[] }) {
 
       <Section
         title="Portal users"
-        sub="Standalone participants plus coaching clients with the 360 switched on. The flag is per client — a coaching client can be switched on here without re-onboarding."
+        sub="Everyone using the portal: coaching clients (general portal), coaching clients with the 360 on, standalone ZF participants, and enterprise cohort participants. The 360 flag is per client — switch it on here for any coaching client without re-onboarding."
         actions={
-          <select className={`${input} w-auto`} value={filterCohort} onChange={(e) => setFilterCohort(e.target.value)}>
-            <option value="">All cohorts</option>
-            {cohorts.map((c) => (
-              <option key={c.id} value={c.id}>{c.company_name} · {c.name}</option>
-            ))}
-          </select>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex gap-1 text-[12px]">
+              {([['', 'All'], ['coaching', 'Coaching'], ['coaching_zf', 'Coaching + ZF'], ['standalone', 'Standalone ZF'], ['enterprise', 'Enterprise']] as const).map(([k, label]) => (
+                <button key={k} className={`rounded-tlw-lg px-2 py-1 ${filterKind === k ? 'bg-tlw-navy-deep text-white' : 'text-tlw-espresso hover:bg-tlw-canvas'}`} onClick={() => setFilterKind(k)}>{label}</button>
+              ))}
+            </div>
+            <select className={`${input} w-auto`} value={filterCohort} onChange={(e) => setFilterCohort(e.target.value)}>
+              <option value="">All cohorts</option>
+              {cohorts.map((c) => (
+                <option key={c.id} value={c.id}>{c.company_name} · {c.name}</option>
+              ))}
+            </select>
+          </div>
         }
       >
         {users === null ? (
@@ -163,7 +179,10 @@ export function PortalUsersPanel({ companies }: { companies: Company[] }) {
                 {users.map((u) => (
                   <tr key={u.id} className="align-top">
                     <td className="py-2 pr-3">
-                      <p className="font-medium text-tlw-navy-deep">{u.name} {u.has_coach_relationship && <Chip tone="navy">coaching client</Chip>}</p>
+                      <p className="font-medium text-tlw-navy-deep">
+                        {u.name}{' '}
+                        <Chip tone={u.kind === 'coaching' ? 'gray' : 'navy'}>{{ coaching: 'coaching', coaching_zf: 'coaching + ZF', standalone: 'standalone ZF', enterprise: 'enterprise' }[u.kind]}</Chip>
+                      </p>
                       <p className="text-tlw-warm-gray">{u.email || 'no email'}</p>
                     </td>
                     <td className="py-2 pr-3 text-tlw-espresso">{u.cohort_name ? `${u.company_name || ''} · ${u.cohort_name}` : u.company_name || '—'}</td>

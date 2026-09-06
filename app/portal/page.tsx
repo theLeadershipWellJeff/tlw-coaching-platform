@@ -11,6 +11,7 @@ import { BillingCard } from './BillingCard'
 import { AssessmentCard } from './AssessmentCard'
 import { ContactSupportCard } from './ContactSupportCard'
 import { PortalGoalsCard } from './PortalGoalsCard'
+import { DocumentsCard } from './DocumentsCard'
 
 export const dynamic = 'force-dynamic'
 
@@ -133,7 +134,7 @@ export default async function PortalHome() {
             {hasCoach ? 'Chat with your coaching assistant' : 'Chat with your thinking partner'}
           </p>
           <p className="mt-0.5 text-[13px] text-tlw-warm-gray">
-            {hasCoach ? 'Reflect on your goals and sessions, anytime.' : 'Work through your report and what comes next, anytime.'}
+            {hasCoach ? 'Reflect on your goals, sessions, and documents, anytime.' : 'Work through your report and what comes next, anytime.'}
           </p>
         </div>
         <span className="text-[20px] text-tlw-signal-orange" aria-hidden>
@@ -287,6 +288,11 @@ export default async function PortalHome() {
           )}
         </Card>
         )}
+
+        {/* Documents the client has added — every portal, coach or not */}
+        <div className="lg:col-span-2">
+          <DocumentsCard hasCoach={hasCoach} />
+        </div>
 
         {/* Frameworks surfaced to this client (self-hides when none) */}
         <div className="lg:col-span-2">
