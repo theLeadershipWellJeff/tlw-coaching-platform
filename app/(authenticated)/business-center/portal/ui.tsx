@@ -1,6 +1,6 @@
 'use client'
 /** Small shared bits for the debrief command-center panels. */
-import type { ReactNode } from 'react'
+import type { ReactNode, RefObject } from 'react'
 
 export async function api<T = any>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, { ...init, headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) } })
@@ -58,4 +58,71 @@ export function Section({ title, sub, actions, children }: { title: string; sub?
 
 export function ErrorLine({ error }: { error: string }) {
   return error ? <p className="mt-2 text-[12px] text-tlw-signal-orange">{error}</p> : null
+}
+
+/** Upload one document for a portal user (per-user page + add-participant forms). */
+export async function uploadUserDocument(
+  userId: string,
+  file: File,
+  kind: 'assessment_360' | 'general',
+  opts: { title?: string; confirmName?: boolean } = {}
+): Promise<{ document: { id: string; extraction_status: string; extraction_error: string | null }; message: string }> {
+  const fd = new FormData()
+  fd.append('file', file)
+  fd.append('kind', kind)
+  if (opts.title) fd.append('title', opts.title)
+  if (opts.confirmName) fd.append('confirmName', '1')
+  const res = await fetch(`/api/admin/portal-users/${userId}/documents`, { method: 'POST', body: fd })
+  const d = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(d.error || `Upload failed (${res.status})`)
+  return d
+}
+
+/**
+ * Upload the files picked on an add-participant form, one after another, and
+ * describe each outcome. Never throws — a failed file is reported, the rest go on.
+ */
+export async function uploadPickedDocuments(userId: string, report: File | null, others: File[]): Promise<string[]> {
+  const notes: string[] = []
+  if (report) {
+    try {
+      const r = await uploadUserDocument(userId, report, 'assessment_360')
+      notes.push(`360 report: ${r.document.extraction_status}${r.document.extraction_error ? ` — ${r.document.extraction_error}` : ''}`)
+    } catch (e) {
+      notes.push(`360 report failed: ${e instanceof Error ? e.message : 'upload error'}`)
+    }
+  }
+  for (const f of others) {
+    try {
+      const r = await uploadUserDocument(userId, f, 'general')
+      notes.push(`${f.name}: ${r.document.extraction_status}`)
+    } catch (e) {
+      notes.push(`${f.name} failed: ${e instanceof Error ? e.message : 'upload error'}`)
+    }
+  }
+  return notes
+}
+
+/** The two file inputs an add-participant form carries (360 PDF + other documents). */
+export function DocumentPickers({
+  reportRef,
+  othersRef,
+  className = '',
+}: {
+  reportRef: RefObject<HTMLInputElement>
+  othersRef: RefObject<HTMLInputElement>
+  className?: string
+}) {
+  return (
+    <div className={`grid grid-cols-1 gap-2 sm:grid-cols-2 ${className}`}>
+      <label className="text-[11px] text-tlw-warm-gray">
+        360 report (PDF, optional — switches the 360 on when it reads clean)
+        <input ref={reportRef} type="file" accept=".pdf" className={input} />
+      </label>
+      <label className="text-[11px] text-tlw-warm-gray">
+        Other documents (PDF, Word, or text — join their chat context)
+        <input ref={othersRef} type="file" multiple accept=".pdf,.docx,.txt,.md" className={input} />
+      </label>
+    </div>
+  )
 }

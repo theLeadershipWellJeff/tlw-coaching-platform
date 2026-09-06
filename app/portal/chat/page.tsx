@@ -2,9 +2,11 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { GoalEditorModal } from '../GoalEditorModal'
+import { SavePlanModal } from './SavePlanModal'
 
 type ChatMessage = { role: 'user' | 'assistant'; content: string }
-type Conversation = { id: string; title: string; updated_at: string }
+type ChatMode = 'general' | 'weekly_plan'
+type Conversation = { id: string; title: string; updated_at: string; mode?: ChatMode }
 
 const SUGGESTIONS = [
   'What themes have come up across my sessions?',
@@ -20,6 +22,9 @@ const ASSESSMENT_SUGGESTIONS = [
   'Help me turn this into goals I can measure.',
 ]
 const COMPARISON_SUGGESTION = "What's changed since my last 360?"
+
+/** Plan-your-week openers — the brief expects the client to say they're planning. */
+const WEEK_SUGGESTIONS = ["I'm planning my week.", 'Help me work out what a successful week looks like.']
 
 /** A short, editable seed for "save as goal": the first sentence of the reply
  *  as the title, the rest as the why. The client edits before anything saves. */
@@ -44,6 +49,12 @@ export default function PortalChat() {
   const [assessment, setAssessment] = useState<{ enabled: boolean; hasComparison: boolean }>({ enabled: false, hasComparison: false })
   const [goalSeed, setGoalSeed] = useState<{ title: string; description: string } | null>(null)
   const [goalSaved, setGoalSaved] = useState(false)
+  // Plan your week: a thread's mode is fixed at creation; ?mode=week starts one.
+  const [mode, setMode] = useState<ChatMode>('general')
+  const [weekStart, setWeekStart] = useState('')
+  const [planSeed, setPlanSeed] = useState<{ title: string | null; tasks: string[] } | null>(null)
+  const [planBusy, setPlanBusy] = useState(false)
+  const [planSaved, setPlanSaved] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const endRef = useRef<HTMLDivElement>(null)
 
@@ -77,6 +88,20 @@ export default function PortalChat() {
 
   useEffect(() => {
     refreshConversations()
+    // Entry points from the home page: ?mode=week starts a planning thread,
+    // ?c=<id> reopens a specific conversation (e.g. the one behind this week's plan).
+    try {
+      const qs = new URLSearchParams(window.location.search)
+      if (qs.get('mode') === 'week') setMode('weekly_plan')
+      const c = qs.get('c')
+      if (c) openConversation(c)
+    } catch {
+      /* ignore */
+    }
+    fetch('/api/portal/weekly-plan')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d?.weekStart && setWeekStart(d.weekStart))
+      .catch(() => {})
     // Which starters to offer: the 360 set when a report is on file.
     fetch('/api/portal/assessments')
       .then((r) => (r.ok ? r.json() : { enabled: false, documents: [] }))
@@ -89,19 +114,26 @@ export default function PortalChat() {
       .catch(() => {})
   }, [])
 
-  const starters = assessment.enabled
-    ? [...ASSESSMENT_SUGGESTIONS, ...(assessment.hasComparison ? [COMPARISON_SUGGESTION] : [])]
-    : SUGGESTIONS
+  const starters =
+    mode === 'weekly_plan'
+      ? WEEK_SUGGESTIONS
+      : assessment.enabled
+        ? [...ASSESSMENT_SUGGESTIONS, ...(assessment.hasComparison ? [COMPARISON_SUGGESTION] : [])]
+        : SUGGESTIONS
+  const canSavePlan = mode === 'weekly_plan' && !!activeId && messages.some((m) => m.role === 'assistant' && m.content.trim()) && !sending
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, sending])
 
-  function newChat() {
+  function newChat(nextMode: ChatMode = 'general') {
     setActiveId(null)
     setMessages([])
     setError('')
     setSidebarOpen(false)
+    setMode(nextMode)
+    setPlanSaved(false)
+    setPlanSeed(null)
   }
 
   async function openConversation(id: string) {
@@ -109,10 +141,14 @@ export default function PortalChat() {
     setError('')
     setMessages([])
     setSidebarOpen(false)
+    setPlanSaved(false)
     try {
       const res = await fetch(`/api/portal/chat/${id}`)
       const d = await res.json()
-      if (res.ok) setMessages((d.messages || []).map((m: ChatMessage) => ({ role: m.role, content: m.content })))
+      if (res.ok) {
+        setMessages((d.messages || []).map((m: ChatMessage) => ({ role: m.role, content: m.content })))
+        setMode(d.mode === 'weekly_plan' ? 'weekly_plan' : 'general')
+      }
     } catch {
       /* ignore */
     }
@@ -146,6 +182,32 @@ export default function PortalChat() {
     }
   }
 
+  /** "Save this week's plan": ask for the agreed Top 5, then let the person edit + confirm. */
+  async function proposePlan() {
+    if (!activeId || planBusy) return
+    setPlanBusy(true)
+    setError('')
+    try {
+      const res = await fetch('/api/portal/weekly-plan/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversationId: activeId }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        // The model couldn't read a list; still let them type one in.
+        if (res.status === 502) setPlanSeed({ title: null, tasks: [] })
+        else setError(d.error || 'Could not read the plan from the conversation.')
+        return
+      }
+      setPlanSeed({ title: d.title ?? null, tasks: Array.isArray(d.tasks) ? d.tasks : [] })
+    } catch {
+      setError('Something went wrong. Please try again.')
+    } finally {
+      setPlanBusy(false)
+    }
+  }
+
   async function send(text: string) {
     const content = text.trim()
     if (!content || sending) return
@@ -162,7 +224,7 @@ export default function PortalChat() {
       const res = await fetch('/api/portal/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conversationId: activeId, content, attachment: sentAttachment }),
+        body: JSON.stringify({ conversationId: activeId, content, attachment: sentAttachment, mode: activeId ? undefined : mode }),
       })
 
       if (!res.ok || !res.body) {
@@ -205,10 +267,16 @@ export default function PortalChat() {
   const sidebar = (
     <>
       <button
-        onClick={newChat}
-        className="mb-2 w-full rounded-tlw-lg border border-tlw-warm-gray/25 px-2.5 py-1.5 text-left text-[13px] font-medium text-tlw-signal-orange hover:bg-tlw-canvas"
+        onClick={() => newChat('general')}
+        className="mb-1 w-full rounded-tlw-lg border border-tlw-warm-gray/25 px-2.5 py-1.5 text-left text-[13px] font-medium text-tlw-signal-orange hover:bg-tlw-canvas"
       >
         + New chat
+      </button>
+      <button
+        onClick={() => newChat('weekly_plan')}
+        className="mb-2 w-full rounded-tlw-lg border border-tlw-signal-orange/40 bg-tlw-signal-orange/5 px-2.5 py-1.5 text-left text-[13px] font-medium text-tlw-navy-deep hover:bg-tlw-signal-orange/10"
+      >
+        ✦ Plan your week
       </button>
       {conversations.length === 0 ? (
         <p className="px-2 text-[12px] text-tlw-warm-gray/70">No past chats yet.</p>
@@ -224,6 +292,7 @@ export default function PortalChat() {
                     : 'text-tlw-espresso hover:bg-tlw-canvas'
                 }`}
               >
+                {c.mode === 'weekly_plan' && <span className="mr-1 text-tlw-signal-orange" aria-hidden>✦</span>}
                 {c.title}
               </button>
               <button
@@ -263,7 +332,7 @@ export default function PortalChat() {
           ← Back
         </Link>
         <p className="text-[11px] font-medium uppercase tracking-[2px] text-tlw-warm-gray">
-          Coaching Assistant
+          {mode === 'weekly_plan' ? 'Plan your week' : 'Coaching Assistant'}
         </p>
         {/* On a phone the sidebar is a drawer, so past chats stay reachable. */}
         <button
@@ -272,7 +341,7 @@ export default function PortalChat() {
         >
           {sidebarOpen ? 'Close' : 'Chats'}
         </button>
-        <button onClick={newChat} className="hidden text-[13px] font-medium text-tlw-signal-orange hover:underline md:block">
+        <button onClick={() => newChat('general')} className="hidden text-[13px] font-medium text-tlw-signal-orange hover:underline md:block">
           + New chat
         </button>
       </div>
@@ -293,9 +362,11 @@ export default function PortalChat() {
             {messages.length === 0 && !sending ? (
               <div className="mt-6 text-center">
                 <p className="text-[15px] text-tlw-espresso">
-                  {assessment.enabled
-                    ? 'Ask me anything about your report, your goals, or what to do next.'
-                    : 'Ask me anything about your goals, sessions, or the notes your coach sent you.'}
+                  {mode === 'weekly_plan'
+                    ? 'A short conversation that ends in your Top 5 for the week. Start by saying you are planning your week.'
+                    : assessment.enabled
+                      ? 'Ask me anything about your report, your goals, or what to do next.'
+                      : 'Ask me anything about your goals, sessions, or the notes your coach sent you.'}
                 </p>
                 <div className="mt-4 flex flex-col items-center gap-2">
                   {starters.map((s) => (
@@ -350,9 +421,27 @@ export default function PortalChat() {
                 Saved to your goals. <Link href="/portal" className="font-medium text-tlw-signal-orange hover:underline">See them</Link>
               </p>
             )}
+            {planSaved && (
+              <p className="text-center text-[12px] text-tlw-warm-gray">
+                Your plan is on your home page. <Link href="/portal" className="font-medium text-tlw-signal-orange hover:underline">See it</Link>
+              </p>
+            )}
             <div ref={endRef} />
           </div>
 
+          {mode === 'weekly_plan' && (
+            <div className="flex items-center justify-between gap-3 border-t border-tlw-warm-gray/15 bg-tlw-signal-orange/5 px-4 py-2">
+              <p className="text-[12px] text-tlw-espresso">When your Top 5 is agreed, save it to your home page as a checklist.</p>
+              <button
+                type="button"
+                onClick={proposePlan}
+                disabled={!canSavePlan || planBusy}
+                className="shrink-0 rounded-tlw-lg bg-tlw-signal-orange px-3 py-1.5 text-[13px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+              >
+                {planBusy ? 'Reading the plan…' : "Save this week's plan"}
+              </button>
+            </div>
+          )}
           <form
             onSubmit={(e) => {
               e.preventDefault()
@@ -423,6 +512,19 @@ export default function PortalChat() {
           from="chat"
           onSaved={() => setGoalSaved(true)}
           onClose={() => setGoalSeed(null)}
+        />
+      )}
+      {planSeed && activeId && (
+        <SavePlanModal
+          initialTitle={planSeed.title}
+          initialTasks={planSeed.tasks}
+          weekStart={weekStart || new Date().toISOString().slice(0, 10)}
+          conversationId={activeId}
+          onSaved={() => {
+            setPlanSeed(null)
+            setPlanSaved(true)
+          }}
+          onClose={() => setPlanSeed(null)}
         />
       )}
     </div>

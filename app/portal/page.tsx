@@ -12,6 +12,7 @@ import { AssessmentCard } from './AssessmentCard'
 import { ContactSupportCard } from './ContactSupportCard'
 import { PortalGoalsCard } from './PortalGoalsCard'
 import { DocumentsCard } from './DocumentsCard'
+import { WeeklyPlanCard } from './WeeklyPlanCard'
 
 export const dynamic = 'force-dynamic'
 
@@ -68,7 +69,7 @@ export default async function PortalHome() {
   const data: PortalOverview | null = await loadPortalOverview(clientId)
   if (!data) redirect('/portal/login')
 
-  const firstName = (data.client.name || '').split(' ')[0] || 'there'
+  const firstName = data.displayName
 
   // Presence-aware layout (assessment debrief, Phase 3). A client with a coach
   // sees today's portal exactly; a card that can only ever be empty for a
@@ -117,6 +118,13 @@ export default async function PortalHome() {
         </a>
       )}
 
+      {/* Your 360 report — first thing a participant sees, whenever the flag is on */}
+      {assessmentsEnabled && (
+        <div className="mt-6">
+          <AssessmentCard bookingUrl={data.bookingUrl} />
+        </div>
+      )}
+
       <form action="/portal/search" className="mt-6">
         <input
           name="q"
@@ -125,30 +133,44 @@ export default async function PortalHome() {
         />
       </form>
 
-      <a
-        href="/portal/chat"
-        className="mt-6 flex items-center justify-between rounded-tlw-2xl border border-tlw-navy-rich/20 bg-tlw-navy-rich/5 p-5 transition-colors hover:bg-tlw-navy-rich/10"
-      >
-        <div>
-          <p className="text-[15px] font-medium text-tlw-navy-deep">
-            {hasCoach ? 'Chat with your coaching assistant' : 'Chat with your thinking partner'}
-          </p>
-          <p className="mt-0.5 text-[13px] text-tlw-warm-gray">
-            {hasCoach ? 'Reflect on your goals, sessions, and documents, anytime.' : 'Work through your report and what comes next, anytime.'}
-          </p>
-        </div>
-        <span className="text-[20px] text-tlw-signal-orange" aria-hidden>
-          →
-        </span>
-      </a>
+      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <a
+          href="/portal/chat"
+          className="flex items-center justify-between rounded-tlw-2xl border border-tlw-navy-rich/20 bg-tlw-navy-rich/5 p-5 transition-colors hover:bg-tlw-navy-rich/10"
+        >
+          <div>
+            <p className="text-[15px] font-medium text-tlw-navy-deep">
+              {hasCoach ? 'Chat with your coaching assistant' : 'Chat with your thinking partner'}
+            </p>
+            <p className="mt-0.5 text-[13px] text-tlw-warm-gray">
+              {hasCoach ? 'Reflect on your goals, sessions, and documents, anytime.' : 'Work through your report and what comes next, anytime.'}
+            </p>
+          </div>
+          <span className="text-[20px] text-tlw-signal-orange" aria-hidden>
+            →
+          </span>
+        </a>
+        <a
+          href="/portal/chat?mode=week"
+          className="flex items-center justify-between rounded-tlw-2xl border border-tlw-signal-orange/30 bg-tlw-signal-orange/5 p-5 transition-colors hover:bg-tlw-signal-orange/10"
+        >
+          <div>
+            <p className="text-[15px] font-medium text-tlw-navy-deep">Plan your week</p>
+            <p className="mt-0.5 text-[13px] text-tlw-warm-gray">
+              A short coaching conversation that ends in your Top 5 for the week, saved to this page.
+            </p>
+          </div>
+          <span className="text-[20px] text-tlw-signal-orange" aria-hidden>
+            →
+          </span>
+        </a>
+      </div>
 
       <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {/* Your 360 report — mounted only when the assessment flag is on */}
-        {assessmentsEnabled && (
-          <div className="lg:col-span-2">
-            <AssessmentCard bookingUrl={data.bookingUrl} />
-          </div>
-        )}
+        {/* This week's plan — the Top 5 saved from a Plan-your-week chat */}
+        <div className="lg:col-span-2">
+          <WeeklyPlanCard />
+        </div>
 
         {/* Upcoming sessions */}
         {showSessions && (

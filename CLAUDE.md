@@ -1431,6 +1431,60 @@ remove (`DELETE /api/portal/documents/[id]`). General documents' text joins
 that client's chat context (`chat.ts#loadClientDocumentsForChat`, 16k budget,
 own section in the prompt) so the portal works as a general coaching tool.
 
+### Dry-run feedback round 3 (2026-09-06; migration 061)
+
+- **360 card at the top.** `AssessmentCard` now mounts directly under the
+  booking button whenever the flag is on — with no report yet it says so and
+  points at Your documents (anchor `#your-documents`); each report has **View
+  report** (`GET /api/portal/documents/[id]/download?view=1` → inline signed
+  URL, opens in a tab) and Download (attachment, unchanged).
+- **Settings = Personal information + Sign in.** `app/portal/settings/page.tsx`
+  gains name / **"What should I call you"** (`clients.preferred_name`, 061) /
+  phone / timezone, email read-only (it is the sign-in identity); the
+  username+password section is unchanged. `GET/PATCH /api/portal/profile` is
+  the scoped write path (never key_info; pre-061 the preferred name degrades
+  with a warning). `loadPortalOverview.displayName` + the chat prompt use the
+  preferred name. The report name-gate still matches on `clients.name`.
+- **Plan your week.** A second chat mode: `portal_conversations.mode`
+  (`general|weekly_plan`, 061). `/portal/chat?mode=week` (home button, the
+  sidebar's "✦ Plan your week", or the "This week" card) starts a thread whose
+  system prompt is `lib/portal/prompt.ts#composeWeeklyPlanSystem` — the active
+  **`weekly_plan` brief** (seeded from Jeff's goal-setting master prompt;
+  editable on the Brief tab, which now has a slug picker) → voice standards →
+  portal mechanics → goals → a **compact 360 development summary**
+  (`summariseAssessmentForPlanning`, not the full report) → client documents →
+  recent plans + what got done → a few sent notes. `buildChatContext(clientId,
+  query, mode)` branches on mode; `meta.mode` is stamped on the message. The
+  chat's **"Save this week's plan"** bar → `POST /api/portal/weekly-plan/extract`
+  (model reads the agreed Top 5 as JSON, strings only) → `SavePlanModal` (edit /
+  add / remove, ≤7) → `POST /api/portal/weekly-plan` upserts `weekly_plans`
+  (`(client_id, week_start)` unique; `lib/portal/weekly-plan.ts#cleanTasks`
+  keeps ids + done state on a re-save). Nothing saves without the confirm. Home
+  **"This week" card** (`WeeklyPlanCard`, mounted for every client) lists the
+  tasks as checkboxes (`PATCH` flips one, filtered on client_id) and falls back
+  to the most recent plan, labelled. Events `weekly_plan_saved` /
+  `weekly_plan_task_done`; rate limit `weekly_plan_write` 60/h. Week start =
+  Monday in the client's timezone (`weekStartFor`). Verify:
+  `node_modules/.bin/tsc -p scripts/spikes/tsconfig.spike.json && node
+  scripts/spikes/verify-weekly-plan.js`.
+- **Command center per-user page** `/business-center/portal/users/[id]`
+  (`GET /api/admin/portal-users/[id]`): identity & access (edit, invite/resend,
+  360 flag, coach-workspace link), usage tiles + event timeline, **key info**
+  (coach-private, `PATCH … {keyInfo}`; never crosses to the portal), documents
+  on file with upload (`POST /api/admin/portal-users/[id]/documents` — one
+  file, `kind` assessment_360|general, `confirmName`; a complete 360 flips the
+  flag), accept-name-and-retry / retry / remove (reusing `/api/admin/documents/
+  [id]`; personnel reviews show as a content-less row with no actions), and
+  recent mail. Every name in Portal users and under the companies links here.
+- **Documents at creation.** Both add-participant forms (Portal users tab, and
+  under a company) carry a 360 PDF picker + an "other documents" multi-picker
+  (`ui.tsx#DocumentPickers`); after the row is created the files upload one by
+  one (`uploadPickedDocuments`) and the outcome is reported inline.
+- **Companies tab** (was "ZF Portal"): each company card lists its cohorts with
+  the **portal users under each** (name → user page, report status, invited /
+  seen) plus a "participants without a cohort" group; the panel loads
+  `/api/admin/portal-users` once and groups client-side.
+
 ### Phase 5 — dry run kit (shipped 2026-09-06; the rehearsal itself is Jeff's)
 
 Phase 5 is a rehearsal, not code. What ships to support it:
@@ -2138,6 +2192,17 @@ Verified up + down + re-up against Postgres 16. Reversible via
 `companies/<company_id>/`, extracted text for chat, `include_in_chat`
 toggle). Additive, RLS enabled. Verified up + down + re-up against Postgres
 16. Reversible via `060_company_documents_down.sql`.
+
+**`061_portal_profile_weekly_plans.sql` — PENDING (apply before the Plan-your-week
+and preferred-name features are used; everything else runs without it).**
+Adds `clients.preferred_name`, `portal_conversations.mode` (default
+`general`), the `weekly_plans` table (RLS; unique `(client_id, week_start)`),
+and seeds the `weekly_plan` prompt brief v1. All reads are defensive (the
+profile route saves the rest and warns; chat falls back to a mode-less insert;
+the This-week card reads as "no plan"), but **saving a plan needs the table**.
+Verified up + insert + down + re-up against Postgres 16. Reversible via
+`061_portal_profile_weekly_plans_down.sql` (drops every saved plan and the
+weekly_plan brief versions).
 
 **`048_supervisor_bootstrap_and_signature_unique.sql` — APPLIED (staging + production, 2026-08-14).** (1) Promotes
 the founding coach (email jeff@jeffkholmes.com, else earliest-created) to

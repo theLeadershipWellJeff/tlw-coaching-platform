@@ -104,7 +104,7 @@ export function DocumentsCard({ hasCoach }: { hasCoach: boolean }) {
   const accept = kind === 'assessment_360' ? '.pdf' : '.pdf,.docx,.txt,.md'
 
   return (
-    <div className="rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface p-5">
+    <div id="your-documents" className="rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface p-5">
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-[13px] font-semibold uppercase tracking-[1.5px] text-tlw-navy-rich">Your documents</h2>
         <InfoPopover

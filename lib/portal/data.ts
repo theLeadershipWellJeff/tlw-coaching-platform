@@ -19,6 +19,8 @@ export type PortalAppointment = { id: string; scheduled_at: string; duration_min
 
 export type PortalOverview = {
   client: { id: string; name: string; timezone: string | null }
+  /** How the portal addresses them: preferred_name (migration 061), else first name. */
+  displayName: string
   /** First-visit tour taken (migration 053). */
   onboarded: boolean
   goals: CoachingGoal[]
@@ -60,6 +62,17 @@ export async function loadPortalOverview(clientId: string): Promise<PortalOvervi
     .then(
       (r) => !!r.data?.portal_onboarded,
       () => false
+    )
+  // "What should I call you" (migration 061) — same defensive read; absent =
+  // first name.
+  const preferredName = await supabase
+    .from('clients')
+    .select('preferred_name')
+    .eq('id', clientId)
+    .maybeSingle()
+    .then(
+      (r) => (r.data?.preferred_name || '').trim() || null,
+      () => null
     )
   // Same defensive read for the assessment flag (migration 059). Absent = off.
   const assessmentsEnabled = await supabase
@@ -128,6 +141,7 @@ export async function loadPortalOverview(clientId: string): Promise<PortalOvervi
 
   return {
     client: { id: client.id, name: client.name, timezone: client.timezone },
+    displayName: preferredName || (client.name || '').split(' ')[0] || 'there',
     onboarded,
     goals: Array.isArray(client.coaching_goals) ? (client.coaching_goals as CoachingGoal[]) : [],
     appointments: (apptRes.data ?? []).map((a) => ({

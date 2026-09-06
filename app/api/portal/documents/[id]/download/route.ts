@@ -8,13 +8,13 @@ import { signedDocumentUrl } from '@/lib/documents/storage'
 export const runtime = 'nodejs'
 
 /**
- * Download the client's OWN document: 302 to a short-lived signed URL with
- * Content-Disposition: attachment. Always available — extraction status gates
+ * Download (or, with ?view=1, open inline) the client's OWN document: 302 to a
+ * short-lived signed URL, Content-Disposition: attachment unless viewing. Always available — extraction status gates
  * the AI grounding, never the participant's access to their own file — and
  * there is deliberately no setting anywhere that can disable it (build
  * prompt §5e). Scoped to the session client; another client's id 404s.
  */
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const clientId = await getPortalClientId()
   if (!clientId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const supabase = getSupabaseAdmin()
@@ -25,9 +25,14 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     .eq('client_id', clientId)
     .maybeSingle()
   if (!doc) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  const url = await signedDocumentUrl(supabase, doc.storage_path, {
-    downloadAs: `${(doc.title || 'document').replace(/[^\w.-]+/g, '_')}.${doc.storage_path.split('.').pop() || 'pdf'}`,
-  })
+  // ?view=1 → open inline in the browser (a PDF renders in a tab); otherwise
+  // Content-Disposition: attachment so it saves to disk.
+  const inline = req.nextUrl.searchParams.get('view') === '1'
+  const url = await signedDocumentUrl(
+    supabase,
+    doc.storage_path,
+    inline ? {} : { downloadAs: `${(doc.title || 'document').replace(/[^\w.-]+/g, '_')}.${doc.storage_path.split('.').pop() || 'pdf'}` }
+  )
   if (!url) return NextResponse.json({ error: 'Could not open the file.' }, { status: 502 })
   await logPortalAccess(clientId, 'document_download', { detail: doc.id })
   await logPortalEvent(clientId, 'document_downloaded', { document_id: doc.id })

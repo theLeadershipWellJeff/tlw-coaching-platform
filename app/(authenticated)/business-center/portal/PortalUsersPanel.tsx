@@ -1,9 +1,10 @@
 'use client'
-import { useEffect, useMemo, useState } from 'react'
-import { api, btnLink, btnPrimary, btnSecondary, Chip, ErrorLine, fmtDate, input, Section, statusTone } from './ui'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import Link from 'next/link'
+import { api, btnLink, btnPrimary, btnSecondary, Chip, DocumentPickers, ErrorLine, fmtDate, input, Section, statusTone, uploadPickedDocuments } from './ui'
 import { cohortStatus, type Company } from './CompaniesPanel'
 
-type PortalUser = {
+export type PortalUser = {
   id: string
   name: string
   email: string | null
@@ -15,7 +16,7 @@ type PortalUser = {
   cohort_name: string | null
   assessments_enabled: boolean
   portal_access_expires_at: string | null
-  portal: { invitedAt: string | null; lastSeenAt: string | null; locked: boolean }
+  portal: { invitedAt: string | null; lastSeenAt: string | null; locked: boolean; username?: string | null }
   document: { id: string; extraction_status: string; extraction_error: string | null; assessment_date: string | null } | null
   document_count: number
   engagement: { chat_messages: number; goals_created: number; downloads: number; last_event_at: string | null; talk_to_coach_clicks: number }
@@ -33,6 +34,8 @@ export function PortalUsersPanel({ companies, initialCohortId = '' }: { companie
   const [busy, setBusy] = useState<string | null>(null)
   const [editing, setEditing] = useState<PortalUser | null>(null)
   const [editForm, setEditForm] = useState({ cohortId: '', companyId: '', accessExpiresAt: '', maxAssessments: '', maxDocuments: '' })
+  const reportRef = useRef<HTMLInputElement>(null)
+  const othersRef = useRef<HTMLInputElement>(null)
 
   const cohorts = useMemo(() => companies.flatMap((c) => c.cohorts.map((k) => ({ ...k, company_name: c.name }))), [companies])
 
@@ -61,9 +64,17 @@ export function PortalUsersPanel({ companies, initialCohortId = '' }: { companie
   async function create() {
     setCreating(true)
     setError('')
+    setNotice('')
     try {
-      await api('/api/admin/portal-users', { method: 'POST', body: JSON.stringify({ name: form.name, email: form.email, companyId: form.companyId || null, cohortId: form.cohortId || null }) })
+      const created = await api<{ id: string }>('/api/admin/portal-users', { method: 'POST', body: JSON.stringify({ name: form.name, email: form.email, companyId: form.companyId || null, cohortId: form.cohortId || null }) })
+      // Documents picked on the form go up right after the row exists.
+      const report = reportRef.current?.files?.[0] || null
+      const others = Array.from(othersRef.current?.files || [])
+      const notes = await uploadPickedDocuments(created.id, report, others)
+      setNotice(`${form.name.trim()} added.${notes.length ? ` ${notes.join(' · ')}` : ''} Invite them from the list below.`)
       setForm({ name: '', email: '', companyId: form.companyId, cohortId: form.cohortId })
+      if (reportRef.current) reportRef.current.value = ''
+      if (othersRef.current) othersRef.current.value = ''
       await load()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not create.')
@@ -137,6 +148,7 @@ export function PortalUsersPanel({ companies, initialCohortId = '' }: { companie
           </select>
           <button className={btnPrimary} disabled={creating || !form.name.trim() || !form.email.trim()} onClick={create}>{creating ? 'Adding…' : '+ Add participant'}</button>
         </div>
+        <DocumentPickers reportRef={reportRef} othersRef={othersRef} className="mt-2" />
         <ErrorLine error={error} />
       </Section>
 
@@ -184,7 +196,7 @@ export function PortalUsersPanel({ companies, initialCohortId = '' }: { companie
                   <tr key={u.id} className="align-top">
                     <td className="py-2 pr-3">
                       <p className="font-medium text-tlw-navy-deep">
-                        {u.name}{' '}
+                        <Link href={`/business-center/portal/users/${u.id}`} className="hover:text-tlw-signal-orange hover:underline">{u.name}</Link>{' '}
                         <Chip tone={u.kind === 'coaching' ? 'gray' : 'navy'}>{{ coaching: 'coaching', coaching_zf: 'coaching + ZF', standalone: 'standalone ZF', enterprise: 'enterprise' }[u.kind]}</Chip>
                       </p>
                       <p className="text-tlw-warm-gray">{u.email || 'no email'}</p>
@@ -217,6 +229,8 @@ export function PortalUsersPanel({ companies, initialCohortId = '' }: { companie
                       <button className={btnLink} disabled={busy === u.id || !u.email} onClick={() => invite(u)}>{u.portal.invitedAt ? 'Resend' : 'Invite'}</button>
                       <span className="mx-1 text-tlw-warm-gray">·</span>
                       <button className={btnLink} onClick={() => openEdit(u)}>Edit</button>
+                      <span className="mx-1 text-tlw-warm-gray">·</span>
+                      <Link className={btnLink} href={`/business-center/portal/users/${u.id}`}>Open</Link>
                     </td>
                   </tr>
                 ))}
