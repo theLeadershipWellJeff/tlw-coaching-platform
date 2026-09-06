@@ -19,6 +19,13 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   if (!conv || conv.client_id !== clientId) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
+  // mode (migration 061), defensive: absent column = general.
+  const mode = await supabase
+    .from('portal_conversations')
+    .select('mode')
+    .eq('id', params.id)
+    .maybeSingle()
+    .then((r) => (r.data?.mode === 'weekly_plan' ? 'weekly_plan' : 'general'), () => 'general')
 
   const { data: messages } = await supabase
     .from('portal_messages')
@@ -26,7 +33,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     .eq('conversation_id', params.id)
     .order('created_at', { ascending: true })
 
-  return NextResponse.json({ title: conv.title, messages: messages || [] })
+  return NextResponse.json({ title: conv.title, mode, messages: messages || [] })
 }
 
 /** Rename a conversation. Scoped to the authenticated portal client. */

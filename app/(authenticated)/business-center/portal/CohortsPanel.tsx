@@ -3,7 +3,7 @@
  * Cohorts tab — every cohort across every company in one list, split by
  * lifecycle: Active (running), Inactive (finished, kept for reference),
  * Archived (out of the working lists). Rows reuse CohortRow, so edit / roster /
- * invitations behave exactly as they do under the company on the ZF Portal tab.
+ * invitations behave exactly as they do under the company on the Companies tab.
  */
 import { useEffect, useMemo, useState } from 'react'
 import { api, Section } from './ui'
@@ -43,7 +43,7 @@ export function CohortsPanel({ onViewParticipants }: { onViewParticipants: (coho
   }
 
   const EMPTY: Record<CohortStatus, string> = {
-    active: 'No active cohorts. Create one under its company on the ZF Portal tab.',
+    active: 'No active cohorts. Create one under its company on the Companies tab.',
     inactive: 'No inactive cohorts. Set a finished cohort to inactive from its Edit form.',
     archived: 'Nothing archived.',
   }

@@ -28,7 +28,9 @@ import type { CoachingGoal } from '@/lib/supabase/types'
 import { loadLatestAssessmentForChat } from './assessments'
 import { loadActiveBrief } from './briefs'
 import { loadCompanyContext } from './company'
-import { composeChatSystem } from './prompt'
+import { composeChatSystem, composeWeeklyPlanSystem, summariseAssessmentForPlanning } from './prompt'
+import { formatPlansForPrompt, loadWeeklyPlans, weekStartFor } from './weekly-plan'
+import type { PortalChatMode } from '@/lib/supabase/types'
 
 const MODEL = process.env.PORTAL_CHAT_MODEL || 'claude-sonnet-4-6'
 
@@ -83,6 +85,7 @@ function clip(text: string, max: number): string {
  * default for "what have we been working on lately".
  */
 export type ChatContextMeta = {
+  mode?: PortalChatMode
   brief_slug?: string
   brief_version?: number
   assessment_document_id?: string
@@ -91,16 +94,27 @@ export type ChatContextMeta = {
 
 export async function buildChatContext(
   clientId: string,
-  query?: string
+  query?: string,
+  mode: PortalChatMode = 'general'
 ): Promise<{ clientName: string; system: string; meta: ChatContextMeta }> {
   const supabase = getSupabaseAdmin()
 
   const { data: client } = await supabase
     .from('clients')
-    .select('id, org_id, name, coaching_goals')
+    .select('id, org_id, name, coaching_goals, timezone')
     .eq('id', clientId)
     .maybeSingle()
   const clientName = client?.name || 'the client'
+  // preferred_name (migration 061) — defensive separate read.
+  const preferredName = await supabase
+    .from('clients')
+    .select('preferred_name')
+    .eq('id', clientId)
+    .maybeSingle()
+    .then(
+      (r) => (r.data?.preferred_name || '').trim() || null,
+      () => null
+    )
   const goals: CoachingGoal[] = Array.isArray(client?.coaching_goals)
     ? (client!.coaching_goals as CoachingGoal[])
     : []
@@ -131,6 +145,45 @@ export async function buildChatContext(
   ])
   const hasCoach = (coachLinks?.length ?? 0) > 0
   const brief = assessment && client?.org_id ? await loadActiveBrief(client.org_id, 'assessment_360').catch(() => null) : null
+
+  // ── Plan your week: a different persona (the weekly_plan brief), a compact
+  // development picture instead of the full report, and recent plans. ──
+  if (mode === 'weekly_plan') {
+    const [planBrief, plans] = await Promise.all([
+      client?.org_id ? loadActiveBrief(client.org_id, 'weekly_plan').catch(() => null) : Promise.resolve(null),
+      loadWeeklyPlans(clientId, 4),
+    ])
+    let notesBudget = 4000
+    const planNoteParts: string[] = []
+    for (const n of (sentNotes || []).slice(0, 3)) {
+      if (notesBudget <= 0) break
+      const chunk = clip(htmlToPlainText(n.body_html || ''), notesBudget)
+      if (!chunk) continue
+      notesBudget -= chunk.length
+      const date = n.sent_at ? new Date(n.sent_at).toISOString().slice(0, 10) : ''
+      planNoteParts.push(`## Notes${date ? ` — ${date}` : ''}${n.subject ? ` (${n.subject})` : ''}\n${chunk}`)
+    }
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: client?.timezone || undefined, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
+    const system = composeWeeklyPlanSystem({
+      clientName,
+      preferredName,
+      hasCoach,
+      brief: planBrief ? { slug: planBrief.slug, version: planBrief.version, body: planBrief.body } : null,
+      goals,
+      assessmentSummary: assessment ? summariseAssessmentForPlanning(assessment.data) : null,
+      clientDocuments,
+      recentPlans: formatPlansForPrompt(plans),
+      noteParts: planNoteParts,
+      today,
+      weekStart: weekStartFor(new Date(), client?.timezone),
+    })
+    const meta: ChatContextMeta = { mode: 'weekly_plan' }
+    if (planBrief) {
+      meta.brief_slug = planBrief.slug
+      meta.brief_version = planBrief.version
+    }
+    return { clientName, system, meta }
+  }
 
   const recentIds = new Set((recent ?? []).map((t) => t.id))
   const recentParts = (recent ?? [])

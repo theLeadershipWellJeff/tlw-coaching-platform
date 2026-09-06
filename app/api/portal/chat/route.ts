@@ -4,6 +4,8 @@ import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { buildChatContext, streamChatReply, type ChatContextMeta, type ChatMsg } from '@/lib/portal/chat'
 import { checkPortalRateLimit, logPortalAccess } from '@/lib/portal/access'
 import { logPortalEvent } from '@/lib/portal/events'
+import { isChatMode, weekLabel, weekStartFor } from '@/lib/portal/weekly-plan'
+import type { PortalChatMode } from '@/lib/supabase/types'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -13,13 +15,21 @@ export async function GET() {
   const clientId = await getPortalClientId()
   if (!clientId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const supabase = getSupabaseAdmin()
+  // `mode` (migration 061) read defensively: pre-migration every thread is general.
+  const withMode = await supabase
+    .from('portal_conversations')
+    .select('id, title, updated_at, mode')
+    .eq('client_id', clientId)
+    .order('updated_at', { ascending: false })
+    .limit(50)
+  if (!withMode.error) return NextResponse.json({ conversations: withMode.data || [] })
   const { data } = await supabase
     .from('portal_conversations')
     .select('id, title, updated_at')
     .eq('client_id', clientId)
     .order('updated_at', { ascending: false })
     .limit(50)
-  return NextResponse.json({ conversations: data || [] })
+  return NextResponse.json({ conversations: (data || []).map((c) => ({ ...c, mode: 'general' })) })
 }
 
 /**
@@ -45,6 +55,9 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
   const content = String(body.content || '').trim()
   let conversationId: string | null = body.conversationId ? String(body.conversationId) : null
+  // Requested mode for a NEW thread; an existing thread keeps the mode it was
+  // created with, whatever the client sends.
+  let mode: PortalChatMode = isChatMode(body.mode) ? body.mode : 'general'
   if (!content) return NextResponse.json({ error: 'Message is empty.' }, { status: 400 })
   if (content.length > 8000) return NextResponse.json({ error: 'Message is too long.' }, { status: 400 })
 
@@ -62,7 +75,7 @@ export async function POST(req: NextRequest) {
   const supabase = getSupabaseAdmin()
   const { data: client } = await supabase
     .from('clients')
-    .select('id, org_id')
+    .select('id, org_id, timezone')
     .eq('id', clientId)
     .maybeSingle()
   if (!client) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -78,17 +91,28 @@ export async function POST(req: NextRequest) {
     if (!conv || conv.client_id !== clientId) {
       return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
     }
+    const stored = await supabase.from('portal_conversations').select('mode').eq('id', conversationId).maybeSingle().then((r) => r.data?.mode, () => undefined)
+    mode = isChatMode(stored) ? stored : 'general'
   } else {
-    const title = content.length > 48 ? content.slice(0, 48).trim() + '…' : content
-    const { data: conv, error } = await supabase
+    const title =
+      mode === 'weekly_plan'
+        ? `Plan · ${weekLabel(weekStartFor(new Date(), client.timezone))}`
+        : content.length > 48
+          ? content.slice(0, 48).trim() + '…'
+          : content
+    let inserted = await supabase
       .from('portal_conversations')
-      .insert({ client_id: clientId, org_id: client.org_id, title })
+      .insert({ client_id: clientId, org_id: client.org_id, title, mode })
       .select('id')
       .single()
-    if (error || !conv) {
+    // Pre-061 (no mode column): fall back to a plain insert so chat keeps working.
+    if (inserted.error && /mode/.test(inserted.error.message)) {
+      inserted = await supabase.from('portal_conversations').insert({ client_id: clientId, org_id: client.org_id, title }).select('id').single()
+    }
+    if (inserted.error || !inserted.data) {
       return NextResponse.json({ error: 'Could not start a conversation.' }, { status: 500 })
     }
-    conversationId = conv.id
+    conversationId = inserted.data.id
   }
 
   const persistedContent = attachment ? `${content}\n\n📎 Attached: ${attachment.filename}` : content
@@ -117,7 +141,7 @@ export async function POST(req: NextRequest) {
   let meta: ChatContextMeta = {}
   try {
     // The current question drives retrieval across the client's whole history.
-    ;({ system, meta } = await buildChatContext(clientId, content))
+    ;({ system, meta } = await buildChatContext(clientId, content, mode))
   } catch (e) {
     console.error('portal chat context failed:', e)
     return NextResponse.json(
@@ -182,6 +206,7 @@ export async function POST(req: NextRequest) {
       'Content-Type': 'text/plain; charset=utf-8',
       'Cache-Control': 'no-cache, no-transform',
       'X-Conversation-Id': conversationId,
+      'X-Conversation-Mode': mode,
     },
   })
 }

@@ -23,6 +23,8 @@
     "../../lib/documents/assessment-360/**/*.ts",
     "../../lib/portal/goals.ts",
     "../../lib/portal/prompt.ts",
-    "../../lib/writing-standards.ts"
+    "../../lib/writing-standards.ts",
+    "../../lib/portal/weekly-plan.ts",
+    "../../lib/portal/chat.ts"
   ]
 }

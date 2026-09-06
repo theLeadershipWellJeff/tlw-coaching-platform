@@ -26,6 +26,8 @@ export type PortalEventType =
   | 'talk_to_coach_clicked'
   | 'progress_self_rating'
   | 'support_ticket_opened'
+  | 'weekly_plan_saved'
+  | 'weekly_plan_task_done'
 
 export async function logPortalEvent(
   clientId: string,

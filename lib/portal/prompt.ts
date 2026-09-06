@@ -153,3 +153,76 @@ Guidelines:
 
   return sections.join('\n\n')
 }
+
+// ── Plan your week ──────────────────────────────────────────────────────────
+
+export type WeeklyPlanPromptParts = {
+  clientName: string
+  /** How they asked to be addressed — used only when the brief permits naming. */
+  preferredName: string | null
+  hasCoach: boolean
+  /** The active weekly_plan brief (Jeff's goal-setting master prompt); null = a built-in floor. */
+  brief: PromptBrief | null
+  goals: CoachingGoal[]
+  /** Compact 360 development picture, when a report is on file. */
+  assessmentSummary: string | null
+  clientDocuments?: PromptClientDocument[]
+  /** Recent weekly plans + what got checked off, formatted. */
+  recentPlans: string
+  noteParts: string[]
+  /** Today (YYYY-MM-DD) + the Monday of this week, in the client's zone. */
+  today: string
+  weekStart: string
+}
+
+const WEEKLY_PLAN_FLOOR = `You are a coach helping the person plan their week. Ask what a successful week would look like, draw on their goals and material below to suggest the most impactful actions, and work toward an agreed Top 5 for the week. One question per turn. Peer, not expert.`
+
+/**
+ * The Plan-your-week system prompt. Deliberately NOT the general reflection
+ * preamble: the brief IS the persona here. Layer: brief → voice standards →
+ * portal mechanics (how the plan gets saved) → the client's goals / 360
+ * development picture / documents / recent plans / notes, each omitted when
+ * empty. The 360's structured data is summarised, not dumped — a weekly plan
+ * needs the development areas, not every item score.
+ */
+export function composeWeeklyPlanSystem(p: WeeklyPlanPromptParts): string {
+  const sections: string[] = []
+  const name = p.clientName.toUpperCase()
+  sections.push(p.brief ? `${p.brief.body.trim()}` : WEEKLY_PLAN_FLOOR)
+  sections.push(PORTAL_CHAT_VOICE_STANDARDS)
+  sections.push(
+    `PORTAL MECHANICS:
+- Today is ${p.today}; this week began Monday ${p.weekStart}. "This week" means that week.
+- The person is in theLeadershipWell client portal. When the Top 5 is agreed, restate it once as a plain numbered list (1–5, one line each, imperative) and tell them they can press "Save this week's plan" to put it on their home page as a checklist. You cannot save it yourself.
+- ${p.hasCoach ? 'They have a human coach; anything that needs a person goes to their coach.' : 'They have no assigned coach in this portal; for anything that needs a person, suggest "Talk to a coach" on their home page.'}
+- Never invent facts about their work. Everything you know about them is in the material below; if something is not there, ask.${p.preferredName ? `
+- If a name is ever needed for clarity, they go by "${p.preferredName}".` : ''}`
+  )
+  if (p.goals.length) {
+    const goalsText = p.goals
+      .map((g) => {
+        const metrics = (g.metrics || []).filter(Boolean)
+        return `- ${g.title}${g.description ? `: ${g.description}` : ''}${metrics.length ? `\n  measures: ${metrics.join('; ')}` : ''}`
+      })
+      .join('\n')
+    sections.push(`${name}'S COACHING GOALS (treat these as their Objectives; the measures as Key Results):\n${goalsText}`)
+  }
+  if (p.assessmentSummary) sections.push(`${name}'S 360 DEVELOPMENT PICTURE (perception data from their most recent report — use it to suggest where a week's effort compounds; never quote it as ability, never attribute to individual raters):\n${p.assessmentSummary}`)
+  const docs = (p.clientDocuments || []).filter((d) => d.text.trim())
+  if (docs.length) sections.push(`DOCUMENTS ${name} ADDED TO THEIR PORTAL (their projects, plans, role material — refer to them by title):\n${docs.map((d) => `## ${d.title}\n${d.text.trim()}`).join('\n\n')}`)
+  if (p.recentPlans) sections.push(`${name}'S RECENT WEEKLY PLANS (what they committed to and what got done — carry unfinished items forward only if they still matter; ask):\n${p.recentPlans}`)
+  if (p.noteParts.length) sections.push(`SESSION NOTES ${name} RECEIVED FROM THEIR COACH:\n${p.noteParts.join('\n\n')}`)
+  return sections.join('\n\n')
+}
+
+/** A short development summary from a 360 for the weekly-plan prompt. */
+export function summariseAssessmentForPlanning(data: Assessment360Data): string {
+  const lines: string[] = []
+  const strengths = [...data.competency_rankings].sort((a, b) => a.rank - b.rank).slice(0, 3)
+  if (strengths.length) lines.push(`Standout competencies (by band): ${strengths.map((c) => `${c.competency} (${c.band})`).join('; ')}`)
+  const dev = data.development_candidates.slice(0, 3)
+  if (dev.length) lines.push(`Development candidates the report points toward: ${dev.map((c) => `${c.competency}${c.is_passion ? ' (a stated passion)' : ''}`).join('; ')}`)
+  const gaps = [...data.gap_analysis].sort((a, b) => Math.abs(b.gap) - Math.abs(a.gap)).slice(0, 3)
+  if (gaps.length) lines.push(`Largest self-vs-others gaps: ${gaps.map((g) => `${g.competency} (${g.gap > 0 ? 'others see more than they do' : 'they rate themselves higher than others do'})`).join('; ')}`)
+  return lines.join('\n')
+}

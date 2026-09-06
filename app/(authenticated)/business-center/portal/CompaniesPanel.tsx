@@ -1,6 +1,8 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
-import { api, btnLink, btnPrimary, btnSecondary, Chip, ErrorLine, fmtDate, input, Section } from './ui'
+import Link from 'next/link'
+import { api, btnLink, btnPrimary, btnSecondary, Chip, DocumentPickers, ErrorLine, fmtDate, input, Section, statusTone, uploadPickedDocuments } from './ui'
+import type { PortalUser } from './PortalUsersPanel'
 
 export type Cohort = {
   id: string
@@ -29,6 +31,7 @@ export function CohortRow({
   onChanged,
   companyName,
   onViewParticipants,
+  participants,
 }: {
   cohort: Cohort
   onChanged: (c: Cohort) => void
@@ -36,6 +39,8 @@ export function CohortRow({
   companyName?: string
   /** Jump to the Portal users tab filtered to this cohort. */
   onViewParticipants?: () => void
+  /** The cohort's portal users, listed beneath the row (Companies tab). */
+  participants?: PortalUser[]
 }) {
   const [edit, setEdit] = useState(false)
   const [form, setForm] = useState({
@@ -141,6 +146,7 @@ export function CohortRow({
               </p>
             )}
             <ErrorLine error={error} />
+            {participants && <ParticipantList users={participants} />}
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <button className={btnLink} onClick={() => setEdit(true)}>Edit</button>
@@ -258,20 +264,44 @@ function CompanyDocuments({ companyId }: { companyId: string }) {
   )
 }
 
-/** Add a participant directly under a company (cohort optional). */
-function AddParticipant({ company, onAdded }: { company: Company; onAdded: () => void }) {
+/** The portal users under a cohort / company, each linking to their page. */
+function ParticipantList({ users }: { users: PortalUser[] }) {
+  if (!users.length) return <p className="mt-2 text-[12px] text-tlw-warm-gray">No participants yet.</p>
+  return (
+    <ul className="mt-2 divide-y divide-tlw-warm-gray/10 rounded-tlw-lg bg-tlw-canvas px-3">
+      {users.map((u) => (
+        <li key={u.id} className="flex flex-wrap items-center justify-between gap-2 py-1.5 text-[12px]">
+          <span className="min-w-0">
+            <Link href={`/business-center/portal/users/${u.id}`} className="font-medium text-tlw-navy-deep hover:text-tlw-signal-orange hover:underline">{u.name}</Link>
+            <span className="ml-2 text-tlw-warm-gray">{u.email || 'no email'}</span>
+          </span>
+          <span className="flex shrink-0 items-center gap-2 text-tlw-warm-gray">
+            {u.document ? <Chip tone={statusTone(u.document.extraction_status)}>report: {u.document.extraction_status}</Chip> : <Chip>no report</Chip>}
+            <span>{u.portal.lastSeenAt ? `seen ${fmtDate(u.portal.lastSeenAt)}` : u.portal.invitedAt ? `invited ${fmtDate(u.portal.invitedAt)}` : 'not invited'}</span>
+          </span>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/** Add a participant directly under a company (cohort optional), with their documents. */
+function AddParticipant({ company, onAdded }: { company: Company; onAdded: (note: string) => void }) {
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState({ name: '', email: '', cohortId: '' })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const reportRef = useRef<HTMLInputElement>(null)
+  const othersRef = useRef<HTMLInputElement>(null)
   async function create() {
     setBusy(true)
     setError('')
     try {
-      await api('/api/admin/portal-users', { method: 'POST', body: JSON.stringify({ name: form.name, email: form.email, companyId: company.id, cohortId: form.cohortId || null }) })
+      const created = await api<{ id: string }>('/api/admin/portal-users', { method: 'POST', body: JSON.stringify({ name: form.name, email: form.email, companyId: company.id, cohortId: form.cohortId || null }) })
+      const notes = await uploadPickedDocuments(created.id, reportRef.current?.files?.[0] || null, Array.from(othersRef.current?.files || []))
       setForm({ name: '', email: '', cohortId: form.cohortId })
       setOpen(false)
-      onAdded()
+      onAdded(`${created.id ? form.name.trim() : 'Participant'} added.${notes.length ? ` ${notes.join(' · ')}` : ''}`)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not add.')
     } finally {
@@ -285,24 +315,25 @@ function AddParticipant({ company, onAdded }: { company: Company; onAdded: () =>
       <input className={input} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="Email" />
       <select className={input} value={form.cohortId} onChange={(e) => setForm({ ...form, cohortId: e.target.value })}>
         <option value="">No cohort</option>
-        {company.cohorts.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        {company.cohorts.filter((c) => cohortStatus(c.status) !== 'archived').map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
       </select>
       <div className="flex gap-2">
         <button className={btnPrimary} disabled={busy || !form.name.trim() || !form.email.trim()} onClick={create}>{busy ? 'Adding…' : 'Add'}</button>
         <button className={btnSecondary} onClick={() => setOpen(false)}>Cancel</button>
       </div>
+      <DocumentPickers reportRef={reportRef} othersRef={othersRef} className="sm:col-span-4" />
       {error && <p className="text-[12px] text-tlw-signal-orange sm:col-span-4">{error}</p>}
     </div>
   )
 }
 
-function CompanyCard({ company, onChanged }: { company: Company; onChanged: (c: Company) => void }) {
+function CompanyCard({ company, users, onChanged, onUsersChanged }: { company: Company; users: PortalUser[]; onChanged: (c: Company) => void; onUsersChanged: () => void }) {
   const [edit, setEdit] = useState(false)
   const [form, setForm] = useState({ name: company.name, vision: company.vision || '', values: company.values || '', notes: company.notes || '' })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [newCohort, setNewCohort] = useState<{ name: string; seatsPurchased: string; accessExpiresAt: string; debriefCoachName: string } | null>(null)
-  const [participantsAdded, setParticipantsAdded] = useState(0)
+  const [addedNote, setAddedNote] = useState('')
 
   async function save() {
     setBusy(true)
@@ -366,13 +397,19 @@ function CompanyCard({ company, onChanged }: { company: Company; onChanged: (c: 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
         <p className="text-[11px] font-semibold uppercase tracking-wider text-tlw-warm-gray">Cohorts &amp; participants</p>
         <div className="flex items-center gap-3">
-          <AddParticipant company={company} onAdded={() => setParticipantsAdded((n) => n + 1)} />
+          <AddParticipant
+            company={company}
+            onAdded={(note) => {
+              setAddedNote(note)
+              onUsersChanged()
+            }}
+          />
           {!newCohort && (
             <button className={btnLink} onClick={() => setNewCohort({ name: '', seatsPurchased: '', accessExpiresAt: '', debriefCoachName: '' })}>+ New cohort</button>
           )}
         </div>
       </div>
-      {participantsAdded > 0 && <p className="mt-1 text-[12px] text-emerald-700">{participantsAdded} participant{participantsAdded > 1 ? 's' : ''} added — see the Portal users tab to invite them.</p>}
+      {addedNote && <p className="mt-1 text-[12px] text-emerald-700">{addedNote} Open them to invite.</p>}
       {newCohort && (
         <div className="mt-2 grid grid-cols-1 gap-2 rounded-tlw-xl border border-dashed border-tlw-warm-gray/30 p-3 sm:grid-cols-4">
           <input className={input} value={newCohort.name} onChange={(e) => setNewCohort({ ...newCohort, name: e.target.value })} placeholder="Cohort name" />
@@ -388,20 +425,42 @@ function CompanyCard({ company, onChanged }: { company: Company; onChanged: (c: 
       <ul className="mt-2 space-y-2">
         {company.cohorts.length === 0 && !newCohort && <li className="text-[12px] text-tlw-warm-gray">No cohorts yet.</li>}
         {company.cohorts.map((c) => (
-          <CohortRow key={c.id} cohort={c} onChanged={(nc) => onChanged({ ...company, cohorts: company.cohorts.map((x) => (x.id === nc.id ? nc : x)) })} />
+          <CohortRow
+            key={c.id}
+            cohort={c}
+            participants={users.filter((u) => u.cohort_id === c.id)}
+            onChanged={(nc) => onChanged({ ...company, cohorts: company.cohorts.map((x) => (x.id === nc.id ? nc : x)) })}
+          />
         ))}
       </ul>
+      {users.some((u) => u.company_id === company.id && !u.cohort_id) && (
+        <div className="mt-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-tlw-warm-gray">Participants without a cohort</p>
+          <ParticipantList users={users.filter((u) => u.company_id === company.id && !u.cohort_id)} />
+        </div>
+      )}
     </div>
   )
 }
 
 export function CompaniesPanel() {
   const [companies, setCompanies] = useState<Company[] | null>(null)
+  const [users, setUsers] = useState<PortalUser[]>([])
   const [error, setError] = useState('')
   const [creating, setCreating] = useState(false)
   const [name, setName] = useState('')
 
+  // Every portal user once; grouped under company → cohort in the cards.
+  async function loadUsers() {
+    try {
+      const d = await api<{ users: PortalUser[] }>('/api/admin/portal-users')
+      setUsers(d.users)
+    } catch {
+      /* the cards still render without the lists */
+    }
+  }
   async function load() {
+    loadUsers()
     try {
       const d = await api<{ companies: Company[] }>('/api/admin/companies')
       setCompanies(d.companies)
@@ -430,7 +489,7 @@ export function CompaniesPanel() {
 
   return (
     <div className="space-y-4">
-      <Section title="ZF Portal — companies, cohorts, participants" sub="Enterprise sponsors live here: their documents shape the assistant for their people, cohorts carry seats purchased vs activated, and participants can be added under the company with or without a cohort. Standalone participants (no company) are added from the Portal users tab. Debrief coaches are a name on the cohort — they have no app access.">
+      <Section title="Companies — cohorts, documents, participants" sub="Enterprise sponsors live here: their documents shape the assistant for their people, cohorts carry seats purchased vs activated, and participants can be added under the company with or without a cohort. Standalone participants (no company) are added from the Portal users tab. Debrief coaches are a name on the cohort — they have no app access.">
         <div className="flex gap-2">
           <input className={input} value={name} onChange={(e) => setName(e.target.value)} placeholder="New company name" onKeyDown={(e) => e.key === 'Enter' && name.trim() && create()} />
           <button className={btnPrimary} disabled={creating || !name.trim()} onClick={create}>+ Add company</button>
@@ -440,7 +499,9 @@ export function CompaniesPanel() {
       {companies === null ? (
         <p className="text-[13px] text-tlw-warm-gray">Loading…</p>
       ) : (
-        companies.map((c) => <CompanyCard key={c.id} company={c} onChanged={(nc) => setCompanies((cs) => (cs || []).map((x) => (x.id === nc.id ? nc : x)))} />)
+        companies.map((c) => (
+          <CompanyCard key={c.id} company={c} users={users} onUsersChanged={loadUsers} onChanged={(nc) => setCompanies((cs) => (cs || []).map((x) => (x.id === nc.id ? nc : x)))} />
+        ))
       )}
     </div>
   )

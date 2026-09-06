@@ -8,13 +8,13 @@ Phases 1–4 built. Do not skip it, and do not schedule into the buffer week.
 `docs/DEBRIEF_SUPPORT_RUNBOOK.md`.
 
 **Where.** Business Center → Command Center → **Client Portal**
-(`/business-center/portal`). The ZF set-up lives in its **ZF Portal** tab. Supervisor sign-in required.
+(`/business-center/portal`). Companies, cohorts, and their portal users live in the **Companies** tab; every portal user is on **Portal users**, and each name opens their own page. Supervisor sign-in required.
 
 ---
 
 ## 0. Before you start (one-time)
 
-- [ ] Migrations 059 and 060 applied.
+- [ ] Migrations 059, 060, and 061 applied.
 - [ ] Vercel env: `RESEND_API_KEY`, `PORTAL_FROM_EMAIL`, `PORTAL_FROM_NAME`,
       `DEFAULT_COACH_EMAIL` (the house coach), optional `SUPPORT_NOTIFY_EMAIL`.
 - [ ] Resend domain `mail.theleadershipwell.online` shows **Verified** (Resend
@@ -48,7 +48,7 @@ node scripts/spikes/verify-batch-360.js /path/to/folder-of-cohort-pdfs/
 
 ## 2. Set up the company and cohort (5 min)
 
-ZF Portal tab.
+Companies tab.
 
 - [ ] Add the company. Paste vision and values if the sponsor supplied them.
       Leave blank otherwise — the assistant then carries no company context,
@@ -65,12 +65,15 @@ ZF Portal tab.
 ## 3. Add ten test participants (10 min)
 
 Portal users tab → Add a ZF participant (pick the company and cohort), or
-**+ Add participant** under the company on the ZF Portal tab. Use real names from the cohort roster
+**+ Add participant** under the company on the Companies tab. Use real names from the cohort roster
 for the ones whose reports you have, and your own aliases (e.g. `jeff+t1@…`)
 for the rest so invitations reach inboxes you control.
 
 - [ ] Ten rows appear with the cohort name, "360: on", "Report: none",
-      "not invited".
+      "not invited". (Both add forms take a 360 PDF and other documents at
+      the same time — try it on two of them; the rest go in via Reports.)
+- [ ] Click a name → the user's own page: identity, usage, key info,
+      documents (upload / accept name / remove), recent mail.
 - [ ] Seats activated on the cohort now reads 10/N.
 
 ## 4. Upload the reports (5 min)
@@ -85,7 +88,7 @@ Reports tab → Bulk upload. Choose the cohort, select the verified PDFs,
 
 ## 5. Rehearse the staggered send (15 min, over two days)
 
-ZF Portal tab → the cohort → **Send invitations**.
+Companies tab → the cohort → **Send invitations**.
 
 - [ ] First call: sends to at most 25, throttled. The row under the cohort
       reports sent/failed/skipped/remaining.
@@ -122,6 +125,13 @@ Open one of your alias invitations.
       reports → it says the section is not reported, not that the score is 0.
 - [ ] **Save as a goal** under a reply → editor opens prefilled → a measure is
       required → saves → appears on the home page marked "yours".
+- [ ] **Plan your week** (home page button) → say "I'm planning my week" →
+      the assistant asks what a successful week looks like, one question at a
+      time, and works toward a Top 5 → **Save this week's plan** → edit the
+      list → save → the **This week** card on the home page shows it; check
+      one off and reload — it stays checked.
+- [ ] **Settings** → set "What should I call you" → the home greeting and the
+      assistant use it. Username + password still save below it.
 - [ ] Contact support → sends → the ticket appears in the Support tab and the
       notice email arrives.
 - [ ] **Your documents** card: upload your own PDF (the 360 again) → the name

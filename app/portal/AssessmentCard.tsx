@@ -17,10 +17,12 @@ function fmtDate(ymd: string | null): string {
 }
 
 /**
- * "Your 360 Report" — every completed assessment, newest first. The server
- * only mounts this when portal_features.assessments is on; the route
- * double-checks. Renders identically for a coaching client and a standalone
- * participant. Download is always available (no setting can disable it).
+ * "Your 360 Report" — every completed assessment, newest first, at the top of
+ * the home page whenever portal_features.assessments is on (the route
+ * double-checks). With no report yet it says so and points at Your documents,
+ * so a participant sees where their report will land before it is uploaded.
+ * "View report" opens the PDF in a tab; download is always available (no
+ * setting can disable it). Identical for a coaching client and a participant.
  */
 export function AssessmentCard({ bookingUrl }: { bookingUrl: string | null }) {
   const [items, setItems] = useState<Assessment[] | null>(null)
@@ -31,8 +33,6 @@ export function AssessmentCard({ bookingUrl }: { bookingUrl: string | null }) {
       .then((d) => setItems(d.enabled ? d.documents || [] : []))
       .catch(() => setItems([]))
   }, [])
-
-  if (items !== null && items.length === 0) return null
 
   function talkToCoach() {
     fetch('/api/portal/events', {
@@ -61,6 +61,11 @@ export function AssessmentCard({ bookingUrl }: { bookingUrl: string | null }) {
       <div className="mt-3">
         {items === null ? (
           <p className="text-[13px] text-tlw-warm-gray">Loading…</p>
+        ) : items.length === 0 ? (
+          <p className="text-[13px] text-tlw-warm-gray">
+            Your report will appear here once it has been uploaded. You can add it yourself under{' '}
+            <a href="#your-documents" className="font-medium text-tlw-signal-orange hover:underline">Your documents</a>, or your coach or the portal team will add it for you.
+          </p>
         ) : (
           <ul className="space-y-3">
             {items.map((a, i) => (
@@ -75,13 +80,24 @@ export function AssessmentCard({ bookingUrl }: { bookingUrl: string | null }) {
                     {a.has_comparison && ' · compares with your previous report'}
                   </p>
                 </div>
-                <a
-                  href={`/api/portal/documents/${a.id}/download`}
-                  onClick={() => viewed(a.id)}
-                  className="shrink-0 text-[13px] font-medium text-tlw-signal-orange hover:underline"
-                >
-                  Download PDF
-                </a>
+                <span className="flex shrink-0 items-center gap-3 text-[13px]">
+                  <a
+                    href={`/api/portal/documents/${a.id}/download?view=1`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => viewed(a.id)}
+                    className="rounded-tlw-lg bg-tlw-signal-orange px-3 py-1.5 font-medium text-white transition-opacity hover:opacity-90"
+                  >
+                    View report
+                  </a>
+                  <a
+                    href={`/api/portal/documents/${a.id}/download`}
+                    onClick={() => viewed(a.id)}
+                    className="font-medium text-tlw-signal-orange hover:underline"
+                  >
+                    Download
+                  </a>
+                </span>
               </li>
             ))}
           </ul>

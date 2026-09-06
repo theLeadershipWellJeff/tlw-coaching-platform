@@ -4,8 +4,8 @@
  *   - Portal users — every client using the portal, across all four use cases
  *     (coaching, coaching + ZF, standalone ZF participant, enterprise cohort)
  *   - Cohorts — every cohort across companies, split active / inactive / archived
- *   - ZF Portal — the assessment-debrief set-up: companies (with their
- *     documents and participants), cohorts, report uploads, support, brief
+ *   - Companies — each company with its documents, cohorts, and the portal
+ *     users under them; then Reports (bulk upload), Support, Brief
  * All data comes from /api/admin/*, each gated by requireSupervisor and
  * written to the admin audit log.
  */
@@ -22,7 +22,7 @@ import { BriefPanel } from './BriefPanel'
 const TABS = [
   ['users', 'Portal users'],
   ['cohorts', 'Cohorts'],
-  ['zf', 'ZF Portal'],
+  ['zf', 'Companies'],
   ['documents', 'Reports'],
   ['support', 'Support'],
   ['brief', 'Brief'],

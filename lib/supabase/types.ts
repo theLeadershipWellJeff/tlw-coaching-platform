@@ -74,6 +74,10 @@ export type Client = {
   company: string | null
   status: string
   phone: string | null
+  // "What should I call you" (migration 061) — how the portal greets the client
+  // and how the assistant addresses them. NULL = first word of `name`. `name`
+  // stays the report/legal name the 360 name-gate matches on.
+  preferred_name: string | null
   timezone: string | null
   // Friendly display city for `timezone` (migration 021) — the major city the
   // coach picked (e.g. "Austin"), shown back instead of the zone's canonical city.
@@ -783,7 +787,7 @@ export type SessionReport = {
  * any nullable column is optional too (Postgres fills NULL). Everything else
  * is required.
  */
-type Defaulted = 'id' | 'created_at' | 'updated_at' | 'sent_at' | 'agreement_on_file' | 'client_type' | 'org_id' | 'portal_onboarded' | 'failed_attempts' | 'first_seen_at' | 'last_seen_at' | 'portal_features' | 'seats_purchased' | 'status' | 'version' | 'is_active' | 'extraction_status' | 'visible_to_coach' | 'include_in_chat'
+type Defaulted = 'id' | 'created_at' | 'updated_at' | 'sent_at' | 'agreement_on_file' | 'client_type' | 'org_id' | 'portal_onboarded' | 'failed_attempts' | 'first_seen_at' | 'last_seen_at' | 'portal_features' | 'seats_purchased' | 'status' | 'version' | 'is_active' | 'extraction_status' | 'visible_to_coach' | 'include_in_chat' | 'mode' | 'tasks'
 type NullableKeys<T> = { [K in keyof T]-?: null extends T[K] ? K : never }[keyof T]
 type OptionalOnInsert<T> = Defaulted | Extract<keyof T, NullableKeys<T>>
 
@@ -812,6 +816,25 @@ export type PortalConversation = {
   org_id: string
   client_id: string
   title: string
+  // 'general' = the reflection chat; 'weekly_plan' = a Plan-your-week thread
+  // that runs under the weekly_plan brief (migration 061). Default 'general'.
+  mode: PortalChatMode
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+export type PortalChatMode = 'general' | 'weekly_plan'
+
+// A saved Top 5 for one week (migration 061). One row per client per week
+// (week_start = the Monday); tasks are checked off on the portal home card.
+export type WeeklyPlanTask = { id: string; text: string; done: boolean; done_at: string | null }
+export type WeeklyPlan = {
+  id: string
+  org_id: string
+  client_id: string
+  week_start: DateString
+  title: string | null
+  tasks: WeeklyPlanTask[]
+  conversation_id: string | null
   created_at: Timestamp
   updated_at: Timestamp
 }
@@ -885,6 +908,12 @@ export type Database = {
         Row: PortalMessage
         Insert: Insertable<PortalMessage>
         Update: Updatable<PortalMessage>
+        Relationships: []
+      }
+      weekly_plans: {
+        Row: WeeklyPlan
+        Insert: Insertable<WeeklyPlan>
+        Update: Updatable<WeeklyPlan>
         Relationships: []
       }
       coaching_hours_entries: {
