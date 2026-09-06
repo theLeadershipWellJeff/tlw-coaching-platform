@@ -8,7 +8,7 @@ Phases 1–4 built. Do not skip it, and do not schedule into the buffer week.
 `docs/DEBRIEF_SUPPORT_RUNBOOK.md`.
 
 **Where.** Business Center → Command Center → **Client Portal**
-(`/business-center/portal`). Companies, cohorts, and their portal users live in the **Companies** tab; every portal user is on **Portal users**, and each name opens their own page. Supervisor sign-in required.
+(`/command-center/portal`). Companies, cohorts, and their portal users live in the **Companies** tab; every portal user is on **Portal users**, and each name opens their own page. Supervisor sign-in required.
 
 ---
 

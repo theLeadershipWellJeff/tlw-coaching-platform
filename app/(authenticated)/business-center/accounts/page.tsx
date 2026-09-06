@@ -553,7 +553,7 @@ export default function AccountsPage() {
                 {coaches.map((coach) => (
                   <Link
                     key={coach.id}
-                    href="/business-center/coaches"
+                    href="/command-center"
                     className="flex items-center justify-between gap-4 px-5 py-4 transition-colors hover:bg-tlw-canvas"
                   >
                     <div>

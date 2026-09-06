@@ -33,7 +33,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
   try {
     const session = await createBillingPortalSession(
       (coach as any).stripe_customer_id,
-      `${getBaseUrl()}/business-center/coaches`
+      `${getBaseUrl()}/command-center`
     )
     return NextResponse.json({ url: session.url })
   } catch (e: any) {

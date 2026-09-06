@@ -7,7 +7,7 @@ import { TopBar } from './TopBar'
 const STORAGE_KEY = 'tlw-sidebar-collapsed'
 const MOBILE_QUERY = '(max-width: 767px)'
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({ children, isSupervisor = false }: { children: ReactNode; isSupervisor?: boolean }) {
   const [collapsed, setCollapsed] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
 
@@ -54,6 +54,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <Sidebar
         collapsed={collapsed}
         onToggle={toggle}
+        isSupervisor={isSupervisor}
         floating={overlayExpanded}
         onNavigate={isMobile ? () => setCollapsed(true) : undefined}
       />

@@ -196,7 +196,7 @@ export function PortalUsersPanel({ companies, initialCohortId = '' }: { companie
                   <tr key={u.id} className="align-top">
                     <td className="py-2 pr-3">
                       <p className="font-medium text-tlw-navy-deep">
-                        <Link href={`/business-center/portal/users/${u.id}`} className="hover:text-tlw-signal-orange hover:underline">{u.name}</Link>{' '}
+                        <Link href={`/command-center/portal/users/${u.id}`} className="hover:text-tlw-signal-orange hover:underline">{u.name}</Link>{' '}
                         <Chip tone={u.kind === 'coaching' ? 'gray' : 'navy'}>{{ coaching: 'coaching', coaching_zf: 'coaching + ZF', standalone: 'standalone ZF', enterprise: 'enterprise' }[u.kind]}</Chip>
                       </p>
                       <p className="text-tlw-warm-gray">{u.email || 'no email'}</p>
@@ -230,7 +230,7 @@ export function PortalUsersPanel({ companies, initialCohortId = '' }: { companie
                       <span className="mx-1 text-tlw-warm-gray">·</span>
                       <button className={btnLink} onClick={() => openEdit(u)}>Edit</button>
                       <span className="mx-1 text-tlw-warm-gray">·</span>
-                      <Link className={btnLink} href={`/business-center/portal/users/${u.id}`}>Open</Link>
+                      <Link className={btnLink} href={`/command-center/portal/users/${u.id}`}>Open</Link>
                     </td>
                   </tr>
                 ))}

@@ -1343,7 +1343,7 @@ mounted; the goals card stays the read-only server-rendered one).
 
 ### Phase 4 — command center (shipped 2026-09-06)
 
-**`/business-center/portal`** (linked from the Command Center header;
+**`/command-center/portal`** (linked from the Command Center header;
 supervisor-only — every `/api/admin/*` route goes through
 `lib/admin/route.ts#adminContext` → `requireSupervisor`, and every action
 writes `admin_audit_log`). Five tabs, each a client component:
@@ -1390,7 +1390,7 @@ writes `admin_audit_log`). Five tabs, each a client component:
 
 Jeff's first pass through the command center reshaped the admin IA to match
 the product's two layers. **Command Center → "Client Portal"**
-(`/business-center/portal`; the old `/business-center/debrief` redirects):
+(`/command-center/portal`; the old `/command-center/portal` redirects):
 
 - **Portal users** tab = EVERY portal user across the four use cases, with a
   `kind` filter (`lib/admin/debrief.ts#PortalUserKind`): `coaching` (general
@@ -1416,7 +1416,7 @@ the product's two layers. **Command Center → "Client Portal"**
   tab filtered to that cohort (`initialCohortId`). Archived cohorts drop out
   of the participant-assignment pulldowns (create + edit) but stay in the
   users filter. The Command Center's **"In portal"** pulse stat and each
-  coach row's **Portal** cell link to `/business-center/portal`.
+  coach row's **Portal** cell link to `/command-center/portal`.
 - **Reports** / **Support** / **Brief** tabs unchanged.
 - **Resend refusal → Gmail fallback (`lib/portal/send.ts`).** When Resend is
   configured but rejects a send (e.g. the 403 "domain is not verified" Jeff
@@ -1472,7 +1472,7 @@ own section in the prompt) so the portal works as a general coaching tool.
   Monday in the client's timezone (`weekStartFor`). Verify:
   `node_modules/.bin/tsc -p scripts/spikes/tsconfig.spike.json && node
   scripts/spikes/verify-weekly-plan.js`.
-- **Command center per-user page** `/business-center/portal/users/[id]`
+- **Command center per-user page** `/command-center/portal/users/[id]`
   (`GET /api/admin/portal-users/[id]`): identity & access (edit, invite/resend,
   360 flag, coach-workspace link), usage tiles + event timeline, **key info**
   (coach-private, `PATCH … {keyInfo}`; never crosses to the portal), documents
@@ -1572,8 +1572,21 @@ post-beta (Tier 3 of the plan).
 
 ## Admin Command Center (migration 057) — supervisor-only
 
-`/business-center/coaches` is the **Command Center** (formerly "My Team"): the
-supervisor's one view over every coach on the platform. All of it is gated by
+`/command-center` is the **Command Center** (formerly "My Team", and until
+2026-09-06 at `/business-center/coaches`): the supervisor's one view over every
+coach on the platform. It has its **own sidebar entry, directly below Business
+Center, rendered only for a supervisor session** — `app/(authenticated)/
+layout.tsx` resolves `getSessionCoach().role` server-side and passes
+`isSupervisor` through `AppShell` → `Sidebar` (`supervisorOnly` destinations),
+so a regular coach never sees the entry (the routes stay gated by
+`requireSupervisor` regardless). The Business Center no longer links to it. Old
+addresses (`/business-center/coaches`, `/business-center/portal[/users/[id]]`,
+`/business-center/debrief`) redirect. The page opens with the firm pulse, then a
+**Client Portal card** (`PortalPulseCard` ← `GET /api/admin/portal-stats`:
+users by kind, active/invited, active this week, chat messages 7d, seats vs
+purchased across active cohorts, reports on file / held-or-missing, open
+support tickets — counts only), the whole card clicking through to
+`/command-center/portal`. All of it is gated by
 `requireSupervisor`; a regular coach gets the access notice / 403s.
 
 - **Firm pulse strip** — coaches (open vs. awaiting first sign-in), total
