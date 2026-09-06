@@ -101,7 +101,7 @@ export async function buildChatContext(
 
   const { data: client } = await supabase
     .from('clients')
-    .select('id, org_id, name, coaching_goals, timezone')
+    .select('id, org_id, name, coaching_goals, timezone, client_type')
     .eq('id', clientId)
     .maybeSingle()
   const clientName = client?.name || 'the client'
@@ -143,7 +143,9 @@ export async function buildChatContext(
     loadCompanyContext(clientId).catch(() => null),
     loadClientDocumentsForChat(clientId).catch(() => []),
   ])
-  const hasCoach = (coachLinks?.length ?? 0) > 0
+  // Same rule as the home page: a portal participant's house-coach link is
+  // structural, not a coaching relationship.
+  const hasCoach = (coachLinks?.length ?? 0) > 0 && client?.client_type !== 'portal'
   const brief = assessment && client?.org_id ? await loadActiveBrief(client.org_id, 'assessment_360').catch(() => null) : null
 
   // ── Plan your week: a different persona (the weekly_plan brief), a compact

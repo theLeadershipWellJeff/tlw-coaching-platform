@@ -25,7 +25,7 @@ function rememberLocally() {
   }
 }
 
-type Step = { title: string; body: string; icon: string }
+type Step = { title: string; body: string; icon: string; noCoach?: { title: string; body: string } }
 
 /**
  * The steps mirror the home page's cards, in the order they appear, so the tour
@@ -56,6 +56,11 @@ const STEPS: Step[] = [
     icon: '✉️',
     title: 'Reach your coach',
     body: 'Send your coach a note straight from here any time — no need to switch to email.',
+    /** Swapped in when nobody is coaching them (a standalone or enterprise participant). */
+    noCoach: {
+      title: 'Talk to a theLeadershipWell coach',
+      body: 'Want to work through your report with a person? Book a conversation with one of our coaches from the card at the bottom, or send us a note and someone will reply by email.',
+    },
   },
   {
     icon: 'ⓘ',
@@ -72,10 +77,13 @@ const STEPS: Step[] = [
 export function PortalTour({
   onboarded,
   openSignal = 0,
+  hasCoach = true,
 }: {
   onboarded: boolean
   /** Bump to reopen the tour on demand ("take the tour again"). */
   openSignal?: number
+  /** Someone is coaching them — otherwise the coach step reads as "a theLeadershipWell coach". */
+  hasCoach?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState(0)
@@ -108,7 +116,8 @@ export function PortalTour({
   }
 
   if (!open) return null
-  const s = STEPS[step]
+  const raw = STEPS[step]
+  const s = !hasCoach && raw.noCoach ? { ...raw, ...raw.noCoach } : raw
   const last = step === STEPS.length - 1
 
   return (

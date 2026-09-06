@@ -7,11 +7,11 @@ import { PortalTour, TourReplayLink } from './PortalTour'
  * tour and its replay link. Kept separate so the page itself stays a server
  * component and its data never round-trips through the browser.
  */
-export function PortalShell({ onboarded }: { onboarded: boolean }) {
+export function PortalShell({ onboarded, hasCoach = true }: { onboarded: boolean; hasCoach?: boolean }) {
   const [openSignal, setOpenSignal] = useState(0)
   return (
     <>
-      <PortalTour onboarded={onboarded} openSignal={openSignal} />
+      <PortalTour onboarded={onboarded} openSignal={openSignal} hasCoach={hasCoach} />
       <div className="mt-8 flex justify-center">
         <TourReplayLink onReplay={() => setOpenSignal((v) => v + 1)} />
       </div>

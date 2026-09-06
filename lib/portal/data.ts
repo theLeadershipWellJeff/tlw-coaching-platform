@@ -33,7 +33,9 @@ export type PortalOverview = {
   messages: { id: string; type: string; subject: string | null; preview: string | null; sent_at: string }[]
   /** The coach's client-facing scheduler link (migration 051), or null. */
   bookingUrl: string | null
-  /** A coach is linked (coach_clients). Decides which cards make sense to show. */
+  /** A coach is actually coaching them: a coach_clients link AND not a
+   *  client_type 'portal' participant (whose house-coach link is structural).
+   *  Decides which cards make sense to show. */
   hasCoach: boolean
   /** portal_features.assessments (migration 059) — the 360 surfaces are on. */
   assessmentsEnabled: boolean
@@ -44,7 +46,7 @@ export async function loadPortalOverview(clientId: string): Promise<PortalOvervi
 
   const { data: client } = await supabase
     .from('clients')
-    .select('id, name, timezone, coaching_goals')
+    .select('id, name, timezone, coaching_goals, client_type')
     .eq('id', clientId)
     .maybeSingle()
   if (!client) return null
@@ -153,7 +155,10 @@ export async function loadPortalOverview(clientId: string): Promise<PortalOvervi
     sessionNotes: notesRes.data ?? [],
     messages: commRes.data ?? [],
     bookingUrl,
-    hasCoach: links.length > 0,
+    // A standalone / enterprise participant (client_type 'portal') is linked to
+    // the house coach so the tenant gates work, but nobody is coaching them —
+    // the portal must not offer "your coach" they do not have.
+    hasCoach: links.length > 0 && client.client_type !== 'portal',
     assessmentsEnabled,
   }
 }

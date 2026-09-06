@@ -1276,7 +1276,12 @@ off gets a home page byte-identical to before (the report card isn't even
 mounted; the goals card stays the read-only server-rendered one).
 
 - **Presence-aware home (`app/portal/page.tsx`, `lib/portal/data.ts` returns
-  `hasCoach` + `assessmentsEnabled`).** Sessions / session-records / notes /
+  `hasCoach` + `assessmentsEnabled`).** `hasCoach` = a `coach_clients` link
+  AND `client_type !== 'portal'` (round 3 fix): a participant's house-coach
+  link is structural, so they get **"Talk to a theLeadershipWell coach"**
+  (`ContactSupportCard` with the house coach's `booking_url` + a note that
+  becomes a support ticket), never "Contact your coach". `chat.ts` uses the
+  same rule for the prompt's human-route line. Sessions / session-records / notes /
   messages cards render when the client has a coach OR already has that data;
   a coach-less participant never sees a card that can only be empty. Contact
   card = `ContactCoachCard` when a coach is linked, else **`ContactSupportCard`**
@@ -2193,8 +2198,7 @@ Verified up + down + re-up against Postgres 16. Reversible via
 toggle). Additive, RLS enabled. Verified up + down + re-up against Postgres
 16. Reversible via `060_company_documents_down.sql`.
 
-**`062_client_documents_reconcile.sql` — PENDING (apply now; the first portal
-upload failed on it).** Production's `client_documents` was created by hand
+**`062_client_documents_reconcile.sql` — APPLIED (production, confirmed 2026-09-06).** Production's `client_documents` was created by hand
 before 059's final column list and lacks `updated_at` ("Could not find the
 'updated_at' column … in the schema cache"). 062 is idempotent: `ADD COLUMN IF
 NOT EXISTS` for every 059/060 column on `client_documents` (+ `updated_at` on
