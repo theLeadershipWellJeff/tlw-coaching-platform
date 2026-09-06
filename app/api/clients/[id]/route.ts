@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { mergeCoachGoalSave } from '@/lib/portal/goals'
+import type { CoachingGoal } from '@/lib/supabase/types'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { toErrorResponse } from '@/lib/api-handler'
 import { requireClientCoach } from '@/lib/client-access'
@@ -35,6 +37,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   for (const key of allowed) {
     if (key in body) patch[key] = body[key]
   }
+    // Goals are edited from two directions (coach here, client in their portal).
+    // The coach's save never clobbers a client-authored goal: stamp authorship
+    // and put back any client goal the coach's editor didn't have loaded.
+    if (Array.isArray(patch.coaching_goals)) {
+      const { data: current } = await supabase.from('clients').select('coaching_goals').eq('id', params.id).maybeSingle()
+      const existing = Array.isArray(current?.coaching_goals) ? (current!.coaching_goals as CoachingGoal[]) : []
+      patch.coaching_goals = mergeCoachGoalSave(existing, patch.coaching_goals as CoachingGoal[])
+    }
     // Agreement acknowledgment (migration 018 columns) — lets the coach record an
     // agreement signed outside this platform (e.g. Coach Accountable) and the
     // client's recording decision without re-issuing. These are the fields the

@@ -1132,7 +1132,7 @@ is never accepted here, and vice-versa.
   `dismissed_at` is the coach's override for a false positive. Reads are
   defensive: no table → the old nudge-derived list.
 
-## Assessment debrief add-on (ZF 360 first; migration 059) — Phases 1–2 shipped
+## Assessment debrief add-on (ZF 360 first; migration 059) — Phases 1–3 shipped
 
 A **document-grounded assessment debrief** as a per-client FEATURE FLAG on the
 existing Client Portal — same login, same chat, same middleware, same `clients`
@@ -1261,13 +1261,79 @@ the reference report to ~±0.01. No OCR, no vision model.
   PDF in a new session — it is not in the repo.
 - **Not in Phase 2:** no portal card, no chat grounding, no command-center UI.
 
-**Remaining phases:** 3 portal surfaces (360 card, chat context layering with
-the active brief + company context, starters, portal goals write path with
-`author` stamp, save-as-goal, presence-aware cards, contact-support card), 4
-command center (companies, cohorts, portal users, documents + bulk upload with
-the verification gate, support queue, brief editor, CTA), 5 dry run. Non-goals
-stand: no chat tool-use, no debrief-coach logins, no sponsor dashboards, no
-download toggle, no "most improved" lists.
+### Phase 3 — portal surfaces (shipped 2026-09-05)
+
+**The gate everywhere is `portal_features.assessments === true` + a completed
+assessment document, never `client_type`.** A coaching client with the flag
+off gets a home page byte-identical to before (the report card isn't even
+mounted; the goals card stays the read-only server-rendered one).
+
+- **Presence-aware home (`app/portal/page.tsx`, `lib/portal/data.ts` returns
+  `hasCoach` + `assessmentsEnabled`).** Sessions / session-records / notes /
+  messages cards render when the client has a coach OR already has that data;
+  a coach-less participant never sees a card that can only be empty. Contact
+  card = `ContactCoachCard` when a coach is linked, else **`ContactSupportCard`**
+  (→ `POST /api/portal/support`: `support_tickets` + first
+  `support_ticket_messages` row, `contact` rate limit, best-effort Resend
+  notice to `SUPPORT_NOTIFY_EMAIL` or `DEFAULT_COACH_EMAIL` so a ticket is
+  never silent before the Phase 4 queue). Chat CTA copy adapts ("thinking
+  partner" when coach-less).
+- **"Your 360 report" (`AssessmentCard`, `GET /api/portal/assessments` →
+  `lib/portal/assessments.ts`).** Every completed assessment newest first by
+  `assessment_date`, "Download PDF" (→ the always-available download route,
+  logs `report_viewed`), "Work through it in the chat", and **"Talk to a
+  coach"** → the primary coach's `booking_url` (the house coach's HubSpot link
+  for portal clients) logging `talk_to_coach_clicked` via `POST
+  /api/portal/events` (allowlist: `talk_to_coach_clicked`, `report_viewed`,
+  `comparison_viewed`).
+- **Chat context (`lib/portal/prompt.ts#composeChatSystem`, pure; wired by
+  `lib/portal/chat.ts#buildChatContext`).** Layered exactly per the build
+  prompt: preamble → `PORTAL_CHAT_VOICE_STANDARDS` → **`ASSESSMENT_GROUNDING_RULES`**
+  (the non-negotiable floor: perception not ability, numbers only from the
+  data, band-then-score ranking, no rater attribution in any framing, no
+  prescribing goals, weights/"closest to green" never mentioned, absent
+  sections are absent, comparison offered gently with caveats) → the **active
+  brief** (`lib/portal/briefs.ts`, `prompt_briefs` where `is_active`) → **company
+  vision/values** (`lib/portal/company.ts`, strictly via `clients.company_id`;
+  OMITTED entirely when null) → the most recent report's **structured data**
+  (+ its `comparison` block; never every historical report) → **verbatims** →
+  goals / sent notes / sessions, each omitted when empty. ~12k tokens with a
+  full 360. `buildChatContext` returns `meta` (brief slug/version, document id,
+  has_comparison); the chat route stamps it into
+  **`portal_messages.metadata`** on the assistant turn and logs `chat_started`
+  / `chat_message` / `comparison_viewed` (heuristic on the question) to
+  `portal_events`.
+- **Starters (`app/portal/chat/page.tsx`).** With a report on file the four
+  360 starters replace the default three, plus "What's changed since my last
+  360?" only when a comparison exists (buttons, never auto-sent). **"Save as a
+  goal"** under every finished assistant turn seeds `GoalEditorModal` (first
+  sentence → title, reply → why) — the client edits and saves; **no tool-use,
+  no autonomous writes**.
+- **Portal goals write path (`/api/portal/goals` GET/POST/PATCH/DELETE →
+  `lib/portal/goals.ts`).** Writes the same `clients.coaching_goals` with
+  **`author: 'client'`** (+ `source: 'manual'`); **metrics required**; index-
+  addressed; the client can only edit/remove goals they authored. UI =
+  `PortalGoalsCard` (mounted when the flag is on OR no coach) + the shared
+  `GoalEditorModal`. **Coach-side merge guard:** `PATCH /api/clients/[id]`
+  runs `mergeCoachGoalSave` — every incoming goal is stamped (`client` kept
+  when the title matches a client goal, else `coach`/`ai`), and client goals
+  the coach's editor didn't have loaded are put back. Goal-generate already
+  preserved `source !== 'generated'`, so client goals survive it too.
+- **Verification.** `scripts/spikes/verify-portal-phase3.js` (no key needed):
+  goal-authorship rules, prompt layering/omissions/confidentiality (rater
+  names + `key_info` never present), and the **cross-company isolation test**
+  run against a real Postgres (two companies, two clients, rollback) — `PG=env
+  PGHOST=… PGPORT=… PGDATABASE=… PGUSERNAME=…`. `verify-portal-chat-guardrails.js`
+  (needs `ANTHROPIC_API_KEY`) asks the live model factual score/band
+  questions, three rater-attribution framings, and three escalating
+  prescription asks, with heuristic asserts + full replies for a human read —
+  **not run in CI; run before the dry run.**
+
+**Remaining phases:** 4 command center (companies, cohorts, portal users,
+documents + bulk upload with the verification gate, support queue, brief
+editor, per-client flag toggle), 5 dry run. Non-goals stand: no chat tool-use,
+no debrief-coach logins, no sponsor dashboards, no download toggle, no "most
+improved" lists.
 
 ## Multi-coach beta (2026-08 — coach onboarding readiness)
 
@@ -1437,6 +1503,8 @@ links fail with a clear error).
 Transactional email (Client Portal sign-in links/invitations — see the Assessment
 debrief section): `RESEND_API_KEY`, `PORTAL_FROM_EMAIL`, optional
 `PORTAL_FROM_NAME`; unset = portal links fall back to the coach's Gmail.
+Optional `SUPPORT_NOTIFY_EMAIL` (portal "Contact support" notices; defaults to
+`DEFAULT_COACH_EMAIL`).
 See `.env.example`.
 
 ## Stripe integration

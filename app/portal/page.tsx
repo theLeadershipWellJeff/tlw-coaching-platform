@@ -8,6 +8,9 @@ import { FrameworksCard } from './FrameworksCard'
 import { InfoPopover } from './InfoPopover'
 import { PortalShell } from './PortalShell'
 import { BillingCard } from './BillingCard'
+import { AssessmentCard } from './AssessmentCard'
+import { ContactSupportCard } from './ContactSupportCard'
+import { PortalGoalsCard } from './PortalGoalsCard'
 
 export const dynamic = 'force-dynamic'
 
@@ -66,6 +69,18 @@ export default async function PortalHome() {
 
   const firstName = (data.client.name || '').split(' ')[0] || 'there'
 
+  // Presence-aware layout (assessment debrief, Phase 3). A client with a coach
+  // sees today's portal exactly; a card that can only ever be empty for a
+  // coach-less participant is not rendered at all. Never keyed on client_type.
+  const { hasCoach, assessmentsEnabled } = data
+  const showSessions = hasCoach || data.appointments.length > 0
+  const showTranscripts = hasCoach || data.transcripts.length > 0
+  const showNotes = hasCoach || data.sessionNotes.length > 0
+  const showMessages = hasCoach || data.messages.length > 0
+  // Client-side goal editing comes with the debrief; a coaching client with the
+  // flag off keeps the read-only card, byte-identical to before.
+  const editableGoals = assessmentsEnabled || !hasCoach
+
   return (
     <div className="mx-auto max-w-4xl px-4 py-10">
       <div className="flex items-center justify-between">
@@ -114,9 +129,11 @@ export default async function PortalHome() {
         className="mt-6 flex items-center justify-between rounded-tlw-2xl border border-tlw-navy-rich/20 bg-tlw-navy-rich/5 p-5 transition-colors hover:bg-tlw-navy-rich/10"
       >
         <div>
-          <p className="text-[15px] font-medium text-tlw-navy-deep">Chat with your coaching assistant</p>
+          <p className="text-[15px] font-medium text-tlw-navy-deep">
+            {hasCoach ? 'Chat with your coaching assistant' : 'Chat with your thinking partner'}
+          </p>
           <p className="mt-0.5 text-[13px] text-tlw-warm-gray">
-            Reflect on your goals and sessions, anytime.
+            {hasCoach ? 'Reflect on your goals and sessions, anytime.' : 'Work through your report and what comes next, anytime.'}
           </p>
         </div>
         <span className="text-[20px] text-tlw-signal-orange" aria-hidden>
@@ -125,7 +142,15 @@ export default async function PortalHome() {
       </a>
 
       <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {/* Your 360 report — mounted only when the assessment flag is on */}
+        {assessmentsEnabled && (
+          <div className="lg:col-span-2">
+            <AssessmentCard bookingUrl={data.bookingUrl} />
+          </div>
+        )}
+
         {/* Upcoming sessions */}
+        {showSessions && (
         <Card
           title="Upcoming sessions"
           info="Your booked coaching sessions. Use “Schedule your next session” up top to book another."
@@ -146,8 +171,15 @@ export default async function PortalHome() {
             </ul>
           )}
         </Card>
+        )}
 
         {/* Coaching goals */}
+        {editableGoals ? (
+          <PortalGoalsCard
+            hasCoach={hasCoach}
+            initialGoals={data.goals.map((g, index) => ({ ...g, index, editable: g.author === 'client' }))}
+          />
+        ) : (
         <Card title="Your coaching goals" info="The goals you and your coach are working on. Revisit them anytime to stay focused.">
           {data.goals.length === 0 ? (
             <Empty>Your goals will appear here once set with your coach.</Empty>
@@ -171,8 +203,10 @@ export default async function PortalHome() {
             </ul>
           )}
         </Card>
+        )}
 
         {/* Session records — each opens the full transcript */}
+        {showTranscripts && (
         <Card
           title="Your sessions"
           info="A record of your past sessions. Open one to read it in full, or search up top to find a moment."
@@ -197,8 +231,10 @@ export default async function PortalHome() {
             </ul>
           )}
         </Card>
+        )}
 
         {/* Session notes the coach sent — each opens the full note */}
+        {showNotes && (
         <Card
           title="Your session notes"
           info="The notes your coach sent you after a session. Open one to read it in full."
@@ -230,8 +266,10 @@ export default async function PortalHome() {
             </ul>
           )}
         </Card>
+        )}
 
         {/* Everything else the coach sent */}
+        {showMessages && (
         <Card title="Messages from your coach" info="Other emails and nudges your coach has sent you.">
           {data.messages.length === 0 ? (
             <Empty>Messages your coach sends you will appear here.</Empty>
@@ -248,6 +286,7 @@ export default async function PortalHome() {
             </ul>
           )}
         </Card>
+        )}
 
         {/* Frameworks surfaced to this client (self-hides when none) */}
         <div className="lg:col-span-2">
@@ -259,9 +298,9 @@ export default async function PortalHome() {
           <BillingCard />
         </div>
 
-        {/* Contact your coach — interactive */}
+        {/* Contact — the coach when there is one, otherwise support */}
         <div className="lg:col-span-2">
-          <ContactCoachCard />
+          {hasCoach ? <ContactCoachCard /> : <ContactSupportCard />}
         </div>
       </div>
     </div>

@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import { GoalEditorModal } from '../GoalEditorModal'
 
 type ChatMessage = { role: 'user' | 'assistant'; content: string }
 type Conversation = { id: string; title: string; updated_at: string }
@@ -10,6 +11,23 @@ const SUGGESTIONS = [
   'Help me prepare for my next session.',
   'How am I tracking against my goals?',
 ]
+
+/** Conversation starters when a 360 report is on file (buttons, never auto-sent). */
+const ASSESSMENT_SUGGESTIONS = [
+  'What strengths emerge from my 360?',
+  "Where's the biggest gap between how I see myself and how others see me?",
+  'What should I focus on first?',
+  'Help me turn this into goals I can measure.',
+]
+const COMPARISON_SUGGESTION = "What's changed since my last 360?"
+
+/** A short, editable seed for "save as goal": the first sentence of the reply
+ *  as the title, the rest as the why. The client edits before anything saves. */
+function seedGoalFrom(text: string): { title: string; description: string } {
+  const clean = text.replace(/[*_#>`]/g, '').replace(/\s+/g, ' ').trim()
+  const first = clean.split(/(?<=[.!?])\s/)[0] || clean
+  return { title: first.slice(0, 120), description: clean.slice(0, 600) }
+}
 
 export default function PortalChat() {
   const [conversations, setConversations] = useState<Conversation[]>([])
@@ -23,6 +41,9 @@ export default function PortalChat() {
   const [uploading, setUploading] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [menuFor, setMenuFor] = useState<string | null>(null)
+  const [assessment, setAssessment] = useState<{ enabled: boolean; hasComparison: boolean }>({ enabled: false, hasComparison: false })
+  const [goalSeed, setGoalSeed] = useState<{ title: string; description: string } | null>(null)
+  const [goalSaved, setGoalSaved] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const endRef = useRef<HTMLDivElement>(null)
 
@@ -56,7 +77,21 @@ export default function PortalChat() {
 
   useEffect(() => {
     refreshConversations()
+    // Which starters to offer: the 360 set when a report is on file.
+    fetch('/api/portal/assessments')
+      .then((r) => (r.ok ? r.json() : { enabled: false, documents: [] }))
+      .then((d) =>
+        setAssessment({
+          enabled: !!d.enabled && (d.documents || []).length > 0,
+          hasComparison: (d.documents || []).some((x: { has_comparison?: boolean }) => x.has_comparison),
+        })
+      )
+      .catch(() => {})
   }, [])
+
+  const starters = assessment.enabled
+    ? [...ASSESSMENT_SUGGESTIONS, ...(assessment.hasComparison ? [COMPARISON_SUGGESTION] : [])]
+    : SUGGESTIONS
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -258,10 +293,12 @@ export default function PortalChat() {
             {messages.length === 0 && !sending ? (
               <div className="mt-6 text-center">
                 <p className="text-[15px] text-tlw-espresso">
-                  Ask me anything about your goals, sessions, or the notes your coach sent you.
+                  {assessment.enabled
+                    ? 'Ask me anything about your report, your goals, or what to do next.'
+                    : 'Ask me anything about your goals, sessions, or the notes your coach sent you.'}
                 </p>
                 <div className="mt-4 flex flex-col items-center gap-2">
-                  {SUGGESTIONS.map((s) => (
+                  {starters.map((s) => (
                     <button
                       key={s}
                       onClick={() => send(s)}
@@ -274,7 +311,7 @@ export default function PortalChat() {
               </div>
             ) : (
               messages.map((m, i) => (
-                <div key={i} className={m.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
+                <div key={i} className={m.role === 'user' ? 'flex justify-end' : 'flex flex-col items-start'}>
                   <div
                     className={`max-w-[80%] whitespace-pre-wrap rounded-tlw-2xl px-4 py-2.5 text-[14px] leading-relaxed ${
                       m.role === 'user'
@@ -288,6 +325,15 @@ export default function PortalChat() {
                       <span className="ml-0.5 inline-block h-3.5 w-[2px] animate-pulse bg-tlw-warm-gray align-middle" />
                     )}
                   </div>
+                  {/* Explicit, human-driven: the assistant never writes a goal itself. */}
+                  {m.role === 'assistant' && m.content.trim() && !(streaming && i === messages.length - 1) && (
+                    <button
+                      onClick={() => setGoalSeed(seedGoalFrom(m.content))}
+                      className="mt-1 ml-2 text-[12px] font-medium text-tlw-signal-orange hover:underline"
+                    >
+                      Save as a goal
+                    </button>
+                  )}
                 </div>
               ))
             )}
@@ -299,6 +345,11 @@ export default function PortalChat() {
               </div>
             )}
             {error && <p className="text-center text-[12px] text-tlw-signal-orange">{error}</p>}
+            {goalSaved && (
+              <p className="text-center text-[12px] text-tlw-warm-gray">
+                Saved to your goals. <Link href="/portal" className="font-medium text-tlw-signal-orange hover:underline">See them</Link>
+              </p>
+            )}
             <div ref={endRef} />
           </div>
 
@@ -366,6 +417,14 @@ export default function PortalChat() {
           </form>
         </section>
       </div>
+      {goalSeed && (
+        <GoalEditorModal
+          initial={goalSeed}
+          from="chat"
+          onSaved={() => setGoalSaved(true)}
+          onClose={() => setGoalSeed(null)}
+        />
+      )}
     </div>
   )
 }

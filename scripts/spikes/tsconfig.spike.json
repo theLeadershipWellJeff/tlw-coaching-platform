@@ -10,7 +10,19 @@
     "skipLibCheck": true,
     "noEmit": false,
     "declaration": false,
-    "sourceMap": false
+    "sourceMap": false,
+    "baseUrl": "../..",
+    "paths": {
+      "@/*": [
+        "./*"
+      ]
+    }
   },
-  "include": ["../../lib/documents/geometry.ts", "../../lib/documents/assessment-360/**/*.ts"]
+  "include": [
+    "../../lib/documents/geometry.ts",
+    "../../lib/documents/assessment-360/**/*.ts",
+    "../../lib/portal/goals.ts",
+    "../../lib/portal/prompt.ts",
+    "../../lib/writing-standards.ts"
+  ]
 }

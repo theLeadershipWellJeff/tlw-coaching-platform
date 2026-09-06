@@ -42,6 +42,10 @@ export type CoachingGoal = {
   // Absent on goals that predate this field — treated as protected, since we
   // can't prove they weren't hand-written.
   source?: 'manual' | 'generated'
+  // Who wrote it (Phase 3 of the assessment debrief). 'client' = set by the
+  // client in their portal — the coach-side save path never clobbers these.
+  // Absent = coach (legacy) or, for source 'generated', the AI.
+  author?: 'coach' | 'client' | 'ai'
 }
 
 // The tenant root (migration 042). One row per coaching firm; TLW is org #1.
