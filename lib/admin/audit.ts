@@ -17,6 +17,22 @@ export type AdminAction =
   | 'billing_checkout_link'
   | 'coach_added'
   | 'coach_removed'
+  // Assessment debrief command center (Phase 4)
+  | 'company_created'
+  | 'company_updated'
+  | 'cohort_created'
+  | 'cohort_updated'
+  | 'portal_user_created'
+  | 'portal_user_updated'
+  | 'portal_invite_sent'
+  | 'cohort_invite_batch'
+  | 'document_uploaded'
+  | 'document_retry'
+  | 'document_deleted'
+  | 'support_reply'
+  | 'support_closed'
+  | 'brief_version_created'
+  | 'brief_activated'
 
 export async function logAdminAction(
   supabase: SupabaseClient<Database>,

@@ -1132,7 +1132,7 @@ is never accepted here, and vice-versa.
   `dismissed_at` is the coach's override for a false positive. Reads are
   defensive: no table → the old nudge-derived list.
 
-## Assessment debrief add-on (ZF 360 first; migration 059) — Phases 1–3 shipped
+## Assessment debrief add-on (ZF 360 first; migration 059) — Phases 1–4 shipped
 
 A **document-grounded assessment debrief** as a per-client FEATURE FLAG on the
 existing Client Portal — same login, same chat, same middleware, same `clients`
@@ -1329,11 +1329,57 @@ mounted; the goals card stays the read-only server-rendered one).
   prescription asks, with heuristic asserts + full replies for a human read —
   **not run in CI; run before the dry run.**
 
-**Remaining phases:** 4 command center (companies, cohorts, portal users,
-documents + bulk upload with the verification gate, support queue, brief
-editor, per-client flag toggle), 5 dry run. Non-goals stand: no chat tool-use,
-no debrief-coach logins, no sponsor dashboards, no download toggle, no "most
-improved" lists.
+### Phase 4 — command center (shipped 2026-09-06)
+
+**`/business-center/debrief`** (linked from the Command Center header;
+supervisor-only — every `/api/admin/*` route goes through
+`lib/admin/route.ts#adminContext` → `requireSupervisor`, and every action
+writes `admin_audit_log`). Five tabs, each a client component:
+
+- **Companies & cohorts** (`CompaniesPanel`). `GET/POST /api/admin/companies`,
+  `PATCH …/[id]` (name, vision, values, internal notes); cohorts `POST
+  /api/admin/cohorts`, `PATCH …/[id]` (seats purchased, access window, debrief
+  coach NAME — text, no app access, status). **Seats activated is counted**
+  (`lib/admin/debrief.ts#seatsActivated`, from `clients.cohort_id`), shown
+  against purchased. **Roster CSV** (`GET …/[id]/roster`) for the off-platform
+  group debrief. **Send invitations** (`POST …/[id]/invite`) is a manual
+  action that sends in **throttled batches of ≤25 (700 ms apart)**; the UI
+  loops while `remaining > 0`. Default skips anyone already invited; "Re-send
+  all" is the explicit override. Warm-up pacing stays a human decision.
+- **Portal users** (`PortalUsersPanel`, `GET/POST /api/admin/portal-users`,
+  `PATCH …/[id]`, `POST …/[id]/invite`). The view = standalone participants
+  (`client_type='portal'`) PLUS coaching clients with the flag on — separate
+  from the coaching roster. Create a participant → `createPortalParticipant`
+  (client_type `portal`, cohort's company + access expiry denormalised,
+  `coach_clients` link to the **house coach** = `DEFAULT_COACH_EMAIL`, falling
+  back to the acting supervisor). Per row: the **`assessments` flag toggle**
+  (how a coaching client gets the 360 without re-onboarding), invite/resend,
+  cohort/company/expiry/caps edit, portal state (`loadPortalStates`), latest
+  report status, and an engagement summary from `portal_events`.
+- **Documents** (`DocumentsPanel`). **Bulk upload** `POST /api/admin/documents`
+  (multipart `cohortId` + `files[]`, ≤60): each PDF is extracted FIRST, its
+  `participant_name` matched (`namesMatch`) against the cohort's members —
+  exactly one match files it via `createClientDocument` (`confirmName` by the
+  match) and flips the flag on completion; zero or many matches, or a failed
+  extraction, are **held** and returned for a human. `GET /api/admin/documents`
+  lists everything (never text/structured data); `POST …/[id]` retries
+  (`{confirmName}` accepts a surfaced mismatch), `DELETE …/[id]` removes.
+  Personnel reviews are never retried/deleted from here.
+- **Support** (`SupportPanel`, `GET /api/admin/support`, `POST …/[id]`
+  `{action: reply|close|reopen}`): reply emails the client (Resend, else the
+  acting supervisor's Gmail), records a `support_ticket_messages` row, logs to
+  `communications`.
+- **Brief** (`BriefPanel`, `GET/POST /api/admin/briefs`, `POST …/[id]` to
+  activate): saving creates a **new version and activates it** (old versions
+  kept; exactly one active per slug via the partial unique index); effective
+  on the next chat message, no deploy. Roll back by activating an older one.
+
+**Remaining:** Phase 5 dry run (one real cohort end to end, ten test
+participants, staggered sends rehearsed, extraction verified on every real
+report, Caleb on the support runbook; run
+`scripts/spikes/verify-portal-chat-guardrails.js` with a key first). Non-goals
+stand: no chat tool-use, no debrief-coach logins, no sponsor dashboards, no
+download toggle, no "most improved" lists.
 
 ## Multi-coach beta (2026-08 — coach onboarding readiness)
 
