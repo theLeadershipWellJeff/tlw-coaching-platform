@@ -1,5 +1,29 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+
+/**
+ * Per-browser belt-and-braces for the "taken" flag. The client record is the
+ * source of truth (it follows the person to a new device), but this page's
+ * server payload can be served from the router cache for a short while after
+ * the flag is written, and a failed write must not turn into a tour that
+ * greets someone on every visit. Either signal = don't auto-open.
+ */
+const LOCAL_KEY = 'tlw-portal-tour-done'
+function localDone(): boolean {
+  try {
+    return window.localStorage.getItem(LOCAL_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+function rememberLocally() {
+  try {
+    window.localStorage.setItem(LOCAL_KEY, '1')
+  } catch {
+    /* private mode etc. — the server flag still covers it */
+  }
+}
 
 type Step = { title: string; body: string; icon: string }
 
@@ -55,9 +79,10 @@ export function PortalTour({
 }) {
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState(0)
+  const router = useRouter()
 
   useEffect(() => {
-    if (!onboarded) setOpen(true)
+    if (!onboarded && !localDone()) setOpen(true)
   }, [onboarded])
 
   useEffect(() => {
@@ -70,10 +95,15 @@ export function PortalTour({
   async function finish() {
     setOpen(false)
     setStep(0)
+    rememberLocally()
     try {
-      await fetch('/api/portal/onboarded', { method: 'POST' })
-    } catch {
-      /* the tour simply shows again next visit */
+      const res = await fetch('/api/portal/onboarded', { method: 'POST' })
+      if (!res.ok) console.error('portal tour flag not saved:', res.status, await res.text().catch(() => ''))
+      // Drop the cached server payload for this page so the next visit reads
+      // the flag fresh instead of a copy taken before it was set.
+      router.refresh()
+    } catch (e) {
+      console.error('portal tour flag not saved:', e)
     }
   }
 

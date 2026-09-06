@@ -1085,7 +1085,14 @@ is never accepted here, and vice-versa.
   skippable). The "taken" flag is `clients.portal_onboarded` (migration 053) —
   per client, not per browser, so it doesn't re-fire on a new device — and a
   **"Take the tour again"** link at the foot of the page replays it. Every card
-  carries an `InfoPopover` (ⓘ).
+  carries an `InfoPopover` (ⓘ). **Re-showing fix (2026-09-06):** finishing or
+  skipping the tour also sets a per-browser `localStorage` key
+  (`tlw-portal-tour-done`) and calls `router.refresh()`, because the home
+  page's server payload can be served from the Next router cache for a short
+  while after the flag is written (and a failed write must not mean a tour on
+  every visit); either signal suppresses the auto-open, the replay link still
+  works. `POST /api/portal/onboarded` now returns 500 on a failed update
+  instead of swallowing it.
 - **Rate limiting + audit (`lib/portal/access.ts`, migration 053).**
   `portal_access_log` is both the audit trail for a surface holding a client's
   full history and the counter behind per-client rate limits (chat 60/h, upload
