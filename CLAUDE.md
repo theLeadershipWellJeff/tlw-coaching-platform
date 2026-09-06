@@ -2193,8 +2193,7 @@ Verified up + down + re-up against Postgres 16. Reversible via
 toggle). Additive, RLS enabled. Verified up + down + re-up against Postgres
 16. Reversible via `060_company_documents_down.sql`.
 
-**`061_portal_profile_weekly_plans.sql` — PENDING (apply before the Plan-your-week
-and preferred-name features are used; everything else runs without it).**
+**`061_portal_profile_weekly_plans.sql` — APPLIED (production, confirmed 2026-09-06).**
 Adds `clients.preferred_name`, `portal_conversations.mode` (default
 `general`), the `weekly_plans` table (RLS; unique `(client_id, week_start)`),
 and seeds the `weekly_plan` prompt brief v1. All reads are defensive (the
