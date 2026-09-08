@@ -5,7 +5,7 @@ import { TranscriptsList } from './TranscriptsList'
 export default function ClientTranscriptsPage({ params }: { params: { id: string } }) {
   return (
     <>
-      <PageHeader breadcrumb="Clients" title="Transcripts" />
+      <PageHeader breadcrumb="Clients" title="Transcripts" guide="transcripts" />
       <Link
         href={`/clients/${params.id}`}
         className="mb-4 inline-block text-[12px] font-medium text-tlw-warm-gray hover:text-tlw-espresso"

@@ -710,6 +710,18 @@ existing coaches are unchanged. Read/written via `GET`/`PATCH /api/coach`
 shape. `lib/scheduling.ts` also centralizes the shared timezone option list
 (`orderedTimeZones`) reused by the timezone, client-edit, and scheduling UIs.
 
+**"View reminder" preview (Account → Scheduling).** Each reminder row (the
+booking confirmation + every "Remind N before" rule) has a **View reminder**
+button that opens a modal showing the email exactly as the client receives
+it: `GET /api/coach/reminder-preview?kind=confirmation|nudge&hoursBefore=&
+meetingLink=` runs the SAME builder the real send uses
+(`buildAppointmentEmailHTML`, coach's profile name, coach timezone) for a
+sample client ("Sam Client") and a sample session, with the Zoom link **as
+currently typed in the form** (unsaved edits preview correctly; empty →
+saved/env/firm default via `getMeetingLink`). Returns `{subject, html,
+sample}`; the modal (`SchedulingSettings#ReminderPreviewModal`) renders the
+html in a fully sandboxed iframe. Nothing is sent or stored.
+
 **Reminders = confirmation + configurable nudges.** The confirmation fires at
 booking (if enabled); each enabled `reminder_settings.reminders` rule is a
 pre-session nudge at its own lead time. `lib/appointments.ts#sendAppointmentReminder`
@@ -1598,6 +1610,55 @@ Phase 5 is a rehearsal, not code. What ships to support it:
 Non-goals stand: no chat tool-use, no debrief-coach logins, no sponsor
 dashboards, no download toggle, no "most improved" lists.
 
+## Coach profile, workspace guides, standard templates (2026-09-08; migration 064)
+
+- **Coach profile (Account → Profile, `CoachProfileSettings.tsx`).** A card
+  directly under "Signed in as" where the coach sets how the app refers to
+  them: **full name** (`coaches.name` — Google supplied it at first sign-in,
+  from here the coach owns it; every email sign-off / From name / coach-voiced
+  prompt reads it), **"What should the app call you?"**
+  (`coaches.preferred_name`, 064 — the dashboard greeting; NULL = first word of
+  `name`), **title / credentials** and **phone** (`coaches.title`/`phone`, 064,
+  reference only). `GET/PATCH /api/coach` carry `name` / `preferredName` /
+  `title` / `phone`; the three 064 columns are written in their own UPDATE so an
+  unapplied migration only costs those fields (clear "apply migration 064"
+  error), never the name. Helpers in `lib/coach.ts`: `coachGreetingName`
+  (greeting) + `coachDisplayName` (full name, else email). The dashboard
+  greeting, the top-bar avatar initials (`TopBar` — re-reads on the
+  `tlw-coach-profile-changed` window event the card fires), the client-recap
+  draft (`/api/notes/client-email`) and the prep-sheet From name (`/api/send`)
+  now read the coach ROW, not the Google session name. The "Signed in as" card
+  keeps showing the Google account for reference.
+- **Workspace guides (`app/components/layout/WorkspaceGuide.tsx`).** Every
+  workspace shows a dismissable "how to use this space" note under its title:
+  `PageHeader` takes a `guide` key and renders the banner below the
+  title/subtitle row; copy lives in **`lib/workspace-guides.ts`**
+  (`WORKSPACE_GUIDES` — dashboard, clients, client, notes, transcripts,
+  practice, library, nudges, business-center, command-center, account; the
+  dashboard + practice copy is Jeff's verbatim). Closing persists per workspace
+  in localStorage (`tlw-guide-dismissed:<key>`); the Profile card has **"Show
+  the workspace guides again"** which clears those keys. The banner renders
+  only after mount so server/client markup agree. Adding a workspace = add a
+  key + copy, pass `guide=` on its `PageHeader`.
+- **"Session notes" naming.** The workspace action bar and the notes page say
+  **"+ New session notes"** (was "+ New note"); the workspace summary card is
+  titled **"Session notes"**. Routes/tables unchanged.
+- **Standard templates (`lib/standard-templates.ts`).** theLeadershipWell's
+  shared templates — **Session notes**, **Library of great questions**, **First
+  session (contracting)**, **Engagement review** — are code-defined (not
+  `note_templates` rows), so every coach has them with no per-coach seeding and
+  Jeff updates them by editing the module. Surfaces: `GET /api/templates`
+  returns them as `standard` alongside the coach's own (or as `templates` for
+  `?folderId=standard`), rendered as `note_templates`-shaped rows with id
+  `std:<key>` + `standard: true`; the note editor's **Templates** menu groups
+  "My templates" / "theLeadershipWell standards"; the Library → Templates
+  section has a fixed **"theLeadershipWell standards"** row (`StandardsRow`)
+  opening `FolderTemplates` in read-only mode (description, preview, **"Copy to
+  my templates"** → POST `/api/templates` into Unfiled — the standard itself is
+  never editable/deletable). Merge fields in the standards resolve through the
+  existing `template-render` route on insert. To add a standard: append to
+  `STANDARD_TEMPLATES` (editor-vocabulary HTML: h2/h3/p/ul/ol).
+
 ## Multi-coach beta (2026-08 — coach onboarding readiness)
 
 Plan: `docs/BETA_COACH_ONBOARDING_PLAN.md`. Beta scope decision: **transcript
@@ -2296,6 +2357,12 @@ Reads are defensive (the notes card says "not available yet"; the cron
 returns a clear 500 naming the migration) — nothing else in round 4 needs it.
 Verified up + inserts + dedupe + down + re-up against Postgres 16. Reversible
 via `063_portal_notes_reminders_down.sql`.
+
+**`064_coach_profile.sql` — APPLIED (production, confirmed 2026-09-08).** Adds `coaches.preferred_name`,
+`coaches.title`, `coaches.phone` (all nullable text). Additive; the app reads
+them defensively (absent = first-name greeting) and the name field of the
+Profile card saves independently, so only the three new fields wait on it.
+Reversible via `064_coach_profile_down.sql`.
 
 **`062_client_documents_reconcile.sql` — APPLIED (production, confirmed 2026-09-06).** Production's `client_documents` was created by hand
 before 059's final column list and lacks `updated_at` ("Could not find the

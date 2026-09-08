@@ -7,6 +7,7 @@ export default function PracticePage() {
       <PageHeader
         title="Practice"
         subtitle="Your coaching craft, scored session by session against the ICF competencies and theLeadershipWell standards."
+        guide="practice"
       />
       <ScorecardSpace />
     </>

@@ -309,9 +309,17 @@ function FieldsMenu({ editor }: { editor: Editor }) {
   )
 }
 
-/** Insert a saved Library template, resolving its merge fields against the client. */
+type MenuTemplate = Pick<NoteTemplate, 'id' | 'name' | 'content'>
+
+/**
+ * Insert a saved Library template, resolving its merge fields against the
+ * client. Lists the coach's own templates first, then theLeadershipWell's
+ * standard templates (session notes, the library of great questions, …) which
+ * every coach has without setting anything up.
+ */
 function TemplatesMenu({ editor, clientId }: { editor: Editor; clientId?: string }) {
-  const [templates, setTemplates] = useState<NoteTemplate[] | null>(null)
+  const [templates, setTemplates] = useState<MenuTemplate[] | null>(null)
+  const [standard, setStandard] = useState<MenuTemplate[]>([])
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState(false)
 
@@ -320,12 +328,15 @@ function TemplatesMenu({ editor, clientId }: { editor: Editor; clientId?: string
     setLoading(true)
     fetch('/api/templates')
       .then((r) => (r.ok ? r.json() : { templates: [] }))
-      .then((d) => setTemplates(d.templates || []))
+      .then((d) => {
+        setTemplates(d.templates || [])
+        setStandard(d.standard || [])
+      })
       .catch(() => setTemplates([]))
       .finally(() => setLoading(false))
   }
 
-  async function insert(t: NoteTemplate, close: () => void) {
+  async function insert(t: MenuTemplate, close: () => void) {
     let content = t.content || ''
     if (clientId && content.includes('{{')) {
       setBusy(true)
@@ -352,19 +363,47 @@ function TemplatesMenu({ editor, clientId }: { editor: Editor; clientId?: string
         {(close) =>
           loading ? (
             <p className="px-3 py-2 text-[12px] text-tlw-warm-gray">loading…</p>
-          ) : !templates || templates.length === 0 ? (
+          ) : (!templates || templates.length === 0) && standard.length === 0 ? (
             <p className="px-3 py-2 text-[12px] text-tlw-warm-gray">No templates yet — add them in the Library.</p>
           ) : (
-            templates.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => insert(t, close)}
-                className="block w-full truncate px-3 py-1.5 text-left text-[13px] text-tlw-espresso hover:bg-tlw-canvas"
-              >
-                {t.name}
-              </button>
-            ))
+            <>
+              {templates && templates.length > 0 && (
+                <p className="px-3 pb-0.5 pt-1.5 text-[10px] font-medium uppercase tracking-[1.5px] text-tlw-warm-gray">
+                  My templates
+                </p>
+              )}
+              {(templates || []).map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => insert(t, close)}
+                  className="block w-full truncate px-3 py-1.5 text-left text-[13px] text-tlw-espresso hover:bg-tlw-canvas"
+                >
+                  {t.name}
+                </button>
+              ))}
+              {standard.length > 0 && (
+                <>
+                  <p
+                    className={`px-3 pb-0.5 pt-1.5 text-[10px] font-medium uppercase tracking-[1.5px] text-tlw-warm-gray ${
+                      templates && templates.length > 0 ? 'mt-1 border-t border-tlw-warm-gray/15' : ''
+                    }`}
+                  >
+                    theLeadershipWell standards
+                  </p>
+                  {standard.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => insert(t, close)}
+                      className="block w-full truncate px-3 py-1.5 text-left text-[13px] text-tlw-espresso hover:bg-tlw-canvas"
+                    >
+                      {t.name}
+                    </button>
+                  ))}
+                </>
+              )}
+            </>
           )
         }
       </Menu>

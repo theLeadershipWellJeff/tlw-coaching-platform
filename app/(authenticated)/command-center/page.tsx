@@ -614,6 +614,7 @@ export default function CommandCenterPage() {
         eyebrow="theLeadershipWell"
         title="Command Center"
         subtitle="Coaches, plans, and the Client Portal across the platform"
+        guide="command-center"
         actions={
           <div className="flex items-center gap-2">
             <a

@@ -54,9 +54,17 @@ export async function POST(req: NextRequest) {
   // The send goes out through the signed-in coach's Gmail — From is their
   // identity, and the courtesy copy goes to their own inbox (not a firm default).
   const senderEmail = (session as any).user?.email || process.env.JEFF_FROM_EMAIL!
+  // From name = the coach's profile name (Account → Profile), else the Google name.
+  let profileName = ''
+  try {
+    const coach = await getSessionCoach(getSupabaseAdmin())
+    profileName = coach?.name?.trim() || ''
+  } catch {
+    /* fall back below */
+  }
   const sender = {
     email: senderEmail,
-    name: (session as any).user?.name || process.env.DEFAULT_COACH_NAME || senderEmail,
+    name: profileName || (session as any).user?.name || process.env.DEFAULT_COACH_NAME || senderEmail,
   }
   const cc = senderEmail || process.env.JEFF_CC_EMAIL!
 

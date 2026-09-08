@@ -71,3 +71,28 @@ export async function getSessionCoach(
   if (!email) return null
   return getOrCreateCoach(supabase, email, session.user?.name || email)
 }
+
+/**
+ * How the app addresses the coach in greetings and headers: the preferred name
+ * they set on Account → Profile ("Dr. Jeff"), else the first word of their full
+ * name, else "there". Never the raw email.
+ */
+export function coachGreetingName(
+  coach: Pick<Coach, 'name' | 'preferred_name' | 'email'> | null | undefined
+): string {
+  const preferred = coach?.preferred_name?.trim()
+  if (preferred) return preferred
+  const first = (coach?.name || '').trim().split(/\s+/)[0]
+  if (first && !first.includes('@')) return first
+  return 'there'
+}
+
+/**
+ * The coach's full display name for emails, prompts, and sign-offs — the
+ * profile name when set, else the email. A coach who never edited their profile
+ * keeps the name Google supplied at first sign-in.
+ */
+export function coachDisplayName(coach: Pick<Coach, 'name' | 'email'> | null | undefined): string {
+  const name = (coach?.name || '').trim()
+  return name || coach?.email || 'the coach'
+}

@@ -29,15 +29,36 @@ export function TopBar() {
   const [loading, setLoading] = useState(false)
   const [active, setActive] = useState(0)
 
+  // The avatar reads the coach's own profile name (Account → Profile), falling
+  // back to the Google session; re-reads when the profile card saves.
   useEffect(() => {
-    fetch('/api/auth/session')
-      .then((r) => r.json())
-      .then((d) => {
-        const n: string = d?.user?.name || d?.user?.email || ''
-        setName(n)
-        setInitials(computeInitials(n))
-      })
-      .catch(() => {})
+    let cancelled = false
+    async function load() {
+      let n = ''
+      try {
+        const coach = await fetch('/api/coach').then((r) => (r.ok ? r.json() : null))
+        n = coach?.coach?.name || coach?.coach?.email || ''
+      } catch {
+        /* fall through */
+      }
+      if (!n) {
+        try {
+          const d = await fetch('/api/auth/session').then((r) => r.json())
+          n = d?.user?.name || d?.user?.email || ''
+        } catch {
+          /* ignore */
+        }
+      }
+      if (cancelled) return
+      setName(n)
+      setInitials(computeInitials(n))
+    }
+    load()
+    window.addEventListener('tlw-coach-profile-changed', load)
+    return () => {
+      cancelled = true
+      window.removeEventListener('tlw-coach-profile-changed', load)
+    }
   }, [])
 
   useEffect(() => {

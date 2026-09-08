@@ -102,11 +102,11 @@ export function NotesCard({ clientId }: { clientId: string }) {
 
   return (
     <MiniListCard
-      title="Notes"
+      title="Session notes"
       href={`/clients/${clientId}/notes`}
       items={items}
       loading={loading}
-      emptyText="No notes yet."
+      emptyText="No session notes yet."
     />
   )
 }

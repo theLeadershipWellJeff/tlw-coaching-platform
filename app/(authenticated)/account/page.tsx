@@ -2,6 +2,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
 import { PageHeader } from '@/app/components/layout/PageHeader'
 import { SupervisorSettings } from './SupervisorSettings'
+import { CoachProfileSettings } from './CoachProfileSettings'
 import { TimezoneSettings } from './TimezoneSettings'
 import { SchedulingSettings } from './SchedulingSettings'
 import { SignatureSettings } from './SignatureSettings'
@@ -16,7 +17,7 @@ export default async function AccountPage() {
 
   return (
     <>
-      <PageHeader title="Account" subtitle="Your coach profile and session settings." />
+      <PageHeader title="Account" subtitle="Your coach profile and session settings." guide="account" />
 
       <div className="max-w-2xl space-y-6">
         <div className="rounded-tlw-xl border border-tlw-warm-gray/15 bg-tlw-surface p-6">
@@ -25,7 +26,7 @@ export default async function AccountPage() {
           </p>
           <dl className="space-y-3 text-[13px]">
             <div className="flex justify-between gap-4">
-              <dt className="text-tlw-warm-gray">Name</dt>
+              <dt className="text-tlw-warm-gray">Google account</dt>
               <dd className="text-tlw-espresso">{name}</dd>
             </div>
             <div className="flex justify-between gap-4">
@@ -34,6 +35,9 @@ export default async function AccountPage() {
             </div>
           </dl>
         </div>
+
+        {/* How the app refers to the coach — name, greeting name, title, phone. */}
+        <CoachProfileSettings />
 
         <TimezoneSettings />
 

@@ -3,6 +3,8 @@ import Anthropic from '@anthropic-ai/sdk'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
 import { CLIENT_VOICE_STANDARDS } from '@/lib/writing-standards'
+import { getSupabaseAdmin } from '@/lib/supabase/server'
+import { getSessionCoach, coachDisplayName } from '@/lib/coach'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -40,8 +42,15 @@ export async function POST(req: NextRequest) {
   if (!noteText) return NextResponse.json({ error: 'The note is empty — nothing to send.' }, { status: 400 })
 
   const firstName = clientName.split(' ')[0] || 'there'
-  // Voice the recap as the signed-in coach, not a fixed name.
-  const coachName = (session as any).user?.name || 'the coach'
+  // Voice the recap as the signed-in coach — the name they set on Account →
+  // Profile (falls back to the Google session name if the row can't be read).
+  let coachName: string = (session as any).user?.name || 'the coach'
+  try {
+    const coach = await getSessionCoach(getSupabaseAdmin())
+    if (coach) coachName = coachDisplayName(coach)
+  } catch {
+    /* keep the session name */
+  }
 
   const prompt = `You are ${coachName}, executive coach at theLeadershipWell. Turn the raw session note below into a terse, client-facing recap email to ${clientName}.
 
