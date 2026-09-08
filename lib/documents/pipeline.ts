@@ -29,6 +29,9 @@ export const MAX_DOCUMENT_BYTES = 4 * 1024 * 1024
 export const DEFAULT_MAX_ASSESSMENTS = 5
 export const DEFAULT_MAX_DOCUMENTS = 10
 
+export { describeFailure } from './failure'
+export type { DocumentFailureReason } from './failure'
+
 export class DocumentError extends Error {
   constructor(public status: number, message: string) {
     super(message)

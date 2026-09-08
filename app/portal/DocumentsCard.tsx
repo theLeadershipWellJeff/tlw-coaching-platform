@@ -11,6 +11,20 @@ type Doc = {
   visible_to_coach: boolean
   assessment_date: string | null
   created_at: string
+  reason?: { kind: 'name_mismatch'; report_name: string; account_name: string } | { kind: 'unsupported' } | { kind: 'failed' } | null
+}
+
+/** Why a row is not usable, and what the client can do about it. */
+function reasonLine(d: Doc): string {
+  const r = d.reason
+  if (!r) {
+    if (d.extraction_status === 'failed') return ' · could not be read — press Retry, or contact support'
+    if (d.extraction_status === 'unsupported') return ' · layout not recognised — support has been notified'
+    return ''
+  }
+  if (r.kind === 'name_mismatch') return ` · not added: the report is for "${r.report_name}" but your account name is "${r.account_name}". If it is yours, correct your name in Settings, then Retry.`
+  if (r.kind === 'unsupported') return ' · layout not recognised — support has been notified'
+  return ' · could not be read — press Retry, or contact support'
 }
 
 const KIND_LABEL: Record<string, string> = {
@@ -92,6 +106,23 @@ export function DocumentsCard({ hasCoach }: { hasCoach: boolean }) {
       setBusy(false)
     }
   }
+  async function retry(doc: Doc) {
+    setBusy(true)
+    setError('')
+    setMessage('')
+    try {
+      const res = await fetch(`/api/portal/documents/${doc.id}/retry`, { method: 'POST' })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.error || 'Could not retry.')
+      setMessage(d.message || 'Retried.')
+      await load()
+      if (d.document?.kind === 'assessment_360' && d.document?.extraction_status === 'complete') window.location.reload()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not retry.')
+    } finally {
+      setBusy(false)
+    }
+  }
   async function remove(doc: Doc) {
     if (!window.confirm(`Remove "${doc.title || KIND_LABEL[doc.kind] || 'this document'}"? This deletes the file.`)) return
     setBusy(true)
@@ -126,15 +157,22 @@ export function DocumentsCard({ hasCoach }: { hasCoach: boolean }) {
               <li key={d.id} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-[13px]">
                 <div className="min-w-0">
                   <p className="truncate font-medium text-tlw-navy-deep">{d.title || KIND_LABEL[d.kind] || 'Document'}</p>
-                  <p className="text-[12px] text-tlw-warm-gray">
+                  <p className="whitespace-normal text-[12px] text-tlw-warm-gray">
                     {KIND_LABEL[d.kind] || d.kind} · {fmtDate(d.assessment_date || d.created_at)}
-                    {d.extraction_status === 'failed' && ' · could not be read — support has been notified'}
-                    {d.extraction_status === 'unsupported' && ' · layout not recognised — support has been notified'}
+                    {reasonLine(d)}
                     {d.kind === 'personnel_review' && ' · private to you'}
                   </p>
                 </div>
                 <span className="flex shrink-0 items-center gap-3 text-[12px]">
                   <a href={`/api/portal/documents/${d.id}/download`} className="font-medium text-tlw-signal-orange hover:underline">Download</a>
+                  {(d.extraction_status === 'failed' || d.extraction_status === 'unsupported') && (
+                    <>
+                      {d.reason?.kind === 'name_mismatch' && (
+                        <a href="/portal/settings" className="text-tlw-warm-gray hover:text-tlw-espresso">Settings</a>
+                      )}
+                      <button onClick={() => retry(d)} disabled={busy} className="font-medium text-tlw-navy-deep hover:underline">Retry</button>
+                    </>
+                  )}
                   {hasCoach && d.kind !== 'personnel_review' && (
                     <button onClick={() => toggleShare(d)} disabled={busy} className="text-tlw-warm-gray hover:text-tlw-espresso">
                       {d.visible_to_coach ? 'Shared with coach' : 'Not shared'}

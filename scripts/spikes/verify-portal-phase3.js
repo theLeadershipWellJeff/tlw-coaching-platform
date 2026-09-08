@@ -130,6 +130,24 @@ function check(name, ok, detail = '') {
     }
   }
 
+  // ------------------------------------------------ (d) portal failure reasons
+  // 2026-09-08: the portal list shows WHY a document is unusable (a name
+  // mismatch names both names so the client can correct their own), never the
+  // raw error; the retry route never bypasses the name gate.
+  console.log('\n[d] document failure reasons')
+  const { describeFailure } = require(path.join(build, 'documents/failure.js'))
+  const { portalOutcomeMessage } = require(path.join(build, 'portal/documents.js'))
+  const mm = describeFailure({ extraction_status: 'failed', extraction_error: 'name_mismatch: the report is for "Jeff Holmes"; this client record is "Jeffrey K. Holmes".' })
+  check('name mismatch parsed with both names', mm && mm.kind === 'name_mismatch' && mm.report_name === 'Jeff Holmes' && mm.account_name === 'Jeffrey K. Holmes')
+  check('other failure is opaque', JSON.stringify(describeFailure({ extraction_status: 'failed', extraction_error: 'ParseError: cross-check off by 0.2 on row 3' })) === '{"kind":"failed"}')
+  check('unsupported', describeFailure({ extraction_status: 'unsupported', extraction_error: 'no legend' })?.kind === 'unsupported')
+  check('complete → null', describeFailure({ extraction_status: 'complete', extraction_error: 'warnings: x' }) === null)
+  const msg = portalOutcomeMessage('assessment_360', mm, false)
+  check('mismatch message names both names and the Settings → Retry path', /Jeff Holmes/.test(msg) && /Jeffrey K\. Holmes/.test(msg) && /Settings/.test(msg) && /Retry/.test(msg))
+  check('plain failure message offers Retry', /Retry/.test(portalOutcomeMessage('general', { kind: 'failed' }, false)))
+  const retrySrc = fs.readFileSync(path.resolve(__dirname, '../../app/api/portal/documents/[id]/retry/route.ts'), 'utf8')
+  check('portal retry never passes confirmName', !/confirmName\s*:\s*true/.test(retrySrc) && /retryExtraction\(supabase, doc\.id\)/.test(retrySrc))
+
   console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`}`)
   process.exit(failures ? 1 : 0)
 })().catch((e) => {

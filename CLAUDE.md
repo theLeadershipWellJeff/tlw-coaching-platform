@@ -1333,6 +1333,24 @@ the reference report to ~±0.01. No OCR, no vision model.
   Manager/Self below 75th, Peers/Others at/above 90th; Engagement absent (2
   direct reports); 60 items across 19 competencies. Ask Jeff to re-share the
   PDF in a new session — it is not in the repo.
+- **Failure reasons + client retry (2026-09-08).** `lib/documents/failure.ts#
+  describeFailure` shapes a failed row for the portal — `name_mismatch` with
+  BOTH names (the client can see whether their own account name is the
+  problem), else an opaque `unsupported` / `failed`; the raw error never
+  leaves the server. `GET /api/portal/documents` carries it as `reason`, the
+  card (`DocumentsCard`) prints it in place of the old blanket "could not be
+  read" and offers **Retry** (+ a Settings link on a mismatch) →
+  `POST /api/portal/documents/[id]/retry` (own rows only, `document_upload`
+  rate limit; **never passes `confirmName`** — a client cannot wave through a
+  report that is not theirs; correcting their name in Settings so the gate
+  passes is the self-service path, the coach/command-center confirm is the
+  other). A complete 360 on retry flips the assessments flag like an upload.
+  `lib/documents/notify.ts#notifyDocumentFailure` makes "support has been
+  notified" true: best-effort Resend mail to `SUPPORT_NOTIFY_EMAIL` /
+  `DEFAULT_COACH_EMAIL` with client + document ids and the error on every
+  failed portal upload/retry. The chat status line names both names and the
+  Settings → Retry path. Found when Jeff's own re-upload showed "could not be
+  read" with no way to tell a name mismatch from a parse failure.
 - **Not in Phase 2:** no portal card, no chat grounding, no command-center UI.
 
 ### Phase 3 — portal surfaces (shipped 2026-09-05)
