@@ -146,7 +146,14 @@ export function GoalsCard({
         <ul className="space-y-4">
           {goals.map((g, i) => (
             <li key={i}>
-              <p className="text-[14px] font-medium text-tlw-navy-deep">{g.title}</p>
+              <p className="text-[14px] font-medium text-tlw-navy-deep">
+                {g.title}
+                {g.progress !== undefined && (
+                  <span className={`ml-2 rounded-full px-2 py-0.5 text-[11px] font-medium ${g.completed_at ? 'bg-emerald-100 text-emerald-700' : 'bg-tlw-canvas text-tlw-warm-gray'}`} title="Progress the client reported in their portal">
+                    {g.completed_at ? 'completed' : `${g.progress}%`}
+                  </span>
+                )}
+              </p>
               {g.description && <p className="mt-0.5 text-[13px] leading-relaxed text-tlw-warm-gray">{g.description}</p>}
               {g.metrics && g.metrics.length > 0 && (
                 <ul className="mt-1.5 space-y-0.5">

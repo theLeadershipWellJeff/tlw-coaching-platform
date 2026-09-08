@@ -14,7 +14,7 @@ Phases 1–4 built. Do not skip it, and do not schedule into the buffer week.
 
 ## 0. Before you start (one-time)
 
-- [ ] Migrations 059, 060, and 061 applied.
+- [ ] Migrations 059–063 applied.
 - [ ] Vercel env: `RESEND_API_KEY`, `PORTAL_FROM_EMAIL`, `PORTAL_FROM_NAME`,
       `DEFAULT_COACH_EMAIL` (the house coach), optional `SUPPORT_NOTIFY_EMAIL`.
 - [ ] Resend domain `mail.theleadershipwell.online` shows **Verified** (Resend
@@ -131,7 +131,15 @@ Open one of your alias invitations.
       list → save → the **This week** card on the home page shows it; check
       one off and reload — it stays checked.
 - [ ] **Settings** → set "What should I call you" → the home greeting and the
-      assistant use it. Username + password still save below it.
+      assistant use it. Username + password still save below it. The **Email
+      reminders** switch sits between them.
+- [ ] **My notes** → write one → in the chat, ask about it by title → the
+      assistant refers to it. Nothing from it appears anywhere coach-side.
+- [ ] **Your goals** → click a goal's ring → drag to 60 → Save → the ring and
+      the overall bar move. **Mark complete** on one → confetti, "done", and
+      the coach workspace shows "completed" on that goal.
+- [ ] Reminders: as supervisor, call `/api/cron/portal-reminders?dryRun=1`
+      with the cron secret → the list shows who would get what today.
 - [ ] Contact support → sends → the ticket appears in the Support tab and the
       notice email arrives.
 - [ ] **Your documents** card: upload your own PDF (the 360 again) → the name

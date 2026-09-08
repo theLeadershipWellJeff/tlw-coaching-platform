@@ -39,6 +39,8 @@ export type PromptParts = {
   goals: CoachingGoal[]
   /** Documents the client added to their own portal (kind 'general'), budgeted. */
   clientDocuments?: PromptClientDocument[]
+  /** The client's own journal ("My notes"), formatted; '' when empty. */
+  myNotes?: string
   noteParts: string[]
   recentParts: string[]
   retrievedParts: string[]
@@ -134,7 +136,8 @@ Guidelines:
       .map((g) => {
         const metrics = (g.metrics || []).filter(Boolean)
         const who = g.author === 'client' ? ' (set by them)' : ''
-        return `- ${g.title}${g.description ? `: ${g.description}` : ''}${who}${metrics.length ? `\n  measures: ${metrics.join('; ')}` : ''}`
+        const prog = g.progress !== undefined ? ` — progress ${g.progress}%${g.completed_at ? ', completed' : ''}${g.progress_updated_at ? ` (updated ${g.progress_updated_at.slice(0, 10)})` : ''}` : ' — no progress reported yet'
+        return `- ${g.title}${g.description ? `: ${g.description}` : ''}${who}${prog}${metrics.length ? `\n  measures: ${metrics.join('; ')}` : ''}`
       })
       .join('\n')
     sections.push(`${clientName.toUpperCase()}'S COACHING GOALS:\n${goalsText}`)
@@ -147,6 +150,7 @@ Guidelines:
         .join('\n\n')}`
     )
   }
+  if (p.myNotes) sections.push(`NOTES ${clientName.toUpperCase()} WROTE FOR THEMSELVES IN THEIR PORTAL (their private journal — treat as their own current thinking; refer to a note by its title when you draw on it):\n${p.myNotes}`)
   if (p.noteParts.length) sections.push(`SESSION NOTES ${clientName.toUpperCase()} RECEIVED FROM THEIR COACH:\n${p.noteParts.join('\n\n')}`)
   if (p.recentParts.length) sections.push(`MOST RECENT SESSIONS:\n${p.recentParts.join('\n\n')}`)
   if (p.retrievedParts.length) sections.push(`EARLIER SESSIONS AND NOTES RELEVANT TO THIS QUESTION:\n${p.retrievedParts.join('\n\n')}`)
@@ -167,6 +171,8 @@ export type WeeklyPlanPromptParts = {
   /** Compact 360 development picture, when a report is on file. */
   assessmentSummary: string | null
   clientDocuments?: PromptClientDocument[]
+  /** The client's own journal ("My notes"), formatted; '' when empty. */
+  myNotes?: string
   /** Recent weekly plans + what got checked off, formatted. */
   recentPlans: string
   noteParts: string[]
@@ -202,14 +208,16 @@ export function composeWeeklyPlanSystem(p: WeeklyPlanPromptParts): string {
     const goalsText = p.goals
       .map((g) => {
         const metrics = (g.metrics || []).filter(Boolean)
-        return `- ${g.title}${g.description ? `: ${g.description}` : ''}${metrics.length ? `\n  measures: ${metrics.join('; ')}` : ''}`
+        const prog = g.progress !== undefined ? ` — progress ${g.progress}%${g.completed_at ? ', completed' : ''}` : ''
+        return `- ${g.title}${g.description ? `: ${g.description}` : ''}${prog}${metrics.length ? `\n  measures: ${metrics.join('; ')}` : ''}`
       })
       .join('\n')
-    sections.push(`${name}'S COACHING GOALS (treat these as their Objectives; the measures as Key Results):\n${goalsText}`)
+    sections.push(`${name}'S COACHING GOALS (treat these as their Objectives; the measures as Key Results; progress is their own report):\n${goalsText}`)
   }
   if (p.assessmentSummary) sections.push(`${name}'S 360 DEVELOPMENT PICTURE (perception data from their most recent report — use it to suggest where a week's effort compounds; never quote it as ability, never attribute to individual raters):\n${p.assessmentSummary}`)
   const docs = (p.clientDocuments || []).filter((d) => d.text.trim())
   if (docs.length) sections.push(`DOCUMENTS ${name} ADDED TO THEIR PORTAL (their projects, plans, role material — refer to them by title):\n${docs.map((d) => `## ${d.title}\n${d.text.trim()}`).join('\n\n')}`)
+  if (p.myNotes) sections.push(`NOTES ${name} WROTE FOR THEMSELVES IN THEIR PORTAL (their private journal; often where projects and intentions live):\n${p.myNotes}`)
   if (p.recentPlans) sections.push(`${name}'S RECENT WEEKLY PLANS (what they committed to and what got done — carry unfinished items forward only if they still matter; ask):\n${p.recentPlans}`)
   if (p.noteParts.length) sections.push(`SESSION NOTES ${name} RECEIVED FROM THEIR COACH:\n${p.noteParts.join('\n\n')}`)
   return sections.join('\n\n')

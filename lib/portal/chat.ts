@@ -30,6 +30,7 @@ import { loadActiveBrief } from './briefs'
 import { loadCompanyContext } from './company'
 import { composeChatSystem, composeWeeklyPlanSystem, summariseAssessmentForPlanning } from './prompt'
 import { formatPlansForPrompt, loadWeeklyPlans, weekStartFor } from './weekly-plan'
+import { formatNotesForPrompt, loadNotesForChat } from './notes'
 import type { PortalChatMode } from '@/lib/supabase/types'
 
 const MODEL = process.env.PORTAL_CHAT_MODEL || 'claude-sonnet-4-6'
@@ -119,7 +120,7 @@ export async function buildChatContext(
     ? (client!.coaching_goals as CoachingGoal[])
     : []
 
-  const [{ data: recent }, { data: sentNotes }, { data: coachLinks }, assessment, company, clientDocuments] = await Promise.all([
+  const [{ data: recent }, { data: sentNotes }, { data: coachLinks }, assessment, company, clientDocuments, myNotes] = await Promise.all([
     supabase
       .from('transcripts')
       .select('id, title, session_date, raw_md')
@@ -142,7 +143,9 @@ export async function buildChatContext(
     }),
     loadCompanyContext(clientId).catch(() => null),
     loadClientDocumentsForChat(clientId).catch(() => []),
+    loadNotesForChat(clientId).catch(() => []),
   ])
+  const myNotesText = formatNotesForPrompt(myNotes)
   // Same rule as the home page: a portal participant's house-coach link is
   // structural, not a coaching relationship.
   const hasCoach = (coachLinks?.length ?? 0) > 0 && client?.client_type !== 'portal'
@@ -174,6 +177,7 @@ export async function buildChatContext(
       goals,
       assessmentSummary: assessment ? summariseAssessmentForPlanning(assessment.data) : null,
       clientDocuments,
+      myNotes: myNotesText,
       recentPlans: formatPlansForPrompt(plans),
       noteParts: planNoteParts,
       today,
@@ -246,6 +250,7 @@ export async function buildChatContext(
     brief: brief ? { slug: brief.slug, version: brief.version, body: brief.body } : null,
     company: company ? { name: company.name, vision: company.vision, values: company.values, documents: company.documents } : null,
     clientDocuments,
+    myNotes: myNotesText,
     assessment: assessment ? { data: assessment.data, assessmentCount: assessment.assessmentCount } : null,
     goals,
     noteParts,

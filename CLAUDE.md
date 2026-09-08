@@ -1490,6 +1490,47 @@ own section in the prompt) so the portal works as a general coaching tool.
   seen) plus a "participants without a cohort" group; the panel loads
   `/api/admin/portal-users` once and groups client-side.
 
+### Dry-run feedback round 4 (2026-09-06; migration 063) — notes, reminders, goal progress
+
+- **My notes** (`portal_notes`, 063): the client's private journal. `MyNotesCard`
+  on every home page (list, expand, edit, delete, "+ New note");
+  `GET/POST /api/portal/notes`, `PATCH/DELETE …/[id]` (scoped, `note_write`
+  120/h, ≤200 notes). **Never read coach-side.** The newest notes join the
+  assistant's context in both chat modes (`lib/portal/notes.ts#loadNotesForChat`,
+  8k budget / 2.5k per note) under "NOTES <NAME> WROTE FOR THEMSELVES". Not in
+  Quick search yet (needs the search SQL function extended — its own migration).
+- **Goal progress.** Each goal in `clients.coaching_goals` may carry
+  `progress` (0–100), `progress_updated_at`, `completed_at` — the client's own
+  report on ANY goal, coach-written included (`PATCH /api/portal/goals`
+  `{index, progress}`; `lib/portal/goals.ts#applyProgress` stamps
+  `completed_at` on the transition into 100 and clears it below, so a return
+  to 100 celebrates again). `PortalGoalsCard` (now mounted for every client)
+  shows a progress **ring** per goal, a 5-step slider + **Mark complete**, an
+  overall "n of m complete" bar, and fires **`Confetti.tsx`** (canvas, brand
+  colours, ~3 s, respects reduced motion) when `justCompleted` comes back.
+  `mergeCoachGoalSave` carries progress fields across a coach re-save (by
+  title); the coach workspace `GoalsCard` shows a read-only chip; both prompts
+  list each goal's progress. Events `goal_progress` / `goal_completed`.
+- **Reminders** (`portal_reminders` ledger, 063; `lib/portal/reminders.ts`;
+  daily `GET /api/cron/portal-reminders` at 15:00 UTC in `vercel.json`,
+  `?dryRun=1` to preview). Three kinds, at most one email per client per
+  day, precedence welcome → quarterly → comeback: **welcome** (invited, never
+  signed in: day 3, day 10 after the latest invitation), **quarterly_goals**
+  (the first Monday of Jan/Apr/Jul/Oct, 7-day window, only for people who
+  have been in), **comeback** (14 and 35 days since last seen, keyed on the
+  last-seen date so the ladder restarts after a return). Skips: no email,
+  archived/inactive, expired portal access, `portal_features.reminders ===
+  false` (the **"Email reminders"** switch on portal Settings, via
+  `PATCH /api/portal/profile {reminders}`). Each send is claimed in the ledger
+  (unique `(client_id, kind, period_key)`) BEFORE sending, carries a fresh
+  sign-in link, goes over `lib/portal/send.ts#deliverPortalEmail` (the shared
+  Resend-then-Gmail transport the sign-in link also uses now), logs to
+  `communications` as `type='reminder'`, and signs off as the coach — or the
+  firm for a `portal`-type participant. Copy in `lib/portal/email.ts#
+  buildReminderEmailHtml`. Verify the pure rules:
+  `node_modules/.bin/tsc -p scripts/spikes/tsconfig.spike.json && node
+  scripts/spikes/verify-portal-reminders.js`.
+
 ### Phase 5 — dry run kit (shipped 2026-09-06; the rehearsal itself is Jeff's)
 
 Phase 5 is a rehearsal, not code. What ships to support it:
@@ -2210,6 +2251,15 @@ Verified up + down + re-up against Postgres 16. Reversible via
 `companies/<company_id>/`, extracted text for chat, `include_in_chat`
 toggle). Additive, RLS enabled. Verified up + down + re-up against Postgres
 16. Reversible via `060_company_documents_down.sql`.
+
+**`063_portal_notes_reminders.sql` — PENDING (apply before My notes and the
+portal reminders are used; everything else runs without it).** Adds
+`portal_notes` (the client's private journal) and `portal_reminders` (the
+cron's dedupe ledger, unique `(client_id, kind, period_key)`), both RLS.
+Reads are defensive (the notes card says "not available yet"; the cron
+returns a clear 500 naming the migration) — nothing else in round 4 needs it.
+Verified up + inserts + dedupe + down + re-up against Postgres 16. Reversible
+via `063_portal_notes_reminders_down.sql`.
 
 **`062_client_documents_reconcile.sql` — APPLIED (production, confirmed 2026-09-06).** Production's `client_documents` was created by hand
 before 059's final column list and lacks `updated_at` ("Could not find the

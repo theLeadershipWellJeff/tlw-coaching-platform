@@ -8,7 +8,9 @@ import { orderedTimeZones } from '@/lib/scheduling'
  *   1. Personal information — name, "What should I call you" (preferred name,
  *      migration 061), phone, timezone. Email is shown read-only: it is the
  *      sign-in identity, so it changes through the coach / support.
- *   2. Sign in — the optional username + password (migration 054).
+ *   2. Email reminders — the portal's welcome / come-back / quarterly-goals
+ *      emails, on by default (portal_features.reminders === false = off).
+ *   3. Sign in — the optional username + password (migration 054).
  * Reaching this page requires a portal session, so the client arrived via a
  * magic link; possession of the email account is what authorizes changes here.
  */
@@ -118,6 +120,42 @@ function ProfileSection() {
   )
 }
 
+function RemindersSection() {
+  const [on, setOn] = useState<boolean | null>(null)
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  useEffect(() => {
+    fetch('/api/portal/profile')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setOn(d?.profile ? d.profile.reminders !== false : true))
+      .catch(() => setOn(true))
+  }, [])
+  async function toggle(next: boolean) {
+    setOn(next)
+    setMsg(null)
+    try {
+      const res = await fetch('/api/portal/profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reminders: next }) })
+      if (!res.ok) throw new Error()
+      setMsg({ ok: true, text: next ? 'Reminders are on.' : 'Reminders are off. You can turn them back on any time.' })
+    } catch {
+      setOn(!next)
+      setMsg({ ok: false, text: 'Could not save that. Please try again.' })
+    }
+  }
+  return (
+    <div className="rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface p-6">
+      <h2 className="text-[16px] font-medium text-tlw-navy-deep">Email reminders</h2>
+      <p className="mt-1 text-[13px] text-tlw-warm-gray">
+        An occasional email from the portal: a nudge if you have not been in for a while, and a note at the start of each quarter to look at your goals. Never more than one a day, usually far fewer.
+      </p>
+      <label className="mt-4 flex items-center gap-3 text-[14px] text-tlw-espresso">
+        <input type="checkbox" checked={on ?? true} disabled={on === null} onChange={(e) => toggle(e.target.checked)} className="h-4 w-4 accent-tlw-signal-orange" />
+        Send me reminders
+      </label>
+      <div className="mt-2"><Msg msg={msg} /></div>
+    </div>
+  )
+}
+
 function SignInSection() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -212,6 +250,7 @@ export default function PortalSettings() {
       </div>
       <div className="mt-8 space-y-6">
         <ProfileSection />
+        <RemindersSection />
         <SignInSection />
       </div>
     </div>
