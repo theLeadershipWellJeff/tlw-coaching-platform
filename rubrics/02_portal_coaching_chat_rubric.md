@@ -1,6 +1,6 @@
 # theLeadershipWell · Portal Coaching Chat Rubric
 
-**Current version: v1.0** (published as `portal_chat` v1 by migration 065; refine as you work) · September 2026 · Owner: Dr. Jeff Holmes
+**Current version: v1.1** (brief body = `portal_chat` v1, migration 065; the code floor gained the documents-path and 360-status lines on 2026-09-08) · September 2026 · Owner: Dr. Jeff Holmes
 
 Governs how the client-portal **reflection chat** coaches in its general mode — the conversation a client opens from "Chat" on the portal home page, between sessions, drawing on their own material. (Plan-your-week has its own rubric, 03; a 360 conversation adds rubric 04 on top of this one.)
 
@@ -21,6 +21,10 @@ Governs how the client-portal **reflection chat** coaches in its general mode �
 **What the assistant can see.** The client's coaching goals (with their own progress reports), the session notes their coach chose to send (`communications` rows of type `session_note` — never the coach's private notes), their session transcripts (newest four in full plus passages retrieved against the question), documents they added, their private portal journal, frameworks surfaced to them, and — when on file — their most recent 360 and its comparison. **Never** `clients.key_info`, coach-private notes, other clients, or anything about the coach's practice.
 
 **What it cannot do.** It has no tools. It cannot save a goal, a plan, or a note; the client does that with the buttons under a reply ("Save as a goal", "Save this week's plan"). It should say so rather than pretend.
+
+**How material reaches it (preamble, 2026-09-08).** Anything the client adds under "Your documents" on their home page is read and included (a 360 report in full as structured data; other documents as text); the chat paperclip attaches a file to the current conversation only. The assistant cannot receive files itself — when a client says they uploaded something it cannot see, it says what it can see and points to "Your documents", not to the coach.
+
+**A 360 on file but not surfaced (`loadAssessmentStatusForChat`, both chat modes).** When a 360 exists but is not the surfaced report — still being read, the name on the report did not match the account, an unsupported layout, filed as an other document before the pipeline recognised 360s by layout, or the 360 surfaces switched off — the prompt carries a one-line status and the assistant states that exact situation and the next step. It never says "I have no 360" when one is on file. Incident that prompted this: Jeff re-uploaded his report and the assistant, seeing nothing, told him to ask his coach.
 
 ## 2. The rubric (the brief)
 
@@ -87,3 +91,4 @@ Ending a turn
 ## 5. Version history
 
 - **v1.0** — First written rubric. Consolidates the code floor and publishes the first `portal_chat` brief (migration 065).
+- **v1.1** (2026-09-08, code floor only, no migration) — the preamble says how documents reach the assistant and that it cannot receive files; a 360 on file but not surfaced is explained by a status line in both chat modes instead of denied.

@@ -25,7 +25,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { htmlToPlainText } from '@/lib/communications'
 import type { CoachingGoal } from '@/lib/supabase/types'
-import { loadLatestAssessmentForChat } from './assessments'
+import { loadAssessmentStatusForChat, loadLatestAssessmentForChat } from './assessments'
 import { loadActiveBrief } from './briefs'
 import { loadCompanyContext } from './company'
 import { composeChatSystem, composeWeeklyPlanSystem, summariseAssessmentForPlanning } from './prompt'
@@ -157,6 +157,9 @@ export async function buildChatContext(
     loadNotesForChat(clientId).catch(() => []),
   ])
   const myNotesText = formatNotesForPrompt(myNotes)
+  // A 360 on file but not surfaced (name mismatch, still reading, filed as an
+  // other document, surfaces off) — the assistant says the true state.
+  const assessmentStatus = assessment ? null : await loadAssessmentStatusForChat(clientId).catch(() => null)
   // Same rule as the home page: a portal participant's house-coach link is
   // structural, not a coaching relationship.
   const hasCoach = (coachLinks?.length ?? 0) > 0 && client?.client_type !== 'portal'
@@ -191,6 +194,7 @@ export async function buildChatContext(
       brief: planBrief ? { slug: planBrief.slug, version: planBrief.version, body: planBrief.body } : null,
       goals,
       assessmentSummary: assessment ? summariseAssessmentForPlanning(assessment.data) : null,
+      assessmentStatus,
       clientDocuments,
       myNotes: myNotesText,
       recentPlans: formatPlansForPrompt(plans),
@@ -268,6 +272,7 @@ export async function buildChatContext(
     clientDocuments,
     myNotes: myNotesText,
     assessment: assessment ? { data: assessment.data, assessmentCount: assessment.assessmentCount } : null,
+    assessmentStatus,
     goals,
     noteParts,
     recentParts,
