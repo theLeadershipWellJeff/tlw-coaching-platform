@@ -1,6 +1,6 @@
 # theLeadershipWell · ZF 360 Report Interpretation Rubric
 
-**Current version: v2.0 (draft — supersedes the placeholder v1 brief when published)** · September 2026 · Owner: Dr. Jeff Holmes
+**Current version: v2.0** (published as `assessment_360` v2 by migration 065, superseding the placeholder v1; refine as you work) · September 2026 · Owner: Dr. Jeff Holmes
 
 Governs how the portal assistant reads a **Zenger Folkman Extraordinary Leader 360** with a participant after their human debrief. It is instrument-specific by design; the code beneath it is instrument-agnostic (the `assessment_360` slug and `client_documents.kind` never name the vendor).
 
@@ -79,7 +79,7 @@ Headline = band movement and change in distance to the 90th (both normed). Raw d
 | "I can't say who wrote that — the comments are anonymous within each group, and that's what lets people be candid" | any guess, hypothetical, or hint |
 | "here's where the data points; what do you make of it?" | "your top three goals are…" |
 
-## 7. The brief (v2.0 draft — replaces placeholder v1)
+## 7. The brief (v2.0 — replaces placeholder v1)
 
 **Brief title:** Assessment 360 interpretation brief v2 — Extraordinary Leader
 
@@ -138,4 +138,4 @@ The rubric is only as good as its calibration. With one report on file, the fast
 ## 10. Version history
 
 - **v1** (live, placeholder) — Seeded by migration 059: the nine non-negotiables in brief form.
-- **v2.0 (draft)** — Full interpretation rubric: report anatomy, reading protocol, three-circle model, change rules, language table, the training plan, and the proposed v2 brief body. Not yet published.
+- **v2.0** — Full interpretation rubric: report anatomy, reading protocol, three-circle model, change rules, language table, the training plan, and the v2 brief body (published by migration 065).

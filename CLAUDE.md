@@ -2383,6 +2383,14 @@ them defensively (absent = first-name greeting) and the name field of the
 Profile card saves independently, so only the three new fields wait on it.
 Reversible via `064_coach_profile_down.sql`.
 
+**`065_publish_rubric_briefs.sql` — PENDING (data only, no schema).** Publishes
+`portal_chat` v1 (rubrics/02) and `assessment_360` v2 (rubrics/04, replacing
+the 059 placeholder) as the active prompt briefs, per org, idempotent. Generated
+by `scripts/rubrics/publish-brief.js <slug> --sql`. Effective on the next chat
+message; reversible via `065_publish_rubric_briefs_down.sql` (re-activates the
+prior versions) or the Brief tab. Until applied: the general chat runs on the
+built-in preamble alone and 360 conversations on the placeholder v1 brief.
+
 **`062_client_documents_reconcile.sql` — APPLIED (production, confirmed 2026-09-06).** Production's `client_documents` was created by hand
 before 059's final column list and lacks `updated_at` ("Could not find the
 'updated_at' column … in the schema cache"). 062 is idempotent: `ADD COLUMN IF
