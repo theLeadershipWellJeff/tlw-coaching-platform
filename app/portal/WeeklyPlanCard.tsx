@@ -14,12 +14,17 @@ function weekLabel(ymd: string): string {
 
 /**
  * "This week" — the Top 5 the client saved from a Plan-your-week chat, as a
- * checklist. Checking a task saves at once. With no plan for the current week
- * the card shows the most recent one (labelled) and a nudge to plan this week.
+ * checklist, plus a box to add a to-do straight from the card (which starts
+ * this week's plan if there is none yet). Checking a task saves at once;
+ * to-dos on the current week can be removed. With no plan for the current
+ * week the card shows the most recent one (labelled) and a nudge to plan.
  */
 export function WeeklyPlanCard() {
   const [data, setData] = useState<Data | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
+  const [draft, setDraft] = useState('')
+  const [adding, setAdding] = useState(false)
+  const [error, setError] = useState('')
 
   async function load() {
     try {
@@ -61,6 +66,49 @@ export function WeeklyPlanCard() {
 
   const done = plan ? plan.tasks.filter((t) => t.done).length : 0
 
+  /** Add a to-do to THIS week (creates the week's plan if there is none yet). */
+  async function add() {
+    const text = draft.trim()
+    if (!text || adding) return
+    setAdding(true)
+    setError('')
+    try {
+      const res = await fetch('/api/portal/weekly-plan', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ add: text, weekStart: data?.weekStart || undefined }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.error || 'Could not add that.')
+      setDraft('')
+      setData((cur) => cur && { ...cur, current: d.plan, latest: cur.latest?.week_start === d.plan.week_start ? d.plan : cur.latest })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not add that.')
+    } finally {
+      setAdding(false)
+    }
+  }
+  async function remove(task: Task) {
+    if (!plan) return
+    setBusy(task.id)
+    try {
+      const res = await fetch('/api/portal/weekly-plan', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ planId: plan.id, remove: task.id }),
+      })
+      if (!res.ok) await load()
+      else {
+        const d = await res.json()
+        setData((cur) => cur && { ...cur, [isCurrent ? 'current' : 'latest']: d.plan })
+      }
+    } catch {
+      await load()
+    } finally {
+      setBusy(null)
+    }
+  }
+
   return (
     <div className="rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface p-5">
       <div className="flex items-center justify-between gap-2">
@@ -83,17 +131,43 @@ export function WeeklyPlanCard() {
             {plan.title && <p className="text-[14px] font-medium text-tlw-navy-deep">{plan.title}</p>}
             <ul className="mt-1 space-y-1.5">
               {plan.tasks.map((t) => (
-                <li key={t.id}>
-                  <label className="flex cursor-pointer items-start gap-2.5 text-[14px] text-tlw-espresso">
+                <li key={t.id} className="group flex items-start gap-2">
+                  <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-2.5 text-[14px] text-tlw-espresso">
                     <input type="checkbox" checked={t.done} disabled={busy === t.id} onChange={() => toggle(t)} className="mt-1 h-4 w-4 accent-tlw-signal-orange" />
                     <span className={t.done ? 'text-tlw-warm-gray line-through' : ''}>{t.text}</span>
                   </label>
+                  {isCurrent && (
+                    <button onClick={() => remove(t)} disabled={busy === t.id} aria-label="Remove" title="Remove" className="mt-0.5 shrink-0 text-[13px] text-tlw-warm-gray opacity-0 transition-opacity hover:text-tlw-espresso group-hover:opacity-100">
+                      ✕
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>
             <p className="mt-2 text-[12px] text-tlw-warm-gray">{done} of {plan.tasks.length} done</p>
           </>
         )}
+        {data && (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              add()
+            }}
+            className="mt-3 flex items-center gap-2"
+          >
+            <input
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder={isCurrent ? 'Add a to-do for this week…' : 'Add a to-do for this week (starts a new plan)…'}
+              maxLength={240}
+              className="min-w-0 flex-1 rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-canvas px-3 py-2 text-[13px] text-tlw-espresso outline-none focus:border-tlw-signal-orange"
+            />
+            <button type="submit" disabled={adding || !draft.trim()} className="shrink-0 rounded-tlw-lg border border-tlw-warm-gray/25 px-3 py-2 text-[13px] font-medium text-tlw-signal-orange transition-colors hover:bg-tlw-canvas disabled:opacity-50">
+              {adding ? 'Adding…' : '+ Add'}
+            </button>
+          </form>
+        )}
+        {error && <p className="mt-1 text-[12px] text-tlw-signal-orange">{error}</p>}
         <div className="mt-3 flex flex-wrap gap-2">
           <Link href="/portal/chat?mode=week" className="rounded-tlw-lg bg-tlw-navy-deep px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-tlw-navy-rich">
             {plan && isCurrent ? 'Revisit this week' : 'Plan your week'}
