@@ -7,6 +7,11 @@ type Brief = { id: string; slug: string; version: number; title: string; body: s
 /** The briefs the portal reads. Each is versioned independently. */
 const BRIEFS: Array<{ slug: string; label: string; sub: string }> = [
   {
+    slug: 'portal_chat',
+    label: 'Coaching chat rubric',
+    sub: 'The coaching-conversation rubric for the general reflection chat (rubrics/02 in the repo). Layered under the voice standards on every general-mode message; with no active version the built-in preamble alone governs.',
+  },
+  {
     slug: 'assessment_360',
     label: '360 interpretation brief',
     sub: 'The instrument-specific guidance the assistant reads for every 360 conversation. The grounding rules (perception not ability, no rater attribution, no prescribing goals) are enforced in code beneath every version.',

@@ -4,6 +4,7 @@
  * Layered outermost to innermost (build prompt §6):
  *   1. the portal role preamble
  *   2. PORTAL_CHAT_VOICE_STANDARDS (house rule)
+ *   2b. the active `portal_chat` coaching-conversation brief, when one exists
  *   3. assessment grounding rules (the non-negotiable floor) + the ACTIVE
  *      interpretation brief for the document kind
  *   4. company vision & values — OMITTED ENTIRELY when the client has none
@@ -34,6 +35,13 @@ export type PromptParts = {
   /** Whether a coach is linked — decides where "talk to a human" points. */
   hasCoach: boolean
   brief: PromptBrief | null
+  /**
+   * The coaching-conversation rubric for the general reflection chat — the
+   * active `portal_chat` prompt brief (rubrics/02_portal_coaching_chat_rubric.md).
+   * Layered right after the voice standards, before any assessment material.
+   * null = no active row; the built-in preamble alone governs (today's behavior).
+   */
+  coachingBrief?: PromptBrief | null
   company: PromptCompany | null
   assessment: { data: Assessment360Data; assessmentCount: number } | null
   goals: CoachingGoal[]
@@ -103,6 +111,10 @@ Guidelines:
 
   // 2. Voice standards
   sections.push(PORTAL_CHAT_VOICE_STANDARDS)
+
+  // 2b. The coaching-conversation rubric (portal_chat brief), when one is active.
+  if (p.coachingBrief) sections.push(`COACHING CONVERSATION RUBRIC (${p.coachingBrief.slug} v${p.coachingBrief.version}):
+${p.coachingBrief.body.trim()}`)
 
   // 3. Grounding rules + brief (only when an assessment is in play)
   if (p.assessment) {
