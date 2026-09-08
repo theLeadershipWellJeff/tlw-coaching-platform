@@ -110,7 +110,7 @@ export function NotesPanel({ clientId, autoNew = false }: { clientId: string; au
     load()
   }, [load])
 
-  // When arrived here via "+ New note", start a fresh note once after load.
+  // When arrived here via "+ New session notes", start a fresh note once after load.
   // Wait for the client too so the default title can include their name.
   useEffect(() => {
     if (autoNew && !loading && clientLoaded && !autoNewDone.current) {
@@ -160,7 +160,7 @@ export function NotesPanel({ clientId, autoNew = false }: { clientId: string; au
           onClick={newNote}
           className="rounded-tlw-lg bg-tlw-navy-rich px-3 py-1.5 text-[12px] font-medium text-tlw-cream transition-colors hover:bg-tlw-navy-rich/85"
         >
-          + New note
+          + New session notes
         </button>
       </div>
 

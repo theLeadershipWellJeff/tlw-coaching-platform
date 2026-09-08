@@ -2,8 +2,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { NoteTemplate } from '@/lib/supabase/types'
 import { RichNoteEditor } from '../clients/[id]/RichNoteEditor'
+import { STANDARD_FOLDER_ID } from '@/lib/standard-templates'
 
 type Editing = { id: string | null; name: string; content: string } | null
+type ListedTemplate = NoteTemplate & { description?: string; standard?: boolean }
 
 /**
  * Manage the templates inside one Library folder. `folderId` is a folder uuid,
@@ -15,8 +17,13 @@ type Editing = { id: string | null; name: string; content: string } | null
 export function FolderTemplates({ folderId, kind = 'note' }: { folderId: string; kind?: string }) {
   const isAgreement = kind === 'agreement'
   const isWorksheet = kind === 'worksheet'
+  // theLeadershipWell's standard templates: code-defined, read-only for every
+  // coach; "Copy to my templates" makes an editable copy (lands in Unfiled).
+  const isStandard = folderId === STANDARD_FOLDER_ID
   const noun = 'template'
-  const [templates, setTemplates] = useState<NoteTemplate[]>([])
+  const [templates, setTemplates] = useState<ListedTemplate[]>([])
+  const [previewing, setPreviewing] = useState<string | null>(null)
+  const [copied, setCopied] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [editing, setEditing] = useState<Editing>(null)
@@ -61,6 +68,27 @@ export function FolderTemplates({ folderId, kind = 'note' }: { folderId: string;
       if (!res.ok) throw new Error(data.error || 'Save failed')
       setEditing(null)
       await load()
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Copy a standard template into the coach's own templates (Unfiled) so they
+  // can edit it; the original stays in the shared folder.
+  async function copyToMine(t: ListedTemplate) {
+    setBusy(true)
+    setError('')
+    try {
+      const res = await fetch('/api/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: t.name, content: t.content, folder_id: null }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Could not copy')
+      setCopied((c) => ({ ...c, [t.id]: 'Copied to your Unfiled templates — edit it there.' }))
     } catch (e: any) {
       setError(e.message)
     } finally {
@@ -133,14 +161,22 @@ export function FolderTemplates({ folderId, kind = 'note' }: { folderId: string;
           works like note templates.
         </div>
       )}
-      <div className="flex items-center justify-end">
-        <button
-          onClick={() => setEditing({ id: null, name: '', content: '' })}
-          className="rounded-tlw-lg bg-tlw-navy-rich px-3 py-1.5 text-[12px] font-medium text-tlw-cream transition-opacity hover:opacity-90"
-        >
-          + New {noun}
-        </button>
-      </div>
+      {isStandard ? (
+        <div className="rounded-tlw-lg border border-tlw-navy-rich/15 bg-tlw-navy-rich/[0.04] px-4 py-3 text-[12px] text-tlw-espresso">
+          <span className="font-medium">Shared with every theLeadershipWell coach.</span> These are ready to use from
+          the note editor&apos;s Templates menu. To change one, copy it to your templates and edit the copy — the
+          standard stays as it is.
+        </div>
+      ) : (
+        <div className="flex items-center justify-end">
+          <button
+            onClick={() => setEditing({ id: null, name: '', content: '' })}
+            className="rounded-tlw-lg bg-tlw-navy-rich px-3 py-1.5 text-[12px] font-medium text-tlw-cream transition-opacity hover:opacity-90"
+          >
+            + New {noun}
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <div className="h-24 animate-pulse rounded-tlw-xl border border-tlw-warm-gray/15 bg-tlw-surface/60" />
@@ -157,12 +193,37 @@ export function FolderTemplates({ folderId, kind = 'note' }: { folderId: string;
       ) : (
         <div className="space-y-2">
           {templates.map((t) => (
-            <div
-              key={t.id}
-              className="flex items-center justify-between gap-4 rounded-tlw-xl border border-tlw-warm-gray/15 bg-tlw-surface p-4"
-            >
-              <p className="truncate text-[14px] font-medium text-tlw-navy-deep">{t.name}</p>
+            <div key={t.id} className="rounded-tlw-xl border border-tlw-warm-gray/15 bg-tlw-surface p-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <p className="truncate text-[14px] font-medium text-tlw-navy-deep">{t.name}</p>
+                {isStandard && t.description && (
+                  <p className="mt-0.5 text-[12px] text-tlw-warm-gray">{t.description}</p>
+                )}
+              </div>
               <div className="flex shrink-0 items-center gap-3 text-[12px] font-medium">
+                {isStandard ? (
+                  <>
+                    <button
+                      onClick={() => setPreviewing((p) => (p === t.id ? null : t.id))}
+                      className="text-tlw-warm-gray hover:text-tlw-espresso"
+                    >
+                      {previewing === t.id ? 'hide' : 'preview'}
+                    </button>
+                    {copied[t.id] ? (
+                      <span className="text-tlw-warm-gray">{copied[t.id]}</span>
+                    ) : (
+                      <button
+                        onClick={() => copyToMine(t)}
+                        disabled={busy}
+                        className="rounded-tlw-md border border-tlw-navy-rich/30 px-2.5 py-1 text-tlw-navy-rich hover:bg-tlw-navy-rich/[0.06] disabled:opacity-40"
+                      >
+                        Copy to my templates
+                      </button>
+                    )}
+                  </>
+                ) : (
+                <>
                 <button
                   onClick={() => setEditing({ id: t.id, name: t.name, content: t.content })}
                   className="text-tlw-warm-gray hover:text-tlw-espresso"
@@ -183,7 +244,16 @@ export function FolderTemplates({ folderId, kind = 'note' }: { folderId: string;
                     delete
                   </button>
                 )}
+                </>
+                )}
               </div>
+            </div>
+            {isStandard && previewing === t.id && (
+              <div
+                className="tlw-prose mt-3 rounded-tlw-lg border border-tlw-warm-gray/15 bg-tlw-canvas/60 px-4 py-3 text-[13px] text-tlw-espresso"
+                dangerouslySetInnerHTML={{ __html: t.content }}
+              />
+            )}
             </div>
           ))}
         </div>

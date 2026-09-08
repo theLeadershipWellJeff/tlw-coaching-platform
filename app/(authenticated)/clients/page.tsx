@@ -7,6 +7,7 @@ export default function ClientsPage() {
       <PageHeader
         title="Client Roster"
         subtitle="Your full client directory — active and inactive, one click to each."
+        guide="clients"
       />
       <ClientsRoster />
     </>

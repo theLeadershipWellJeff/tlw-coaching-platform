@@ -8,6 +8,7 @@ export default function NudgesPage() {
       <PageHeader
         title="Nudge Queue"
         subtitle="Between-session touches drafted from your sessions. Review, edit, and send — nothing goes out without you."
+        guide="nudges"
       />
       <div className="mb-6 flex items-center justify-between gap-4">
         <p className="text-[12px] text-tlw-warm-gray">

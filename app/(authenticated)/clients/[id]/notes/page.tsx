@@ -11,7 +11,7 @@ export default function ClientNotesPage({
 }) {
   return (
     <>
-      <PageHeader breadcrumb="Clients" title="Session notes" />
+      <PageHeader breadcrumb="Clients" title="Session notes" guide="notes" />
       <Link
         href={`/clients/${params.id}`}
         className="mb-4 inline-block text-[12px] font-medium text-tlw-warm-gray hover:text-tlw-espresso"

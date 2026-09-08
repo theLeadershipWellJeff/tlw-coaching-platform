@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
 import Link from 'next/link'
+import { WorkspaceGuide } from './WorkspaceGuide'
+import type { WorkspaceGuideKey } from '@/lib/workspace-guides'
 
 interface PageHeaderProps {
   title: string
@@ -11,31 +13,48 @@ interface PageHeaderProps {
   /** Label for the back control (defaults to the breadcrumb/eyebrow, else "Back"). */
   backLabel?: string
   actions?: ReactNode
+  /**
+   * Which workspace guide to show under the title — the dismissable
+   * "how to use this space" note (copy in lib/workspace-guides.ts).
+   */
+  guide?: WorkspaceGuideKey
 }
 
-export function PageHeader({ title, subtitle, breadcrumb, eyebrow, backHref, backLabel, actions }: PageHeaderProps) {
+export function PageHeader({
+  title,
+  subtitle,
+  breadcrumb,
+  eyebrow,
+  backHref,
+  backLabel,
+  actions,
+  guide,
+}: PageHeaderProps) {
   const topLabel = breadcrumb || eyebrow
   return (
-    <div className="mb-8 flex items-start justify-between gap-4">
-      <div className="min-w-0">
-        {backHref ? (
-          <Link
-            href={backHref}
-            className="mb-1 inline-flex items-center gap-1 text-[11px] font-medium uppercase tracking-[2px] text-tlw-warm-gray transition-colors hover:text-tlw-espresso"
-          >
-            <span aria-hidden>←</span> {backLabel ?? topLabel ?? 'Back'}
-          </Link>
-        ) : (
-          topLabel && (
-            <p className="mb-1 text-[11px] font-medium uppercase tracking-[2px] text-tlw-warm-gray">
-              {topLabel}
-            </p>
-          )
-        )}
-        <h1 className="text-2xl font-medium leading-tight text-tlw-navy-deep">{title}</h1>
-        {subtitle && <p className="mt-1 text-[13px] text-tlw-warm-gray">{subtitle}</p>}
+    <div className="mb-8">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          {backHref ? (
+            <Link
+              href={backHref}
+              className="mb-1 inline-flex items-center gap-1 text-[11px] font-medium uppercase tracking-[2px] text-tlw-warm-gray transition-colors hover:text-tlw-espresso"
+            >
+              <span aria-hidden>←</span> {backLabel ?? topLabel ?? 'Back'}
+            </Link>
+          ) : (
+            topLabel && (
+              <p className="mb-1 text-[11px] font-medium uppercase tracking-[2px] text-tlw-warm-gray">
+                {topLabel}
+              </p>
+            )
+          )}
+          <h1 className="text-2xl font-medium leading-tight text-tlw-navy-deep">{title}</h1>
+          {subtitle && <p className="mt-1 text-[13px] text-tlw-warm-gray">{subtitle}</p>}
+        </div>
+        {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
       </div>
-      {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+      {guide && <WorkspaceGuide id={guide} />}
     </div>
   )
 }
