@@ -93,11 +93,10 @@ const icons = {
       <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
     </svg>
   ),
+  // A small jet, nose up — the cockpit of the airplane model.
   command: (
     <svg viewBox="0 0 24 24" width="18" height="18" {...stroke}>
-      <circle cx="12" cy="12" r="8.5" />
-      <path d="M12 3.5v3M12 17.5v3M3.5 12h3M17.5 12h3" />
-      <circle cx="12" cy="12" r="2.5" />
+      <path d="M12 2.5c1.4 1.8 2 3.8 2 6.5v3.5l6.5 3.8v2.2L14 17v2.2l2.2 1.6V22L12 21l-4.2 1v-1.2L10 19.2V17l-6.5 1.5v-2.2L10 12.5V9c0-2.7.6-4.7 2-6.5z" />
     </svg>
   ),
 }
