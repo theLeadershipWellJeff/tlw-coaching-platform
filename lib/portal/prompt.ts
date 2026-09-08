@@ -44,6 +44,13 @@ export type PromptParts = {
   coachingBrief?: PromptBrief | null
   company: PromptCompany | null
   assessment: { data: Assessment360Data; assessmentCount: number } | null
+  /**
+   * When a 360 exists on file but is not the surfaced report (still being
+   * read, name mismatch, unsupported layout, filed as an other document, or
+   * the surfaces switched off), a one-line explanation so the assistant says
+   * the true state instead of "I have no report". Null when nothing to say.
+   */
+  assessmentStatus?: string | null
   goals: CoachingGoal[]
   /** Documents the client added to their own portal (kind 'general'), budgeted. */
   clientDocuments?: PromptClientDocument[]
@@ -107,6 +114,7 @@ Guidelines:
 - When you draw on a specific session, set of notes, or report section, say which one (by date or title) so they can go read it themselves.
 - ${humanRouteLine(p.hasCoach)}
 - Never invent facts. If something isn't in the material below, say you don't have it. The material below is a relevant selection, not their complete history — if they ask about something you can't see, say so.
+- How material reaches you: anything they add under "Your documents" on their portal home page is read and included here (a 360 feedback report is read in full as structured data; other documents as text). The paperclip in this chat attaches a file to the current conversation only. You cannot receive files yourself — if they say they uploaded something you cannot see, say what you can see and point them to "Your documents" on their home page rather than to their coach.
 - Keep a natural, encouraging tone. No clinical or diagnostic language.`)
 
   // 2. Voice standards
@@ -120,6 +128,9 @@ ${p.coachingBrief.body.trim()}`)
   if (p.assessment) {
     sections.push(ASSESSMENT_GROUNDING_RULES)
     if (p.brief) sections.push(`INTERPRETATION BRIEF (${p.brief.slug} v${p.brief.version}):\n${p.brief.body.trim()}`)
+  } else if (p.assessmentStatus) {
+    // A 360 exists but is not surfaced — say the true state, never "no report".
+    sections.push(`THEIR 360 REPORT — STATUS: ${p.assessmentStatus}`)
   }
 
   // 4. Company context — omitted entirely when absent
@@ -182,6 +193,8 @@ export type WeeklyPlanPromptParts = {
   goals: CoachingGoal[]
   /** Compact 360 development picture, when a report is on file. */
   assessmentSummary: string | null
+  /** A 360 on file but not surfaced (see PromptParts.assessmentStatus). */
+  assessmentStatus?: string | null
   clientDocuments?: PromptClientDocument[]
   /** The client's own journal ("My notes"), formatted; '' when empty. */
   myNotes?: string
@@ -227,6 +240,7 @@ export function composeWeeklyPlanSystem(p: WeeklyPlanPromptParts): string {
       .join('\n')
     sections.push(`${name}'S COACHING GOALS (treat these as their Objectives; the measures as Key Results; progress is their own report):\n${goalsText}`)
   }
+  if (!p.assessmentSummary && p.assessmentStatus) sections.push(`${name}'S 360 REPORT — STATUS: ${p.assessmentStatus}`)
   if (p.assessmentSummary) sections.push(`${name}'S 360 DEVELOPMENT PICTURE (perception data from their most recent report — remind them of it in your first reply and use it to suggest where a week's effort compounds; describe and ask, never prescribe; never quote it as ability, never attribute to individual raters):\n${p.assessmentSummary}`)
   const docs = (p.clientDocuments || []).filter((d) => d.text.trim())
   if (docs.length) sections.push(`DOCUMENTS ${name} ADDED TO THEIR PORTAL (their projects, plans, role material — refer to them by title):\n${docs.map((d) => `## ${d.title}\n${d.text.trim()}`).join('\n\n')}`)

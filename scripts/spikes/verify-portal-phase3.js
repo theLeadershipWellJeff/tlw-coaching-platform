@@ -84,6 +84,12 @@ function check(name, ok, detail = '') {
   check('flag-off client: no grounding rules, no brief, no structured data', !/ASSESSMENT GROUNDING/.test(plain) && !/INTERPRETATION BRIEF/.test(plain) && !/STRUCTURED DATA/.test(plain))
   check('flag-off client: goals, notes, sessions present', /COACHING GOALS:\n- G1: d[^\n]*\n  measures: m1/.test(plain) && /SESSION NOTES PAT/.test(plain) && /MOST RECENT SESSIONS/.test(plain))
   check('prompt never mentions key_info', !/key_info/i.test(full) && !/key_info/i.test(plain))
+  // 2026-09-08: a 360 on file but not surfaced → the status line is present and the
+  // assistant is told how documents reach it; with a surfaced report the line is absent.
+  const status = composeChatSystem({ clientName: 'Pat', hasCoach: true, brief: null, company: null, assessment: null, assessmentStatus: 'A 360 report was added on September 8, 2026 but could not be attached to this account because the name on the report did not match.', goals: [], noteParts: [], recentParts: [], retrievedParts: [] })
+  check('360 on file but not surfaced: status line present, no grounding rules', /THEIR 360 REPORT — STATUS: A 360 report was added/.test(status) && !/ASSESSMENT GROUNDING/.test(status))
+  check('surfaced report: no status line', !/360 REPORT — STATUS/.test(full))
+  check('preamble says how documents reach the assistant', /"Your documents" on their portal home page/.test(plain) && /cannot receive files yourself/.test(plain))
 
   const withCmp = composeChatSystem({ clientName: 'Jeff Holmes', hasCoach: false, brief, company: null, assessment: { data: { ...data, comparison: { prior_document_id: 'x', prior_assessment_date: '2023-01-01', months_elapsed: 19, comparability: { rater_sets_differ: true, prior_rater_counts: null, current_rater_counts: null, norm_vintage_differs: false, confidence: 'moderate' }, by_competency: [] } }, assessmentCount: 2 }, goals: [], noteParts: [], recentParts: [], retrievedParts: [] })
   check('two reports: comparison block present and explained', /"comparison"/.test(withCmp) && /2 assessments on file/.test(withCmp))

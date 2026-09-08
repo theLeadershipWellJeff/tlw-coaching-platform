@@ -1411,7 +1411,14 @@ mounted; the goals card stays the read-only server-rendered one).
   `rubrics/04` §9 — the ten canonical questions with the brief body read from
   the rubric file — checking facts pulled from the extracted data and printing
   every reply for a human read; **run before every `assessment_360` brief
-  version.** The general-document chat context now appends an explicit
+  version.** **A 360 on file but not surfaced** (2026-09-08):
+  `assessments.ts#loadAssessmentStatusForChat` gives both chat modes a one-line
+  status when a 360 exists but is not the surfaced report (still reading, name
+  mismatch, unsupported, filed as an other document pre-promotion, surfaces
+  off) so the assistant states the true situation instead of "I have no 360";
+  the general-chat preamble also says how documents reach it ("Your documents"
+  on the home page; the paperclip is per-conversation) and that it cannot
+  receive files itself. The general-document chat context now appends an explicit
   "longer than can be shown — N more characters not included" note when a
   document is clipped (`chat.ts#loadClientDocumentsForChat`).
 
