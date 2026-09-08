@@ -108,13 +108,15 @@ export async function loadAssessmentStatusForChat(clientId: string): Promise<str
     }
     const err = latest360.extraction_error || ''
     if (latest360.extraction_status === 'failed' && err.startsWith('name_mismatch')) {
-      return `A 360 report was added on ${when(latest360.created_at)} but could not be attached to this account because the name on the report did not match the name on the account, so its contents are not available to you. If they ask about it, say exactly that and suggest they ask their coach or support to confirm the report is theirs.`
+      const m = /the report is for "([^"]*)"; this client record is "([^"]*)"/.exec(err)
+      const names = m ? ` (the report is for "${m[1]}"; the account name is "${m[2]}")` : ''
+      return `A 360 report was added on ${when(latest360.created_at)} but could not be attached to this account because the name on the report did not match the name on the account${names}, so its contents are not available to you. If they ask about it, say exactly that: if the report is theirs, they can correct their name under Settings → Personal information and press Retry next to the report under "Your documents"; otherwise their coach or support can confirm it with them.`
     }
     if (latest360.extraction_status === 'unsupported') {
       return `A 360 report was added on ${when(latest360.created_at)} but its layout could not be read automatically; support has been notified. Its contents are not available to you. If they ask about it, say exactly that.`
     }
     if (latest360.extraction_status === 'failed') {
-      return `A 360 report was added on ${when(latest360.created_at)} but could not be read; support has been notified. Its contents are not available to you. If they ask about it, say exactly that.`
+      return `A 360 report was added on ${when(latest360.created_at)} but could not be read; support has been notified. Its contents are not available to you. If they ask about it, say exactly that and mention the Retry button next to it under "Your documents".`
     }
     return `A 360 report was added on ${when(latest360.created_at)} and is still being read. Its contents are not available to you yet. If they ask about it, say exactly that and suggest they try again shortly.`
   }

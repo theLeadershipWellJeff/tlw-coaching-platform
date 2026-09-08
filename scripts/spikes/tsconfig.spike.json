@@ -28,6 +28,8 @@
     "../../lib/portal/chat.ts",
     "../../lib/portal/reminders.ts",
     "../../lib/portal/notes.ts",
-    "../../lib/scoring/engine.ts"
+    "../../lib/scoring/engine.ts",
+    "../../lib/documents/failure.ts",
+    "../../lib/portal/documents.ts"
   ]
 }

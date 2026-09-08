@@ -1,6 +1,6 @@
 # theLeadershipWell · Portal Coaching Chat Rubric
 
-**Current version: v1.1** (brief body = `portal_chat` v1, migration 065; the code floor gained the documents-path and 360-status lines on 2026-09-08) · September 2026 · Owner: Dr. Jeff Holmes
+**Current version: v1.2** (brief body = `portal_chat` v1, migration 065; the code floor gained the documents-path and 360-status lines on 2026-09-08, and the status line now names the mismatched names and the Retry path) · September 2026 · Owner: Dr. Jeff Holmes
 
 Governs how the client-portal **reflection chat** coaches in its general mode — the conversation a client opens from "Chat" on the portal home page, between sessions, drawing on their own material. (Plan-your-week has its own rubric, 03; a 360 conversation adds rubric 04 on top of this one.)
 
@@ -24,7 +24,7 @@ Governs how the client-portal **reflection chat** coaches in its general mode �
 
 **How material reaches it (preamble, 2026-09-08).** Anything the client adds under "Your documents" on their home page is read and included (a 360 report in full as structured data; other documents as text); the chat paperclip attaches a file to the current conversation only. The assistant cannot receive files itself — when a client says they uploaded something it cannot see, it says what it can see and points to "Your documents", not to the coach.
 
-**A 360 on file but not surfaced (`loadAssessmentStatusForChat`, both chat modes).** When a 360 exists but is not the surfaced report — still being read, the name on the report did not match the account, an unsupported layout, filed as an other document before the pipeline recognised 360s by layout, or the 360 surfaces switched off — the prompt carries a one-line status and the assistant states that exact situation and the next step. It never says "I have no 360" when one is on file. Incident that prompted this: Jeff re-uploaded his report and the assistant, seeing nothing, told him to ask his coach.
+**A 360 on file but not surfaced (`loadAssessmentStatusForChat`, both chat modes).** When a 360 exists but is not the surfaced report — still being read, the name on the report did not match the account, an unsupported layout, filed as an other document before the pipeline recognised 360s by layout, or the 360 surfaces switched off — the prompt carries a one-line status and the assistant states that exact situation and the next step. It never says "I have no 360" when one is on file. On a name mismatch the line carries both names (the report's and the account's) and the self-service route — correct the name under Settings → Personal information, then Retry next to the report under "Your documents" — so the assistant can say exactly what to do. Incident that prompted this: Jeff re-uploaded his report and the assistant, seeing nothing, told him to ask his coach; the portal card then said only "could not be read".
 
 ## 2. The rubric (the brief)
 
@@ -92,3 +92,4 @@ Ending a turn
 
 - **v1.0** — First written rubric. Consolidates the code floor and publishes the first `portal_chat` brief (migration 065).
 - **v1.1** (2026-09-08, code floor only, no migration) — the preamble says how documents reach the assistant and that it cannot receive files; a 360 on file but not surfaced is explained by a status line in both chat modes instead of denied.
+- **v1.2** (2026-09-08, code floor only, no migration) — the 360 status line names the two mismatched names and the Settings → Retry path; the portal documents card shows the same reason and a Retry button.

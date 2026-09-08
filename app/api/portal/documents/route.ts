@@ -4,7 +4,9 @@ import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { checkPortalRateLimit, logPortalAccess } from '@/lib/portal/access'
 import { logPortalEvent } from '@/lib/portal/events'
 import { resolveClientCoach } from '@/lib/portal/coach'
-import { createClientDocument, DocumentError } from '@/lib/documents/pipeline'
+import { createClientDocument, describeFailure, DocumentError } from '@/lib/documents/pipeline'
+import { notifyDocumentFailure } from '@/lib/documents/notify'
+import { portalOutcomeMessage } from '@/lib/portal/documents'
 import type { ClientDocumentKind, PortalFeatures } from '@/lib/supabase/types'
 
 export const runtime = 'nodejs'
@@ -18,11 +20,14 @@ export async function GET() {
   const supabase = getSupabaseAdmin()
   const { data } = await supabase
     .from('client_documents')
-    .select('id, kind, title, size_bytes, extraction_status, uploader_role, visible_to_coach, assessment_date, instrument, supersedes_document_id, created_at')
+    .select('id, kind, title, size_bytes, extraction_status, extraction_error, uploader_role, visible_to_coach, assessment_date, instrument, supersedes_document_id, created_at')
     .eq('client_id', clientId)
     .order('assessment_date', { ascending: false, nullsFirst: false })
     .order('created_at', { ascending: false })
-  return NextResponse.json({ documents: data || [] })
+  // The raw extraction error stays server-side; the client gets a shaped
+  // reason (a name mismatch names both names so they can see what to fix).
+  const documents = (data || []).map(({ extraction_error, ...d }) => ({ ...d, reason: describeFailure({ extraction_status: d.extraction_status, extraction_error }) }))
+  return NextResponse.json({ documents })
 }
 
 /**
@@ -52,7 +57,7 @@ export async function POST(req: NextRequest) {
   }
 
   const supabase = getSupabaseAdmin()
-  const { data: client } = await supabase.from('clients').select('id, org_id, portal_features').eq('id', clientId).maybeSingle()
+  const { data: client } = await supabase.from('clients').select('id, org_id, name, email, portal_features').eq('id', clientId).maybeSingle()
   if (!client) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   // Visibility: kind + client choice (build prompt §4). Default for an
@@ -90,19 +95,12 @@ export async function POST(req: NextRequest) {
     await logPortalAccess(clientId, 'document_upload', { detail: `${storedKind}:${result.document.id}`, ok: result.document.extraction_status === 'complete' })
     await logPortalEvent(clientId, 'document_uploaded', { document_id: result.document.id, kind: storedKind, promoted_from: result.promotedTo360 ? kind : undefined, status: result.document.extraction_status })
     const d = result.document
-    const nameMismatch = d.extraction_status === 'failed' && (d.extraction_error || '').startsWith('name_mismatch')
+    const reason = describeFailure(d)
+    if (reason) await notifyDocumentFailure({ client, document: d, action: 'upload', by: 'client' })
     return NextResponse.json(
       {
-        document: { id: d.id, kind: d.kind, title: d.title, extraction_status: d.extraction_status, assessment_date: d.assessment_date, visible_to_coach: d.visible_to_coach },
-        message: nameMismatch
-          ? 'The name on this report does not match your account, so it has not been added to your portal. If it is your report, contact support and we will check it with you.'
-          : d.extraction_status === 'unsupported'
-            ? 'We could not read this report layout automatically. Your file is saved and downloadable; support has been notified to review it.'
-            : d.extraction_status === 'complete'
-              ? result.promotedTo360
-                ? 'That file is a 360 feedback report, so it was read as your 360 and added to your report card.'
-                : d.kind === 'assessment_360' ? 'Your report has been added.' : 'Your document has been added.'
-              : 'Your file is saved, but we could not read it automatically. Support has been notified.',
+        document: { id: d.id, kind: d.kind, title: d.title, extraction_status: d.extraction_status, assessment_date: d.assessment_date, visible_to_coach: d.visible_to_coach, reason },
+        message: portalOutcomeMessage(d.kind, reason, result.promotedTo360 === true),
       },
       { status: 201 }
     )
@@ -112,3 +110,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Could not upload that file right now.' }, { status: 500 })
   }
 }
+

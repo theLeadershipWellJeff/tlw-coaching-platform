@@ -15,6 +15,7 @@ export type PortalEventType =
   | 'report_viewed'
   | 'document_downloaded'
   | 'document_uploaded'
+  | 'document_retried'
   | 'document_visibility_changed'
   | 'comparison_viewed'
   | 'chat_started'
