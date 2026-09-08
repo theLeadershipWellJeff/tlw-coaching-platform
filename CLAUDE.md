@@ -2252,8 +2252,7 @@ Verified up + down + re-up against Postgres 16. Reversible via
 toggle). Additive, RLS enabled. Verified up + down + re-up against Postgres
 16. Reversible via `060_company_documents_down.sql`.
 
-**`063_portal_notes_reminders.sql` — PENDING (apply before My notes and the
-portal reminders are used; everything else runs without it).** Adds
+**`063_portal_notes_reminders.sql` — APPLIED (production, confirmed 2026-09-06).** Adds
 `portal_notes` (the client's private journal) and `portal_reminders` (the
 cron's dedupe ledger, unique `(client_id, kind, period_key)`), both RLS.
 Reads are defensive (the notes card says "not available yet"; the cron
