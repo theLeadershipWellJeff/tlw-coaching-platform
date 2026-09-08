@@ -89,6 +89,8 @@ export type ChatContextMeta = {
   mode?: PortalChatMode
   brief_slug?: string
   brief_version?: number
+  /** The general chat's coaching-conversation rubric (portal_chat brief), when active. */
+  coaching_brief_version?: number
   assessment_document_id?: string
   has_comparison?: boolean
 }
@@ -150,6 +152,10 @@ export async function buildChatContext(
   // structural, not a coaching relationship.
   const hasCoach = (coachLinks?.length ?? 0) > 0 && client?.client_type !== 'portal'
   const brief = assessment && client?.org_id ? await loadActiveBrief(client.org_id, 'assessment_360').catch(() => null) : null
+  // The coaching-conversation rubric for the general chat (rubrics/02). Absent
+  // row = the built-in preamble alone, exactly as before it existed.
+  const coachingBrief =
+    mode === 'general' && client?.org_id ? await loadActiveBrief(client.org_id, 'portal_chat').catch(() => null) : null
 
   // ── Plan your week: a different persona (the weekly_plan brief), a compact
   // development picture instead of the full report, and recent plans. ──
@@ -248,6 +254,7 @@ export async function buildChatContext(
     clientName,
     hasCoach,
     brief: brief ? { slug: brief.slug, version: brief.version, body: brief.body } : null,
+    coachingBrief: coachingBrief ? { slug: coachingBrief.slug, version: coachingBrief.version, body: coachingBrief.body } : null,
     company: company ? { name: company.name, vision: company.vision, values: company.values, documents: company.documents } : null,
     clientDocuments,
     myNotes: myNotesText,
@@ -263,6 +270,7 @@ export async function buildChatContext(
     meta.brief_slug = brief.slug
     meta.brief_version = brief.version
   }
+  if (coachingBrief) meta.coaching_brief_version = coachingBrief.version
   if (assessment) {
     meta.assessment_document_id = assessment.documentId
     meta.has_comparison = !!assessment.data.comparison

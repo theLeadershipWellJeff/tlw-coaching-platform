@@ -98,6 +98,25 @@ comment there).
   aggregation. `coach_self_scores`/`coach_overall`/`coach_notes` = the coach's
   parallel assessment, which **never overwrites** the machine score.
 
+## Rubrics — the practice's IP (mandatory sync rule)
+
+`rubrics/` is the canonical, human-readable home of every rubric the platform
+runs: **01** the coaching-session scoring rubric (code: `lib/scoring/*`), **02**
+the portal coaching-chat rubric (`portal_chat` prompt brief + the code floor in
+`lib/portal/prompt.ts`), **03** the goal-setting rubric (`weekly_plan` brief),
+**04** the ZF 360 report-interpretation rubric (`assessment_360` brief +
+`ASSESSMENT_GROUNDING_RULES`). Read `rubrics/README.md` first. **Any change to a
+rubric's behavior — engine prompt, gates, bands, a prompt brief, the chat
+prompt floor — MUST update the matching `rubrics/*.md` in the same commit and be
+pushed**; a rubric change that is not reflected there is not done. The band
+definitions and principles in 01 are rendered from `rubric.ts`
+(`node scripts/rubrics/render-scoring-rubric.js`, `--check` to verify — run
+after the spike tsconfig compile). Briefs 02–04 carry their live body between
+`BRIEF BODY` markers; `node scripts/rubrics/publish-brief.js <slug>` publishes
+it as a new active `prompt_briefs` version (or paste it in the Command Center
+Brief tab). The general chat loads the `portal_chat` brief when one is active
+(no active row = the built-in preamble alone, today's behavior).
+
 ## Writing standards — client-facing voice (mandatory)
 
 `spec/theLeadershipWell_Writing_Standards_v1.0.md` is Jeff's tone & voice
