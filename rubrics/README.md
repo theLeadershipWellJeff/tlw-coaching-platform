@@ -22,7 +22,7 @@ Each of 02–04 carries its brief verbatim between `<!-- BEGIN BRIEF BODY -->` /
 
 1. **Refine here first.** A rubric change starts as an edit to its file in this folder — in a session with Claude or by hand. The file is the record of intent.
 2. **Then it goes live.**
-   - Rubrics 02–04: publish the brief body — Command Center → Client Portal → Brief tab (paste, save = new active version), or from the repo with `node scripts/rubrics/publish-brief.js <slug>` (needs the Supabase env; `--dry-run` prints the body). Floor changes are code.
+   - Rubrics 02–04: publish the brief body — Command Center → Client Portal → Brief tab (paste, save = new active version), or from the repo with `node scripts/rubrics/publish-brief.js <slug>` (needs the Supabase env; `--dry-run` prints the body; `--sql` prints an idempotent block to paste into the Supabase SQL editor — the path used when a session has no database credentials, e.g. migration 065). Floor changes are code.
    - Rubric 01: the code change lands in the same commit as the document; after a rubric-text change run `node_modules/.bin/tsc -p scripts/spikes/tsconfig.spike.json && node scripts/rubrics/render-scoring-rubric.js` so the generated sections match, and `--check` before committing.
 3. **Bump the version line** at the top of the file and add a one-line entry to its version history. Spec-level deltas for the scoring rubric still go in `spec/` as before; this folder holds the consolidated current state.
 4. **Standing rule for Claude sessions** (also in `CLAUDE.md`): any change to a rubric's behavior — code or brief — updates the matching file here in the same commit, and the commit is pushed to the repo. A rubric change that is not reflected here is not done.

@@ -6,6 +6,9 @@
 //   node scripts/rubrics/publish-brief.js weekly_plan       # rubrics/03
 //   node scripts/rubrics/publish-brief.js assessment_360    # rubrics/04
 //   node scripts/rubrics/publish-brief.js assessment_360 --dry-run
+//   node scripts/rubrics/publish-brief.js assessment_360 --sql   # print an idempotent SQL block instead
+//                                                                 # (paste into the Supabase SQL editor — for
+//                                                                 # sessions without database credentials)
 //
 // Needs NEXT_PUBLIC_SUPABASE_URL + SUPABASE_API_SECRET_KEY in the environment
 // (read from .env.local when present). Publishes to the first organization
@@ -44,6 +47,51 @@ function extractTitle(md) {
   return m ? m[1].trim() : null
 }
 
+/**
+ * An idempotent SQL block that makes `body` the ACTIVE version of `slug` for
+ * every organization: a version already carrying this exact body is
+ * re-activated (so re-running after the down-script restores it, and a
+ * re-run on an already-published org is a no-op); otherwise a new version is
+ * inserted and activated. Dollar-quoted with a tag that cannot appear in the
+ * body.
+ */
+function briefSql(slug, title, body, sourceFile) {
+  const tag = '$brief$'
+  if (body.includes(tag) || title.includes("'")) throw new Error('body contains the dollar-quote tag or title contains a quote')
+  return `-- ${slug}: make the BRIEF BODY of ${sourceFile} the active version
+-- (re-activates an existing version with this body; else inserts the next version).
+DO $do$
+DECLARE
+  o RECORD;
+  match_version int;
+  match_active boolean;
+  next_version int;
+BEGIN
+  FOR o IN SELECT DISTINCT org_id FROM prompt_briefs UNION SELECT id FROM organizations LOOP
+    SELECT version, is_active INTO match_version, match_active FROM prompt_briefs
+      WHERE org_id = o.org_id AND slug = '${slug}' AND btrim(body) = btrim(${tag}${body}${tag})
+      ORDER BY version DESC LIMIT 1;
+    IF match_version IS NOT NULL THEN
+      IF NOT match_active THEN
+        UPDATE prompt_briefs SET is_active = false
+          WHERE org_id = o.org_id AND slug = '${slug}' AND is_active;
+        UPDATE prompt_briefs SET is_active = true
+          WHERE org_id = o.org_id AND slug = '${slug}' AND version = match_version;
+      END IF;
+      CONTINUE;
+    END IF;
+    SELECT COALESCE(MAX(version), 0) + 1 INTO next_version FROM prompt_briefs
+      WHERE org_id = o.org_id AND slug = '${slug}';
+    UPDATE prompt_briefs SET is_active = false
+      WHERE org_id = o.org_id AND slug = '${slug}' AND is_active;
+    INSERT INTO prompt_briefs (org_id, slug, version, title, body, is_active)
+      VALUES (o.org_id, '${slug}', next_version, '${title}', ${tag}${body}${tag}, true);
+  END LOOP;
+END
+$do$;
+`
+}
+
 async function main() {
   const args = process.argv.slice(2)
   const slug = args.find((a) => !a.startsWith('--'))
@@ -58,6 +106,10 @@ async function main() {
   const title = extractTitle(md) || `${slug} brief (from ${FILES[slug]})`
   if (body.length < 40) throw new Error('brief body is too short to be useful')
 
+  if (args.includes('--sql')) {
+    process.stdout.write(briefSql(slug, title, body, FILES[slug]))
+    return
+  }
   console.log(`slug: ${slug}\ntitle: ${title}\nbody: ${body.length} chars from ${FILES[slug]}`)
   if (dryRun) {
     console.log('\n--- body ---\n' + body)
@@ -78,12 +130,21 @@ async function main() {
     orgId = data.id
   }
 
-  const { data: latest } = await supabase.from('prompt_briefs').select('version, body').eq('org_id', orgId).eq('slug', slug).order('version', { ascending: false }).limit(1).maybeSingle()
-  if (latest && latest.body.trim() === body) {
-    console.log(`no change: v${latest.version} already carries this body`)
+  const { data: versions } = await supabase.from('prompt_briefs').select('version, body, is_active').eq('org_id', orgId).eq('slug', slug).order('version', { ascending: false })
+  const existing = (versions || []).find((v) => v.body.trim() === body)
+  if (existing) {
+    if (existing.is_active) {
+      console.log(`no change: v${existing.version} already carries this body and is active`)
+      return
+    }
+    const { error: deact } = await supabase.from('prompt_briefs').update({ is_active: false }).eq('org_id', orgId).eq('slug', slug).eq('is_active', true)
+    if (deact) throw new Error(deact.message)
+    const { error: react } = await supabase.from('prompt_briefs').update({ is_active: true }).eq('org_id', orgId).eq('slug', slug).eq('version', existing.version)
+    if (react) throw new Error(react.message)
+    console.log(`re-activated ${slug} v${existing.version} (it already carried this body)`)
     return
   }
-  const version = (latest?.version || 0) + 1
+  const version = (versions?.[0]?.version || 0) + 1
   const { error: deact } = await supabase.from('prompt_briefs').update({ is_active: false }).eq('org_id', orgId).eq('slug', slug).eq('is_active', true)
   if (deact) throw new Error(deact.message)
   const { error } = await supabase.from('prompt_briefs').insert({ org_id: orgId, slug, version, title, body, is_active: true })

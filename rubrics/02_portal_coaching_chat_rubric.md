@@ -1,12 +1,12 @@
 # theLeadershipWell · Portal Coaching Chat Rubric
 
-**Current version: v1.0 (draft for Jeff's refinement)** · September 2026 · Owner: Dr. Jeff Holmes
+**Current version: v1.0** (published as `portal_chat` v1 by migration 065; refine as you work) · September 2026 · Owner: Dr. Jeff Holmes
 
 Governs how the client-portal **reflection chat** coaches in its general mode — the conversation a client opens from "Chat" on the portal home page, between sessions, drawing on their own material. (Plan-your-week has its own rubric, 03; a 360 conversation adds rubric 04 on top of this one.)
 
 **Where it runs.** `lib/portal/prompt.ts#composeChatSystem`, assembled per message by `lib/portal/chat.ts#buildChatContext`. Layer order: preamble → voice standards → **this rubric's brief (`portal_chat`, when active)** → assessment grounding + 360 brief (only with a report) → company context → structured 360 data → verbatims → goals → client documents → the client's own notes → coach-sent session notes → recent sessions → retrieved earlier material. Replies stream; model `PORTAL_CHAT_MODEL` (default `claude-sonnet-4-6`); `max_tokens` 4096.
 
-**Live editing.** The brief body below is the `portal_chat` prompt brief. Publish it from the Command Center Brief tab ("Coaching chat rubric") or `node scripts/rubrics/publish-brief.js portal_chat`. **With no active version, the code floor alone governs — which is exactly today's behavior.** Publishing v1.0 is therefore a deliberate step: dry-run it, read a few conversations, then activate.
+**Live editing.** The brief body below is the `portal_chat` prompt brief. Publish it from the Command Center Brief tab ("Coaching chat rubric") or `node scripts/rubrics/publish-brief.js portal_chat`. With no active version the code floor alone governs; v1.0 is published by migration 065 and is live from the next chat message.
 
 ---
 
@@ -86,4 +86,4 @@ Ending a turn
 
 ## 5. Version history
 
-- **v1.0 (draft)** — First written rubric. Consolidates the code floor and proposes the `portal_chat` brief; not yet published to the database.
+- **v1.0** — First written rubric. Consolidates the code floor and publishes the first `portal_chat` brief (migration 065).
