@@ -1,11 +1,11 @@
 # theLeadershipWell · Goal-Setting Rubric
 
-**Current version: v1.0** (brief body = the live `weekly_plan` v1, seeded September 2026) · Owner: Dr. Jeff Holmes
+**Current version: v1.1** (brief body = the live `weekly_plan` v1, seeded September 2026; the code floor gained the 360 reminder on 2026-09-08) · Owner: Dr. Jeff Holmes
 
 Governs goal-setting wherever the platform does it: the portal's **Plan-your-week** conversation (the main surface), the portal goal editor, and the coach-side goal hygiene the workspace enforces.
 
 **Where it runs.**
-- **Plan your week** — `/portal/chat?mode=week`. `lib/portal/prompt.ts#composeWeeklyPlanSystem`: the **brief is the persona** (there is no separate preamble) → voice standards → portal mechanics (today's date, the week's Monday, how saving works, the human route) → the client's goals as Objectives with measures as Key Results and their own progress → a **compact 360 development picture** (`summariseAssessmentForPlanning`: standout competencies by band, development candidates, largest self-vs-others gaps; never the full report) → their documents → their journal → recent weekly plans and what got done → coach-sent notes.
+- **Plan your week** — `/portal/chat?mode=week`. `lib/portal/prompt.ts#composeWeeklyPlanSystem`: the **brief is the persona** (there is no separate preamble) → voice standards → portal mechanics (today's date, the week's Monday, how saving works, the human route) → the client's goals as Objectives with measures as Key Results and their own progress → a **compact 360 development picture** (`summariseAssessmentForPlanning`: the Profound Strengths, every full three-circle overlap with its two lowest-scored behaviors, the two-circle candidates, the marked self-vs-others gaps; never the full report — and the mechanics tell the assistant to remind the client of it in its first reply, §1) → their documents → their journal → recent weekly plans and what got done → coach-sent notes.
 - **Saving** — "Save this week's plan" → `POST /api/portal/weekly-plan/extract` (the model reads the agreed Top 5 as plain strings) → the client edits/confirms in `SavePlanModal` (≤ 7 items) → `weekly_plans` (one per client per week; re-saves keep task ids and done state). The home "This week" card is the checklist; a to-do can be added there directly.
 - **Goals** — `clients.coaching_goals` `{title, description, metrics[], progress, author}`. Portal writes require metrics; a client can only edit goals they authored; the coach's editor preserves client goals and progress on re-save (`mergeCoachGoalSave`). The chat's "Save as a goal" seeds the editor — the client confirms; nothing is written autonomously.
 - **Coach side** — the workspace goals card and the notes-panel goals modal share `GoalRows`; "generate from notes" (`/api/clients/[id]/goals/generate`) proposes goals from session notes and never overwrites client-authored ones.
@@ -19,7 +19,8 @@ Governs goal-setting wherever the platform does it: the portal's **Plan-your-wee
 - **One conversation, one outcome:** the week ends with an agreed **Top 5** stated as a plain numbered list so it can be saved. "Ask before proposing; propose before finalising."
 - The assistant **cannot save**; it tells the client to press "Save this week's plan".
 - Goals carry **measures** (up to three) — the portal refuses a client goal without them.
-- The 360 enters as a **development picture**, never as ability, never with rater attribution.
+- **When a 360 is on file, the first reply reminds the client of the areas their report points to for becoming extraordinary** (v1.1, `composeWeeklyPlanSystem` mechanics): the competencies below their own 90th-percentile mark that the people around them voted important *and* the client named a passion — the three-circle overlap from rubric 04 — and asks whether one belongs in this week's Top 5. Describe and ask; never rank the areas, never prescribe which to pick, never mention weights or ranking logic. When a Top 5 action serves one of those areas, the assistant says which, so the week's effort compounds toward a Profound Strength. A client who would rather leave the 360 aside that week is let go without comment.
+- The picture itself (`summariseAssessmentForPlanning`) is shaped for action: the report date; the **Profound Strengths** as the base to build from; **every full three-circle overlap** with its score, its distance below the 90th mark, and the **two lowest-scored behaviors under it** (the item level is where a weekly action gets concrete); the two-circle candidates as "also close" with what is missing; and the largest marked self-vs-others gaps. Perception language throughout; never as ability, never with rater attribution.
 - Everything else the assistant knows is in the prompt; if it is not there, it asks.
 
 ## 2. The rubric (the brief) — live v1
@@ -111,3 +112,4 @@ OKR (Doerr, *Measure What Matters*, 2018), Traction / EOS (Wickman, *Traction*, 
 ## 6. Version history
 
 - **v1.0** — Live `weekly_plan` brief v1 as seeded by migration 061 (Jeff's goal-setting master prompt with a portal preamble). This document adds the floor, the hygiene rules, and the refinement suggestions.
+- **v1.1** (2026-09-08, code floor only — the brief is unchanged, no migration) — with a 360 on file the first reply reminds the client of the three-circle development areas and asks whether one belongs in the week's Top 5; the development picture now carries the Profound Strengths, every full overlap with its lowest-scored behaviors, and the marked gaps.

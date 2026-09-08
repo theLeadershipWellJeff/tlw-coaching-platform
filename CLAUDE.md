@@ -1531,7 +1531,12 @@ own section in the prompt) so the portal works as a general coaching tool.
   **`weekly_plan` brief** (seeded from Jeff's goal-setting master prompt;
   editable on the Brief tab, which now has a slug picker) → voice standards →
   portal mechanics → goals → a **compact 360 development summary**
-  (`summariseAssessmentForPlanning`, not the full report) → client documents →
+  (`summariseAssessmentForPlanning`, not the full report — since 2026-09-08 the
+  Profound Strengths as the base, every full three-circle overlap with the two
+  lowest-scored behaviors under it, and the marked gaps; and the mechanics tell
+  the assistant to **remind the client of those areas in its first reply** and
+  ask whether one belongs in the week's Top 5 — describe and ask, never
+  prescribe; rubrics/03 v1.1) → client documents →
   recent plans + what got done → a few sent notes. `buildChatContext(clientId,
   query, mode)` branches on mode; `meta.mode` is stamped on the message. The
   chat's **"Save this week's plan"** bar → `POST /api/portal/weekly-plan/extract`
