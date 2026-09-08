@@ -8,8 +8,9 @@ import { orderedTimeZones } from '@/lib/scheduling'
  *   1. Personal information — name, "What should I call you" (preferred name,
  *      migration 061), phone, timezone. Email is shown read-only: it is the
  *      sign-in identity, so it changes through the coach / support.
- *   2. Email reminders — the portal's welcome / come-back / quarterly-goals
- *      emails, on by default (portal_features.reminders === false = off).
+ *   2. Email reminders — the master switch (portal_features.reminders) and
+ *      which ones: weekly planning nudge + day, away check-in + interval,
+ *      quarterly goal review (portal_features.reminder_settings).
  *   3. Sign in — the optional username + password (migration 054).
  * Reaching this page requires a portal session, so the client arrived via a
  * magic link; possession of the email account is what authorizes changes here.
@@ -120,38 +121,104 @@ function ProfileSection() {
   )
 }
 
+type ReminderSettings = { weekly: boolean; weekly_day: number; comeback: boolean; comeback_days: 14 | 30 | 60; quarterly: boolean }
+const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+
 function RemindersSection() {
   const [on, setOn] = useState<boolean | null>(null)
+  const [prefs, setPrefs] = useState<ReminderSettings>({ weekly: false, weekly_day: 1, comeback: true, comeback_days: 14, quarterly: true })
+  const [dirty, setDirty] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
   useEffect(() => {
     fetch('/api/portal/profile')
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => setOn(d?.profile ? d.profile.reminders !== false : true))
+      .then((d) => {
+        if (!d?.profile) return setOn(true)
+        setOn(d.profile.reminders !== false)
+        if (d.profile.reminderSettings) setPrefs(d.profile.reminderSettings)
+      })
       .catch(() => setOn(true))
   }, [])
-  async function toggle(next: boolean) {
-    setOn(next)
+  function set<K extends keyof ReminderSettings>(k: K, v: ReminderSettings[K]) {
+    setPrefs((p) => ({ ...p, [k]: v }))
+    setDirty(true)
+    setMsg(null)
+  }
+  async function save(nextOn = on ?? true) {
+    setSaving(true)
     setMsg(null)
     try {
-      const res = await fetch('/api/portal/profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reminders: next }) })
+      const res = await fetch('/api/portal/profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reminders: nextOn, reminderSettings: prefs }) })
       if (!res.ok) throw new Error()
-      setMsg({ ok: true, text: next ? 'Reminders are on.' : 'Reminders are off. You can turn them back on any time.' })
+      setDirty(false)
+      setMsg({ ok: true, text: nextOn ? 'Saved.' : 'Reminders are off. You can turn them back on any time.' })
     } catch {
-      setOn(!next)
       setMsg({ ok: false, text: 'Could not save that. Please try again.' })
+    } finally {
+      setSaving(false)
     }
   }
+  const row = 'flex flex-wrap items-center gap-x-3 gap-y-1 text-[14px] text-tlw-espresso'
+  const select = 'rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-canvas px-2 py-1 text-[13px] text-tlw-espresso outline-none focus:border-tlw-signal-orange disabled:opacity-50'
   return (
     <div className="rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface p-6">
       <h2 className="text-[16px] font-medium text-tlw-navy-deep">Email reminders</h2>
       <p className="mt-1 text-[13px] text-tlw-warm-gray">
-        An occasional email from the portal: a nudge if you have not been in for a while, and a note at the start of each quarter to look at your goals. Never more than one a day, usually far fewer.
+        Occasional emails from the portal, each with a one-click sign-in link. Never more than one a day. Choose which ones you want.
       </p>
-      <label className="mt-4 flex items-center gap-3 text-[14px] text-tlw-espresso">
-        <input type="checkbox" checked={on ?? true} disabled={on === null} onChange={(e) => toggle(e.target.checked)} className="h-4 w-4 accent-tlw-signal-orange" />
+      <label className="mt-4 flex items-center gap-3 text-[14px] font-medium text-tlw-espresso">
+        <input
+          type="checkbox"
+          checked={on ?? true}
+          disabled={on === null || saving}
+          onChange={(e) => {
+            setOn(e.target.checked)
+            save(e.target.checked)
+          }}
+          className="h-4 w-4 accent-tlw-signal-orange"
+        />
         Send me reminders
       </label>
-      <div className="mt-2"><Msg msg={msg} /></div>
+      <div className={`mt-4 space-y-3 border-l-2 border-tlw-warm-gray/15 pl-4 ${on === false ? 'opacity-50' : ''}`}>
+        <div className={row}>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={prefs.weekly} disabled={on !== true} onChange={(e) => set('weekly', e.target.checked)} className="h-4 w-4 accent-tlw-signal-orange" />
+            A nudge to plan my week
+          </label>
+          <span className="text-[13px] text-tlw-warm-gray">on</span>
+          <select className={select} value={prefs.weekly_day} disabled={on !== true || !prefs.weekly} onChange={(e) => set('weekly_day', Number(e.target.value))}>
+            {DAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}
+          </select>
+          <span className="text-[12px] text-tlw-warm-gray">— only if I have not saved a plan for that week yet</span>
+        </div>
+        <div className={row}>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={prefs.comeback} disabled={on !== true} onChange={(e) => set('comeback', e.target.checked)} className="h-4 w-4 accent-tlw-signal-orange" />
+            A check-in when I have been away
+          </label>
+          <span className="text-[13px] text-tlw-warm-gray">after</span>
+          <select className={select} value={prefs.comeback_days} disabled={on !== true || !prefs.comeback} onChange={(e) => set('comeback_days', Number(e.target.value) as 14 | 30 | 60)}>
+            <option value={14}>2 weeks</option>
+            <option value={30}>1 month</option>
+            <option value={60}>2 months</option>
+          </select>
+          <span className="text-[12px] text-tlw-warm-gray">— once, then one more a while later</span>
+        </div>
+        <div className={row}>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={prefs.quarterly} disabled={on !== true} onChange={(e) => set('quarterly', e.target.checked)} className="h-4 w-4 accent-tlw-signal-orange" />
+            A goal review at the start of each quarter
+          </label>
+          <span className="text-[12px] text-tlw-warm-gray">— the first week of January, April, July, and October</span>
+        </div>
+      </div>
+      <div className="mt-4 flex items-center gap-3">
+        <button type="button" onClick={() => save()} disabled={saving || !dirty || on !== true} className={button}>
+          {saving ? 'Saving…' : 'Save reminders'}
+        </button>
+        <Msg msg={msg} />
+      </div>
     </div>
   )
 }

@@ -516,9 +516,23 @@ export type PortalFeatures = {
   /** Per-client cap overrides (default 5 assessments / 10 documents). */
   max_assessments?: number
   max_documents?: number
-  // Portal reminder emails (welcome / come-back / quarterly goals). Absent or
-  // true = on; false = the client switched them off in Settings.
+  // Portal reminder emails. Absent or true = on; false = the client switched
+  // them all off in Settings. Which reminders, and how often, live in
+  // reminder_settings (absent = defaults; see lib/portal/reminders.ts).
   reminders?: boolean
+  reminder_settings?: PortalReminderSettings
+}
+
+// Per-client reminder preferences (portal Settings → Email reminders).
+export type PortalReminderSettings = {
+  /** A nudge to plan the week, on the chosen day (0 = Sunday … 6 = Saturday), if no plan is saved yet. */
+  weekly?: boolean
+  weekly_day?: number
+  /** A check-in after this many days away (first rung; the second is 2.5×). */
+  comeback?: boolean
+  comeback_days?: 14 | 30 | 60
+  /** The first-week-of-the-quarter goal review. */
+  quarterly?: boolean
 }
 
 export type Company = {
@@ -847,7 +861,7 @@ export type PortalNote = {
 }
 
 // Dedupe ledger for the daily portal-reminder cron (migration 063).
-export type PortalReminderKind = 'welcome' | 'comeback' | 'quarterly_goals'
+export type PortalReminderKind = 'welcome' | 'comeback' | 'quarterly_goals' | 'weekly_plan'
 export type PortalReminder = {
   id: string
   org_id: string

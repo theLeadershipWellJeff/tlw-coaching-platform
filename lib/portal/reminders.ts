@@ -8,13 +8,19 @@
  *                   so a missed cron day still sends once) → "time to look at
  *                   your goals for the quarter". Only for people who have been
  *                   in the portal at least once.
- *   comeback        gone quiet → 14 days and 35 days since last seen, then
- *                   quarterly only. The period key carries the last-seen date,
- *                   so the ladder restarts after they come back and go quiet
- *                   again.
+ *   comeback        gone quiet → after the days the client chose (14 default;
+ *                   30 or 60) and again at 2.5× that, then quarterly only. The
+ *                   period key carries the last-seen date, so the ladder
+ *                   restarts after they come back and go quiet again.
+ *   weekly_plan     on the client's chosen weekday (Monday default), when no
+ *                   plan is saved for the current week yet — off by default,
+ *                   switched on in Settings.
  *
- * Precedence when several apply on one day: welcome (they don't know the
- * portal yet) → quarterly → comeback. Every send is claimed in
+ * Which of these a client gets is theirs to set (portal Settings → Email
+ * reminders; `portal_features.reminders` = the master switch,
+ * `portal_features.reminder_settings` = the detail; see
+ * `normalizeReminderSettings`). Precedence when several apply on one day:
+ * welcome (they don't know the portal yet) → quarterly → comeback → weekly. Every send is claimed in
  * `portal_reminders` (unique per client/kind/period) BEFORE sending, so a
  * reminder can never go twice; a failed send keeps the claim with its error so
  * support can see it, and the next rung still fires on schedule.
@@ -34,7 +40,8 @@ import { resolveClientCoach } from './coach'
 import { deliverPortalEmail } from './send'
 import { buildReminderEmailHtml } from './email'
 import { logPortalEvent } from './events'
-import type { PortalFeatures, PortalReminderKind } from '@/lib/supabase/types'
+import { weekStartFor } from './weekly-plan'
+import type { PortalFeatures, PortalReminderKind, PortalReminderSettings } from '@/lib/supabase/types'
 
 export type ReminderCandidate = {
   id: string
@@ -47,14 +54,47 @@ export type ReminderCandidate = {
   accessExpiresAt: string | null
   invitedAt: string | null
   lastSeenAt: string | null
+  /** week_start values the client already has a saved plan for (for the weekly nudge). */
+  plannedWeeks?: string[]
 }
 
 export type ReminderDecision = { kind: PortalReminderKind; periodKey: string }
 
 const DAY = 86400_000
 export const WELCOME_DAYS = [3, 10] as const
-export const COMEBACK_DAYS = [14, 35] as const
+export const COMEBACK_DAY_OPTIONS = [14, 30, 60] as const
 export const QUARTER_WINDOW_DAYS = 7
+
+export type ReminderSettings = Required<PortalReminderSettings>
+export const DEFAULT_REMINDER_SETTINGS: ReminderSettings = { weekly: false, weekly_day: 1, comeback: true, comeback_days: 14, quarterly: true }
+
+/** Stored preferences → a total, valid shape (unknown values fall back to defaults). */
+export function normalizeReminderSettings(raw: unknown): ReminderSettings {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
+  const days = Number(r.comeback_days)
+  const day = Number(r.weekly_day)
+  return {
+    weekly: typeof r.weekly === 'boolean' ? r.weekly : DEFAULT_REMINDER_SETTINGS.weekly,
+    weekly_day: Number.isInteger(day) && day >= 0 && day <= 6 ? day : DEFAULT_REMINDER_SETTINGS.weekly_day,
+    comeback: typeof r.comeback === 'boolean' ? r.comeback : DEFAULT_REMINDER_SETTINGS.comeback,
+    comeback_days: (COMEBACK_DAY_OPTIONS as readonly number[]).includes(days) ? (days as ReminderSettings['comeback_days']) : DEFAULT_REMINDER_SETTINGS.comeback_days,
+    quarterly: typeof r.quarterly === 'boolean' ? r.quarterly : DEFAULT_REMINDER_SETTINGS.quarterly,
+  }
+}
+
+/** The two come-back rungs for a chosen first interval (14 → 14, 35; 30 → 30, 75; 60 → 60, 150). */
+export function comebackRungs(firstDays: number): [number, number] {
+  return [firstDays, Math.round(firstDays * 2.5)]
+}
+
+function localWeekday(now: Date, timeZone?: string | null): number {
+  try {
+    const w = new Intl.DateTimeFormat('en-US', { timeZone: timeZone || 'UTC', weekday: 'short' }).format(now)
+    return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(w)
+  } catch {
+    return now.getUTCDay()
+  }
+}
 
 /** YYYY-MM-DD of `now` in the client's zone (UTC when unknown/invalid). */
 export function localDate(now: Date, timeZone?: string | null): string {
@@ -95,6 +135,7 @@ export function decideReminder(c: ReminderCandidate, now: Date, sent: Set<string
   if (c.accessExpiresAt && Date.parse(c.accessExpiresAt) < now.getTime()) return null
   const has = (d: ReminderDecision) => sent.has(`${d.kind}:${d.periodKey}`)
   const today = localDate(now, c.timezone)
+  const prefs = normalizeReminderSettings(c.portalFeatures?.reminder_settings)
 
   // 1. Never been in: the welcome ladder, keyed on the invitation date.
   if (!c.lastSeenAt) {
@@ -111,20 +152,33 @@ export function decideReminder(c: ReminderCandidate, now: Date, sent: Set<string
   }
 
   // 2. Quarterly goals, inside the first week of the quarter.
-  const { firstMonday, key } = quarterAnchor(today)
-  const sinceMonday = daysBetween(firstMonday, today)
-  if (sinceMonday >= 0 && sinceMonday < QUARTER_WINDOW_DAYS) {
-    const decision = { kind: 'quarterly_goals' as const, periodKey: key }
-    if (!has(decision)) return decision
+  if (prefs.quarterly) {
+    const { firstMonday, key } = quarterAnchor(today)
+    const sinceMonday = daysBetween(firstMonday, today)
+    if (sinceMonday >= 0 && sinceMonday < QUARTER_WINDOW_DAYS) {
+      const decision = { kind: 'quarterly_goals' as const, periodKey: key }
+      if (!has(decision)) return decision
+    }
   }
 
   // 3. Gone quiet: the come-back ladder, keyed on the last-seen date.
-  const seenDay = localDate(new Date(c.lastSeenAt), c.timezone)
-  const quiet = daysBetween(seenDay, today)
-  for (const d of [...COMEBACK_DAYS].reverse()) {
-    if (quiet >= d) {
-      const decision = { kind: 'comeback' as const, periodKey: `comeback-${d}d-${seenDay}` }
-      return has(decision) ? null : decision
+  if (prefs.comeback) {
+    const seenDay = localDate(new Date(c.lastSeenAt), c.timezone)
+    const quiet = daysBetween(seenDay, today)
+    for (const d of [...comebackRungs(prefs.comeback_days)].reverse()) {
+      if (quiet >= d) {
+        const decision = { kind: 'comeback' as const, periodKey: `comeback-${d}d-${seenDay}` }
+        return has(decision) ? null : decision
+      }
+    }
+  }
+
+  // 4. Plan the week: on their chosen day, if this week has no saved plan.
+  if (prefs.weekly && localWeekday(now, c.timezone) === prefs.weekly_day) {
+    const weekStart = weekStartFor(now, c.timezone)
+    if (!(c.plannedWeeks || []).includes(weekStart)) {
+      const decision = { kind: 'weekly_plan' as const, periodKey: `plan-${weekStart}` }
+      if (!has(decision)) return decision
     }
   }
   return null
@@ -134,6 +188,7 @@ export const REMINDER_SUBJECTS: Record<PortalReminderKind, string> = {
   welcome: 'Your coaching portal is ready when you are',
   comeback: 'A quiet nudge from your coaching portal',
   quarterly_goals: 'A new quarter — a good moment for your goals',
+  weekly_plan: 'Your Top 5 for this week',
 }
 
 /** Everyone with a portal presence: participants, the 360 flag, or ever invited. */
@@ -150,7 +205,13 @@ async function loadCandidates(): Promise<ReminderCandidate[]> {
     .neq('client_type', 'coach')
     .limit(2000)
   const clients = rows || []
-  const states = await loadPortalStates(supabase, clients.map((c) => c.id))
+  const ids = clients.map((c) => c.id)
+  const states = await loadPortalStates(supabase, ids)
+  // Saved plans from the last two weeks, for the weekly nudge (any zone's "this week").
+  const since = new Date(Date.now() - 14 * DAY).toISOString().slice(0, 10)
+  const { data: plans } = ids.length ? await supabase.from('weekly_plans').select('client_id, week_start').in('client_id', ids).gte('week_start', since) : { data: [] }
+  const planned = new Map<string, string[]>()
+  for (const p of plans || []) planned.set(p.client_id, [...(planned.get(p.client_id) || []), p.week_start])
   return clients.map((c) => ({
     id: c.id,
     name: c.name,
@@ -162,6 +223,7 @@ async function loadCandidates(): Promise<ReminderCandidate[]> {
     accessExpiresAt: c.portal_access_expires_at,
     invitedAt: states[c.id]?.invitedAt ?? null,
     lastSeenAt: states[c.id]?.lastSeenAt ?? null,
+    plannedWeeks: planned.get(c.id) || [],
   }))
 }
 

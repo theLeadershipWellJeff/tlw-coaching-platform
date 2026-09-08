@@ -1518,10 +1518,17 @@ own section in the prompt) so the portal works as a general coaching tool.
   signed in: day 3, day 10 after the latest invitation), **quarterly_goals**
   (the first Monday of Jan/Apr/Jul/Oct, 7-day window, only for people who
   have been in), **comeback** (14 and 35 days since last seen, keyed on the
-  last-seen date so the ladder restarts after a return). Skips: no email,
-  archived/inactive, expired portal access, `portal_features.reminders ===
-  false` (the **"Email reminders"** switch on portal Settings, via
-  `PATCH /api/portal/profile {reminders}`). Each send is claimed in the ledger
+  last-seen date so the ladder restarts after a return), plus an opt-in
+  **weekly_plan** nudge (the client's chosen weekday, only when no plan is
+  saved for that week). **Clients set their own reminders** on portal
+  Settings → Email reminders: the master switch (`portal_features.reminders`,
+  false = all off) and `portal_features.reminder_settings` (`weekly` +
+  `weekly_day` 0–6, `comeback` + `comeback_days` 14|30|60 → rungs at n and
+  2.5n, `quarterly`; `lib/portal/reminders.ts#normalizeReminderSettings`
+  supplies defaults: weekly off, comeback 14, quarterly on), via `PATCH
+  /api/portal/profile {reminders, reminderSettings}`. Precedence welcome →
+  quarterly → comeback → weekly. Skips: no email, archived/inactive, expired
+  portal access, master switch off. Each send is claimed in the ledger
   (unique `(client_id, kind, period_key)`) BEFORE sending, carries a fresh
   sign-in link, goes over `lib/portal/send.ts#deliverPortalEmail` (the shared
   Resend-then-Gmail transport the sign-in link also uses now), logs to

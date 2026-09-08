@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getPortalClientId } from '@/lib/portal/server'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { allTimeZones } from '@/lib/scheduling'
+import { normalizeReminderSettings, COMEBACK_DAY_OPTIONS } from '@/lib/portal/reminders'
 import type { Database } from '@/lib/supabase/types'
 
 export const runtime = 'nodejs'
@@ -32,9 +33,17 @@ export async function GET() {
       (r) => ({ value: r.data?.preferred_name ?? null, available: true }),
       () => ({ value: null, available: false })
     )
-  const features = (data.portal_features || {}) as { reminders?: boolean }
+  const features = (data.portal_features || {}) as { reminders?: boolean; reminder_settings?: unknown }
   return NextResponse.json({
-    profile: { name: data.name, email: data.email, phone: data.phone, timezone: data.timezone, preferred_name: preferred.value, reminders: features.reminders !== false },
+    profile: {
+      name: data.name,
+      email: data.email,
+      phone: data.phone,
+      timezone: data.timezone,
+      preferred_name: preferred.value,
+      reminders: features.reminders !== false,
+      reminderSettings: normalizeReminderSettings(features.reminder_settings),
+    },
     preferredNameAvailable: preferred.available,
   })
 }
@@ -65,12 +74,25 @@ export async function PATCH(req: NextRequest) {
     patch.timezone = v || null
   }
   const supabase = getSupabaseAdmin()
-  if ('reminders' in body) {
-    if (typeof body.reminders !== 'boolean') return NextResponse.json({ error: 'reminders must be true or false.' }, { status: 400 })
+  if ('reminders' in body || 'reminderSettings' in body) {
     const { data: cur } = await supabase.from('clients').select('portal_features').eq('id', clientId).maybeSingle()
     const features = { ...((cur?.portal_features as Record<string, unknown>) || {}) }
-    if (body.reminders) delete features.reminders
-    else features.reminders = false
+    if ('reminders' in body) {
+      if (typeof body.reminders !== 'boolean') return NextResponse.json({ error: 'reminders must be true or false.' }, { status: 400 })
+      if (body.reminders) delete features.reminders
+      else features.reminders = false
+    }
+    if ('reminderSettings' in body) {
+      const r = body.reminderSettings
+      if (!r || typeof r !== 'object') return NextResponse.json({ error: 'reminderSettings must be an object.' }, { status: 400 })
+      if ('comeback_days' in r && !(COMEBACK_DAY_OPTIONS as readonly number[]).includes(Number(r.comeback_days))) {
+        return NextResponse.json({ error: 'comeback_days must be 14, 30, or 60.' }, { status: 400 })
+      }
+      if ('weekly_day' in r && !(Number.isInteger(Number(r.weekly_day)) && Number(r.weekly_day) >= 0 && Number(r.weekly_day) <= 6)) {
+        return NextResponse.json({ error: 'weekly_day must be 0–6.' }, { status: 400 })
+      }
+      features.reminder_settings = normalizeReminderSettings({ ...normalizeReminderSettings(features.reminder_settings), ...r })
+    }
     patch.portal_features = features as never
   }
   if (Object.keys(patch).length === 1) return NextResponse.json({ error: 'Nothing to save.' }, { status: 400 })

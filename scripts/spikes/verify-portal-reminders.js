@@ -67,6 +67,27 @@ assert.deepStrictEqual(R.decideReminder({ ...quiet, lastSeenAt: '2026-09-15T16:0
 assert.strictEqual(R.decideReminder(seen, at('2026-10-04T23:30:00Z'), none), null)
 assert.deepStrictEqual(R.decideReminder({ ...seen, timezone: 'Asia/Amman' }, at('2026-10-04T23:30:00Z'), none), { kind: 'quarterly_goals', periodKey: 'goals-2026Q4' })
 
+// ── per-client settings ──────────────────────────────────────────────────────
+assert.deepStrictEqual(R.normalizeReminderSettings(undefined), { weekly: false, weekly_day: 1, comeback: true, comeback_days: 14, quarterly: true })
+assert.deepStrictEqual(R.normalizeReminderSettings({ comeback_days: 45, weekly_day: 9, weekly: true }), { weekly: true, weekly_day: 1, comeback: true, comeback_days: 14, quarterly: true }, 'invalid values fall back')
+assert.deepStrictEqual(R.comebackRungs(30), [30, 75]); assert.deepStrictEqual(R.comebackRungs(60), [60, 150])
+// comeback off → nothing at 14 days; 30-day setting → nothing at 20, comeback-30d at 31
+assert.strictEqual(R.decideReminder({ ...quiet, portalFeatures: { reminder_settings: { comeback: false } } }, at('2026-08-20T16:00:00Z'), none), null)
+assert.strictEqual(R.decideReminder({ ...quiet, portalFeatures: { reminder_settings: { comeback_days: 30 } } }, at('2026-08-21T16:00:00Z'), none), null)
+assert.deepStrictEqual(R.decideReminder({ ...quiet, portalFeatures: { reminder_settings: { comeback_days: 30 } } }, at('2026-09-01T16:00:00Z'), none), { kind: 'comeback', periodKey: 'comeback-30d-2026-08-01' })
+// quarterly off → nothing on the first Monday
+assert.strictEqual(R.decideReminder({ ...seen, portalFeatures: { reminder_settings: { quarterly: false } } }, at('2026-10-05T16:00:00Z'), none), null)
+// weekly: Monday Sep 14 2026 in LA, no plan for the week → plan nudge; a saved plan for 2026-09-14 → nothing; Tuesday → nothing
+const weekly = { ...base, invitedAt: '2026-06-01T00:00:00Z', lastSeenAt: '2026-09-12T16:00:00Z', portalFeatures: { reminder_settings: { weekly: true, weekly_day: 1 } } }
+assert.deepStrictEqual(R.decideReminder(weekly, at('2026-09-14T16:00:00Z'), none), { kind: 'weekly_plan', periodKey: 'plan-2026-09-14' })
+assert.strictEqual(R.decideReminder({ ...weekly, plannedWeeks: ['2026-09-14'] }, at('2026-09-14T16:00:00Z'), none), null)
+assert.strictEqual(R.decideReminder(weekly, at('2026-09-15T16:00:00Z'), none), null)
+assert.strictEqual(R.decideReminder(weekly, at('2026-09-14T16:00:00Z'), new Set(['weekly_plan:plan-2026-09-14'])), null)
+// weekly off by default
+assert.strictEqual(R.decideReminder({ ...weekly, portalFeatures: {} }, at('2026-09-14T16:00:00Z'), none), null)
+// comeback beats weekly on the same day (away 14+ days, Monday)
+assert.deepStrictEqual(R.decideReminder({ ...weekly, lastSeenAt: '2026-08-20T16:00:00Z' }, at('2026-09-14T16:00:00Z'), none), { kind: 'comeback', periodKey: 'comeback-14d-2026-08-20' })
+
 // ── goal progress ────────────────────────────────────────────────────────────
 assert.strictEqual(G.clampProgress(103), 100); assert.strictEqual(G.clampProgress(-4), 0); assert.strictEqual(G.clampProgress('42.6'), 43); assert.strictEqual(G.clampProgress('x'), null)
 const g0 = { title: 'Delegate more', description: '', metrics: ['2 handed off'], author: 'coach' }
