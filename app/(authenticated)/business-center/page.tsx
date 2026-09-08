@@ -9,6 +9,7 @@ export default function BusinessCenterPage() {
         eyebrow="theLeadershipWell"
         title="Business Center"
         subtitle="Billing, accounts, and invoices"
+        guide="business-center"
         actions={
           <div className="flex items-center gap-2">
             <Link

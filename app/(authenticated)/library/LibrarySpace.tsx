@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { FolderTemplates } from './FolderTemplates'
 import { FolderPdfs } from './FolderPdfs'
+import { STANDARD_FOLDER_ID, STANDARD_FOLDER_LABEL, STANDARD_TEMPLATES } from '@/lib/standard-templates'
 
 type Section = 'templates' | 'pdf'
 type Folder = { id: string; name: string; kind: string; count: number }
@@ -395,7 +396,12 @@ function FolderList({
         <div className="h-24 animate-pulse rounded-tlw-xl border border-tlw-warm-gray/15 bg-tlw-surface/60" />
       ) : folders.length === 0 && unfiled === 0 ? (
         <div className="rounded-tlw-xl border border-dashed border-tlw-warm-gray/25 bg-tlw-surface/60 p-8 text-center">
-          <p className="text-[13px] text-tlw-warm-gray">No folders yet.</p>
+          <p className="text-[13px] text-tlw-warm-gray">No folders of your own yet.</p>
+          {section === 'templates' && (
+            <div className="mt-4 text-left">
+              <StandardsRow onOpen={onOpen} />
+            </div>
+          )}
           {section === 'templates' && (
             <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
               <span className="text-[12px] text-tlw-warm-gray">Quick add:</span>
@@ -414,6 +420,7 @@ function FolderList({
         </div>
       ) : (
         <div className="space-y-2">
+          {section === 'templates' && <StandardsRow onOpen={onOpen} />}
           {folders.map((f) => (
             <div key={f.id} className="flex items-center justify-between gap-4 rounded-tlw-xl border border-tlw-warm-gray/15 bg-tlw-surface p-4">
               {renaming === f.id ? (
@@ -499,7 +506,7 @@ function FolderList({
                 <button onClick={() => onOpen({ id: 'none', name: unfiledLabel, kind: 'note' })} className="flex min-w-0 items-center gap-3 text-left">
                   <FolderIcon />
                   <span className="text-[14px] font-medium text-tlw-navy-deep">{unfiledLabel}</span>
-                  <span className="text-[12px] text-tlw-warm-gray">{unfiled} template{unfiled === 1 ? '' : 's'} from before folders</span>
+                  <span className="text-[12px] text-tlw-warm-gray">{unfiled} template{unfiled === 1 ? '' : 's'} not in a folder</span>
                 </button>
               )}
               <div className="flex shrink-0 items-center gap-3 text-[12px] font-medium">
@@ -525,6 +532,31 @@ function FolderList({
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+/**
+ * The fixed, read-only folder of theLeadershipWell's standard templates —
+ * present for every coach, never deletable. Opens FolderTemplates in its
+ * read-only mode (folderId 'standard').
+ */
+function StandardsRow({ onOpen }: { onOpen: (f: OpenFolder) => void }) {
+  const count = STANDARD_TEMPLATES.length
+  return (
+    <div className="flex items-center justify-between gap-4 rounded-tlw-xl border border-tlw-navy-rich/20 bg-tlw-navy-rich/[0.04] p-4">
+      <button
+        onClick={() => onOpen({ id: STANDARD_FOLDER_ID, name: STANDARD_FOLDER_LABEL, kind: 'note' })}
+        className="flex min-w-0 items-center gap-3 text-left"
+      >
+        <span aria-hidden className="text-tlw-navy-rich">✦</span>
+        <span className="truncate text-[14px] font-medium text-tlw-navy-deep">{STANDARD_FOLDER_LABEL}</span>
+        <span className="shrink-0 rounded-full bg-tlw-surface px-2 py-0.5 text-[10px] uppercase tracking-[1px] text-tlw-warm-gray">
+          Shared
+        </span>
+        <span className="shrink-0 text-[12px] text-tlw-warm-gray">{count} template{count === 1 ? '' : 's'}</span>
+      </button>
+      <span className="shrink-0 text-[12px] text-tlw-warm-gray">Session notes, great questions — copy to make your own</span>
     </div>
   )
 }

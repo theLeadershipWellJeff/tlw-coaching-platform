@@ -257,6 +257,12 @@ export type Coach = {
   email: string
   name: string
   role: string // coach | supervisor
+  // Coach profile (migration 064). preferred_name = how the app greets the coach
+  // ("Dr. Jeff"); NULL = the first word of `name`. title/phone are optional
+  // reference fields edited on Account → Profile. All read defensively.
+  preferred_name?: string | null
+  title?: string | null
+  phone?: string | null
   google_refresh_token: string | null
   timezone: string
   supervisor_email: string | null

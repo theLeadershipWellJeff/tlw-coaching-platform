@@ -147,7 +147,7 @@ export function ClientDetail({ clientId }: { clientId: string }) {
           href={`/clients/${clientId}/notes?new=1`}
           className="rounded-tlw-lg bg-tlw-navy-rich px-4 py-2 text-[13px] font-medium text-tlw-cream transition-opacity hover:opacity-90"
         >
-          + New note
+          + New session notes
         </Link>
         <button
           onClick={() => setEmailing(true)}

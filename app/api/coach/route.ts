@@ -27,6 +27,11 @@ export async function GET() {
       name: coach.name,
       email: coach.email,
       role: coach.role,
+      // Coach profile (migration 064) — how the app refers to the coach. Read
+      // defensively: absent columns read as null (= first name of `name`).
+      preferred_name: coach.preferred_name ?? null,
+      title: coach.title ?? null,
+      phone: coach.phone ?? null,
       timezone: coach.timezone,
       supervisor_email: coach.supervisor_email,
       library_labels: coach.library_labels || {},
@@ -68,6 +73,7 @@ export async function PATCH(req: NextRequest) {
 
   const body = await req.json().catch(() => ({}))
   const update: {
+    name?: string
     supervisor_email?: string | null
     timezone?: string
     library_labels?: Record<string, string>
@@ -76,6 +82,32 @@ export async function PATCH(req: NextRequest) {
     nudge_settings?: ReturnType<typeof normalizeNudgeSettings>
     booking_url?: string | null
   } = {}
+
+  // Coach profile — the full name the app uses in emails, prompts, and sign-offs.
+  // Google supplied it at first sign-in; from here the coach owns it.
+  if ('name' in body) {
+    const raw = String(body.name ?? '').trim().replace(/\s+/g, ' ')
+    if (!raw) return NextResponse.json({ error: 'Enter your name.' }, { status: 400 })
+    if (raw.length > 120) return NextResponse.json({ error: 'That name is too long.' }, { status: 400 })
+    update.name = raw
+  }
+  // preferred_name / title / phone (migration 064) — "" clears each.
+  const profile: { preferred_name?: string | null; title?: string | null; phone?: string | null } = {}
+  if ('preferredName' in body) {
+    const raw = String(body.preferredName ?? '').trim().replace(/\s+/g, ' ')
+    if (raw.length > 60) return NextResponse.json({ error: 'Keep the greeting name under 60 characters.' }, { status: 400 })
+    profile.preferred_name = raw || null
+  }
+  if ('title' in body) {
+    const raw = String(body.title ?? '').trim().replace(/\s+/g, ' ')
+    if (raw.length > 120) return NextResponse.json({ error: 'Keep the title under 120 characters.' }, { status: 400 })
+    profile.title = raw || null
+  }
+  if ('phone' in body) {
+    const raw = String(body.phone ?? '').trim()
+    if (raw.length > 40) return NextResponse.json({ error: 'That phone number is too long.' }, { status: 400 })
+    profile.phone = raw || null
+  }
 
   // Client-facing scheduler link shown in the Client Portal (migration 051).
   // "" clears it. Only http(s) is accepted — this URL is rendered as a link on a
@@ -188,8 +220,22 @@ export async function PATCH(req: NextRequest) {
     update.nudge_settings = normalizeNudgeSettings(next)
   }
 
-  if (Object.keys(update).length === 0) {
+  if (Object.keys(update).length === 0 && Object.keys(profile).length === 0) {
     return NextResponse.json({ error: 'Nothing to update.' }, { status: 400 })
+  }
+
+  // Apply the profile columns (migration 064) on their own, same reasoning as
+  // booking_url below: an unapplied migration must only cost these fields,
+  // never the name or the rest of the save.
+  if (Object.keys(profile).length > 0) {
+    const { error: profileError } = await supabase.from('coaches').update(profile).eq('id', coach.id)
+    if (profileError) {
+      console.error('coach profile update failed (migration 064 applied?):', profileError.message)
+      return NextResponse.json(
+        { error: `Could not save the profile fields — apply migration 064 (${profileError.message}).` },
+        { status: 500 }
+      )
+    }
   }
 
   // Apply booking_url separately (migration 051). Postgres rejects the WHOLE
@@ -216,5 +262,5 @@ export async function PATCH(req: NextRequest) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json(update)
+  return NextResponse.json({ ...update, ...profile })
 }
