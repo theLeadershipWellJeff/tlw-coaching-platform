@@ -8,6 +8,9 @@ export type PortalGoal = {
   metrics?: string[]
   author?: 'coach' | 'client' | 'ai'
   editable: boolean
+  /** Self-reported progress, 0–100 (absent = not started). */
+  progress?: number
+  completed_at?: string | null
 }
 
 type Props = {

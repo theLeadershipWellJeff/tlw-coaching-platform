@@ -28,6 +28,7 @@ export type PortalAction =
   | 'document_visibility'
   | 'goal_write'
   | 'weekly_plan_write'
+  | 'note_write'
 
 /** Per-client ceilings, per rolling window. */
 const LIMITS: Partial<Record<PortalAction, { max: number; windowMinutes: number }>> = {
@@ -37,6 +38,7 @@ const LIMITS: Partial<Record<PortalAction, { max: number; windowMinutes: number 
   document_upload: { max: 10, windowMinutes: 60 },
   goal_write: { max: 30, windowMinutes: 60 },
   weekly_plan_write: { max: 60, windowMinutes: 60 },
+  note_write: { max: 120, windowMinutes: 60 },
   login_password: { max: 10, windowMinutes: 15 },
 }
 

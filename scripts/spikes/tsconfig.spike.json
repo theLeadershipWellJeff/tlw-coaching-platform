@@ -25,6 +25,8 @@
     "../../lib/portal/prompt.ts",
     "../../lib/writing-standards.ts",
     "../../lib/portal/weekly-plan.ts",
-    "../../lib/portal/chat.ts"
+    "../../lib/portal/chat.ts",
+    "../../lib/portal/reminders.ts",
+    "../../lib/portal/notes.ts"
   ]
 }

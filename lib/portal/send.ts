@@ -53,7 +53,6 @@ export async function sendPortalLoginEmail(opts: {
   /** communications.coach_id attribution (defaults to the resolved coach). */
   attributeToCoachId?: string | null
 }): Promise<PortalSendResult> {
-  const supabase = getSupabaseAdmin()
   const coach = opts.coach === undefined ? await resolveClientCoach(opts.client.id) : opts.coach
   const firstName = (opts.client.name || '').split(' ')[0] || 'there'
   const subject = opts.kind === 'invite' ? 'Your coaching portal invitation' : 'Your sign-in link'
@@ -62,6 +61,37 @@ export async function sendPortalLoginEmail(opts: {
     link: opts.link,
     coachName: coach?.name || null,
   })
+  return deliverPortalEmail({
+    client: opts.client,
+    coach,
+    sender: opts.sender,
+    subject,
+    html,
+    type: 'email',
+    preview: opts.kind === 'invite' ? 'Client Portal invitation' : 'Client Portal sign-in link',
+    attributeToCoachId: opts.attributeToCoachId,
+  })
+}
+
+/**
+ * Any client-facing portal email over the same transport (Resend, else the
+ * coach's Gmail) with the same communications logging. Used for sign-in
+ * links and for the portal reminders. `coach` = the client's coach when
+ * already resolved (null = none).
+ */
+export async function deliverPortalEmail(opts: {
+  client: { id: string; name: string | null; email: string }
+  coach: Coach | null
+  sender?: Coach | null
+  subject: string
+  html: string
+  /** communications.type — 'email' for sign-in links, 'reminder' for portal reminders. */
+  type: 'email' | 'reminder'
+  preview: string
+  attributeToCoachId?: string | null
+}): Promise<PortalSendResult> {
+  const supabase = getSupabaseAdmin()
+  const { coach, subject, html } = opts
 
   // Gmail fallback sender: the explicit on-behalf sender when they have Gmail
   // access, else the client's coach (the house coach for portal participants).
@@ -108,10 +138,10 @@ export async function sendPortalLoginEmail(opts: {
   await logCommunication(supabase, {
     coach_id: opts.attributeToCoachId ?? coach?.id ?? null,
     client_id: opts.client.id,
-    type: 'email',
+    type: opts.type,
     direction: 'outbound',
     subject,
-    preview: opts.kind === 'invite' ? 'Client Portal invitation' : 'Client Portal sign-in link',
+    preview: opts.preview,
     body_html: null,
     status: result.ok ? 'sent' : 'failed',
     error_detail: result.ok ? result.warning ?? null : result.error ?? 'send failed',

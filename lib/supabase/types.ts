@@ -46,6 +46,13 @@ export type CoachingGoal = {
   // client in their portal — the coach-side save path never clobbers these.
   // Absent = coach (legacy) or, for source 'generated', the AI.
   author?: 'coach' | 'client' | 'ai'
+  // Self-reported progress, 0–100, set by the client in their portal (any goal,
+  // including coach-written ones — progress is the client's report). Absent =
+  // not started. completed_at is stamped the first time progress reaches 100
+  // (and cleared if it drops back below), which is what fires the confetti.
+  progress?: number
+  progress_updated_at?: string
+  completed_at?: string | null
 }
 
 // The tenant root (migration 042). One row per coaching firm; TLW is org #1.
@@ -509,6 +516,9 @@ export type PortalFeatures = {
   /** Per-client cap overrides (default 5 assessments / 10 documents). */
   max_assessments?: number
   max_documents?: number
+  // Portal reminder emails (welcome / come-back / quarterly goals). Absent or
+  // true = on; false = the client switched them off in Settings.
+  reminders?: boolean
 }
 
 export type Company = {
@@ -787,7 +797,7 @@ export type SessionReport = {
  * any nullable column is optional too (Postgres fills NULL). Everything else
  * is required.
  */
-type Defaulted = 'id' | 'created_at' | 'updated_at' | 'sent_at' | 'agreement_on_file' | 'client_type' | 'org_id' | 'portal_onboarded' | 'failed_attempts' | 'first_seen_at' | 'last_seen_at' | 'portal_features' | 'seats_purchased' | 'status' | 'version' | 'is_active' | 'extraction_status' | 'visible_to_coach' | 'include_in_chat' | 'mode' | 'tasks'
+type Defaulted = 'id' | 'created_at' | 'updated_at' | 'sent_at' | 'agreement_on_file' | 'client_type' | 'org_id' | 'portal_onboarded' | 'failed_attempts' | 'first_seen_at' | 'last_seen_at' | 'portal_features' | 'seats_purchased' | 'status' | 'version' | 'is_active' | 'extraction_status' | 'visible_to_coach' | 'include_in_chat' | 'mode' | 'tasks' | 'body'
 type NullableKeys<T> = { [K in keyof T]-?: null extends T[K] ? K : never }[keyof T]
 type OptionalOnInsert<T> = Defaulted | Extract<keyof T, NullableKeys<T>>
 
@@ -823,6 +833,31 @@ export type PortalConversation = {
   updated_at: Timestamp
 }
 export type PortalChatMode = 'general' | 'weekly_plan'
+
+// The client's own journal inside the portal (migration 063). PRIVATE to the
+// client — never read coach-side; the newest notes join the assistant's context.
+export type PortalNote = {
+  id: string
+  org_id: string
+  client_id: string
+  title: string | null
+  body: string
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
+// Dedupe ledger for the daily portal-reminder cron (migration 063).
+export type PortalReminderKind = 'welcome' | 'comeback' | 'quarterly_goals'
+export type PortalReminder = {
+  id: string
+  org_id: string
+  client_id: string
+  kind: PortalReminderKind
+  period_key: string
+  sent_at: Timestamp
+  via: string | null
+  error: string | null
+}
 
 // A saved Top 5 for one week (migration 061). One row per client per week
 // (week_start = the Monday); tasks are checked off on the portal home card.
@@ -914,6 +949,18 @@ export type Database = {
         Row: WeeklyPlan
         Insert: Insertable<WeeklyPlan>
         Update: Updatable<WeeklyPlan>
+        Relationships: []
+      }
+      portal_notes: {
+        Row: PortalNote
+        Insert: Insertable<PortalNote>
+        Update: Updatable<PortalNote>
+        Relationships: []
+      }
+      portal_reminders: {
+        Row: PortalReminder
+        Insert: Insertable<PortalReminder>
+        Update: Updatable<PortalReminder>
         Relationships: []
       }
       coaching_hours_entries: {

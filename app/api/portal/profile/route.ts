@@ -13,7 +13,7 @@ export const runtime = 'nodejs'
  * sign-in identity, so changing it is a coach / support action. Never
  * key_info or any coach-private column. Scoped to the session client.
  */
-const SELECT = 'id, name, email, phone, timezone'
+const SELECT = 'id, name, email, phone, timezone, portal_features'
 
 export async function GET() {
   const clientId = await getPortalClientId()
@@ -32,8 +32,9 @@ export async function GET() {
       (r) => ({ value: r.data?.preferred_name ?? null, available: true }),
       () => ({ value: null, available: false })
     )
+  const features = (data.portal_features || {}) as { reminders?: boolean }
   return NextResponse.json({
-    profile: { name: data.name, email: data.email, phone: data.phone, timezone: data.timezone, preferred_name: preferred.value },
+    profile: { name: data.name, email: data.email, phone: data.phone, timezone: data.timezone, preferred_name: preferred.value, reminders: features.reminders !== false },
     preferredNameAvailable: preferred.available,
   })
 }
@@ -63,9 +64,17 @@ export async function PATCH(req: NextRequest) {
     if (v && !allTimeZones().includes(v)) return NextResponse.json({ error: 'Unknown timezone.' }, { status: 400 })
     patch.timezone = v || null
   }
+  const supabase = getSupabaseAdmin()
+  if ('reminders' in body) {
+    if (typeof body.reminders !== 'boolean') return NextResponse.json({ error: 'reminders must be true or false.' }, { status: 400 })
+    const { data: cur } = await supabase.from('clients').select('portal_features').eq('id', clientId).maybeSingle()
+    const features = { ...((cur?.portal_features as Record<string, unknown>) || {}) }
+    if (body.reminders) delete features.reminders
+    else features.reminders = false
+    patch.portal_features = features as never
+  }
   if (Object.keys(patch).length === 1) return NextResponse.json({ error: 'Nothing to save.' }, { status: 400 })
 
-  const supabase = getSupabaseAdmin()
   const { error } = await supabase.from('clients').update(patch).eq('id', clientId)
   if (error) {
     // Pre-061: preferred_name is not a column yet. Save the rest and say so.

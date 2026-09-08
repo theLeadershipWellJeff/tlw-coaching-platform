@@ -13,6 +13,7 @@ import { ContactSupportCard } from './ContactSupportCard'
 import { PortalGoalsCard } from './PortalGoalsCard'
 import { DocumentsCard } from './DocumentsCard'
 import { WeeklyPlanCard } from './WeeklyPlanCard'
+import { MyNotesCard } from './MyNotesCard'
 
 export const dynamic = 'force-dynamic'
 
@@ -79,9 +80,6 @@ export default async function PortalHome() {
   const showTranscripts = hasCoach || data.transcripts.length > 0
   const showNotes = hasCoach || data.sessionNotes.length > 0
   const showMessages = hasCoach || data.messages.length > 0
-  // Client-side goal editing comes with the debrief; a coaching client with the
-  // flag off keeps the read-only card, byte-identical to before.
-  const editableGoals = assessmentsEnabled || !hasCoach
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10">
@@ -196,37 +194,12 @@ export default async function PortalHome() {
         </Card>
         )}
 
-        {/* Coaching goals */}
-        {editableGoals ? (
-          <PortalGoalsCard
-            hasCoach={hasCoach}
-            initialGoals={data.goals.map((g, index) => ({ ...g, index, editable: g.author === 'client' }))}
-          />
-        ) : (
-        <Card title="Your coaching goals" info="The goals you and your coach are working on. Revisit them anytime to stay focused.">
-          {data.goals.length === 0 ? (
-            <Empty>Your goals will appear here once set with your coach.</Empty>
-          ) : (
-            <ul className="space-y-3">
-              {data.goals.map((g, i) => (
-                <li key={i}>
-                  <p className="text-[14px] font-medium text-tlw-navy-deep">{g.title}</p>
-                  {g.description && (
-                    <p className="mt-0.5 text-[13px] text-tlw-espresso">{g.description}</p>
-                  )}
-                  {g.metrics && g.metrics.filter(Boolean).length > 0 && (
-                    <ul className="mt-1 space-y-0.5">
-                      {g.metrics.filter(Boolean).map((m, j) => (
-                        <li key={j} className="text-[12px] text-tlw-warm-gray">— {m}</li>
-                      ))}
-                    </ul>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-        )}
+        {/* Goals — every client gets the progress card (round 4); coach-written
+            wording stays read-only, progress is the client's to report */}
+        <PortalGoalsCard
+          hasCoach={hasCoach}
+          initialGoals={data.goals.map((g, index) => ({ ...g, index, editable: g.author === 'client' }))}
+        />
 
         {/* Session records — each opens the full transcript */}
         {showTranscripts && (
@@ -314,6 +287,11 @@ export default async function PortalHome() {
         {/* Documents the client has added — every portal, coach or not */}
         <div className="lg:col-span-2">
           <DocumentsCard hasCoach={hasCoach} />
+        </div>
+
+        {/* My notes — the client's private journal; feeds the assistant */}
+        <div className="lg:col-span-2">
+          <MyNotesCard />
         </div>
 
         {/* Frameworks surfaced to this client (self-hides when none) */}

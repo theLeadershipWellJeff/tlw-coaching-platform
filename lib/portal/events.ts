@@ -28,6 +28,10 @@ export type PortalEventType =
   | 'support_ticket_opened'
   | 'weekly_plan_saved'
   | 'weekly_plan_task_done'
+  | 'note_saved'
+  | 'goal_progress'
+  | 'goal_completed'
+  | 'reminder_sent'
 
 export async function logPortalEvent(
   clientId: string,
