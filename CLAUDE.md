@@ -2319,8 +2319,7 @@ returns a clear 500 naming the migration) — nothing else in round 4 needs it.
 Verified up + inserts + dedupe + down + re-up against Postgres 16. Reversible
 via `063_portal_notes_reminders_down.sql`.
 
-**`064_coach_profile.sql` — PENDING (deliver to Jeff; apply before using the
-Account → Profile greeting/title/phone fields).** Adds `coaches.preferred_name`,
+**`064_coach_profile.sql` — APPLIED (production, confirmed 2026-09-08).** Adds `coaches.preferred_name`,
 `coaches.title`, `coaches.phone` (all nullable text). Additive; the app reads
 them defensively (absent = first-name greeting) and the name field of the
 Profile card saves independently, so only the three new fields wait on it.
