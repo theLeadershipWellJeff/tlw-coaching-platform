@@ -53,7 +53,7 @@ function escapeHtml(s: string): string {
  */
 export function buildReminderEmailHtml(opts: {
   firstName: string
-  kind: 'welcome' | 'comeback' | 'quarterly_goals'
+  kind: 'welcome' | 'comeback' | 'quarterly_goals' | 'weekly_plan'
   link: string
   settingsLink: string
   coachName: string | null
@@ -70,6 +70,11 @@ export function buildReminderEmailHtml(opts: {
       lead: 'It has been a little while since you were in your portal.',
       body: 'No pressure — it is there when you want it. A useful way back in: open the chat and ask what has moved since you last looked, or set the Top 5 for the week ahead. This link signs you straight in.',
       button: 'Pick up where you left off',
+    },
+    weekly_plan: {
+      lead: 'A new week. Five things would make it a good one — which five?',
+      body: 'Plan your week is a short conversation in your portal that ends in your Top 5, saved to your home page as a checklist. It draws on your goals, what got done last week, and anything you have noted since. Ten minutes, usually less.',
+      button: 'Plan your week',
     },
     quarterly_goals: {
       lead: 'A new quarter has started, which makes this a good moment to look at your goals.',
