@@ -683,6 +683,18 @@ existing coaches are unchanged. Read/written via `GET`/`PATCH /api/coach`
 shape. `lib/scheduling.ts` also centralizes the shared timezone option list
 (`orderedTimeZones`) reused by the timezone, client-edit, and scheduling UIs.
 
+**"View reminder" preview (Account → Scheduling).** Each reminder row (the
+booking confirmation + every "Remind N before" rule) has a **View reminder**
+button that opens a modal showing the email exactly as the client receives
+it: `GET /api/coach/reminder-preview?kind=confirmation|nudge&hoursBefore=&
+meetingLink=` runs the SAME builder the real send uses
+(`buildAppointmentEmailHTML`, coach's profile name, coach timezone) for a
+sample client ("Sam Client") and a sample session, with the Zoom link **as
+currently typed in the form** (unsaved edits preview correctly; empty →
+saved/env/firm default via `getMeetingLink`). Returns `{subject, html,
+sample}`; the modal (`SchedulingSettings#ReminderPreviewModal`) renders the
+html in a fully sandboxed iframe. Nothing is sent or stored.
+
 **Reminders = confirmation + configurable nudges.** The confirmation fires at
 booking (if enabled); each enabled `reminder_settings.reminders` rule is a
 pre-session nudge at its own lead time. `lib/appointments.ts#sendAppointmentReminder`

@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   WEEKDAY_LABELS,
   REMINDER_LEAD_OPTIONS,
@@ -28,7 +29,10 @@ function leadLabel(hours: number): string {
  * nudges). Saved to the coach profile via PATCH /api/coach. Timezone lives in its
  * own card just above this (it drives how these hours are read).
  */
+type PreviewTarget = { kind: 'confirmation' | 'nudge'; hoursBefore?: number }
+
 export function SchedulingSettings() {
+  const [preview, setPreview] = useState<PreviewTarget | null>(null)
   const [availability, setAvailability] = useState<CoachAvailability>(defaultAvailability())
   const [reminders, setReminders] = useState<ReminderSettings>(defaultReminderSettings())
   // Client-facing scheduler link (migration 051) — its own column, not part of
@@ -186,6 +190,7 @@ export function SchedulingSettings() {
           className="h-4 w-4 accent-blue-600"
         />
         Email a confirmation when a session is booked
+        <ViewButton onClick={() => setPreview({ kind: 'confirmation' })} />
       </label>
 
       <div className="mt-3 space-y-2">
@@ -217,6 +222,7 @@ export function SchedulingSettings() {
                 </option>
               ))}
             </select>
+            <ViewButton onClick={() => setPreview({ kind: 'nudge', hoursBefore: rule.hoursBefore })} />
             <button
               onClick={() => removeReminder(idx)}
               className="text-[12px] text-tlw-warm-gray hover:text-red-600"
@@ -248,6 +254,119 @@ export function SchedulingSettings() {
           </p>
         )}
       </div>
+
+      {preview && (
+        <ReminderPreviewModal
+          target={preview}
+          meetingLink={reminders.meetingLink ?? ''}
+          onClose={() => setPreview(null)}
+        />
+      )}
     </div>
+  )
+}
+
+/** The small "view" affordance next to each reminder rule. */
+function ViewButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title="See exactly what the client will receive"
+      className="rounded-tlw-md border border-tlw-warm-gray/30 px-2 py-0.5 text-[11px] font-medium text-tlw-espresso transition-colors hover:border-tlw-warm-gray/50 hover:bg-tlw-canvas"
+    >
+      View reminder
+    </button>
+  )
+}
+
+/**
+ * Shows the reminder email exactly as the client receives it — fetched from
+ * /api/coach/reminder-preview, which runs the same builder as the real send
+ * (sample client + sample time; the Zoom link as currently typed above).
+ * Rendered in a sandboxed iframe so the email's styling stays inside it.
+ */
+function ReminderPreviewModal({
+  target,
+  meetingLink,
+  onClose,
+}: {
+  target: PreviewTarget
+  meetingLink: string
+  onClose: () => void
+}) {
+  const [data, setData] = useState<{ subject: string; html: string; sample: { clientName: string; whenLabel: string } } | null>(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    const q = new URLSearchParams({ kind: target.kind })
+    if (target.hoursBefore) q.set('hoursBefore', String(target.hoursBefore))
+    if (meetingLink.trim()) q.set('meetingLink', meetingLink.trim())
+    fetch(`/api/coach/reminder-preview?${q.toString()}`)
+      .then(async (r) => {
+        const d = await r.json().catch(() => ({}))
+        if (!r.ok) throw new Error(d.error || 'Could not build the preview.')
+        return d
+      })
+      .then((d) => !cancelled && setData(d))
+      .catch((e) => !cancelled && setError(e.message))
+    return () => {
+      cancelled = true
+    }
+  }, [target, meetingLink])
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const label =
+    target.kind === 'confirmation' ? 'Booking confirmation' : `Reminder · ${leadLabel(target.hoursBefore ?? 24)}`
+
+  if (typeof document === 'undefined') return null
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-tlw-navy-deep/50 p-4"
+      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-tlw-xl bg-tlw-surface shadow-2xl">
+        <div className="flex items-start justify-between gap-4 border-b border-tlw-warm-gray/15 px-5 py-4">
+          <div className="min-w-0">
+            <p className="text-[11px] font-medium uppercase tracking-[2px] text-tlw-warm-gray">{label}</p>
+            <p className="mt-1 truncate text-[14px] font-medium text-tlw-navy-deep">
+              {data ? `Subject: ${data.subject}` : error ? 'Preview unavailable' : 'Building preview…'}
+            </p>
+            <p className="mt-0.5 text-[12px] text-tlw-warm-gray">
+              This is what the client receives, shown for a sample client and session. The date, name, and Zoom
+              link fill in from the real booking.
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="shrink-0 rounded-tlw-sm px-2 text-[20px] leading-none text-tlw-warm-gray hover:bg-tlw-warm-gray/10 hover:text-tlw-espresso"
+          >
+            ×
+          </button>
+        </div>
+        <div className="min-h-[320px] flex-1 overflow-hidden bg-[#DDD9D3]">
+          {error ? (
+            <p className="p-5 text-[13px] text-tlw-signal-orange">{error}</p>
+          ) : data ? (
+            <iframe
+              title="Reminder email preview"
+              sandbox=""
+              srcDoc={data.html}
+              className="h-[70vh] w-full border-0"
+            />
+          ) : (
+            <div className="h-[70vh] animate-pulse" />
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body
   )
 }
