@@ -92,6 +92,9 @@ export const COMPETENCY_BANDS: Record<number, Partial<Record<Band, string>>> = {
   // 2 — Embodies a coaching mindset. v0.5 B2: signaling a role shift earns
   // mindset credit off the floor (2.04 bias-awareness, ethics 3.7 disclosure).
   // Signaling is necessary but not sufficient — mindset content governs the ceiling.
+  // v0.5.4: a signaled consultant envelope inside the closing window (final 20%)
+  // is a sanctioned "coach's offer" — counted and scored, but not read against
+  // C2. Unsignaled closing-window advice earns no exemption.
   2: {
     Emerging:
       "Coach-centered; curiosity absent; client's choices not respected.",
@@ -100,7 +103,7 @@ export const COMPETENCY_BANDS: Record<number, Partial<Record<Band, string>>> = {
     Proficient:
       'Generally client-centered. Signals role shifts when they occur (earns the floor). Curiosity present but process-curiosity (2.09) underdeveloped; bias toward action/frameworks (2.04) live. May supply centerpiece insight rather than evoking it.',
     Strong:
-      "Role shifts signaled, permissioned, brief, returned. Coach shows awareness of bias toward frameworks/content and actively nurtures the client's own curiosity rather than filling space. Consulting is the exception, not the back half.",
+      "Role shifts signaled, permissioned, brief, returned. Coach shows awareness of bias toward frameworks/content and actively nurtures the client's own curiosity rather than filling space. Consulting is the exception, not the back half — a SIGNALED coach's offer inside the closing window (final 20% of the session) is exempt from this read (v0.5.4).",
     Masterful:
       "Deep mastery of 2.01, 2.04, 2.05, 2.09. Holds not-knowing with the client. Curiosity is contagious. Offers feel like the client's own discovery; consultant moves rare, surgical, indistinguishable from evocation.",
   },
@@ -226,7 +229,15 @@ export const CROSS_COMPETENCY_PRINCIPLES: { name: string; text: string }[] = [
   },
   {
     name: 'The Consultant Pull Signature',
-    text: 'v0.5.2: a consultant move is a contiguous ENVELOPE (opened by a role-shift out of coaching mode, closed by re-contract, a floor-returning question, or a pause the client fills) — counted ONCE per envelope, not per advice-act. v0.5 A4: envelope count > 3 is a coach-facing advisory flag ("pattern to watch"), not a score-down on C2. The mode read lands on C7 and the overall via Q:S (redefined as questions:consultative-telling). When the coach perceives ~60% questions but the engine reads Q:S < 1:1, that gap is the signature of consultant pull under engagement. Execution quality (each envelope terse and floor-returned) is scored per envelope even when the count stays within coaching mode.',
+    text: 'v0.5.2: a consultant move is a contiguous ENVELOPE (opened by a role-shift out of coaching mode, closed by re-contract, a floor-returning question, or a pause the client fills) — counted ONCE per envelope, not per advice-act. v0.5 A4: envelope count > 3 is a coach-facing advisory flag ("pattern to watch"), not a score-down on C2. The mode read lands on C7 and the overall via Q:S (redefined as questions:consultative-telling). When the coach perceives ~60% questions but the engine reads Q:S < 1:1, that gap is the signature of consultant pull under engagement. Execution quality (each envelope terse and floor-returned) is scored per envelope even when the count stays within coaching mode. v0.5.4: a signaled coach\'s offer in the closing window stays in the count and is scored, but is exempt from the C2 read (see The Coach\'s Offer).',
+  },
+  {
+    name: "The Coach's Offer",
+    text: "v0.5.4: a SIGNALED shift into advice (\"may I give some advice?\", \"can I change hats?\") inside the closing window — the final 20% of the session by elapsed time — is a sanctioned container. The envelope is still counted and scored on its four criteria, but from the signal to the session end consulting is NOT read against Competency 2 (coaching mindset). Unsignaled closing-window advice earns no exemption; an envelope signaled BEFORE the window opens is an ordinary consultant move even if it runs to the end. The signal is the price of the container. Q:S and talk-time are unchanged — the mode read still lands on C7 and the overall.",
+  },
+  {
+    name: 'The Accuracy Sounding',
+    text: 'v0.5.4: a restatement, summary, or fact-check of the CLIENT\'S material followed by a check on accuracy or direction ("is that right?", "did I get that right?", "like that?", "is this where you want to go?") is a QUESTION — counted in the Q:S numerator (sub-count accuracy_soundings), credited to C6 (6.02/6.03) and, on emotion, to the flagged-emotion count. NEVER consultative telling, NEVER a consultant-move opener, and NOT a "leading question" (a category the rubric does not recognize). Guardrail: when the content checked is the coach\'s OWN conclusion or advice offered for ratification, the who-synthesises test governs — that is co-thinking or consulting, not a sounding. The check tag must not launder advice.',
   },
   {
     name: 'The Co-thinking / Consulting Boundary',

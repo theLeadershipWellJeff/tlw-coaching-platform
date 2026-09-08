@@ -162,6 +162,14 @@ const REVIEW_FLAG_GUIDE: Record<string, { title: string; fix: string }> = {
     title: 'Contracting vs. session housekeeping unclear',
     fix: 'The engine couldn’t cleanly split engagement-level contracting (what coaching is, confidentiality, roles, fees) from ordinary within-session logistics somewhere in this transcript. Skim the opening — if the contracting read below looks right, mark it reviewed; if not, rescore.',
   },
+  closing_window_unverified: {
+    title: 'Closing-window offer could not be verified against timestamps',
+    fix: 'A consultant move was treated as a signaled coach’s offer inside the closing window (final 20% of the session, v0.5.4) and left out of the coaching-mindset read — but the transcript carries no usable timestamps, so the engine took the model’s word on the timing. Check that the signal (“may I give some advice?” / “can I change hats?”) really fell in the last fifth of the session. If it did, mark it reviewed; if not, rescore or note it.',
+  },
+  closing_window_timing_mismatch: {
+    title: 'Closing-window exemption revoked — timing didn’t check out',
+    fix: 'The engine claimed a coach’s-offer exemption for a consultant move, but the transcript timestamps put the signal (or the envelope) before the closing window opened — or no qualifying signal was found at all. The exemption was removed from that row (the signal is the price of the container), but the coaching-mindset score was produced with the exemption in mind. Read Competency 2’s evidence against the moves below; if the score still holds, mark it reviewed; otherwise rescore.',
+  },
 }
 
 /** Interactive manual-review panel — each Layer-0 flag can be reviewed and
@@ -356,6 +364,8 @@ function ConversationMetrics({ m }: { m: Metrics }) {
 
   const cm = m.consultant_moves
   const ce = m.contracting_envelope
+  // v0.5.4: the closing window (coach's offer) — null on pre-v0.5.4 reports.
+  const cw = m.closing_window ?? null
   // v0.5.3 dual talk-time: the card shows the coaching-body figure (what the
   // 40% flag evaluates); when a contracting envelope was excluded, the raw
   // figure is surfaced alongside — always visible, never suppressed.
@@ -417,7 +427,12 @@ function ConversationMetrics({ m }: { m: Metrics }) {
           label="consultant moves"
           value={cm?.count ?? '—'}
           flag={cm?.count_flag}
-          status={cm && cm.count > 3 ? 'over 3 — mode drift' : 'within coaching mode'}
+          status={
+            (cm && cm.count > 3 ? 'over 3 — mode drift' : 'within coaching mode') +
+            (cw && cw.exempt_count > 0
+              ? ` · ${cw.exempt_count} closing offer${cw.exempt_count === 1 ? '' : 's'}`
+              : '')
+          }
         />
       </div>
 
@@ -433,6 +448,15 @@ function ConversationMetrics({ m }: { m: Metrics }) {
                 <p className="text-[13px] text-tlw-espresso">
                   {mv.description}
                   {mv.span && <span className="ml-2 text-[11px] text-tlw-warm-gray">· {mv.span}</span>}
+                  {mv.closing_window_exempt && (
+                    <span
+                      className="ml-2 rounded-full px-2 py-0.5 text-[10px] font-medium"
+                      style={{ backgroundColor: 'var(--color-success-soft, #e6f4ea)', color: 'var(--color-success)' }}
+                      title="Signaled inside the closing window (final 20%) — counted and scored, but not read against coaching mindset (v0.5.4)"
+                    >
+                      coach’s offer · not read against C2
+                    </span>
+                  )}
                 </p>
                 <span className="shrink-0 text-[13px] font-medium" style={{ color: flagColor(mv.status) }}>
                   {mv.score}/4
@@ -455,6 +479,18 @@ function ConversationMetrics({ m }: { m: Metrics }) {
             </div>
           ))}
         </div>
+      )}
+
+      {cw && cm && cm.count > 0 && (
+        <p className="mt-2 text-[11px]" style={{ color: 'var(--color-muted)' }}>
+          closing window (final {cw.window_pct}%, v0.5.4)
+          {cw.opens_at ? ` opens ${cw.opens_at}` : ''}
+          {cw.session_end ? ` · session ends ${cw.session_end}` : ''}
+          {' '}· {cw.basis === 'timestamps' ? 'from transcript timestamps' : cw.basis === 'estimated' ? 'estimated — no usable timestamps' : 'timing unknown'}
+          {cw.signaled
+            ? ` · signaled${cw.signal_at ? ` at ${cw.signal_at}` : ''}${cw.signal_quote ? ` — “${cw.signal_quote}”` : ''}`
+            : ' · no signaled offer'}
+        </p>
       )}
 
       {ce?.active && (

@@ -15,9 +15,9 @@ A coaching platform for Dr. Jeff Holmes (theLeadershipWell). Two pillars:
    Competencies refined by theLeadershipWell's standards. The **consolidated
    spec `spec/theLeadershipWell_Session_Report_Spec_v0.4.md` is the base source
    of truth**, then apply the deltas **in order**: `..._v0.5.md` → `..._v0.5.1.md`
-   → `..._v0.5.2.md` → **`..._v0.5.3.md` (latest — read this last)**. Read the
-   base + all deltas before touching scoring (the older `..._v0.3.md` is kept
-   for history only).
+   → `..._v0.5.2.md` → `..._v0.5.3.md` → **`..._v0.5.4.md` (latest — read this
+   last)**. Read the base + all deltas before touching scoring (the older
+   `..._v0.3.md` is kept for history only).
 
 Plus a **client workspace** (per-client hub) and **roster**.
 
@@ -274,6 +274,33 @@ it: prior transcript count for the client + 1, `confirmed` only when prior notes
 don't outnumber prior transcripts (a CA-migrated history → `uncertain`).
 Contracting surfaces as a coach-facing QA line on the report (sessions 1–2 only,
 suppressed 3+).
+
+**v0.5.4 additions (the coach's offer + accuracy soundings, Sept 2026).** (1) The
+**closing window** = the final **20%** of the session by elapsed time. A consultant
+envelope whose role-shift is **signaled** inside it ("may I give some advice?",
+"can I change hats?") is a sanctioned **coach's offer**: still **counted**, still
+scored on the four criteria, still listed — but from the signal to the session end
+consulting is **not read against C2** (coaching mindset). `execution_flag` reads
+non-exempt envelopes only; Q:S and talk-time are unchanged (the mode read still
+lands on C7/overall). Unsignaled closing advice earns nothing; a signal before the
+window opens earns nothing. **The engine derives the window from the transcript's
+own timestamps** (`engine.ts#transcriptTiming` — tolerant of `hh:mm:ss`/`mm:ss`,
+skips date-attached wall-clock times like Plaud's `2026-09-08 10:00:00` title,
+needs ≥8 tokens and ≥10 min) and **verifies every exemption the model claims**:
+a claim the timestamps contradict is revoked on the row + flagged
+`closing_window_timing_mismatch`; with no usable timestamps the model's estimate is
+honored + flagged `closing_window_unverified` (the C2 judgment is left as scored —
+a human decides). Output: `metrics.closing_window` (`ClosingWindowBlock`) +
+`ConsultantMove.closing_window_exempt`/`signal_quote` (the signal quote goes
+through the L0.3 verbatim check). (2) **Accuracy soundings** — a restatement/
+summary/fact-check of the client's material followed by "is that right?" / "did I
+get that right?" / "like that?" — are **questions** (Q:S numerator, sub-count
+`utterance_taxonomy.accuracy_soundings`), credit C6, never telling, never an
+envelope opener, and never a "leading question" (not a rubric category). Guardrail:
+checking back the coach's OWN conclusion is co-thinking/consulting under the
+who-synthesises test. Pure-rule verification (no API key):
+`node_modules/.bin/tsc -p scripts/spikes/tsconfig.spike.json && node
+scripts/spikes/verify-closing-window.js`.
 
 **Rescore.** `runAndStoreReport` upserts on `transcript_id`, so re-running it
 replaces the machine report in place (coach self-scores/notes live in separate
