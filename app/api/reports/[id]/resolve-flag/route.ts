@@ -28,6 +28,9 @@ const KNOWN_FLAGS = new Set([
   // v0.5.3 contracting / session-number fail-loud flags
   'session_number_uncertain',
   'contracting_classification_unclear',
+  // v0.5.4 closing-window (coach's offer) fail-loud flags
+  'closing_window_unverified',
+  'closing_window_timing_mismatch',
 ])
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {

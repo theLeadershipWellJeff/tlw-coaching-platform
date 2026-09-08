@@ -1,9 +1,31 @@
 /**
- * The coaching evaluation engine — spec v0.5.3.
+ * The coaching evaluation engine — spec v0.5.4.
  *
  * Sends a speaker-separated transcript to Claude with the Session Report Spec
- * v0.5.3 encoded as instructions, gets back the §12 JSON, then enforces the
+ * v0.5.4 encoded as instructions, gets back the §12 JSON, then enforces the
  * mechanical rules deterministically in code so they can't drift.
+ *
+ * v0.5.4 changes from v0.5.3 (the coach's offer + accuracy soundings):
+ *   §7 — CLOSING WINDOW: the final 20% of the session by elapsed time. A
+ *        consultant envelope SIGNALED inside it ("may I give some advice?",
+ *        "can I change hats?") is a sanctioned "coach's offer": still COUNTED,
+ *        still scored on its four criteria, still displayed — but from the
+ *        signal to the session end consulting is NOT read against C2 (coaching
+ *        mindset). execution_flag is computed over non-exempt envelopes only;
+ *        Q:S and talk-time are unchanged. Unsignaled closing advice earns no
+ *        exemption; a signal BEFORE the window opens earns none either. The
+ *        engine derives the window from the transcript timestamps and VERIFIES
+ *        the model's exemption claims (fail-loud: `closing_window_unverified`
+ *        when no timestamps, `closing_window_timing_mismatch` when the claim
+ *        contradicts the timestamps — the exemption is revoked on the row and
+ *        a human decides; the C2 judgment is left as scored).
+ *   L0 — ACCURACY SOUNDINGS: a restatement/summary/fact-check of the client's
+ *        material followed by a check on accuracy or direction ("is that
+ *        right?", "did I get that right?", "like that?") is a QUESTION —
+ *        counted in the Q:S numerator (sub-count `accuracy_soundings`), never
+ *        consultative telling, never an envelope opener, never a "leading
+ *        question". Guardrail: checking back the coach's OWN conclusion is
+ *        co-thinking/consulting under the who-synthesises test.
  *
  * v0.5.3 changes from v0.5.2 (contracting / agreement-setting):
  *   L0 — A fifth utterance bucket: CONTRACTING (engagement-level agreement-
@@ -81,6 +103,7 @@ import type {
   ConsultantMove,
   ContractingEnvelope,
   ContractingEnvelopeBlock,
+  ClosingWindowBlock,
   Flag,
   IntegrityBlock,
   Metrics,
@@ -205,7 +228,7 @@ function buildPrompt(transcript: string, ctx: ScoringContext): string {
 
   const sn = sessionNumberState(ctx)
 
-  return `Score this coaching session against theLeadershipWell's Session Report Spec v0.5.3.
+  return `Score this coaching session against theLeadershipWell's Session Report Spec v0.5.4.
 
 SESSION CONTEXT
   coach: ${ctx.coachName}
@@ -252,6 +275,7 @@ STEP 1 — SPEAKER ATTRIBUTION (v0.5 A1 — do this BEFORE computing any metrics
 
 STEP 2 — UTTERANCE TAXONOMY (v0.5 A2, extended v0.5.3 — classify every coach utterance into exactly ONE of six buckets by FUNCTION, not grammatical form):
   1. Question — interrogative that evokes client thinking (C7). Counts in Q:S numerator.
+     · ACCURACY SOUNDING (v0.5.4 — a named sub-type of Question): the coach restates, summarizes, or fact-checks the CLIENT'S material and then checks it back for accuracy or direction — "is that right?", "did I get that right?", "like that?", "am I hearing that right?", "is this where you want to go?". Classify as a QUESTION (numerator) AND record it in utterance_taxonomy.accuracy_soundings (a sub-count of questions). It also credits C6 (6.02/6.03 accurate reflection) and, when the material checked is an emotion, counts as a feeling reflection for the flagged-emotion count. It is NEVER consultative telling, NEVER opens a consultant envelope, and is NOT a "leading question" — the rubric has no such category; a sounding is the coach testing whether they heard correctly. GUARDRAIL: when the content being checked is the coach's OWN conclusion, interpretation, or advice offered for ratification ("so you should talk to him first — does that feel right?"), the who-synthesises test governs: that is co-thinking or consulting, not a sounding. The check tag must not launder advice.
   2. Evocative reflection / observation — reflects, summarizes, reframes, or shares an observation to create insight (6.02, 7.10, 7.11). Credits C6/C7. EXCLUDED from Q:S denominator and consultant-move count.
   3. Co-thinking — builds on the client's own material, offered tentatively, WITHOUT ATTACHMENT to adoption (7.11). EXCLUDED from consultant-move count. Flagged for coach visibility.
   4. Consultative / telling — advice, framework, or answer the coach supplies and is invested in. THIS IS THE Q:S DENOMINATOR. Input to consultant-move count.
@@ -264,7 +288,7 @@ STEP 2 — UTTERANCE TAXONOMY (v0.5 A2, extended v0.5.3 — classify every coach
     - Coach signaled it ("I'm going to think alongside you here")? → toward co-thinking
     - Coach ATTACHED to the client adopting it? → CONSULTING regardless of framing
     When in doubt, default to consulting (conservative read) and flag.
-  Record utterance counts in metrics.utterance_taxonomy: {questions, evocative_reflections, co_thinking, consultative_telling, process_logistics, contracting}.
+  Record utterance counts in metrics.utterance_taxonomy: {questions, accuracy_soundings (sub-count of questions), evocative_reflections, co_thinking, consultative_telling, process_logistics, contracting}.
 
 CONTRACTING ENVELOPE (v0.5.3 — ${sn.contractingWindowOpen ? 'the contracting window is OPEN for this session; apply these rules' : 'the contracting window is CLOSED (confirmed session 3+): return metrics.contracting_envelope = null and classify any engagement-contracting content as normal content'}):
   - A contracting envelope mirrors the consultant-move envelope architecture: it OPENS when the coach shifts into engagement-agreement-setting and CLOSES on a return to the client's agenda, a floor-returning coaching question, or a pause after which the client resumes reflection unprompted. Utterances inside the envelope are tagged contracting.
@@ -291,6 +315,13 @@ theLEADERSHIPWELL STANDARDS (apply these on top of ICF):
       · Score each ENVELOPE on the four criteria at envelope scope: Signaled (was the OPENING role-shift named?), Permissioned (did the client agree before the envelope proceeded?), Brief (is the WHOLE envelope terse, or does it crowd out client discovery? — long envelopes fail brief even when they pass the other three), Floor returned (did a close-signal a/b/c actually occur?). Record each move's approximate transcript span (e.g. "50:40-53:21").
       · Envelope count > 3 is a coach-facing advisory flag ("pattern to watch") — it does NOT cap C2 (v0.5 A4). Execution quality is judged per envelope regardless of the count.
       · v0.5.3: a CONTRACTING envelope is NOT a consultant move — exclude contracting from the consultant-move count entirely (it has its own envelope object).
+  - THE COACH'S OFFER — CLOSING WINDOW (v0.5.4):
+      · The CLOSING WINDOW is the final 20% of the session by elapsed time (first transcript timestamp to last). A 55-minute session: the last 11 minutes.
+      · A consultant envelope whose opening role-shift is EXPLICITLY SIGNALED by the coach inside the closing window ("may I give some advice?", "can I change hats for a minute?", "let me put my consultant hat on", "I'd like to offer something — okay?") is a COACH'S OFFER. From that signal to the END of the session, consulting is a sanctioned container: STILL count every envelope, STILL score each on the four criteria, STILL record its span — but mark each such envelope closing_window_exempt: true (with signal_quote = the verbatim signal), and DO NOT read those envelopes against Competency 2. Score C2 on the coaching body: everything before the signal, plus any UNSIGNALED consulting anywhere in the session.
+      · Signal required. Unsignaled advice inside the closing window is an ordinary consultant move (closing_window_exempt: false) and IS read against C2. An envelope signaled BEFORE the window opens is an ordinary consultant move even if it runs into the final 20%. Once a qualifying signal has been given inside the window, later envelopes in the session are covered by it (they need not each be re-signaled).
+      · Report metrics.closing_window: { window_pct: 20, basis ("timestamps" when the transcript carries usable timestamps you measured against; "estimated" when you judged position by proportion of the transcript; "unknown" when you could not tell), session_start, session_end, opens_at (start + 0.8 × duration), signaled, signal_at, signal_quote (VERBATIM — it is verified against the transcript), exempt_count }.
+      · The engine RE-DERIVES the window from the transcript timestamps and verifies every exemption claim; a claim the timestamps contradict is revoked on the row and flagged for manual review. Be accurate about spans.
+      · Q:S and talk-time are UNCHANGED by the closing window — consultative telling inside a coach's offer still counts in the Q:S denominator (the mode read still lands on C7 and the overall).
   - Attunement Standard (Competencies 5, 6, 8): focus earns a 3; reaching a 4 REQUIRES attunement — visible responsiveness to what is emerging beneath the content.
   - SINGLE-INSTANCE STANDARD: for C4, C5, C6, C7, ONE clear qualifying band-4 move is sufficient to reach band 4.
 
@@ -340,7 +371,7 @@ SET session.standing_engagement to true when the transcript shows an ongoing eng
 TRANSCRIPT REQUIREMENT
   You need a speaker-separated verbatim transcript to compute metrics. If NOT speaker-separated, set every metric field to null and set metrics.source to "unavailable". Otherwise set metrics.source to "parsed".
 
-Return EXACTLY this JSON shape (v0.5.3):
+Return EXACTLY this JSON shape (v0.5.4):
 {
   "session": { "coach": "${ctx.coachName}", "client_initials": "${ctx.clientInitials}", "type": "${ctx.sessionType || ''}", "session_number": ${ctx.sessionNumber ?? 'null'}, "engagement_total": ${ctx.engagementTotal ?? 'null'}, "session_number_confidence": "${sn.confidence}", "is_onboarding": ${sn.isOnboarding}, "date": "${ctx.sessionDate}", "standing_engagement": false },
   "overall_score": 0.0,
@@ -365,16 +396,17 @@ Return EXACTLY this JSON shape (v0.5.3):
     "feeling_explorations": 0,
     "question_to_statement": "1:1",
     "question_to_statement_note": "telling_statements only; evocative_reflections and contracting excluded (L0.2, v0.5.3)",
-    "utterance_taxonomy": { "questions": 0, "evocative_reflections": 0, "co_thinking": 0, "consultative_telling": 0, "process_logistics": 0, "contracting": 0 },
+    "utterance_taxonomy": { "questions": 0, "accuracy_soundings": 0, "evocative_reflections": 0, "co_thinking": 0, "consultative_telling": 0, "process_logistics": 0, "contracting": 0 },
     "reflective_pauses": 0,
     "role_shifts_flagged": 0,
     "consultant_moves": {
       "count": 0,
       "unit": "envelope",
       "moves": [
-        { "description": "...", "span": "50:40-53:21", "signaled": true, "permissioned": true, "brief": true, "floor_returned": true, "score": 4, "status": "green" }
+        { "description": "...", "span": "50:40-53:21", "signaled": true, "permissioned": true, "brief": true, "floor_returned": true, "score": 4, "status": "green", "closing_window_exempt": false, "signal_quote": null }
       ]
     },
+    "closing_window": { "window_pct": 20, "basis": "timestamps", "session_start": "00:00:00", "session_end": "00:55:02", "opens_at": "00:44:01", "signaled": false, "signal_at": null, "signal_quote": null, "exempt_count": 0 },
     "contracting_envelope": ${sn.contractingWindowOpen ? `{
       "active": true,
       "present": false,
@@ -443,6 +475,69 @@ function moveStatus(score: number): Flag {
   return 'red'
 }
 
+// ---------------------------------------------------------------------------
+// v0.5.4 §7 — the closing window (the coach's offer). Timing helpers.
+// ---------------------------------------------------------------------------
+
+/** The closing window is the final 20% of the session by elapsed time. */
+export const CLOSING_WINDOW_PCT = 20
+/** Slack (seconds) when comparing model-reported spans against the derived window. */
+const CLOSING_WINDOW_SLACK_S = 60
+
+/** "hh:mm:ss" / "h:mm:ss" / "mm:ss" → seconds, else null. */
+export function parseClock(v: unknown): number | null {
+  if (typeof v !== 'string') return null
+  const m = v.trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/)
+  if (!m) return null
+  const a = Number(m[1])
+  const b = Number(m[2])
+  const c = m[3] == null ? null : Number(m[3])
+  if (b >= 60 || (c != null && c >= 60)) return null
+  return c == null ? a * 60 + b : a * 3600 + b * 60 + c
+}
+
+/** seconds → "hh:mm:ss". */
+export function formatClock(sec: number): string {
+  const s = Math.max(0, Math.round(sec))
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  const r = s % 60
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`
+}
+
+/** The opening timestamp of a model-reported envelope span ("50:40-53:21"). */
+export function spanStart(span: unknown): number | null {
+  if (typeof span !== 'string') return null
+  const first = span.split(/\s*[-–—]\s*/)[0]
+  return parseClock(first)
+}
+
+/**
+ * Derive the session's elapsed-time bounds from the transcript's own
+ * timestamps. Tolerant of "hh:mm:ss" and "mm:ss" tokens anywhere in the text;
+ * requires enough of them (and a plausible duration) to trust the read, else
+ * null — the engine then falls back to the model's proportional estimate and
+ * flags any exemption as unverified (fail-loud).
+ */
+export function transcriptTiming(transcript: string | undefined): { start: number; end: number } | null {
+  if (!transcript) return null
+  // Skip wall-clock times attached to a date ("2026-09-08 10:00:00" — Plaud's
+  // title / front matter) or a timezone marker; and drop anything over four
+  // hours, which is a clock time, not a session clock.
+  const re = /(?<![\d:])(?<!\d{4}-\d{2}-\d{2}[ T])(?<!\d{4}-\d{2}-\d{2}[ T]\d)(\d{1,2}):(\d{2})(?::(\d{2}))?(?![\d:]|\s*(?:[ap]\.?m\b|Z\b|[+-]\d{2}:?\d{2}))/gi
+  const seen: number[] = []
+  let m: RegExpExecArray | null
+  while ((m = re.exec(transcript)) !== null) {
+    const sec = parseClock(m[0])
+    if (sec != null && sec <= 4 * 3600) seen.push(sec)
+  }
+  if (seen.length < 8) return null
+  const start = Math.min(...seen)
+  const end = Math.max(...seen)
+  if (end - start < 600) return null // under ten minutes — not a session clock
+  return { start, end }
+}
+
 /**
  * v0.5.3: parse the model's contracting_envelope block. The engine — never the
  * model — decides `active`: true only while the contracting window is open
@@ -503,7 +598,12 @@ function parseContractingEnvelope(
  * guaranteed, not merely requested. Leaves judgment-only fields (q:s flag,
  * counts without thresholds) as the model returned them.
  */
-function enforceMetrics(raw: any, sn: ReturnType<typeof sessionNumberState>): Metrics {
+function enforceMetrics(
+  raw: any,
+  sn: ReturnType<typeof sessionNumberState>,
+  timing: { start: number; end: number } | null,
+  reviewFlags: string[]
+): Metrics {
   const source = raw?.source === 'unavailable' || raw?.source === 'estimated' ? raw.source : 'parsed'
 
   if (source === 'unavailable') {
@@ -521,6 +621,7 @@ function enforceMetrics(raw: any, sn: ReturnType<typeof sessionNumberState>): Me
       role_shifts_flagged: null,
       consultant_moves: null,
       contracting_envelope: null,
+      closing_window: null,
       utterance_taxonomy: null,
       attribution: undefined,
       source: 'unavailable',
@@ -546,17 +647,80 @@ function enforceMetrics(raw: any, sn: ReturnType<typeof sessionNumberState>): Me
   const emotion = raw?.flagged_emotion_count == null ? null : Number(raw.flagged_emotion_count)
   const explorations = raw?.feeling_explorations == null ? null : Number(raw.feeling_explorations)
 
-  // Consultant moves: derive each move's score from its four criteria, derive
-  // status from score. v0.5 A4: count >3 is amber advisory flag — no score cap.
+  // v0.5.4 — the closing window. The ENGINE derives the window from the
+  // transcript timestamps (authoritative); the model's block is used only when
+  // no usable timestamps exist (basis "estimated"), and then every exemption it
+  // claims is flagged for manual confirmation. A claim the timestamps contradict
+  // is revoked on the row + flagged (the C2 judgment is left as scored — a
+  // human decides).
+  const rawCw = raw?.closing_window
+  const cwBasis: ClosingWindowBlock['basis'] = timing
+    ? 'timestamps'
+    : rawCw?.basis === 'estimated' || rawCw?.basis === 'timestamps'
+    ? 'estimated'
+    : 'unknown'
+  const cwStart = timing ? timing.start : parseClock(rawCw?.session_start)
+  const cwEnd = timing ? timing.end : parseClock(rawCw?.session_end)
+  const cwOpensAt =
+    cwStart != null && cwEnd != null && cwEnd > cwStart
+      ? cwStart + (1 - CLOSING_WINDOW_PCT / 100) * (cwEnd - cwStart)
+      : parseClock(rawCw?.opens_at)
+  const cwSignalQuote =
+    typeof rawCw?.signal_quote === 'string' && rawCw.signal_quote.trim() ? rawCw.signal_quote.trim() : null
+
   const rawMoves: any[] = Array.isArray(raw?.consultant_moves?.moves)
     ? raw.consultant_moves.moves
     : []
+  // The signal time: the model's signal_at, else the earliest SIGNALED envelope
+  // the model marked exempt. Once a qualifying signal has been given inside the
+  // window, every later envelope is covered by it.
+  const claimedSignalStarts = rawMoves
+    .filter((m) => m?.closing_window_exempt && m?.signaled)
+    .map((m) => spanStart(m?.span))
+    .filter((v): v is number => v != null)
+  const modelSignalAt =
+    parseClock(rawCw?.signal_at) ?? (claimedSignalStarts.length ? Math.min(...claimedSignalStarts) : null)
+  const modelSignaled = !!rawCw?.signaled || claimedSignalStarts.length > 0 || rawMoves.some((m) => m?.closing_window_exempt && m?.signaled)
+  // With timestamps the signal must fall inside the derived window; without
+  // them we can only take the model's word (and say so).
+  const signalVerified =
+    timing != null && cwOpensAt != null && modelSignalAt != null && modelSignalAt >= cwOpensAt - CLOSING_WINDOW_SLACK_S
+  const signalUnverifiable = timing == null && modelSignaled
+
+  let cwMismatch = false
+  let cwUnverified = false
+  // Consultant moves: derive each move's score from its four criteria, derive
+  // status from score. v0.5 A4: count >3 is amber advisory flag — no score cap.
   const moves: ConsultantMove[] = rawMoves.map((m) => {
     const score =
       (m?.signaled ? 1 : 0) +
       (m?.permissioned ? 1 : 0) +
       (m?.brief ? 1 : 0) +
       (m?.floor_returned ? 1 : 0)
+    const claimed = !!m?.closing_window_exempt
+    let exempt = false
+    if (claimed) {
+      const start = spanStart(m?.span)
+      if (timing != null) {
+        if (!signalVerified) {
+          cwMismatch = true // no qualifying signal inside the derived window
+        } else if (start == null) {
+          exempt = true
+          cwUnverified = true // covered by a verified signal, but this row has no span to check
+        } else if (start >= (modelSignalAt as number) - CLOSING_WINDOW_SLACK_S) {
+          exempt = true
+        } else {
+          cwMismatch = true // the envelope opened before the signal
+        }
+      } else if (modelSignaled) {
+        exempt = true
+        cwUnverified = true
+      } else {
+        cwMismatch = true // exempt claimed with no signal at all — the signal is the price
+      }
+    }
+    const signalQuote =
+      typeof m?.signal_quote === 'string' && m.signal_quote.trim() ? m.signal_quote.trim() : undefined
     return {
       description: String(m?.description || ''),
       // v0.5.2: the envelope's approximate transcript span, when the model reports it.
@@ -567,10 +731,29 @@ function enforceMetrics(raw: any, sn: ReturnType<typeof sessionNumberState>): Me
       floor_returned: !!m?.floor_returned,
       score,
       status: moveStatus(score),
+      closing_window_exempt: exempt,
+      ...(exempt && signalQuote ? { signal_quote: signalQuote } : {}),
     }
   })
   const count = moves.length
-  const executionFlag = worstFlag(moves.map((m) => m.status))
+  // v0.5.4: the execution flag reads NON-exempt envelopes only — a sanctioned
+  // closing offer failing "brief" does not turn the session's flag red (its own
+  // row status still shows).
+  const executionFlag = worstFlag(moves.filter((m) => !m.closing_window_exempt).map((m) => m.status))
+  const exemptCount = moves.filter((m) => m.closing_window_exempt).length
+  if (cwMismatch) reviewFlags.push('closing_window_timing_mismatch')
+  if (cwUnverified || (signalUnverifiable && exemptCount > 0)) reviewFlags.push('closing_window_unverified')
+  const closingWindow: ClosingWindowBlock = {
+    window_pct: CLOSING_WINDOW_PCT,
+    basis: cwBasis,
+    session_start: cwStart != null ? formatClock(cwStart) : null,
+    session_end: cwEnd != null ? formatClock(cwEnd) : null,
+    opens_at: cwOpensAt != null ? formatClock(cwOpensAt) : null,
+    signaled: timing != null ? signalVerified : modelSignaled,
+    signal_at: modelSignalAt != null ? formatClock(modelSignalAt) : null,
+    signal_quote: cwSignalQuote,
+    exempt_count: exemptCount,
+  }
   // v0.5 A4: amber (not red) for >3 — this is a coach development signal, not a cap.
   const countFlag: Flag = count > 3 ? 'amber' : 'green'
 
@@ -587,6 +770,8 @@ function enforceMetrics(raw: any, sn: ReturnType<typeof sessionNumberState>): Me
         process_logistics:
           rawTaxonomy.process_logistics == null ? null : Number(rawTaxonomy.process_logistics),
         contracting: rawTaxonomy.contracting == null ? null : Number(rawTaxonomy.contracting),
+        accuracy_soundings:
+          rawTaxonomy.accuracy_soundings == null ? null : Number(rawTaxonomy.accuracy_soundings),
       }
     : null
 
@@ -616,7 +801,7 @@ function enforceMetrics(raw: any, sn: ReturnType<typeof sessionNumberState>): Me
     question_to_statement_note:
       typeof raw?.question_to_statement_note === 'string' && raw.question_to_statement_note.trim()
         ? raw.question_to_statement_note.trim()
-        : 'telling_statements only; evocative_reflections and contracting excluded (L0.2, v0.5.3)',
+        : 'telling_statements only; evocative_reflections and contracting excluded (L0.2, v0.5.3); accuracy soundings count as questions (v0.5.4)',
     reflective_pauses: raw?.reflective_pauses == null ? null : Number(raw.reflective_pauses),
     role_shifts_flagged: raw?.role_shifts_flagged == null ? null : Number(raw.role_shifts_flagged),
     consultant_moves: {
@@ -629,6 +814,7 @@ function enforceMetrics(raw: any, sn: ReturnType<typeof sessionNumberState>): Me
       moves,
     },
     contracting_envelope: contracting,
+    closing_window: closingWindow,
     utterance_taxonomy: utteranceTaxonomy,
     attribution,
     source,
@@ -693,6 +879,13 @@ function verifyEvidenceVerbatim(
   for (const c of Array.isArray(raw?.competencies) ? raw.competencies : []) {
     if (c?.evidence) quotes.push(...extractQuotedSpans(String(c.evidence)))
   }
+  // v0.5.4: the closing-window signal is a quoted claim too — verify it.
+  if (typeof raw?.metrics?.closing_window?.signal_quote === 'string') {
+    quotes.push(raw.metrics.closing_window.signal_quote)
+  }
+  for (const m of Array.isArray(raw?.metrics?.consultant_moves?.moves) ? raw.metrics.consultant_moves.moves : []) {
+    if (typeof m?.signal_quote === 'string' && m.signal_quote.trim()) quotes.push(m.signal_quote)
+  }
   const misses = quotes.filter((q) => q.trim() && !isVerbatim(q, normalized))
   return { check: misses.length > 0 ? 'fail' : 'pass', misses }
 }
@@ -733,7 +926,11 @@ export function enforceRules(
   }
 
   const sn = sessionNumberState(ctx)
-  const metrics = enforceMetrics(raw?.metrics, sn)
+  // v0.5.4: the closing window is derived from the transcript's own timestamps
+  // (authoritative); its fail-loud flags are collected here and folded into the
+  // manual-review list below.
+  const metricReviewFlags: string[] = []
+  const metrics = enforceMetrics(raw?.metrics, sn, transcriptTiming(transcript), metricReviewFlags)
   const explorations = metrics.feeling_explorations
 
   // v0.5.3 — the session-1 contracting absence cap. The absence bites ONLY in
@@ -924,6 +1121,9 @@ export function enforceRules(
   if (c3S1CapSuppressed) manualReviewFlags.push('session_number_uncertain')
   // v0.5.3 fail-loud: the contracting vs process/logistics split was unclear.
   if (contracting?.classification_uncertain) manualReviewFlags.push('contracting_classification_unclear')
+  // v0.5.4 fail-loud: closing-window exemptions the timestamps couldn't verify /
+  // contradicted (see enforceMetrics).
+  for (const f of metricReviewFlags) if (!manualReviewFlags.includes(f)) manualReviewFlags.push(f)
   if (verbatim.misses.length > 0) {
     console.warn(
       `v0.5.2 L0.3: ${verbatim.misses.length} quoted evidence string(s) not found verbatim in the transcript — flagged for manual review.`

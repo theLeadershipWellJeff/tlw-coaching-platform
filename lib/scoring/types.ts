@@ -30,6 +30,12 @@ export interface UtteranceTaxonomy {
   consultative_telling: number | null
   process_logistics: number | null
   contracting?: number | null
+  // v0.5.4: accuracy soundings — a restatement/summary/fact-check of the
+  // client's material followed by a check on accuracy or direction ("is that
+  // right?", "did I get that right?"). A SUB-COUNT of `questions` (they are
+  // counted in the Q:S numerator), recorded separately for visibility. Never
+  // consultative telling, never a consultant-move opener.
+  accuracy_soundings?: number | null
 }
 
 // v0.5 A3: fail-loud recording consent flag (agreement on file but recording_authorized = false)
@@ -112,6 +118,13 @@ export interface ConsultantMove {
   floor_returned: boolean
   score: number // 0..4 — count of criteria met (evaluated at envelope scope)
   status: Flag
+  // v0.5.4 — the coach's offer: this envelope was SIGNALED inside the closing
+  // window (final 20% of the session), so it is exempt from the Competency 2
+  // read. Still counted, still scored on the four criteria, still displayed;
+  // excluded from execution_flag. Decided by the engine from the timestamps
+  // when they exist (the model's claim is verified, never trusted blind).
+  closing_window_exempt?: boolean
+  signal_quote?: string // the verbatim role-shift signal, when exempt
 }
 
 // v0.5.3 §Layer 0: a contracting envelope mirrors the consultant-move envelope —
@@ -144,11 +157,30 @@ export interface ContractingEnvelopeBlock {
   envelopes: ContractingEnvelope[]
 }
 
+// v0.5.4 §7: the closing window — the final 20% of the session by elapsed
+// time. A consultant envelope SIGNALED inside it is a "coach's offer": counted
+// and scored, but from the signal to the session end consulting is not read
+// against Competency 2. The engine derives the window from the transcript
+// timestamps (`basis: 'timestamps'`); with no usable timestamps the model's
+// proportional estimate is used and any exemption is flagged for manual review
+// (`closing_window_unverified`).
+export interface ClosingWindowBlock {
+  window_pct: number // 20
+  basis: 'timestamps' | 'estimated' | 'unknown'
+  session_start?: string | null // first transcript timestamp, e.g. "00:00:12"
+  session_end?: string | null // last transcript timestamp, e.g. "55:02"
+  opens_at?: string | null // start + 0.8 × (end − start)
+  signaled: boolean // a qualifying signal was observed inside the window
+  signal_at?: string | null
+  signal_quote?: string | null
+  exempt_count: number // envelopes exempt from the C2 read
+}
+
 export interface ConsultantMoves {
-  count: number // envelope count (v0.5.2: once per envelope, not per advice-act)
+  count: number // envelope count (v0.5.2: once per envelope, not per advice-act) — v0.5.4: coach's offers INCLUDED
   unit: 'envelope' // v0.5.2 §7: the counting unit is the envelope
   count_flag: Flag // amber when >3 (v0.5 A4: advisory flag only, not a score cap)
-  execution_flag: Flag
+  execution_flag: Flag // v0.5.4: worst status among NON-exempt envelopes
   caps_c2: false // v0.5 A4: consultant move count no longer scores C2 down
   note: string   // e.g. "pattern to watch — count no longer scores C2 down"
   moves: ConsultantMove[]
@@ -178,7 +210,10 @@ export interface Metrics {
   // v0.5.3: contracting / agreement-setting envelopes (sessions 1–2 only —
   // `active` false and the block suppressed from the scorecard session 3+).
   contracting_envelope?: ContractingEnvelopeBlock | null
-  utterance_taxonomy: UtteranceTaxonomy | null // v0.5 A2 taxonomy (+ v0.5.3 contracting bucket)
+  // v0.5.4: the closing-window / coach's-offer block (null on pre-v0.5.4
+  // reports or when metrics are unavailable).
+  closing_window?: ClosingWindowBlock | null
+  utterance_taxonomy: UtteranceTaxonomy | null // v0.5 A2 taxonomy (+ v0.5.3 contracting bucket, v0.5.4 accuracy_soundings)
   attribution?: Attribution // v0.5 A1 speaker-attribution confidence
   source: MetricSource
 }
