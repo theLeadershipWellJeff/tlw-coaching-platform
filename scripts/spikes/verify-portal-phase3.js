@@ -82,7 +82,7 @@ function check(name, ok, detail = '') {
 
   const plain = composeChatSystem({ clientName: 'Pat', hasCoach: true, brief: null, company: null, assessment: null, goals: [{ title: 'G1', description: 'd', metrics: ['m1'] }], noteParts: ['## Notes — 2026-01-01\nhello'], recentParts: ['## Session — 2026-01-02\nhi'], retrievedParts: [] })
   check('flag-off client: no grounding rules, no brief, no structured data', !/ASSESSMENT GROUNDING/.test(plain) && !/INTERPRETATION BRIEF/.test(plain) && !/STRUCTURED DATA/.test(plain))
-  check('flag-off client: goals, notes, sessions present', /COACHING GOALS:\n- G1: d\n  measures: m1/.test(plain) && /SESSION NOTES PAT/.test(plain) && /MOST RECENT SESSIONS/.test(plain))
+  check('flag-off client: goals, notes, sessions present', /COACHING GOALS:\n- G1: d[^\n]*\n  measures: m1/.test(plain) && /SESSION NOTES PAT/.test(plain) && /MOST RECENT SESSIONS/.test(plain))
   check('prompt never mentions key_info', !/key_info/i.test(full) && !/key_info/i.test(plain))
 
   const withCmp = composeChatSystem({ clientName: 'Jeff Holmes', hasCoach: false, brief, company: null, assessment: { data: { ...data, comparison: { prior_document_id: 'x', prior_assessment_date: '2023-01-01', months_elapsed: 19, comparability: { rater_sets_differ: true, prior_rater_counts: null, current_rater_counts: null, norm_vintage_differs: false, confidence: 'moderate' }, by_competency: [] } }, assessmentCount: 2 }, goals: [], noteParts: [], recentParts: [], retrievedParts: [] })

@@ -63,10 +63,19 @@ async function loadClientDocumentsForChat(clientId: string): Promise<Array<{ tit
   let budget = CLIENT_DOCS_CHAR_BUDGET
   for (const d of data || []) {
     if (budget <= 0) break
-    const text = clip(d.extracted_text || '', Math.min(CLIENT_DOC_CHARS, budget))
+    const full = (d.extracted_text || '').trim()
+    const max = Math.min(CLIENT_DOC_CHARS, budget)
+    const text = clip(full, max)
     if (!text) continue
     budget -= text.length
-    out.push({ title: d.title || 'Document', text })
+    // Say what was left out, so the assistant explains the clip instead of
+    // reporting the document as "cut off". (A 360 never lands here — the
+    // pipeline reads it structured, whatever kind the client picked.)
+    const omitted = full.length - Math.min(full.length, max)
+    out.push({
+      title: d.title || 'Document',
+      text: omitted > 0 ? `${text}\n[This document is longer than can be shown here — about ${omitted.toLocaleString('en-US')} more characters were not included. If they need the rest, it is in Your documents on their home page.]` : text,
+    })
   }
   return out
 }

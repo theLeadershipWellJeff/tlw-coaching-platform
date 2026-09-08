@@ -63,7 +63,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       { confirmName }
     )
 
-    if (kind === 'assessment_360' && enableAssessments && result.document.extraction_status === 'complete') {
+    if (result.document.kind === 'assessment_360' && enableAssessments && result.document.extraction_status === 'complete') {
       const features = ((client.portal_features as PortalFeatures) || {}) as PortalFeatures
       if (!features.assessments) {
         await supabase.from('clients').update({ portal_features: { ...features, assessments: true } }).eq('id', client.id)

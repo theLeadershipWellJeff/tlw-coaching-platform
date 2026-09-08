@@ -40,6 +40,21 @@ export async function readAllPages(pdfBytes: Uint8Array): Promise<PageData[]> {
   return pages
 }
 
+/**
+ * Cheap layout check without parsing: is this PDF a 360 report the parser
+ * supports? Used by the pipeline to recognise a 360 that a client filed as an
+ * "other document" — the file, not the picker, decides how it is read.
+ */
+export async function detectAssessment360(pdfBytes: Uint8Array): Promise<{ supported: boolean; version: string }> {
+  try {
+    const pages = await readAllPages(pdfBytes)
+    const fp = fingerprintAssessment360(pages)
+    return { supported: fp.supported, version: fp.version }
+  } catch {
+    return { supported: false, version: 'unknown' }
+  }
+}
+
 export async function extractAssessment360(
   pdfBytes: Uint8Array,
   opts: { weights?: TargetWeights } = {}

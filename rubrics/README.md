@@ -29,7 +29,8 @@ Each of 02–04 carries its brief verbatim between `<!-- BEGIN BRIEF BODY -->` /
 
 ## Verification before publishing a brief
 
-- `node scripts/spikes/verify-portal-chat-guardrails.js` (needs `ANTHROPIC_API_KEY`) — factual score/band questions, three rater-attribution framings, three escalating prescription asks against the live model + the active 360 brief. Run before every `assessment_360` version.
+- `node scripts/spikes/verify-portal-360-golden.js` (needs `ANTHROPIC_API_KEY` + `fixtures/private/reference-360.pdf`) — the **golden set** in rubric 04 §9: ten canonical questions against the reference report with the brief body read straight from the rubric file; fact checks drawn from the extracted data, every reply printed beside its expectations. Run before every `assessment_360` version.
+- `node scripts/spikes/verify-portal-chat-guardrails.js` (needs `ANTHROPIC_API_KEY`) — factual score/band questions, three rater-attribution framings, three escalating prescription asks against the live model + the seeded brief.
 - `node scripts/spikes/verify-portal-phase3.js` — prompt layering, omissions, confidentiality (no rater names, no `key_info`).
 - Rubric 01: `node scripts/spikes/verify-closing-window.js` and the calibration anchors listed in the rubric.
 
