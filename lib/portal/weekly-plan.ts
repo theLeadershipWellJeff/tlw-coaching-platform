@@ -134,6 +134,49 @@ export async function setTaskDone(clientId: string, planId: string, taskId: stri
   return { ...data, tasks: data.tasks as WeeklyPlanTask[] } as WeeklyPlan
 }
 
+/**
+ * Add one to-do to the week's plan straight from the home card (no chat
+ * needed). Creates the week's plan if there is none yet. Returns null when
+ * the plan is already at the cap.
+ */
+export async function addTask(clientId: string, orgId: string, weekStart: string, text: string): Promise<WeeklyPlan | null> {
+  const supabase = getSupabaseAdmin()
+  const { data: current } = await supabase.from('weekly_plans').select('*').eq('client_id', clientId).eq('week_start', weekStart).maybeSingle()
+  const existing = Array.isArray(current?.tasks) ? (current!.tasks as WeeklyPlanTask[]) : []
+  if (existing.length >= MAX_WEEKLY_TASKS) return null
+  const tasks = cleanTasks([...existing, text], existing)
+  if (tasks.length === existing.length) return { ...(current as WeeklyPlan), tasks } // empty or duplicate text
+  const row = {
+    client_id: clientId,
+    org_id: orgId,
+    week_start: weekStart,
+    title: current?.title ?? null,
+    tasks,
+    conversation_id: current?.conversation_id ?? null,
+    updated_at: new Date().toISOString(),
+  }
+  const { data, error } = await supabase.from('weekly_plans').upsert(row as never, { onConflict: 'client_id,week_start' }).select('*').single()
+  if (error || !data) throw new Error(error?.message || 'Could not add the to-do.')
+  return { ...data, tasks: data.tasks as WeeklyPlanTask[] } as WeeklyPlan
+}
+
+/** Remove one to-do; filtered on client_id so another client's plan can never be touched. */
+export async function removeTask(clientId: string, planId: string, taskId: string): Promise<WeeklyPlan | null> {
+  const supabase = getSupabaseAdmin()
+  const { data: plan } = await supabase.from('weekly_plans').select('*').eq('id', planId).eq('client_id', clientId).maybeSingle()
+  if (!plan) return null
+  const tasks = (Array.isArray(plan.tasks) ? (plan.tasks as WeeklyPlanTask[]) : []).filter((t) => t.id !== taskId)
+  const { data, error } = await supabase
+    .from('weekly_plans')
+    .update({ tasks, updated_at: new Date().toISOString() })
+    .eq('id', planId)
+    .eq('client_id', clientId)
+    .select('*')
+    .maybeSingle()
+  if (error || !data) return null
+  return { ...data, tasks: data.tasks as WeeklyPlanTask[] } as WeeklyPlan
+}
+
 /** Compact text of recent plans for the weekly-plan prompt. */
 export function formatPlansForPrompt(plans: WeeklyPlan[]): string {
   if (!plans.length) return ''

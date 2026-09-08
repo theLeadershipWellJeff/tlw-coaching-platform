@@ -1466,8 +1466,11 @@ own section in the prompt) so the portal works as a general coaching tool.
   (`(client_id, week_start)` unique; `lib/portal/weekly-plan.ts#cleanTasks`
   keeps ids + done state on a re-save). Nothing saves without the confirm. Home
   **"This week" card** (`WeeklyPlanCard`, mounted for every client) lists the
-  tasks as checkboxes (`PATCH` flips one, filtered on client_id) and falls back
-  to the most recent plan, labelled. Events `weekly_plan_saved` /
+  tasks as checkboxes (`PATCH` flips one, filtered on client_id), has an
+  **add-a-to-do box** (`PATCH {add: text}` → `weekly-plan.ts#addTask`, which
+  starts this week's plan if none exists; cap 7) and hover ✕ remove on the
+  current week (`PATCH {planId, remove: taskId}`), and falls back to the most
+  recent plan, labelled. Events `weekly_plan_saved` /
   `weekly_plan_task_done`; rate limit `weekly_plan_write` 60/h. Week start =
   Monday in the client's timezone (`weekStartFor`). Verify:
   `node_modules/.bin/tsc -p scripts/spikes/tsconfig.spike.json && node
