@@ -48,7 +48,11 @@ assert.ok(sys.includes('360 DEVELOPMENT PICTURE') && sys.includes('RECENT WEEKLY
 assert.ok(sys.includes('Talk to a coach'))
 assert.ok(!sys.includes('warm, insightful coaching assistant'))
 assert.ok(sys.includes('they go by "Pat"'))
+// rubrics/03 v1.1: with a 360 picture, the mechanics tell the assistant to remind the client in the FIRST reply and ask about the Top 5 — never prescribe
+assert.ok(sys.includes('THEIR 360') && sys.includes('FIRST reply') && sys.includes("belongs in this week's Top 5") && sys.includes('never prescribe which to pick'))
 // no brief → floor; no goals → section omitted
 const sys2 = prompt.composeWeeklyPlanSystem({ clientName: 'X', preferredName: null, hasCoach: true, brief: null, goals: [], assessmentSummary: null, recentPlans: '', noteParts: [], today: '2026-09-08', weekStart: '2026-09-07' })
 assert.ok(sys2.includes('plan their week') && !sys2.includes('COACHING GOALS') && sys2.includes('human coach'))
+// no 360 → no reminder rule at all
+assert.ok(!sys2.includes('THEIR 360') && !sys2.includes('360 DEVELOPMENT PICTURE'))
 console.log('weekly-plan helpers: all checks passed')

@@ -214,7 +214,8 @@ export function composeWeeklyPlanSystem(p: WeeklyPlanPromptParts): string {
 - The person is in theLeadershipWell client portal. When the Top 5 is agreed, restate it once as a plain numbered list (1–5, one line each, imperative) and tell them they can press "Save this week's plan" to put it on their home page as a checklist. You cannot save it yourself.
 - ${p.hasCoach ? 'They have a human coach; anything that needs a person goes to their coach.' : 'They have no assigned coach in this portal; for anything that needs a person, suggest "Talk to a coach" on their home page.'}
 - Never invent facts about their work. Everything you know about them is in the material below; if something is not there, ask.${p.preferredName ? `
-- If a name is ever needed for clarity, they go by "${p.preferredName}".` : ''}`
+- If a name is ever needed for clarity, they go by "${p.preferredName}".` : ''}${p.assessmentSummary ? `
+- THEIR 360 (rubrics/03 §1, rubrics/04): a development picture from their most recent report is below. In your FIRST reply, before or alongside asking what a successful week would look like, remind them of it in two or three sentences — the areas their report points to for becoming extraordinary: below the 90th-percentile mark, voted important by the people around them, and something they said they enjoy — and ask whether one of them belongs in this week's Top 5. Describe where the data points; never rank the areas, never prescribe which to pick, never mention weights or ranking logic. Perception language only ("your raters saw", never "you are"); never attribute anything to an individual rater. When a Top 5 action serves one of these areas, say which, so the week's effort compounds toward a Profound Strength. If they would rather leave the 360 aside this week, let it go without comment.` : ''}`
   )
   if (p.goals.length) {
     const goalsText = p.goals
@@ -226,7 +227,7 @@ export function composeWeeklyPlanSystem(p: WeeklyPlanPromptParts): string {
       .join('\n')
     sections.push(`${name}'S COACHING GOALS (treat these as their Objectives; the measures as Key Results; progress is their own report):\n${goalsText}`)
   }
-  if (p.assessmentSummary) sections.push(`${name}'S 360 DEVELOPMENT PICTURE (perception data from their most recent report — use it to suggest where a week's effort compounds; never quote it as ability, never attribute to individual raters):\n${p.assessmentSummary}`)
+  if (p.assessmentSummary) sections.push(`${name}'S 360 DEVELOPMENT PICTURE (perception data from their most recent report — remind them of it in your first reply and use it to suggest where a week's effort compounds; describe and ask, never prescribe; never quote it as ability, never attribute to individual raters):\n${p.assessmentSummary}`)
   const docs = (p.clientDocuments || []).filter((d) => d.text.trim())
   if (docs.length) sections.push(`DOCUMENTS ${name} ADDED TO THEIR PORTAL (their projects, plans, role material — refer to them by title):\n${docs.map((d) => `## ${d.title}\n${d.text.trim()}`).join('\n\n')}`)
   if (p.myNotes) sections.push(`NOTES ${name} WROTE FOR THEMSELVES IN THEIR PORTAL (their private journal; often where projects and intentions live):\n${p.myNotes}`)
@@ -235,14 +236,62 @@ export function composeWeeklyPlanSystem(p: WeeklyPlanPromptParts): string {
   return sections.join('\n\n')
 }
 
-/** A short development summary from a 360 for the weekly-plan prompt. */
+/**
+ * The 360 development picture for the weekly-plan prompt (rubrics/03 §1):
+ * perception data, in plain words, shaped for action — the Profound Strengths
+ * as the base to build from, every competency where the three circles fully
+ * overlap (below its own 90th-percentile mark, voted important by the people
+ * around them, and a stated passion) with the lowest-scored behaviors under it
+ * so a week's action can be concrete, then the largest marked self-vs-others
+ * gaps. Never weights, never ranking logic, never rater attribution.
+ */
 export function summariseAssessmentForPlanning(data: Assessment360Data): string {
   const lines: string[] = []
-  const strengths = [...data.competency_rankings].sort((a, b) => a.rank - b.rank).slice(0, 3)
-  if (strengths.length) lines.push(`Standout competencies (by band): ${strengths.map((c) => `${c.competency} (${c.band})`).join('; ')}`)
-  const dev = data.development_candidates.slice(0, 3)
-  if (dev.length) lines.push(`Development candidates the report points toward: ${dev.map((c) => `${c.competency}${c.is_passion ? ' (a stated passion)' : ''}`).join('; ')}`)
-  const gaps = [...data.gap_analysis].sort((a, b) => Math.abs(b.gap) - Math.abs(a.gap)).slice(0, 3)
-  if (gaps.length) lines.push(`Largest self-vs-others gaps: ${gaps.map((g) => `${g.competency} (${g.gap > 0 ? 'others see more than they do' : 'they rate themselves higher than others do'})`).join('; ')}`)
+  const fmt = (n: number | null | undefined) => (n == null ? '' : n.toFixed(2))
+  lines.push(`Report dated ${data.report_date}. Every number is how their raters saw them — perception, not ability.`)
+
+  const profound = data.competency_rankings.filter((c) => c.band === 'Profound Strength').sort((a, b) => a.rank - b.rank)
+  if (profound.length) {
+    lines.push(`Profound Strengths (at or above the 90th-percentile mark — the base to build from, not gaps to close): ${profound.map((c) => `${c.competency} (${fmt(c.total)})`).join('; ')}.`)
+  }
+
+  const detailByName = new Map(data.competency_details.map((d) => [d.competency, d]))
+  // The score-details table wraps item text across lines and the extractor keeps
+  // only the first; the highest/lowest behavior lists carry the full sentence, so
+  // prefer those by item number and mark any remaining cut-off honestly.
+  const fullItemText = new Map<number, string>()
+  for (const b of [...data.highest_behaviors, ...data.lowest_behaviors]) {
+    if (b.item_number != null) fullItemText.set(b.item_number, b.item)
+  }
+  const itemText = (i: { item_number: number; item: string }): string => {
+    const full = fullItemText.get(i.item_number)
+    if (full) return full
+    return /[.?!)]$/.test(i.item.trim()) ? i.item.trim() : `${i.item.trim()}…`
+  }
+  const lowestItems = (competency: string): string[] => {
+    const d = detailByName.get(competency)
+    const items = (d?.items || []).filter((i) => i.total != null).sort((a, b) => (a.total as number) - (b.total as number)).slice(0, 2)
+    return items.map((i) => `"${itemText(i)}" (${fmt(i.total)})`)
+  }
+  const describe = (c: Assessment360Data['development_candidates'][number]) => {
+    const behaviors = lowestItems(c.competency)
+    return `${c.competency} — ${fmt(c.total)}, ${fmt(c.distance_to_90th)} below its 90th-percentile mark${behaviors.length ? `; lowest-scored behaviors under it: ${behaviors.join(', ')}` : ''}`
+  }
+  const full = data.development_candidates.filter((c) => c.circles_met === 3)
+  const partial = data.development_candidates.filter((c) => c.circles_met === 2)
+  if (full.length) {
+    lines.push(`Where the report points for development — below the 90th-percentile mark, voted important by the people around them, AND something they said they enjoy (all three together):\n${full.map((c) => `- ${describe(c)}`).join('\n')}`)
+  }
+  if (!full.length && partial.length) {
+    lines.push(`No competency meets all three of: below the 90th-percentile mark, voted important, and a stated passion. Meeting two: ${partial.slice(0, 4).map((c) => `${c.competency} (${fmt(c.total)}; missing: ${c.missing.map((m) => (m === 'need' ? 'importance votes' : m)).join(', ')})`).join('; ')}.`)
+  } else if (partial.length) {
+    lines.push(`Also close, meeting two of the three: ${partial.slice(0, 3).map((c) => `${c.competency} (missing ${c.missing.map((m) => (m === 'need' ? 'importance votes' : m)).join(', ')})`).join('; ')}.`)
+  }
+
+  const gaps = data.gap_analysis
+    .filter((g) => g.direction === 'positive' || g.direction === 'negative')
+    .sort((a, b) => Math.abs(b.gap) - Math.abs(a.gap))
+    .slice(0, 3)
+  if (gaps.length) lines.push(`Largest self-vs-others gaps the report marks: ${gaps.map((g) => `${g.competency} (${g.direction === 'positive' ? 'others saw more than they did' : 'they rated themselves higher than others did'})`).join('; ')}.`)
   return lines.join('\n')
 }
