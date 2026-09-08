@@ -37,11 +37,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       { clientId: client.id, orgId: client.org_id, kind, bytes, filename: file.name, title, uploaderRole: 'coach', uploadedBy: actor.id, visibleToCoach: true },
       { confirmName }
     )
-    if (kind === 'assessment_360' && result.document.extraction_status === 'complete') {
+    if (result.document.kind === 'assessment_360' && result.document.extraction_status === 'complete') {
       const f = ((client.portal_features as PortalFeatures) || {}) as PortalFeatures
       if (!f.assessments) await supabase.from('clients').update({ portal_features: { ...f, assessments: true } }).eq('id', client.id)
     }
-    await logAdminAction(supabase, { actorCoachId: actor.id, action: 'document_uploaded', targetClientId: client.id, detail: { document_id: result.document.id, kind, status: result.document.extraction_status, via: 'portal_user' } })
+    await logAdminAction(supabase, { actorCoachId: actor.id, action: 'document_uploaded', targetClientId: client.id, detail: { document_id: result.document.id, kind: result.document.kind, promoted_from: result.promotedTo360 ? kind : undefined, status: result.document.extraction_status, via: 'portal_user' } })
     const { extracted_text: _t, structured_data: _s, ...document } = result.document
     return NextResponse.json({ document, message: result.message }, { status: 201 })
   } catch (e) {

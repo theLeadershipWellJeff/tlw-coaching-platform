@@ -74,7 +74,9 @@ export function DocumentsCard({ hasCoach }: { hasCoach: boolean }) {
       setTitle('')
       if (fileRef.current) fileRef.current.value = ''
       await load()
-      if (kind === 'assessment_360' && d.document?.extraction_status === 'complete') window.location.reload()
+      // Reload on a complete 360 whatever the picker said — the pipeline may
+      // have recognised a report filed as an "other document".
+      if (d.document?.kind === 'assessment_360' && d.document?.extraction_status === 'complete') window.location.reload()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not upload that file.')
     } finally {

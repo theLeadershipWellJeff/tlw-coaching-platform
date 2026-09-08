@@ -80,12 +80,15 @@ export async function POST(req: NextRequest) {
     })
     // A name-verified, complete 360 the client added themselves switches the
     // assessment surfaces on — same rule as a coach upload.
-    if (kind === 'assessment_360' && result.document.extraction_status === 'complete') {
+    // The stored kind, not the picker's: a 360 filed as an "other document" is
+    // promoted by the pipeline when its layout is a supported report.
+    const storedKind = result.document.kind
+    if (storedKind === 'assessment_360' && result.document.extraction_status === 'complete') {
       const f = ((client.portal_features as PortalFeatures) || {}) as PortalFeatures
       if (!f.assessments) await supabase.from('clients').update({ portal_features: { ...f, assessments: true } }).eq('id', client.id)
     }
-    await logPortalAccess(clientId, 'document_upload', { detail: `${kind}:${result.document.id}`, ok: result.document.extraction_status === 'complete' })
-    await logPortalEvent(clientId, 'document_uploaded', { document_id: result.document.id, kind, status: result.document.extraction_status })
+    await logPortalAccess(clientId, 'document_upload', { detail: `${storedKind}:${result.document.id}`, ok: result.document.extraction_status === 'complete' })
+    await logPortalEvent(clientId, 'document_uploaded', { document_id: result.document.id, kind: storedKind, promoted_from: result.promotedTo360 ? kind : undefined, status: result.document.extraction_status })
     const d = result.document
     const nameMismatch = d.extraction_status === 'failed' && (d.extraction_error || '').startsWith('name_mismatch')
     return NextResponse.json(
@@ -96,7 +99,9 @@ export async function POST(req: NextRequest) {
           : d.extraction_status === 'unsupported'
             ? 'We could not read this report layout automatically. Your file is saved and downloadable; support has been notified to review it.'
             : d.extraction_status === 'complete'
-              ? kind === 'assessment_360' ? 'Your report has been added.' : 'Your document has been added.'
+              ? result.promotedTo360
+                ? 'That file is a 360 feedback report, so it was read as your 360 and added to your report card.'
+                : d.kind === 'assessment_360' ? 'Your report has been added.' : 'Your document has been added.'
               : 'Your file is saved, but we could not read it automatically. Support has been notified.',
       },
       { status: 201 }

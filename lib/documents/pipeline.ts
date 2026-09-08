@@ -22,7 +22,7 @@ import { randomUUID } from 'crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ClientDocument, ClientDocumentKind, Database, PortalFeatures } from '@/lib/supabase/types'
 import { extractTranscriptText } from '@/lib/transcripts/extract'
-import { compareAssessments, extractAssessment360, namesMatch, type Assessment360Data } from './assessment-360'
+import { compareAssessments, detectAssessment360, extractAssessment360, namesMatch, type Assessment360Data } from './assessment-360'
 import { DOCUMENTS_BUCKET, documentStoragePath, ensureDocumentsBucket } from './storage'
 
 export const MAX_DOCUMENT_BYTES = 4 * 1024 * 1024
@@ -52,6 +52,13 @@ export type UploadResult = {
   document: ClientDocument
   /** Human-readable outcome for the UI. */
   message: string
+  /** True when a file uploaded as an "other document" was recognised as a
+   *  supported 360 layout and read on the assessment path instead. */
+  promotedTo360?: boolean
+}
+
+function isPdf(bytes: Buffer): boolean {
+  return bytes.length > 5 && bytes.subarray(0, 5).toString('latin1') === '%PDF-'
 }
 
 /** Plain-language rejection for a file that isn't a usable report. */
@@ -110,6 +117,20 @@ export async function createClientDocument(
   input: UploadInput,
   opts: { confirmName?: boolean } = {}
 ): Promise<UploadResult> {
+  // The file decides how it is read, not the picker. A supported 360 layout
+  // filed as an "other document" (the portal picker's default) would otherwise
+  // be stored as clipped plain text — the chat then sees a truncated report and
+  // none of the structured data. Promote it to the assessment path (caps, name
+  // gate, comparison, the assessments flag) so the report is read in full. A
+  // personnel review is left alone: private by the client's choice.
+  let promotedFrom: ClientDocumentKind | null = null
+  if (input.kind === 'general' && isPdf(input.bytes)) {
+    const detected = await detectAssessment360(new Uint8Array(input.bytes))
+    if (detected.supported) {
+      promotedFrom = input.kind
+      input = { ...input, kind: 'assessment_360' }
+    }
+  }
   const ext = checkDocumentBytes(input.bytes, input.filename, input.kind)
   await enforceCaps(supabase, input.clientId, input.kind)
   await ensureDocumentsBucket(supabase)
@@ -146,7 +167,10 @@ export async function createClientDocument(
   }
 
   const document = await runExtraction(supabase, row as ClientDocument, input.bytes, opts)
-  return { document, message: describeOutcome(document) }
+  const message = promotedFrom
+    ? `That file is a 360 feedback report, so it was read as your 360 rather than as a general document. ${describeOutcome(document)}`
+    : describeOutcome(document)
+  return { document, message, promotedTo360: promotedFrom != null }
 }
 
 /** Re-run extraction for an existing row (retry / confirm-name). */
