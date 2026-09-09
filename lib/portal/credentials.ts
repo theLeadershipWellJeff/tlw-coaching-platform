@@ -156,6 +156,9 @@ export async function verifyPortalLogin(
   return { ok: true, clientId: row.client_id }
 }
 
+const MISSING_TABLE_MESSAGE =
+  'Password sign-in is not switched on for this site yet (the client_credentials table is missing — migration 054). You can keep signing in with the emailed link.'
+
 /** Create or replace this client's credentials. Username must be free. */
 export async function setPortalCredentials(
   clientId: string,
@@ -168,11 +171,15 @@ export async function setPortalCredentials(
   if (!p.ok) return { ok: false, error: p.error }
 
   const supabase = getSupabaseAdmin()
-  const { data: taken } = await supabase
+  const { data: taken, error: lookupError } = await supabase
     .from('client_credentials')
     .select('client_id')
     .eq('username', u.username)
     .maybeSingle()
+  if (lookupError && isMissingTableError(lookupError)) {
+    console.error('[portal/credentials] client_credentials missing', lookupError.message)
+    return { ok: false, error: MISSING_TABLE_MESSAGE }
+  }
   if (taken && taken.client_id !== clientId) {
     return { ok: false, error: 'That username is already taken.' }
   }
@@ -196,8 +203,41 @@ export async function setPortalCredentials(
     },
     { onConflict: 'client_id' }
   )
-  if (error) return { ok: false, error: 'Could not save those credentials.' }
+  if (error) {
+    // The detail stays in the server log (never in a client-facing response),
+    // but the two causes an admin can act on get a message that names them.
+    console.error('[portal/credentials] save failed', {
+      clientId,
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+    })
+    if (isMissingTableError(error)) {
+      return { ok: false, error: MISSING_TABLE_MESSAGE }
+    }
+    if (error.code === '23505') {
+      return { ok: false, error: 'That username is already taken.' }
+    }
+    if (error.code === '23503') {
+      return {
+        ok: false,
+        error: 'Could not save those credentials — this account is not linked to a client record. Ask your coach to send a fresh sign-in link.',
+      }
+    }
+    return {
+      ok: false,
+      error: `Could not save those credentials (error ${error.code || 'unknown'}). Please try again or contact support.`,
+    }
+  }
   return { ok: true }
+}
+
+/** Postgres "relation does not exist" or PostgREST "not in the schema cache". */
+function isMissingTableError(error: { code?: string; message?: string }): boolean {
+  if (error.code === '42P01' || error.code === 'PGRST205') return true
+  const m = error.message || ''
+  return /client_credentials/.test(m) && /(does not exist|schema cache)/i.test(m)
 }
 
 /**

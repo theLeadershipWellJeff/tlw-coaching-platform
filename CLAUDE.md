@@ -1172,7 +1172,15 @@ is never accepted here, and vice-versa.
   returns username / password-set / last-seen / locked, surfaced on the
   `InviteToPortalButton` ("Resend portal link" once they've been in). The coach
   can never see the password — it's a one-way hash; the remedies are resend-link
-  and let the client set a new one.
+  and let the client set a new one. **Save failures are diagnosable
+  (2026-09-09):** `setPortalCredentials` logs the Supabase error (code/message/
+  details) to the server log and maps the actionable causes to a message — a
+  missing `client_credentials` table / schema-cache miss (42P01 / PGRST205) says
+  so and names migration 054, a username unique violation (23505) says "taken",
+  an FK miss on `client_id` (23503) says the account isn't linked to a client;
+  anything else carries the Postgres error code. Before this every cause read as
+  the bare "Could not save those credentials."; check Vercel logs for
+  `[portal/credentials]` when a client reports it.
 - **Billing (`lib/portal/billing.ts`).** **An enterprise coachee sees no billing
   at all** — the company is the payer. `resolvePortalBillingAccount` is the single
   gate: it resolves `coachees` → `billing_accounts` and returns null unless
