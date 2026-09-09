@@ -1,0 +1,344 @@
+{
+  "generated": "2026-09-09",
+  "source": "docs/qa/route-scoping-audit.md",
+  "rule": "A route is allowlisted only when it legitimately has no tenant to scope to: a token-bearing public link, a signed webhook/shared-secret entry point, a cron entry point, the auth handler, a pre-session portal auth step, supervisor-only cross-tenant admin surfaces, or firm-level shared content. Every entry carries a written justification; re-audit when any of these routes gains a new data read.",
+  "count": 48,
+  "routes": [
+    {
+      "path": "/api/actions/complete",
+      "methods": "GET",
+      "principal": "public",
+      "category": "public-token",
+      "justification": "Token = credential: row looked up by actions.complete_token; idempotent status flip only, no cross-row read."
+    },
+    {
+      "path": "/api/admin/briefs/[id]",
+      "methods": "POST",
+      "principal": "coach (supervisor)",
+      "category": "supervisor-cross-tenant",
+      "justification": "adminContext() → requireSupervisor (401/403); cross-tenant by design (command center); actions write admin_audit_log."
+    },
+    {
+      "path": "/api/admin/briefs",
+      "methods": "GET, POST",
+      "principal": "coach (supervisor)",
+      "category": "supervisor-cross-tenant",
+      "justification": "adminContext() → requireSupervisor (401/403); cross-tenant by design (command center); actions write admin_audit_log."
+    },
+    {
+      "path": "/api/admin/cohorts/[id]/invite",
+      "methods": "POST",
+      "principal": "coach (supervisor)",
+      "category": "supervisor-cross-tenant",
+      "justification": "adminContext() → requireSupervisor (401/403); cross-tenant by design (command center); actions write admin_audit_log."
+    },
+    {
+      "path": "/api/admin/cohorts/[id]/roster",
+      "methods": "GET",
+      "principal": "coach (supervisor)",
+      "category": "supervisor-cross-tenant",
+      "justification": "adminContext() → requireSupervisor (401/403); cross-tenant by design (command center); actions write admin_audit_log."
+    },
+    {
+      "path": "/api/admin/cohorts/[id]",
+      "methods": "PATCH",
+      "principal": "coach (supervisor)",
+      "category": "supervisor-cross-tenant",
+      "justification": "adminContext() → requireSupervisor (401/403); cross-tenant by design (command center); actions write admin_audit_log."
+    },
+    {
+      "path": "/api/admin/cohorts",
+      "methods": "POST",
+      "principal": "coach (supervisor)",
+      "category": "supervisor-cross-tenant",
+      "justification": "adminContext() → requireSupervisor (401/403); cross-tenant by design (command center); actions write admin_audit_log."
+    },
+    {
+      "path": "/api/admin/companies/[id]/documents/[docId]",
+      "methods": "DELETE, PATCH",
+      "principal": "coach (supervisor)",
+      "category": "supervisor-cross-tenant",
+      "justification": "adminContext() → requireSupervisor (401/403); cross-tenant by design (command center); actions write admin_audit_log."
+    },
+    {
+      "path": "/api/admin/companies/[id]/documents",
+      "methods": "GET, POST",
+      "principal": "coach (supervisor)",
+      "category": "supervisor-cross-tenant",
+      "justification": "adminContext() → requireSupervisor (401/403); cross-tenant by design (command center); actions write admin_audit_log."
+    },
+    {
+      "path": "/api/admin/companies/[id]",
+      "methods": "PATCH",
+      "principal": "coach (supervisor)",
+      "category": "supervisor-cross-tenant",
+      "justification": "adminContext() → requireSupervisor (401/403); cross-tenant by design (command center); actions write admin_audit_log."
+    },
+    {
+      "path": "/api/admin/companies",
+      "methods": "GET, POST",
+      "principal": "coach (supervisor)",
+      "category": "supervisor-cross-tenant",
+      "justification": "adminContext() → requireSupervisor (401/403); cross-tenant by design (command center); actions write admin_audit_log."
+    },
+    {
+      "path": "/api/admin/cron-runs",
+      "methods": "GET",
+      "principal": "coach (supervisor)",
+      "category": "supervisor-cross-tenant",
+      "justification": "adminContext() → requireSupervisor (401/403); cross-tenant by design (command center); actions write admin_audit_log."
+    },
+    {
+      "path": "/api/admin/documents/[id]",
+      "methods": "DELETE, POST",
+      "principal": "coach (supervisor)",
+      "category": "supervisor-cross-tenant",
+      "justification": "adminContext() → requireSupervisor (401/403); cross-tenant by design (command center); actions write admin_audit_log."
+    },
+    {
+      "path": "/api/admin/documents",
+      "methods": "GET, POST",
+      "principal": "coach (supervisor)",
+      "category": "supervisor-cross-tenant",
+      "justification": "adminContext() → requireSupervisor (401/403); cross-tenant by design (command center); actions write admin_audit_log."
+    },
+    {
+      "path": "/api/admin/portal-stats",
+      "methods": "GET",
+      "principal": "coach (supervisor)",
+      "category": "supervisor-cross-tenant",
+      "justification": "adminContext() → requireSupervisor (401/403); cross-tenant by design (command center); actions write admin_audit_log."
+    },
+    {
+      "path": "/api/admin/portal-users/[id]/documents",
+      "methods": "POST",
+      "principal": "coach (supervisor)",
+      "category": "supervisor-cross-tenant",
+      "justification": "adminContext() → requireSupervisor (401/403); cross-tenant by design (command center); actions write admin_audit_log."
+    },
+    {
+      "path": "/api/admin/portal-users/[id]/invite",
+      "methods": "POST",
+      "principal": "coach (supervisor)",
+      "category": "supervisor-cross-tenant",
+      "justification": "adminContext() → requireSupervisor (401/403); cross-tenant by design (command center); actions write admin_audit_log."
+    },
+    {
+      "path": "/api/admin/portal-users/[id]",
+      "methods": "GET, PATCH",
+      "principal": "coach (supervisor)",
+      "category": "supervisor-cross-tenant",
+      "justification": "adminContext() → requireSupervisor; cross-tenant by design. The ONE admin route that reads/writes clients.key_info (coach-private, shown to the supervisor only; never a portal surface)."
+    },
+    {
+      "path": "/api/admin/portal-users",
+      "methods": "GET, POST",
+      "principal": "coach (supervisor)",
+      "category": "supervisor-cross-tenant",
+      "justification": "adminContext() → requireSupervisor (401/403); cross-tenant by design (command center); actions write admin_audit_log."
+    },
+    {
+      "path": "/api/admin/support/[id]",
+      "methods": "POST",
+      "principal": "coach (supervisor)",
+      "category": "supervisor-cross-tenant",
+      "justification": "adminContext() → requireSupervisor (401/403); cross-tenant by design (command center); actions write admin_audit_log."
+    },
+    {
+      "path": "/api/admin/support",
+      "methods": "GET",
+      "principal": "coach (supervisor)",
+      "category": "supervisor-cross-tenant",
+      "justification": "adminContext() → requireSupervisor (401/403); cross-tenant by design (command center); actions write admin_audit_log."
+    },
+    {
+      "path": "/api/agenda/[token]",
+      "methods": "GET, POST",
+      "principal": "public",
+      "category": "public-token",
+      "justification": "Token = credential: agenda_requests.token; GET returns first name + prompts + own answers; POST writes that row only and notifies the linked coach."
+    },
+    {
+      "path": "/api/agreements/sign",
+      "methods": "POST",
+      "principal": "public",
+      "category": "public-token",
+      "justification": "Token = credential: agreements.sign_token, expiry + already-signed checks; update guarded on status=sent; promotes flags onto that agreement's client only."
+    },
+    {
+      "path": "/api/auth/[...nextauth]",
+      "methods": "GET, POST",
+      "principal": "public",
+      "category": "auth-handler",
+      "justification": "NextAuth handler (Google OAuth); BETA_COACH_EMAILS allowlist in authOptions.signIn."
+    },
+    {
+      "path": "/api/billing/authorize/[token]/session",
+      "methods": "POST",
+      "principal": "public",
+      "category": "public-token",
+      "justification": "Token = credential: billing_accounts.authorization_token (UUID-shape checked); creates a Stripe setup Checkout for that account only."
+    },
+    {
+      "path": "/api/billing/invoices/receipt/[token]",
+      "methods": "GET",
+      "principal": "public",
+      "category": "public-token",
+      "justification": "Token = credential: invoices.receipt_token; stamps received_at once and 302s to Stripe hosted URL."
+    },
+    {
+      "path": "/api/billing/webhooks/stripe",
+      "methods": "POST",
+      "principal": "webhook",
+      "category": "webhook",
+      "justification": "constructWebhookEvent verifies stripe-signature with STRIPE_WEBHOOK_SECRET before any DB write; rows matched by Stripe ids / tlw_* metadata."
+    },
+    {
+      "path": "/api/coaches/[id]/billing/checkout",
+      "methods": "POST",
+      "principal": "coach (supervisor)",
+      "category": "supervisor-cross-tenant",
+      "justification": "requireSupervisor (401/403); cross-tenant by design; audit-logged."
+    },
+    {
+      "path": "/api/coaches/[id]/billing/portal",
+      "methods": "POST",
+      "principal": "coach (supervisor)",
+      "category": "supervisor-cross-tenant",
+      "justification": "requireSupervisor (401/403); cross-tenant by design; audit-logged."
+    },
+    {
+      "path": "/api/coaches/[id]/clients/[clientId]/portal-invite",
+      "methods": "POST",
+      "principal": "coach (supervisor)",
+      "category": "supervisor-cross-tenant",
+      "justification": "requireSupervisor; verifies the coach_clients link between the URL coach and client before minting; per-client rate limit; audit-logged."
+    },
+    {
+      "path": "/api/coaches/[id]/clients/[clientId]/portal-unlock",
+      "methods": "POST",
+      "principal": "coach (supervisor)",
+      "category": "supervisor-cross-tenant",
+      "justification": "requireSupervisor; verifies the coach_clients link; clears lockout only (never the password); audit-logged."
+    },
+    {
+      "path": "/api/coaches/[id]/clients",
+      "methods": "GET",
+      "principal": "coach (supervisor)",
+      "category": "supervisor-cross-tenant",
+      "justification": "requireSupervisor; roster of the NAMED coach via coach_clients.coach_id = params.id; explicit column list, key_info not selected."
+    },
+    {
+      "path": "/api/coaches/[id]",
+      "methods": "DELETE, PATCH",
+      "principal": "coach (supervisor)",
+      "category": "supervisor-cross-tenant",
+      "justification": "requireSupervisor (401/403); cross-tenant by design; audit-logged."
+    },
+    {
+      "path": "/api/coaches",
+      "methods": "GET, POST",
+      "principal": "coach (supervisor)",
+      "category": "supervisor-cross-tenant",
+      "justification": "requireSupervisor (401/403); cross-tenant by design; audit-logged."
+    },
+    {
+      "path": "/api/cron/billing-reminders",
+      "methods": "GET",
+      "principal": "cron",
+      "category": "cron",
+      "justification": "Bearer must equal CRON_SECRET (503 if unset); iterates every coach/row by design; wrapped in cronHandler (cron_runs log)."
+    },
+    {
+      "path": "/api/cron/billing-retries",
+      "methods": "GET",
+      "principal": "cron",
+      "category": "cron",
+      "justification": "Bearer must equal CRON_SECRET (503 if unset); iterates every coach/row by design; wrapped in cronHandler (cron_runs log)."
+    },
+    {
+      "path": "/api/cron/calendar-sync",
+      "methods": "GET",
+      "principal": "cron",
+      "category": "cron",
+      "justification": "Bearer must equal CRON_SECRET (503 if unset); iterates every coach/row by design; wrapped in cronHandler (cron_runs log)."
+    },
+    {
+      "path": "/api/cron/nudges",
+      "methods": "GET",
+      "principal": "cron",
+      "category": "cron",
+      "justification": "Bearer must equal CRON_SECRET (503 if unset); iterates every coach/row by design; wrapped in cronHandler (cron_runs log)."
+    },
+    {
+      "path": "/api/cron/portal-reminders",
+      "methods": "GET",
+      "principal": "cron",
+      "category": "cron",
+      "justification": "Bearer must equal CRON_SECRET (503 if unset); iterates every coach/row by design; wrapped in cronHandler (cron_runs log)."
+    },
+    {
+      "path": "/api/cron/reminders",
+      "methods": "GET",
+      "principal": "cron",
+      "category": "cron",
+      "justification": "Bearer must equal CRON_SECRET (503 if unset); iterates every coach/row by design; wrapped in cronHandler (cron_runs log)."
+    },
+    {
+      "path": "/api/cron/vault-sync",
+      "methods": "GET",
+      "principal": "cron",
+      "category": "cron",
+      "justification": "Bearer must equal CRON_SECRET (503 if unset); iterates every coach/row by design; wrapped in cronHandler (cron_runs log)."
+    },
+    {
+      "path": "/api/portal/auth/login",
+      "methods": "POST",
+      "principal": "public",
+      "category": "portal-pre-auth",
+      "justification": "Username→client_credentials lookup; scrypt verify; generic 401 for every failure; per-client rate limit + 15-min lockout; issues cookie for the resolved clientId only."
+    },
+    {
+      "path": "/api/portal/auth/logout",
+      "methods": "POST",
+      "principal": "public",
+      "category": "portal-pre-auth",
+      "justification": "Clears the portal cookie only; no data access."
+    },
+    {
+      "path": "/api/portal/auth/request",
+      "methods": "POST",
+      "principal": "public",
+      "category": "portal-pre-auth",
+      "justification": "Magic-link request: always generic {ok:true} (anti-enumeration); email→client lookup; 5/hour cap; token is minted for that client only."
+    },
+    {
+      "path": "/api/portal/auth/verify",
+      "methods": "POST",
+      "principal": "public",
+      "category": "portal-pre-auth",
+      "justification": "POST-only; consumeLoginToken matches the sha256 hash, single-use, 24h TTL; cookie issued for the token's clientId."
+    },
+    {
+      "path": "/api/transcripts/ingest",
+      "methods": "POST",
+      "principal": "webhook",
+      "category": "webhook",
+      "justification": "x-ingest-secret must equal INGEST_SECRET. Tenant is chosen by the caller (body.coachEmail, else DEFAULT_COACH_EMAIL) and getOrCreateCoach will create a coach row — see observations. Matching inside ingestMarkdown is limited to that coach's accessibleClientIds."
+    },
+    {
+      "path": "/api/vault/map",
+      "methods": "GET",
+      "principal": "coach",
+      "category": "firm-shared-content",
+      "justification": "requireCoach gate; reads the firm-level vault repo Maps/ folder (shared practice IP, not tenant data) — keeps the vault PAT server-side."
+    },
+    {
+      "path": "/api/vault/maps",
+      "methods": "GET",
+      "principal": "coach",
+      "category": "firm-shared-content",
+      "justification": "requireCoach gate; firm-level map registry from the vault repo (shared practice IP, not tenant data)."
+    }
+  ]
+}
