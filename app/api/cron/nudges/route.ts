@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { cronHandler } from '@/lib/cron-runs'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { sendNudge } from '@/lib/nudges/send'
 import type { Coach, Nudge } from '@/lib/supabase/types'
 
 export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic' // never prerender a cron handler
 export const maxDuration = 120
 
 /**
@@ -17,7 +19,7 @@ export const maxDuration = 120
  *
  * Protected by CRON_SECRET (Bearer), same as the reminders cron.
  */
-export async function GET(req: NextRequest) {
+async function handle(req: NextRequest) {
   const secret = process.env.CRON_SECRET
   if (!secret) return NextResponse.json({ error: 'CRON_SECRET not configured' }, { status: 503 })
   if (req.headers.get('authorization') !== `Bearer ${secret}`) {
@@ -52,3 +54,6 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({ sent, considered: due.length })
 }
+
+// Every run is logged to cron_runs (migration 067) — ok with the summary, or failed with the error.
+export const GET = cronHandler('nudges', handle)

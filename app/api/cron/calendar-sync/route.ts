@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { cronHandler } from '@/lib/cron-runs'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { syncExternalBookings } from '@/lib/booking-sync'
 import type { Coach } from '@/lib/supabase/types'
 
 export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic' // never prerender a cron handler
 
 /**
  * External booking capture cron. Vercel Cron hits this hourly. For every coach with
@@ -17,7 +19,7 @@ export const runtime = 'nodejs'
  * Protected by CRON_SECRET (Vercel passes it as a Bearer token), like the other
  * crons. Refuses to run if the secret isn't configured.
  */
-export async function GET(req: NextRequest) {
+async function handle(req: NextRequest) {
   const secret = process.env.CRON_SECRET
   if (!secret) return NextResponse.json({ error: 'CRON_SECRET not configured' }, { status: 503 })
   if (req.headers.get('authorization') !== `Bearer ${secret}`) {
@@ -49,3 +51,6 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({ coaches: coaches?.length || 0, discovered, updated, cancelled, unmatched })
 }
+
+// Every run is logged to cron_runs (migration 067) — ok with the summary, or failed with the error.
+export const GET = cronHandler('calendar-sync', handle)

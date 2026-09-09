@@ -3,8 +3,11 @@ import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { sendAppointmentReminder, syncAppointmentFromCalendar } from '@/lib/appointments'
 import { normalizeReminderSettings, reminderKind } from '@/lib/scheduling'
 import type { Coach } from '@/lib/supabase/types'
+import { cronHandler, errorText, recordCronRun } from '@/lib/cron-runs'
+import { generateCoachTasks } from '@/lib/coach-tasks/generate'
 
 export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic' // never prerender a cron handler
 
 // How far ahead to scan for sessions needing a nudge. Comfortably covers the
 // longest configurable lead time (a few days) with margin; volume is small.
@@ -22,7 +25,7 @@ const LOOKAHEAD_MS = 14 * 24 * 60 * 60 * 1000
  * Protected by CRON_SECRET — Vercel Cron passes it as a Bearer token. The route
  * refuses to run if the secret isn't configured, so it can't be triggered openly.
  */
-export async function GET(req: NextRequest) {
+async function runReminders(req: NextRequest) {
   const secret = process.env.CRON_SECRET
   if (!secret) return NextResponse.json({ error: 'CRON_SECRET not configured' }, { status: 503 })
   if (req.headers.get('authorization') !== `Bearer ${secret}`) {
@@ -98,3 +101,25 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({ sent, considered })
 }
+
+/**
+ * Pass 3 — coach attention queue (migration 067). Runs after the reminder
+ * passes on every hourly tick, in its OWN cron_runs record ('coach-tasks') so a
+ * failure here is visible on its own line and never hides a reminders failure
+ * (or vice versa). Coach-internal only: this pass never emails anyone.
+ */
+export const GET = cronHandler('reminders', async (req: NextRequest) => {
+  const res = await runReminders(req)
+  if (res.status === 401 || res.status === 503) return res // not authenticated — nothing runs
+
+  const supabase = getSupabaseAdmin()
+  let coachTasks: Record<string, unknown>
+  try {
+    coachTasks = await recordCronRun(supabase, 'coach-tasks', () => generateCoachTasks(supabase))
+  } catch (e) {
+    // Recorded as failed in cron_runs by recordCronRun; surface it in the response too.
+    coachTasks = { error: errorText(e) }
+  }
+  const body = await res.clone().json().catch(() => ({}))
+  return NextResponse.json({ ...(body && typeof body === 'object' ? body : {}), coachTasks }, { status: res.status })
+})

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { cronHandler } from '@/lib/cron-runs'
 import { runPortalReminders } from '@/lib/portal/reminders'
 
 export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic' // never prerender a cron handler
 export const maxDuration = 300
 
 /**
@@ -12,7 +14,7 @@ export const maxDuration = 300
  * `?dryRun=1` lists what would go without sending. CRON_SECRET (Bearer), same
  * as the other crons.
  */
-export async function GET(req: NextRequest) {
+async function handle(req: NextRequest) {
   const secret = process.env.CRON_SECRET
   if (!secret) return NextResponse.json({ error: 'CRON_SECRET not configured' }, { status: 503 })
   if (req.headers.get('authorization') !== `Bearer ${secret}`) {
@@ -25,3 +27,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 })
   }
 }
+
+// Every run is logged to cron_runs (migration 067) — ok with the summary, or failed with the error.
+export const GET = cronHandler('portal-reminders', handle)

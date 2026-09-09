@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { cronHandler } from '@/lib/cron-runs'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { syncGarden } from '@/lib/vault/sync'
 import { getVaultConfig } from '@/lib/vault/client'
 
 export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic' // never prerender a cron handler
 export const maxDuration = 300
 
 /**
@@ -14,7 +16,7 @@ export const maxDuration = 300
  * Protected by CRON_SECRET (Bearer), same as the other crons. No-ops cleanly when
  * the vault credential isn't configured.
  */
-export async function GET(req: NextRequest) {
+async function handle(req: NextRequest) {
   const secret = process.env.CRON_SECRET
   if (!secret) return NextResponse.json({ error: 'CRON_SECRET not configured' }, { status: 503 })
   if (req.headers.get('authorization') !== `Bearer ${secret}`) {
@@ -47,3 +49,6 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({ synced, indexed })
 }
+
+// Every run is logged to cron_runs (migration 067) — ok with the summary, or failed with the error.
+export const GET = cronHandler('vault-sync', handle)

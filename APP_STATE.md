@@ -25,8 +25,9 @@ quick, current "what exists right now" ledger._
 
 - **123 API route files** under `app/api/**` (down from 126 — Phase 0 removed 3 CA
   routes). Full route-by-route isolation classification: **`ISOLATION_AUDIT.md` §2**.
-- **6 Vercel crons** (all hourly, `vercel.json`): `reminders`, `nudges`, `vault-sync`,
-  `calendar-sync`, `billing-reminders`, `billing-retries`. Audit: `ISOLATION_AUDIT.md` §3.
+- **7 Vercel crons** (`vercel.json`): hourly `reminders` (+ the coach-task pass),
+  `nudges`, `vault-sync`, `calendar-sync`, `billing-reminders`, `billing-retries`;
+  daily `portal-reminders`. Every run logged to `cron_runs` (067). Audit: `ISOLATION_AUDIT.md` §3.
 - **42 migrations**, strict `001`–`042` (Phase 0 renumbered the old `026`/`034`
   duplicates — map in `docs/MIGRATION_PROCEDURE.md`). **Applied by hand** in the
   Supabase SQL editor; production is at `042`. `042` = the Phase 1 §5.0 tenant
@@ -102,6 +103,39 @@ quick, current "what exists right now" ledger._
     PR #180); (3) verify on the staging preview, then prod-smoke. Natural trigger:
     onboarding a second real organization.
 - Decisions driving Phase 1 are recorded in `ISOLATION_AUDIT.md` §8.
+
+## Coach attention queue build (2026-09-09 → ; brief "Coach Attention Queue & Session Note Send/Close-Out")
+
+- **Migration number truth.** Production probed 2026-09-09 (Jeff ran the check):
+  schema at **064**, `coach_tasks` absent, 065 pending (data only), 066 applied
+  (360 brief active as version 2). The brief believed docs tracked through 039 —
+  that was pre-Phase-0; the folder is strict `001`–`066`. **This build = `067`.**
+- **Staging-before-schema exception — GRANTED.** The staging Supabase project is
+  paused (since 056). Jeff approved ("go", 2026-09-09) applying additive-only
+  `067_coach_tasks.sql` (one new table + one log table + defaulted/nullable
+  columns, no drops/type changes/backfill) directly to production, on the
+  recommendation that the change's risk is in application logic staging would
+  not exercise. Down-script authored first; up/down/re-up verified on Postgres 16.
+- **`coach_tasks`** — generic per-coach task queue; v1 = session-note tasks
+  (`write_note` / `send_note`), states pending|sent|filed|dismissed, no snooze.
+  Open-text `subject_type`/`task_type` so later task kinds (unmatched bookings,
+  billing review, nudge approvals) need no migration. Isolation = `coach_id`
+  filter in app code on every query (no RLS policies).
+- **`notes.status` = view-filter-only invariant.** All 23 `from('notes')`
+  consumers audited unfiltered (list in `CLAUDE.md`); sent truth stays on the
+  050 columns (`sent_to_client_at`), code reads sent as either signal.
+- **Cron host** = the existing hourly `/api/cron/reminders` (pass 3), never the
+  nudge cron — a coach reminder can never reach a client inbox. **`cron_runs`**
+  failure queue: all seven crons now log every run (`lib/cron-runs.ts`);
+  supervisor review at `GET /api/admin/cron-runs`. Stale `running` rows = killed
+  mid-run.
+- **Signal Orange — resolved as the accepted default:** navy final send button,
+  2px Signal Orange top border on the send modal (one orange instance, rule
+  intact). Revisit after two weeks of real use if the moment feels light.
+- **Claim-before-send + idempotency key** (billing pattern) extends to note
+  sending in Phase 3 — not yet built.
+- **Phase status:** Phase 1 shipped (schema + generation, no UI). Phases 2–4
+  pending Jeff's confirmation each.
 
 ## Known isolation gaps (do NOT rely on DB enforcement)
 
