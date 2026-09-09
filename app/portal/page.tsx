@@ -97,7 +97,12 @@ export default async function PortalHome() {
           <PortalLogoutButton />
         </div>
       </div>
-      <PortalShell onboarded={data.onboarded} hasCoach={hasCoach} />
+      <PortalShell
+        onboarded={data.onboarded}
+        hasCoach={hasCoach}
+        assessmentsEnabled={assessmentsEnabled}
+        hasBooking={Boolean(data.bookingUrl)}
+      />
 
       <h1 className="mt-8 text-[24px] font-medium text-tlw-navy-deep">Welcome, {firstName}.</h1>
 

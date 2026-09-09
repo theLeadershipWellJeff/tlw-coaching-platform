@@ -1140,9 +1140,20 @@ is never accepted here, and vice-versa.
   returns it (the file itself is NOT stored). The chat POST accepts an optional
   `attachment: {filename, text}` (capped 30k chars) that is spliced into that
   turn's last user message for the model; only a `📎 filename` marker is persisted.
-- **Onboarding + tips (Phase 7; rebuilt in 053).** `PortalTour` is a **six-step
-  walkthrough** of the home page's cards (progress dots double as navigation,
-  skippable). The "taken" flag is `clients.portal_onboarded` (migration 053) —
+- **Onboarding + tips (Phase 7; rebuilt in 053; steps refreshed 2026-09-09).**
+  `PortalTour` walks the home page **top to bottom in its current order** —
+  booking button, 360 report, assistant chat (+ "Save as a goal"), Plan your
+  week / This-week card, goals with progress, sessions + transcripts + notes +
+  search, Your documents, My notes, contact, Settings + email reminders, the
+  ⓘ tips (progress dots double as navigation, skippable). The list is built
+  per person by `PortalTour.tsx#buildTourSteps({hasCoach, assessmentsEnabled,
+  hasBooking})` — a step whose card the page does not render for them is left
+  out (no booking link → no booking step; flag off → no 360 step; no coach →
+  the coach-only sessions/notes step drops and every other step's `noCoach`
+  wording applies), so the step count always matches what is on screen. The
+  page passes the three flags through `PortalShell`. **Adding a home-page
+  card = add a step there (and a `noCoach` variant when the copy mentions a
+  coach).** The "taken" flag is `clients.portal_onboarded` (migration 053) —
   per client, not per browser, so it doesn't re-fire on a new device — and a
   **"Take the tour again"** link at the foot of the page replays it. Every card
   carries an `InfoPopover` (ⓘ). **Re-showing fix (2026-09-06):** finishing or
