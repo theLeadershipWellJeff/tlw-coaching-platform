@@ -1935,9 +1935,16 @@ post-beta (Tier 3 of the plan).
   the coach's choice; Plaud/Zoom rows are "automated intake coming soon" with a
   Plaud signup link (swap `PLAUD_SIGNUP_URL` for the affiliate link when it
   exists). Manual upload works regardless of the setting.
-- **Sign-in allowlist:** optional `BETA_COACH_EMAILS` env (comma list) gates
-  Google sign-in via `callbacks.signIn`; coaches with an existing row are always
-  allowed; unset = open sign-up.
+- **Sign-in allowlist = the `coaches` table (2026-09-09).** `callbacks.signIn`
+  in `lib/authOptions.ts` admits a Google account only when a `coaches` row
+  already exists for its email (`lib/coach.ts#getCoachByEmail`, get-only; a
+  lookup error fails CLOSED). Nothing is created at sign-in, in
+  `getSessionCoach`, by the ingest webhook, or by any cron — a new coach is
+  added by a supervisor (Command Center → `POST /api/coaches`).
+  `getOrCreateCoach` remains in `lib/coach.ts` for an explicit admin path only
+  and has no callers. A refused account lands on the plain `/auth/error` page
+  ("This account isn't authorized"). `BETA_COACH_EMAILS` no longer grants entry
+  (left in `.env.example` for now; ignored by code).
 - **First-run checklist** (`dashboard/WelcomeChecklist.tsx`): shows while the
   roster is empty (dismissible, localStorage `tlw-welcome-dismissed`) — walks a
   new coach through timezone/calendar, signature, transcript source, first client.
@@ -2053,8 +2060,8 @@ charge a coach. **Do these in the live Stripe account when ready:**
 Google OAuth (`GOOGLE_CLIENT_ID/SECRET`), `NEXTAUTH_URL/SECRET`,
 `ANTHROPIC_API_KEY`, Supabase (`NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_API_SECRET_KEY`),
 `JEFF_FROM_EMAIL`/`JEFF_CC_EMAIL`, Zoom (`ZOOM_ACCOUNT_ID/CLIENT_ID/CLIENT_SECRET`),
-`BETA_COACH_EMAILS` (optional comma-separated sign-in allowlist — see the
-Multi-coach beta section; unset = open sign-up),
+`BETA_COACH_EMAILS` (no longer read — since 2026-09-09 the `coaches` table is
+the sign-in allowlist; see the Multi-coach beta section),
 `INGEST_SECRET`, `CRON_SECRET` (Bearer token for the hourly crons —
 `/api/cron/reminders`, `/api/cron/nudges`, `/api/cron/vault-sync`; set the same
 value in Vercel), `DEFAULT_COACH_EMAIL` (= `jeff@jeffkholmes.com`),
@@ -2282,10 +2289,12 @@ Stripe hosted Checkout (`setup` mode) — never on a TLW page (PCI SAQ-A).**
   **Drive** (drive.readonly was added for Plaud import — enable the Drive API in
   the Cloud console if you hit "Drive API has not been used").
 - **OAuth consent screen is PUBLISHED / "In production"** (as of 2026-08). Any
-  Google account can sign in — no test-user allowlist. On first sign-in a
-  `coaches` row is auto-created (`getOrCreateCoach`) and the coach lands on an
-  empty, per-coach-scoped workspace. To onboard a new coach (e.g. a tester): they
-  just sign in at the app with their Google account and grant the consent scopes.
+  Google account can complete Google's consent step — but since 2026-09-09
+  sign-in is **get-only**: the app admits the account only if a `coaches` row
+  already exists for that email, and never creates one. To onboard a new coach
+  (e.g. a tester): a supervisor adds them first (Command Center → Add coach,
+  `POST /api/coaches`), then they sign in with that Google account and grant the
+  consent scopes; the refresh token is stored on the existing row.
   Manage publishing status / any future scope verification at
   https://console.cloud.google.com/apis/credentials/consent.
 - **Adding an OAuth scope requires the coach to sign out and back in** (the

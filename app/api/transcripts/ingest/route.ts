@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
-import { getOrCreateCoach } from '@/lib/coach'
+import { getCoachByEmail } from '@/lib/coach'
 import { ingestMarkdown } from '@/lib/transcripts/ingest'
 import { sendNeedsReviewEmail } from '@/lib/transcript-review-email'
 
@@ -23,7 +23,37 @@ export const maxDuration = 300
  * Body: { filename?, markdown, title?|summary?, driveFileId?, coachEmail?, coachName? }
  *   - title/summary: an explicit human title (e.g. Zapier maps Plaud's summary here).
  * Header: x-ingest-secret: <INGEST_SECRET>
+ *
+ * SECURITY (2026-09-09): the coach is resolved GET-ONLY. A `coachEmail` with
+ * no `coaches` row is refused (403) and the refusal is written to `cron_runs`
+ * (job 'transcripts-ingest', status 'failed') so it is reviewable at
+ * GET /api/admin/cron-runs?job=transcripts-ingest&status=failed. A webhook
+ * can never create a coach — the secret holder no longer chooses the tenant.
+ * The full markdown is not stored on refusal; Zapier's Drive archive keeps it.
  */
+const INGEST_JOB = 'transcripts-ingest'
+
+/** Reviewable record of a refused ingest — best-effort, never throws. */
+async function recordIngestRejection(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  reason: string,
+  detail: Record<string, unknown>
+): Promise<void> {
+  try {
+    const now = new Date().toISOString()
+    const { error } = await supabase.from('cron_runs').insert({
+      job: INGEST_JOB,
+      status: 'failed',
+      started_at: now,
+      finished_at: now,
+      error: reason.slice(0, 4000),
+      summary: detail,
+    })
+    if (error) console.error('[ingest] could not record rejection:', error.message)
+  } catch (e) {
+    console.error('[ingest] could not record rejection:', e)
+  }
+}
 export async function POST(req: NextRequest) {
   const secret = process.env.INGEST_SECRET
   if (!secret) {
@@ -60,12 +90,32 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  // GET-ONLY coach resolution. No row → refuse + leave a reviewable record.
+  let coach
   try {
-    const coach = await getOrCreateCoach(
-      supabase,
+    coach = await getCoachByEmail(supabase, coachEmail)
+  } catch (e: any) {
+    return NextResponse.json({ error: `Coach lookup failed: ${e.message}` }, { status: 500 })
+  }
+  if (!coach) {
+    await recordIngestRejection(supabase, `rejected: no coaches row for ${coachEmail}`, {
+      code: 'coach_not_found',
       coachEmail,
-      body.coachName || process.env.DEFAULT_COACH_NAME || coachEmail
+      coachName: body.coachName ?? null,
+      filename: body.filename ?? null,
+      title: body.title ?? body.summary ?? null,
+      source: body.source || 'plaud',
+      driveFileId: body.driveFileId ?? body.drive_file_id ?? null,
+      markdownChars: markdown.length,
+      preview: previewOf(markdown),
+    })
+    return NextResponse.json(
+      { error: 'No coach is registered for this transcript — it was not filed.', code: 'coach_not_found' },
+      { status: 403 }
     )
+  }
+
+  try {
     const result = await ingestMarkdown(supabase, {
       coach,
       markdown,

@@ -2,7 +2,13 @@
  * Coach identity. Phase 1 is effectively single-coach (Jeff), but every
  * transcript and report carries a coach_id so a supervisor can roll up across
  * coaches later without a migration. Coaches are keyed by the email on their
- * signed-in Google account and created on first use.
+ * signed-in Google account.
+ *
+ * SECURITY (2026-09-09): the `coaches` table IS the sign-in allowlist. Sign-in,
+ * the session lookup, and every webhook/cron are GET-ONLY — none of them may
+ * create a coach row. `getOrCreateCoach` is retained solely for an explicit
+ * admin onboarding path (not wired to any route today); never call it from
+ * auth, a webhook, or a cron.
  */
 import { getServerSession } from 'next-auth'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -11,6 +17,33 @@ import type { Database, Coach } from './supabase/types'
 
 export const DEFAULT_TIMEZONE = process.env.DEFAULT_TIMEZONE || 'America/Los_Angeles'
 
+/**
+ * The coach row for an email, or null when none exists. Throws on a read
+ * ERROR (as opposed to "no row") so callers can tell an outage from a
+ * stranger — the sign-in gate fails closed on either.
+ */
+export async function getCoachByEmail(
+  supabase: SupabaseClient<Database>,
+  email: string
+): Promise<Coach | null> {
+  const normalizedEmail = email.trim().toLowerCase()
+  if (!normalizedEmail) return null
+  const { data, error } = await supabase
+    .from('coaches')
+    .select('*')
+    .eq('email', normalizedEmail)
+    .maybeSingle()
+  if (error) throw new Error(`Supabase (coaches read): ${error.message}`)
+  return data ?? null
+}
+
+/**
+ * ADMIN-ONLY. Get-or-create a coach row. Reserved for an explicit supervisor
+ * onboarding path; it is deliberately NOT called from sign-in, the session
+ * lookup, the ingest webhook, or any cron (the Command Center adds coaches via
+ * a direct insert in POST /api/coaches). Kept so that path can be built
+ * without re-deriving the create-race handling below.
+ */
 export async function getOrCreateCoach(
   supabase: SupabaseClient<Database>,
   email: string,
@@ -18,12 +51,7 @@ export async function getOrCreateCoach(
 ): Promise<Coach> {
   const normalizedEmail = email.trim().toLowerCase()
 
-  const { data: existing, error: readErr } = await supabase
-    .from('coaches')
-    .select('*')
-    .eq('email', normalizedEmail)
-    .maybeSingle()
-  if (readErr) throw new Error(`Supabase (coaches read): ${readErr.message}`)
+  const existing = await getCoachByEmail(supabase, normalizedEmail)
   if (existing) return existing
 
   const { data: created, error: insErr } = await supabase
@@ -33,11 +61,7 @@ export async function getOrCreateCoach(
     .single()
   if (insErr) {
     // Lost a create race — read the row the other writer inserted.
-    const { data: raced } = await supabase
-      .from('coaches')
-      .select('*')
-      .eq('email', normalizedEmail)
-      .maybeSingle()
+    const raced = await getCoachByEmail(supabase, normalizedEmail)
     if (raced) return raced
     throw new Error(`Supabase (coaches insert): ${insErr.message}`)
   }
@@ -45,31 +69,38 @@ export async function getOrCreateCoach(
 }
 
 /**
- * Persist the coach's Google refresh token (and ensure the coach row exists) on
- * sign-in, so the background webhook can read their calendar server-side. Google
- * only returns a refresh token when offline access is (re)granted; sign-in uses
- * prompt=consent so we get one each time. Never clobber a stored token with null.
+ * Persist the coach's Google refresh token on sign-in, so the background
+ * webhook can read their calendar server-side. Google only returns a refresh
+ * token when offline access is (re)granted; sign-in uses prompt=consent so we
+ * get one each time. Never clobber a stored token with null. GET-ONLY: an
+ * email with no coaches row is ignored here (the signIn callback has already
+ * refused it — this event only runs for admitted accounts).
  */
 export async function storeCoachRefreshToken(
   supabase: SupabaseClient<Database>,
   email: string,
-  name: string,
   refreshToken: string | null | undefined
 ): Promise<void> {
-  const coach = await getOrCreateCoach(supabase, email, name)
+  const coach = await getCoachByEmail(supabase, email)
+  if (!coach) return
   if (!refreshToken) return
   if (coach.google_refresh_token === refreshToken) return
   await supabase.from('coaches').update({ google_refresh_token: refreshToken }).eq('id', coach.id)
 }
 
-/** The coach for the signed-in session, or null if not authenticated. */
+/**
+ * The coach for the signed-in session, or null if not authenticated OR the
+ * session's email no longer has a coaches row (a valid JWT can outlive a
+ * removed coach by up to 30 days). Callers must treat null as 401 — never
+ * re-create the row here.
+ */
 export async function getSessionCoach(
   supabase: SupabaseClient<Database>
 ): Promise<Coach | null> {
   const session = await getServerSession(authOptions)
   const email = session?.user?.email
   if (!email) return null
-  return getOrCreateCoach(supabase, email, session.user?.name || email)
+  return getCoachByEmail(supabase, email)
 }
 
 /**
