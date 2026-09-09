@@ -56,7 +56,16 @@ function formatDate(d: string): string {
   })
 }
 
-export function NotesPanel({ clientId, autoNew = false }: { clientId: string; autoNew?: boolean }) {
+export function NotesPanel({
+  clientId,
+  autoNew = false,
+  initialNoteId,
+}: {
+  clientId: string
+  autoNew?: boolean
+  // Open this note on load (deep link from the dashboard attention queue: ?note=<id>).
+  initialNoteId?: string
+}) {
   const [notes, setNotes] = useState<Note[]>([])
   const [client, setClient] = useState<Client | null>(null)
   const [clientLoaded, setClientLoaded] = useState(false)
@@ -99,12 +108,12 @@ export function NotesPanel({ clientId, autoNew = false }: { clientId: string; au
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to load notes')
       setNotes(data.notes || [])
-      setActiveId((prev) => prev || data.notes?.[0]?.id || null)
+      setActiveId((prev) => prev || (initialNoteId && data.notes?.some((n: Note) => n.id === initialNoteId) ? initialNoteId : null) || data.notes?.[0]?.id || null)
     } catch (e: any) {
       setError(e.message)
     }
     setLoading(false)
-  }, [clientId])
+  }, [clientId, initialNoteId])
 
   useEffect(() => {
     load()

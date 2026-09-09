@@ -7,7 +7,7 @@ export default function ClientNotesPage({
   searchParams,
 }: {
   params: { id: string }
-  searchParams: { new?: string }
+  searchParams: { new?: string; note?: string }
 }) {
   return (
     <>
@@ -18,7 +18,7 @@ export default function ClientNotesPage({
       >
         ← Back to client
       </Link>
-      <NotesPanel clientId={params.id} autoNew={searchParams?.new === '1'} />
+      <NotesPanel clientId={params.id} autoNew={searchParams?.new === '1'} initialNoteId={searchParams?.note} />
     </>
   )
 }
