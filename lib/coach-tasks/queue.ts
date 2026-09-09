@@ -203,3 +203,55 @@ export async function noteForTask(supabase: Db, coach: Coach, taskId: string): P
   if (error) throw new ApiError(500, `Could not create the note: ${error.message}`)
   return { clientId: task.client_id, noteId: note.id, created: true }
 }
+
+/**
+ * After a note is sent (or filed) from the editor: resolve the coach's pending
+ * task for that session, if one exists. Matching = the same rule the generator
+ * uses, so a note the queue would have tied to the appointment is the one that
+ * clears it. Coach-scoped; best-effort (a miss here is corrected by the next
+ * cron reconcile).
+ */
+export async function resolveTasksForNote(
+  supabase: Db,
+  coach: Coach,
+  clientId: string,
+  note: NoteLike,
+  state: 'sent' | 'filed'
+): Promise<number> {
+  const { data: tasks } = await supabase
+    .from('coach_tasks')
+    .select('id, appointment_id, task_type, state')
+    .eq('coach_id', coach.id)
+    .eq('client_id', clientId)
+    .eq('state', 'pending')
+  if (!tasks || tasks.length === 0) return 0
+  const apptIds = tasks.map((t) => t.appointment_id).filter((id): id is string => !!id)
+  if (apptIds.length === 0) return 0
+  const { data: appts } = await supabase
+    .from('appointments')
+    .select('id, coach_id, client_id, scheduled_at, duration_minutes, google_event_id, status')
+    .in('id', apptIds)
+    .eq('coach_id', coach.id)
+  const tz = coach.timezone || 'UTC'
+  let n = 0
+  for (const appt of (appts || []) as ApptLike[]) {
+    const match = findNoteForAppointment(appt, [note], tz)
+    if (!match) continue
+    const task = tasks.find((t) => t.appointment_id === appt.id)
+    if (!task) continue
+    const { data } = await supabase
+      .from('coach_tasks')
+      .update({
+        state,
+        resolved_at: new Date().toISOString(),
+        resolved_by: coach.id,
+        resolution_note: state === 'sent' ? 'Note sent to the client from the editor' : 'Note filed from the editor',
+      })
+      .eq('id', task.id)
+      .eq('coach_id', coach.id)
+      .eq('state', 'pending')
+      .select('id')
+    if (data && data.length > 0) n++
+  }
+  return n
+}

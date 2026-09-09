@@ -151,6 +151,11 @@ export type Note = {
   filed_at?: Timestamp | null
   reopened_at?: Timestamp | null
   reopen_count?: number
+  // Send claim (migration 068): CAS counter + in-flight stamp + audit key so a
+  // double-tap / two-tab send produces exactly one email. See lib/notes/send.ts.
+  send_attempt?: number
+  send_claimed_at?: Timestamp | null
+  send_idempotency_key?: string | null
   created_at: Timestamp
   updated_at: Timestamp
 }
