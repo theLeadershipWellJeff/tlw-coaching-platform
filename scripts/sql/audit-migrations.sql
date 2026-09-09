@@ -1,0 +1,50 @@
+-- Migration audit — paste into the Supabase SQL editor.
+-- One row per migration from 042 on, with a sentinel object that only exists
+-- once that migration ran. `applied = false` means paste that migration file.
+-- Written 2026-09-09 after 053/054/055 turned out never to have been applied
+-- despite the ledger's "confirmed" entries. Extend it when adding a migration.
+with checks(migration, applied, note) as (values
+  ('042_organizations_and_org_id',
+     (select count(*) > 0 from information_schema.columns where table_name = 'clients' and column_name = 'org_id'), ''),
+  ('043_rls_notes_actions_select',
+     (select count(*) > 0 from pg_policies where tablename = 'notes'), 'policies stay dormant until routes switch'),
+  ('044_client_tokens',            to_regclass('public.client_tokens') is not null, ''),
+  ('045_portal_chat',              to_regclass('public.portal_conversations') is not null, ''),
+  ('046_signature_owner',
+     (select count(*) > 0 from email_signatures where coach_id is not null), 'data only — Jeff signature attached to his coach row'),
+  ('047_coach_calendar_and_transcript_source',
+     (select count(*) > 0 from information_schema.columns where table_name = 'coaches' and column_name = 'calendar_id'), ''),
+  ('048_supervisor_bootstrap_and_signature_unique',
+     (select count(*) > 0 from pg_indexes where indexname = 'email_signatures_coach_uidx'), ''),
+  ('049_coaching_hours_entries',   to_regclass('public.coaching_hours_entries') is not null, ''),
+  ('050_note_sent_to_client',
+     (select count(*) > 0 from information_schema.columns where table_name = 'notes' and column_name = 'sent_to_client_at'), 'portal notes gate'),
+  ('051_coach_booking_url',
+     (select count(*) > 0 from information_schema.columns where table_name = 'coaches' and column_name = 'booking_url'), ''),
+  ('052_portal_search',
+     (select count(*) > 0 from pg_proc where proname = 'portal_search'), 'needs btree_gin extension'),
+  ('053_portal_access_log',        to_regclass('public.portal_access_log') is not null, 'rate limits + chat retrieval fn'),
+  ('054_client_credentials',       to_regclass('public.client_credentials') is not null, 'portal password'),
+  ('055_client_frameworks',        to_regclass('public.client_frameworks') is not null, ''),
+  ('056_invoice_reminder_ladder',
+     (select count(*) > 0 from information_schema.columns where table_name = 'invoice_reminders' and column_name = 'kind'), ''),
+  ('057_coach_plans_admin',
+     (select count(*) > 0 from information_schema.columns where table_name = 'coaches' and column_name = 'plan'), ''),
+  ('058_session_plans',            to_regclass('public.session_plans') is not null, ''),
+  ('059_assessment_debrief_foundation', to_regclass('public.companies') is not null, ''),
+  ('060_company_documents',        to_regclass('public.company_documents') is not null, ''),
+  ('061_portal_profile_weekly_plans', to_regclass('public.weekly_plans') is not null, ''),
+  ('062_client_documents_reconcile',
+     (select count(*) > 0 from information_schema.columns where table_name = 'client_documents' and column_name = 'updated_at'), ''),
+  ('063_portal_notes_reminders',   to_regclass('public.portal_notes') is not null, ''),
+  ('064_coach_profile',
+     (select count(*) > 0 from information_schema.columns where table_name = 'coaches' and column_name = 'preferred_name'), ''),
+  ('065_publish_rubric_briefs',
+     (select count(*) > 0 from prompt_briefs where slug = 'portal_chat'), 'data only'),
+  ('066_publish_360_brief_v2_1',
+     (select count(*) > 0 from prompt_briefs where slug = 'assessment_360' and version >= 2), 'data only'),
+  ('067_coach_tasks',              to_regclass('public.coach_tasks') is not null, ''),
+  ('068_note_send_claim',
+     (select count(*) > 0 from information_schema.columns where table_name = 'notes' and column_name = 'send_attempt'), 'send-note claim guard')
+)
+select migration, applied, note from checks order by migration;
