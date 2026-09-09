@@ -1964,8 +1964,7 @@ charge a coach. **Do these in the live Stripe account when ready:**
    on its own; then cancel from the billing portal and confirm the plan drops
    to `free`.
 
-(053 + 054 are applied as of 2026-08-24, so the client drill-down shows full
-portal state — last-seen, lockouts, and portal-unlock all live.)
+(053 + 054 were reported applied 2026-08-24 but were NOT — both landed 2026-09-09. Since then the client drill-down shows full portal state — last-seen, lockouts, and portal-unlock all live.)
 
 ## Security & pipeline hardening (absorbed from PRs #45/#55)
 
@@ -2323,8 +2322,7 @@ units with a 1-hour minimum, rounding up once past 15 min into a half hour
 (`lib/billing.ts`). Past-week revenue uses each note's logged `duration_minutes`;
 the projection uses the scheduled calendar-event length.
 
-**Migration status note (2026-08-24): Jeff confirmed ALL migrations through
-057 are applied in production.** The "pending" language below and in older
+**Migration status note (2026-08-24, CORRECTED 2026-09-09): Jeff reported ALL migrations through 057 applied, but the audit query found 051/052/053/054/055 missing; all five were applied 2026-09-09. Verify any "applied" claim by running `scripts/sql/audit-migrations.sql` in the SQL editor — never by the ledger alone.** The "pending" language below and in older
 per-migration entries is historical — kept for the apply-order caveats it
 records, not as a live to-do list.
 
@@ -2429,14 +2427,14 @@ reads to show only the notes a coach actually sent. Reversible via
 `050_note_sent_to_client_down.sql` (which deliberately keeps the
 `type='session_note'` communications rows — they are the record of real sends).
 
-**`051_coach_booking_url.sql` — APPLIED (production, confirmed 2026-08-24).** Adds `coaches.booking_url` (the
+**`051_coach_booking_url.sql` — ⚠️ NOT applied until 2026-09-09 (the 2026-08-24 confirmation was wrong; found by `scripts/sql/audit-migrations.sql`).** Adds `coaches.booking_url` (the
 client-facing HubSpot/Calendly scheduler link shown at the top of the Client
 Portal) and seeds the founding coach's existing HubSpot link — the one already
 hand-written into the seeded email signature — so the button works on day one.
 Additive/nullable; NULL just hides the button, and reads are defensive, so the
 app runs without it. Set per coach in Account → Scheduling.
 
-**`052_portal_search.sql` — APPLIED (production, confirmed 2026-08-24).** Client Portal full-text search: adds a
+**`052_portal_search.sql` — ⚠️ NOT applied until 2026-09-09 (the 2026-08-24 confirmation was wrong; the portal search ran on the ILIKE fallback the whole time).** Client Portal full-text search: adds a
 generated `search_vector` to `transcripts` and `communications`, compound
 `btree_gin` GIN indexes on `(client_id, search_vector)`, and the `portal_search`
 SQL function that ranks one query across a client's transcripts + sent session
@@ -2447,7 +2445,7 @@ for existing rows during the migration. Requires the `btree_gin` extension
 to the old ILIKE path if the function is absent**, so deploy order is not
 critical here. Verified up + down against Postgres 16.
 
-**`053_portal_access_log.sql` — APPLIED (production, confirmed 2026-08-24).** Three additive pieces for the
+**`053_portal_access_log.sql` — ⚠️ NOT applied until 2026-09-09 (the 2026-08-24 confirmation was wrong; the portal ran with no rate limiting and recency-only chat context the whole time).** Three additive pieces for the
 Client Portal: `portal_access_log` (audit trail + the durable counter behind
 per-client rate limiting — in-process counters are useless on serverless),
 `clients.portal_onboarded` (the first-visit tour flag, moved off localStorage),
@@ -2467,7 +2465,7 @@ the recovery path; without this migration the password tab simply always fails.
 Down drops every stored password — nobody is locked out, since the emailed link
 always works. Verified up + down.
 
-**`055_client_frameworks.sql` — APPLIED (production, confirmed 2026-08-24).** Records frameworks a scored session
+**`055_client_frameworks.sql` — ⚠️ NOT applied until 2026-09-09 (the 2026-08-24 confirmation was wrong).** Records frameworks a scored session
 **named**, not just ones a nudge was sent about, so the portal's Frameworks card
 reflects what was actually discussed. Written by the nudge pipeline before its
 per-window cap discards candidates. Additive; the portal falls back to the
@@ -2541,8 +2539,7 @@ them defensively (absent = first-name greeting) and the name field of the
 Profile card saves independently, so only the three new fields wait on it.
 Reversible via `064_coach_profile_down.sql`.
 
-**`067_coach_tasks.sql` — PENDING (production; staging exception approved by
-Jeff 2026-09-09).** The coach attention queue: `coach_tasks` (generic per-coach
+**`067_coach_tasks.sql` — APPLIED (production, verified by the audit query 2026-09-09; staging exception approved by Jeff).** The coach attention queue: `coach_tasks` (generic per-coach
 task table, partial unique pending index, RLS), `cron_runs` (the cron failure
 queue, RLS), `notes.status/generated_narrative/narrative_generated_at/filed_at/
 reopened_at/reopen_count` (status = view filter only; sent truth stays on the
