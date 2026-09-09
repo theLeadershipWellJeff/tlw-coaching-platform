@@ -98,9 +98,12 @@ export function RichNoteEditor({
   enableTemplates = false,
   enableFields = false,
   clientId,
+  editable = true,
 }: {
   html: string
   onChange: (html: string, text: string) => void
+  // false = read-only (a sent/filed note until "Reopen and revise").
+  editable?: boolean
   placeholder?: string
   // Show a "Templates" dropdown that inserts a saved Library template, resolving
   // its merge fields against `clientId` when provided.
@@ -123,6 +126,7 @@ export function RichNoteEditor({
       Indent,
     ],
     content: html || '',
+    editable,
     editorProps: {
       attributes: {
         class:
@@ -146,6 +150,11 @@ export function RichNoteEditor({
     editorRef.current = editor
   }, [editor])
 
+  // Read-only toggles live (sent/filed note ↔ "Reopen and revise").
+  useEffect(() => {
+    if (editor && editor.isEditable !== editable) editor.setEditable(editable)
+  }, [editor, editable])
+
   if (!editor) {
     return (
       <div className="min-h-[320px] animate-pulse rounded-tlw-lg border border-tlw-warm-gray/20 bg-tlw-canvas/40" />
@@ -154,7 +163,7 @@ export function RichNoteEditor({
 
   return (
     <div className="space-y-2">
-      <Toolbar editor={editor} enableTemplates={enableTemplates} enableFields={enableFields} clientId={clientId} />
+      {editable && <Toolbar editor={editor} enableTemplates={enableTemplates} enableFields={enableFields} clientId={clientId} />}
       <div className="relative">
         {editor.isEmpty && (
           <p className="pointer-events-none absolute left-4 top-4 text-[14px] text-tlw-warm-gray/60">

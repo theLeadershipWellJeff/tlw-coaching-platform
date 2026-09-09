@@ -7,11 +7,14 @@ import { FloatingNoteWindow, openNotePopout } from './FloatingNoteWindow'
 import { KeyInfoCard } from './KeyInfoCard'
 import { CoachingMapCard } from './CoachingMapCard'
 import { EngagementGoalsCard } from './EngagementGoalsCard'
-import { SendToClientModal } from './SendToClientModal'
+import { SendNoteFlow } from './SendNoteFlow'
+import { showToast } from '@/app/components/shared/Toast'
+import { isNoteActive, isNoteSent } from '@/lib/notes/status'
 import { ScheduleSessionModal } from './ScheduleSessionModal'
 import { PrepSheetCard } from './PrepSheetCard'
 import { PlanSessionCard } from './PlanSessionCard'
 import { extractCaptures } from '@/lib/notes/extract'
+import { splitNarrative } from '@/lib/notes/narrative-format'
 import { billedHours } from '@/lib/billing'
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
@@ -108,7 +111,14 @@ export function NotesPanel({
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to load notes')
       setNotes(data.notes || [])
-      setActiveId((prev) => prev || (initialNoteId && data.notes?.some((n: Note) => n.id === initialNoteId) ? initialNoteId : null) || data.notes?.[0]?.id || null)
+      setActiveId(
+        (prev) =>
+          prev ||
+          (initialNoteId && data.notes?.some((n: Note) => n.id === initialNoteId) ? initialNoteId : null) ||
+          (data.notes || []).find((n: Note) => isNoteActive(n))?.id ||
+          data.notes?.[0]?.id ||
+          null
+      )
     } catch (e: any) {
       setError(e.message)
     }
@@ -158,6 +168,10 @@ export function NotesPanel({
   }
 
   const active = notes.find((n) => n.id === activeId) || null
+  // status is a VIEW filter: sent/filed notes leave the working list and sit in
+  // the collapsed "Sent notes" section below (one tap to reopen, read-only).
+  const activeNotes = notes.filter(isNoteActive)
+  const closedNotes = notes.filter((n) => !isNoteActive(n))
 
   return (
     <div className="rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface">
@@ -213,7 +227,7 @@ export function NotesPanel({
               being written; the Edit button loads it into the editor instead,
               and ⧉ pops it straight out to a separate browser window. */}
           <RecentNotes
-            notes={notes}
+            notes={activeNotes}
             activeId={activeId}
             onOpen={openFloating}
             onEdit={(id) => {
@@ -225,6 +239,9 @@ export function NotesPanel({
               closeFloating(id)
             }}
           />
+
+          {/* Sent + filed notes — collapsed, one tap to reopen (read-only). */}
+          <SentNotes notes={closedNotes} activeId={activeId} onOpen={(id) => setActiveId(id)} />
 
           {/* The prep sheet we send out, alongside the notes. */}
           <PrepSheetCard clientId={clientId} />
@@ -286,6 +303,7 @@ function RecentNotes({
           </button>
         )}
       </div>
+      {notes.length === 0 && <p className="px-1 py-2 text-[12px] text-tlw-warm-gray">No open notes — everything is sent or filed.</p>}
       <div className="divide-y divide-tlw-warm-gray/10">
         {visible.map((n) => (
           <div
@@ -340,6 +358,40 @@ function RecentNotes({
   )
 }
 
+function SentNotes({ notes, activeId, onOpen }: { notes: Note[]; activeId: string | null; onOpen: (id: string) => void }) {
+  const [open, setOpen] = useState(false)
+  if (notes.length === 0) return null
+  const sorted = [...notes].sort((a, b) => (b.sent_to_client_at || b.filed_at || b.updated_at || '').localeCompare(a.sent_to_client_at || a.filed_at || a.updated_at || ''))
+  return (
+    <div className="rounded-tlw-lg border border-tlw-warm-gray/15 bg-tlw-surface p-3">
+      <button onClick={() => setOpen((o) => !o)} className="flex w-full items-center justify-between text-left" aria-expanded={open}>
+        <span className="text-[11px] font-semibold uppercase tracking-[1.5px] text-tlw-warm-gray">Sent notes ({notes.length})</span>
+        <span className="text-[12px] text-tlw-warm-gray">{open ? 'Hide' : 'Show'}</span>
+      </button>
+      {open && (
+        <div className="mt-2 divide-y divide-tlw-warm-gray/10">
+          {sorted.map((n) => {
+            const sent = isNoteSent(n)
+            return (
+              <button
+                key={n.id}
+                onClick={() => onOpen(n.id)}
+                className={`flex w-full items-center justify-between gap-3 px-1 py-2 text-left transition-colors hover:bg-tlw-canvas/50 ${n.id === activeId ? 'bg-tlw-canvas/60' : ''}`}
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="truncate text-[13px] text-tlw-navy-deep">{n.title?.trim() || 'Untitled note'}</span>
+                  <span className={`shrink-0 rounded-full px-2 py-[1px] text-[10px] font-medium ${sent ? 'bg-tlw-navy-rich/10 text-tlw-navy-rich' : 'bg-tlw-warm-gray/15 text-tlw-warm-gray'}`}>{sent ? 'sent' : 'filed'}</span>
+                </span>
+                <span className="shrink-0 text-[11px] text-tlw-warm-gray">{formatDate((sent ? n.sent_to_client_at : n.filed_at)?.slice(0, 10) || n.session_date)}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function NoteEditor({
   clientId,
   note,
@@ -366,6 +418,30 @@ function NoteEditor({
   const [state, setState] = useState<SaveState>('idle')
   const [sendOpen, setSendOpen] = useState(false)
   const [scheduleOpen, setScheduleOpen] = useState(false)
+  // Sent/filed notes open read-only until "Reopen and revise" (logged on the
+  // row). The SENT client narrative is read-only forever regardless.
+  const sent = isNoteSent(note)
+  const closed = !isNoteActive(note)
+  const [reopened, setReopened] = useState(false)
+  const [reopening, setReopening] = useState(false)
+  const [showSent, setShowSent] = useState(false)
+  const readOnly = closed && !reopened
+  const { subject: sentSubject, body: sentBody } = splitNarrative(note.generated_narrative)
+
+  async function reopen() {
+    setReopening(true)
+    try {
+      const res = await fetch(`/api/clients/${clientId}/notes/${note.id}/reopen`, { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not reopen the note.')
+      onSaved(data.note)
+      setReopened(true)
+    } catch (e: any) {
+      alert(e.message)
+    } finally {
+      setReopening(false)
+    }
+  }
   const [noteActions, setNoteActions] = useState<NoteAction[]>([])
   const [priorActions, setPriorActions] = useState<NoteAction[]>([])
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -480,7 +556,7 @@ function NoteEditor({
 
   // Debounced autosave whenever an edited field changes.
   useEffect(() => {
-    if (!dirty.current) return
+    if (!dirty.current || readOnly) return
     if (timer.current) clearTimeout(timer.current)
     timer.current = setTimeout(save, 900)
     return () => {
@@ -511,16 +587,51 @@ function NoteEditor({
 
   return (
     <div className="space-y-3">
+      {closed && (
+        <div className="flex flex-col gap-2 rounded-tlw-lg border border-tlw-warm-gray/20 bg-tlw-canvas/60 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-[12px] text-tlw-espresso">
+            {sent
+              ? `Sent to ${client?.name || 'the client'} on ${formatDate((note.sent_to_client_at || '').slice(0, 10))}.`
+              : `Filed on ${formatDate((note.filed_at || note.updated_at).slice(0, 10))} — kept internal, not sent.`}
+            {(note.reopen_count ?? 0) > 0 && <span className="text-tlw-warm-gray"> · reopened {note.reopen_count}×</span>}
+            {readOnly && <span className="text-tlw-warm-gray"> · read-only</span>}
+          </p>
+          <div className="flex items-center gap-2">
+            {sent && (
+              <button onClick={() => setShowSent((v) => !v)} className="min-h-[36px] rounded-tlw-md border border-tlw-warm-gray/30 px-3 text-[12px] font-medium text-tlw-espresso">
+                {showSent ? 'Hide sent message' : 'View sent message'}
+              </button>
+            )}
+            {readOnly && (
+              <button onClick={reopen} disabled={reopening} className="min-h-[36px] rounded-tlw-md bg-tlw-navy-rich px-3 text-[12px] font-medium text-tlw-cream disabled:opacity-40">
+                {reopening ? 'Reopening…' : 'Reopen and revise'}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+      {sent && showSent && (
+        <div className="rounded-tlw-lg border border-tlw-warm-gray/20 bg-tlw-surface p-4" aria-label="Sent message (read-only)">
+          <p className="text-[11px] font-semibold uppercase tracking-[1.5px] text-tlw-warm-gray">Sent message · read-only</p>
+          <p className="mt-1 text-[12px] text-tlw-warm-gray">
+            To {client?.email || 'the client'} · {note.sent_to_client_at ? new Date(note.sent_to_client_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''}
+          </p>
+          {sentSubject && <p className="mt-2 text-[14px] font-medium text-tlw-navy-deep">{sentSubject}</p>}
+          <p className="mt-2 whitespace-pre-wrap text-[14px] leading-relaxed text-tlw-espresso">{sentBody || 'The message text was not stored for this send (sent before the close-out flow).'}</p>
+        </div>
+      )}
       <div className="flex items-center gap-3">
         <input
           value={title}
           onChange={(e) => touch(() => setTitle(e.target.value))}
+          disabled={readOnly}
           placeholder="Note title"
           className="flex-1 border-none bg-transparent text-base font-medium text-tlw-navy-deep outline-none placeholder:text-tlw-warm-gray/60"
         />
         <input
           type="date"
           value={date}
+          disabled={readOnly}
           onChange={(e) => touch(() => setDate(e.target.value))}
           className="rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-surface px-2 py-1 text-[12px] text-tlw-espresso outline-none focus:border-tlw-signal-orange"
         />
@@ -551,6 +662,7 @@ function NoteEditor({
           html={content}
           enableTemplates
           clientId={clientId}
+          editable={!readOnly}
           onChange={(html, plain) =>
             touch(() => {
               setContent(html)
@@ -600,7 +712,9 @@ function NoteEditor({
           shown for review before it sends. */}
       <div className="flex items-center justify-between border-t border-tlw-warm-gray/15 pt-4">
         <p className="text-[11px] text-tlw-warm-gray">
-          {client?.email
+          {sent
+            ? 'This note was sent — the message that went out is read-only (see “View sent message”).'
+            : client?.email
             ? `Sends a cleaned-up version of this note to ${client.name}.`
             : 'Add an email on the client to enable sending.'}
         </p>
@@ -611,34 +725,33 @@ function NoteEditor({
           >
             Schedule next session
           </button>
-          <button
-            onClick={() => setSendOpen(true)}
-            disabled={!client?.email}
-            className="rounded-tlw-lg bg-tlw-navy-rich px-4 py-2 text-[13px] font-medium text-tlw-cream transition-opacity hover:opacity-90 disabled:opacity-40"
-          >
-            Send to client →
-          </button>
+          {!sent && (
+            <button
+              onClick={() => setSendOpen(true)}
+              disabled={!client?.email || readOnly}
+              className="rounded-tlw-lg bg-tlw-navy-rich px-4 py-2 text-[13px] font-medium text-tlw-cream transition-opacity hover:opacity-90 disabled:opacity-40"
+            >
+              Send to client →
+            </button>
+          )}
         </div>
       </div>
 
       {sendOpen && client && (
-        <SendToClientModal
+        <SendNoteFlow
           client={client}
-          noteTitle={title}
-          noteHtml={content}
           noteId={note.id}
           actions={captures.actions.map((a) => a.text)}
           insights={captures.insights.map((i) => i.text)}
           onClose={() => setSendOpen(false)}
-          onSent={(communicationId) => {
-            // Mark the note sent (migration 050) so the state reflects it…
-            onSaved({
-              ...note,
-              sent_to_client_at: new Date().toISOString(),
-              client_communication_id: communicationId,
-            })
-            // …then return to the client workspace rather than staying in the
-            // note editor.
+          onSent={({ sentAt, communicationId }) => {
+            // Only reached after the server confirmed the send + close-out.
+            // Any pending coach-note autosave is flushed before we leave.
+            if (timer.current) clearTimeout(timer.current)
+            if (dirty.current) save()
+            onSaved({ ...note, status: 'sent', sent_to_client_at: sentAt, client_communication_id: communicationId })
+            setSendOpen(false)
+            showToast(`Session note sent to ${client.name}`)
             router.push(`/clients/${clientId}`)
           }}
         />
