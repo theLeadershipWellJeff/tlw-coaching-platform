@@ -1,4 +1,5 @@
 'use client'
+import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import type { ReactNode } from 'react'
 import { TLWLogo } from '../TLWLogo'
@@ -135,21 +136,29 @@ export function Sidebar({ collapsed, onToggle, floating, onNavigate, isSuperviso
       } ${floating ? 'fixed inset-y-0 left-0 z-40 shadow-xl' : ''}`}
     >
       <div className="flex h-16 items-center gap-2 border-b border-tlw-warm-gray/15 px-4">
-        <TLWLogo size={26} />
-        {!collapsed && (
-          <>
+        <Link
+          href="/dashboard"
+          onClick={onNavigate}
+          title="Go to dashboard"
+          aria-label="theLeadershipWell — go to dashboard"
+          className="flex min-w-0 items-center gap-2 rounded-tlw-md transition-opacity duration-tlw-base hover:opacity-80"
+        >
+          <TLWLogo size={26} />
+          {!collapsed && (
             <span className="truncate text-[13px] font-semibold tracking-tight text-tlw-navy-deep">
               theLeadershipWell
             </span>
-            <button
-              onClick={onToggle}
-              title="Collapse sidebar"
-              aria-label="Collapse sidebar"
-              className="ml-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-tlw-md text-tlw-warm-gray transition-colors duration-tlw-base hover:bg-tlw-warm-gray/[0.08] hover:text-tlw-espresso"
-            >
-              {toggleChevron(false)}
-            </button>
-          </>
+          )}
+        </Link>
+        {!collapsed && (
+          <button
+            onClick={onToggle}
+            title="Collapse sidebar"
+            aria-label="Collapse sidebar"
+            className="ml-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-tlw-md text-tlw-warm-gray transition-colors duration-tlw-base hover:bg-tlw-warm-gray/[0.08] hover:text-tlw-espresso"
+          >
+            {toggleChevron(false)}
+          </button>
         )}
       </div>
 
