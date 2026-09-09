@@ -2427,14 +2427,14 @@ reads to show only the notes a coach actually sent. Reversible via
 `050_note_sent_to_client_down.sql` (which deliberately keeps the
 `type='session_note'` communications rows — they are the record of real sends).
 
-**`051_coach_booking_url.sql` — ⚠️ NOT applied until 2026-09-09 (the 2026-08-24 confirmation was wrong; found by `scripts/sql/audit-migrations.sql`).** Adds `coaches.booking_url` (the
+**`051_coach_booking_url.sql` — APPLIED (production, verified by query 2026-09-09; the 2026-08-24 confirmation was wrong — found by `scripts/sql/audit-migrations.sql`).** Adds `coaches.booking_url` (the
 client-facing HubSpot/Calendly scheduler link shown at the top of the Client
 Portal) and seeds the founding coach's existing HubSpot link — the one already
 hand-written into the seeded email signature — so the button works on day one.
 Additive/nullable; NULL just hides the button, and reads are defensive, so the
 app runs without it. Set per coach in Account → Scheduling.
 
-**`052_portal_search.sql` — ⚠️ NOT applied until 2026-09-09 (the 2026-08-24 confirmation was wrong; the portal search ran on the ILIKE fallback the whole time).** Client Portal full-text search: adds a
+**`052_portal_search.sql` — APPLIED (production, verified by query 2026-09-09; the 2026-08-24 confirmation was wrong — portal search ran on the ILIKE fallback until then).** Client Portal full-text search: adds a
 generated `search_vector` to `transcripts` and `communications`, compound
 `btree_gin` GIN indexes on `(client_id, search_vector)`, and the `portal_search`
 SQL function that ranks one query across a client's transcripts + sent session
@@ -2445,7 +2445,7 @@ for existing rows during the migration. Requires the `btree_gin` extension
 to the old ILIKE path if the function is absent**, so deploy order is not
 critical here. Verified up + down against Postgres 16.
 
-**`053_portal_access_log.sql` — ⚠️ NOT applied until 2026-09-09 (the 2026-08-24 confirmation was wrong; the portal ran with no rate limiting and recency-only chat context the whole time).** Three additive pieces for the
+**`053_portal_access_log.sql` — APPLIED (production, verified by query 2026-09-09; the 2026-08-24 confirmation was wrong — the portal ran with no rate limiting and recency-only chat context until then).** Three additive pieces for the
 Client Portal: `portal_access_log` (audit trail + the durable counter behind
 per-client rate limiting — in-process counters are useless on serverless),
 `clients.portal_onboarded` (the first-visit tour flag, moved off localStorage),
@@ -2454,18 +2454,14 @@ and the `portal_chat_context` SQL function (retrieval for the AI chat, reusing
 tour re-offers itself, and the chat degrades to recency-only context — so the app
 runs without it, just with the old truncation behavior. Verified up + down.
 
-**`054_client_credentials.sql` — ⚠️ WAS NOT APPLIED in production despite the
-2026-08-24 confirmation: on 2026-09-09 `to_regclass('public.client_credentials')`
-returned null (found when Jeff's own portal password save failed). Jeff re-ran
-054 + `notify pgrst, 'reload schema'` that day — treat the ledger's "confirmed"
-entries as claims to verify with `to_regclass`, not proof.** Optional Client Portal username +
+**`054_client_credentials.sql` — APPLIED (production, verified by query 2026-09-09).** It was NOT in despite the 2026-08-24 confirmation — found when Jeff's own portal password save failed with the bare error. Treat the ledger's "confirmed" entries as claims to verify with `scripts/sql/audit-migrations.sql`, not proof. Optional Client Portal username +
 password (scrypt hash) in its own table, kept off `clients` so a `select *` can
 never carry a hash into a response. Magic-link sign-in is unaffected and remains
 the recovery path; without this migration the password tab simply always fails.
 Down drops every stored password — nobody is locked out, since the emailed link
 always works. Verified up + down.
 
-**`055_client_frameworks.sql` — ⚠️ NOT applied until 2026-09-09 (the 2026-08-24 confirmation was wrong).** Records frameworks a scored session
+**`055_client_frameworks.sql` — APPLIED (production, verified by query 2026-09-09; the 2026-08-24 confirmation was wrong).** Records frameworks a scored session
 **named**, not just ones a nudge was sent about, so the portal's Frameworks card
 reflects what was actually discussed. Written by the nudge pipeline before its
 per-window cap discards candidates. Additive; the portal falls back to the
