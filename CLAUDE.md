@@ -2456,7 +2456,11 @@ and the `portal_chat_context` SQL function (retrieval for the AI chat, reusing
 tour re-offers itself, and the chat degrades to recency-only context — so the app
 runs without it, just with the old truncation behavior. Verified up + down.
 
-**`054_client_credentials.sql` — APPLIED (production, confirmed 2026-08-24).** Optional Client Portal username +
+**`054_client_credentials.sql` — ⚠️ WAS NOT APPLIED in production despite the
+2026-08-24 confirmation: on 2026-09-09 `to_regclass('public.client_credentials')`
+returned null (found when Jeff's own portal password save failed). Jeff re-ran
+054 + `notify pgrst, 'reload schema'` that day — treat the ledger's "confirmed"
+entries as claims to verify with `to_regclass`, not proof.** Optional Client Portal username +
 password (scrypt hash) in its own table, kept off `clients` so a `select *` can
 never carry a hash into a response. Magic-link sign-in is unaffected and remains
 the recovery path; without this migration the password tab simply always fails.
