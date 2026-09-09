@@ -1796,6 +1796,34 @@ defensive, so a missing table can never break the job it logs.
 **`coaches.digest_hour` (default 17, 0–23, CHECK) / `digest_enabled` /
 `last_digest_sent_on`** are in place for Phase 4; nothing reads them yet.
 
+**Phase 2 — "Needs your attention" (shipped 2026-09-09).** The durable surface
+for the queue: `app/(authenticated)/dashboard/NeedsAttentionPanel.tsx`,
+mounted at the **top of the dashboard page above the arrangeable board** —
+deliberately NOT a registry card, so it can never be opted out of or lost to a
+stored layout; if the digest cron dies the coach still sees the queue. Empty →
+one quiet "Nothing needs your attention" line; pre-067 (`unavailable`) → renders
+nothing. Rows group by client, newest session first (client name → workspace
+link; row = task label, session time in the coach's zone, note title). Actions
+(`lib/coach-tasks/queue.ts`, every query coach-scoped): **Write note**
+(`POST /api/tasks/[id]/note` → `noteForTask` finds the session's note or
+creates one **stamped with the appointment's `google_event_id` as
+`notes.calendar_event_id`** so the generator ties it to the session without
+the date fallback; navigates to `/clients/[id]/notes?note=<id>` — `NotesPanel`
+gained `initialNoteId`), **Open note to send** (send_note → the same deep link;
+Phase 3 puts the send flow there), **File** (send_note rows only — a note
+exists and stays internal: note → `status='filed'` + `filed_at`, task →
+`filed`) and **Dismiss** (any row — no note needed, nothing written to notes,
+task → `dismissed`). Both go through an inline **confirm step** (no
+`window.confirm`, no hover affordance) and `PATCH /api/tasks/[id]
+{action}` → `resolveTask`, a **conditional update on `state='pending'`
+selected back** (two tabs → one success, one 409; the row disappears either
+way), stamping `resolved_at` + `resolved_by` (the coach) + a
+`resolution_note`. `GET /api/tasks` = `listPendingTasks` (enriched; `unavailable`
+pre-067). Mobile: rows stack full-width, actions are ≥40 px full-width buttons
+in a 2-column grid under `sm`, nothing hover-dependent. The 375 px check was
+done by inspection of the classes, not in a browser — verify on a phone after
+deploy.
+
 ## Multi-coach beta (2026-08 — coach onboarding readiness)
 
 Plan: `docs/BETA_COACH_ONBOARDING_PLAN.md`. Beta scope decision: **transcript

@@ -134,8 +134,12 @@ quick, current "what exists right now" ledger._
   intact). Revisit after two weeks of real use if the moment feels light.
 - **Claim-before-send + idempotency key** (billing pattern) extends to note
   sending in Phase 3 — not yet built.
-- **Phase status:** Phase 1 shipped (schema + generation, no UI). Phases 2–4
-  pending Jeff's confirmation each.
+- **Phase status:** Phase 1 shipped (#255, 067 applied in production
+  2026-09-09; Jeff skipped the live cron check). **Phase 2 shipped** — the
+  "Needs your attention" panel is a fixed element at the top of the dashboard
+  (not an opt-in card), with Write note / Open note to send / File / Dismiss
+  (confirm step, coach-scoped conditional resolve). Phases 3–4 pending Jeff's
+  confirmation each.
 
 ## Known isolation gaps (do NOT rely on DB enforcement)
 
