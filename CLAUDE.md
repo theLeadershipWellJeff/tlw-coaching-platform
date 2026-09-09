@@ -1724,6 +1724,78 @@ dashboards, no download toggle, no "most improved" lists.
   existing `template-render` route on insert. To add a standard: append to
   `STANDARD_TEMPLATES` (editor-vocabulary HTML: h2/h3/p/ul/ol).
 
+## Coach attention queue + session-note close-out (build brief; migration 067)
+
+Brief: "Coach Attention Queue & Session Note Send/Close-Out" (Jeff, 2026-09-09).
+Four phases, confirmed one at a time. **Phase 1 shipped 2026-09-09** (schema +
+task generation, no UI). Phases 2–4 (dashboard card, send flow + close-out,
+daily digest + settings) follow, each gated on Jeff's confirmation.
+
+**§1 pre-flight findings (recorded).** Production schema probed 2026-09-09:
+064 applied, `coach_tasks` absent → this build is **067**. The brief's premise
+that docs "track through 039" was stale — Phase 0's renumber made the folder
+strict `001`–`066`. 065 (data only) is still pending; 066 is applied (its 360
+brief landed as version 2, since 065's v2 was never inserted). **Staging
+exception:** the staging project is paused by Supabase; Jeff approved applying
+additive-only 067 straight to production (logged in `APP_STATE.md`). Cron host
+= `/api/cron/reminders`; sent-state truth stays on the 050 columns; send button
+= navy with a 2px Signal Orange top border on the send modal (rule intact).
+
+**`coach_tasks` (generic per-coach queue).** `subject_type` / `task_type` are
+open text — v1 uses `session_note` × `write_note | send_note`; unmatched
+bookings, billing review, nudge approvals can be added with no migration. States
+`pending | sent | filed | dismissed`, **no snooze**. Partial unique index
+`(coach_id, appointment_id, task_type) WHERE state='pending'` is the
+idempotency guard. **Isolation is application code only** (no RLS policies):
+every read/write filters `coach_id`. Coach-internal — nothing here can reach a
+client inbox; it shares no table, cron handler, or template with the nudge
+pipeline.
+
+**Task generation (`lib/coach-tasks/generate.ts#generateCoachTasks`).** Pass 3
+of the hourly `/api/cron/reminders` handler, in its own `cron_runs` record
+(`coach-tasks`). Per coach: appointments (`scheduled`/`completed`, with a
+client) that **ended ≥ 3 h ago** (end = `scheduled_at + duration_minutes`) get
+one task — no matching note → `write_note`; draft note → `send_note`; note
+already sent/filed → the task resolves as `sent`/`filed` (`resolved_by` NULL =
+system). It is a **reconcile**: a pending `write_note` converts to `send_note`
+once a note exists, and a task resolved in any state is never recreated for
+that appointment. Note ↔ appointment match = `notes.calendar_event_id ==
+appointments.google_event_id`, else the newest note for that client with
+`session_date` = the appointment's date **in the coach's timezone**. **Forward
+only:** `COACH_TASKS_EPOCH` (2026-09-09) — no historical backfill; 14-day
+lookback lets a dead cron catch up. Pure rules verified by
+`node_modules/.bin/tsc -p scripts/spikes/tsconfig.spike.json && node
+scripts/spikes/verify-coach-tasks.js` (25 checks).
+
+**`notes.status` is a VIEW FILTER ONLY (invariant).** `draft | sent | filed`
+hides a note in the workspace UI; the prep engine, nudge pipeline, scorecard,
+coaching hours, revenue, search, goal generation and every other consumer read
+notes of **all** statuses. Audited 2026-09-09: 23 consumers of `from('notes')`
+(captures, goals/generate, history, notes list/detail/actions, nudges/context,
+plan-session, send-note, template-render, coaches, coaching-hours ×2 +
+`lib/coaching-hours.ts`, generate, practice/revenue, search, the notes pop-out,
+`lib/billing/engagement-progress.ts`, `lib/billing/sessions.ts`,
+`lib/nudges/generate.ts`, `lib/scoring/store.ts`) — **none filters on it**, and
+none may gain one. Sent truth stays on the 050 columns: code treats a note as
+sent when `status='sent'` OR `sent_to_client_at` is set (`noteIsSent`), so
+pre-067 sends need no backfill. Other 067 note columns: `generated_narrative`
++ `narrative_generated_at` (the cached Claude draft — generated once, never
+regenerated on reopen), `filed_at`, `reopened_at`, `reopen_count`.
+
+**`cron_runs` — the failure queue for every cron.** Silent cron death was the
+platform's most dangerous failure mode; now **all seven** cron routes are
+wrapped in `lib/cron-runs.ts#cronHandler` (open a `running` row → close `ok`
+with the JSON summary, or `failed` with the error; a 4xx auth probe is not a
+run). `recordCronRun` wraps a sub-job; a summary carrying a non-empty `errors`
+list reads as failed (partial failure is never green). A row still `running`
+after an hour = the function was killed mid-run (`stale` in the API). Review:
+supervisor-only `GET /api/admin/cron-runs?status=failed&job=&limit=` (no UI
+yet — Command Center panel is a later phase). All writes are best-effort and
+defensive, so a missing table can never break the job it logs.
+
+**`coaches.digest_hour` (default 17, 0–23, CHECK) / `digest_enabled` /
+`last_digest_sent_on`** are in place for Phase 4; nothing reads them yet.
+
 ## Multi-coach beta (2026-08 — coach onboarding readiness)
 
 Plan: `docs/BETA_COACH_ONBOARDING_PLAN.md`. Beta scope decision: **transcript
@@ -2428,6 +2500,19 @@ via `063_portal_notes_reminders_down.sql`.
 them defensively (absent = first-name greeting) and the name field of the
 Profile card saves independently, so only the three new fields wait on it.
 Reversible via `064_coach_profile_down.sql`.
+
+**`067_coach_tasks.sql` — PENDING (production; staging exception approved by
+Jeff 2026-09-09).** The coach attention queue: `coach_tasks` (generic per-coach
+task table, partial unique pending index, RLS), `cron_runs` (the cron failure
+queue, RLS), `notes.status/generated_narrative/narrative_generated_at/filed_at/
+reopened_at/reopen_count` (status = view filter only; sent truth stays on the
+050 columns), `coaches.digest_hour/digest_enabled/last_digest_sent_on`.
+Additive only — no drops, no type changes, no row backfill. Verified up →
+down → re-up against Postgres 16, plus the unique guard and the digest_hour
+CHECK. **Apply before deploying:** the reminders cron's task pass and every
+cron's run log write these tables (all defensive — a missing table logs an
+error and the crons keep working — but no tasks accrue until it is in).
+Reversible via `067_coach_tasks_down.sql`.
 
 **`066_publish_360_brief_v2_1.sql` — APPLIED (production, confirmed 2026-09-08).**
 Publishes `assessment_360` **v2.1** (rubrics/04, calibrated against the reference

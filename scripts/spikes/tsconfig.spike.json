@@ -30,6 +30,7 @@
     "../../lib/portal/notes.ts",
     "../../lib/scoring/engine.ts",
     "../../lib/documents/failure.ts",
-    "../../lib/portal/documents.ts"
+    "../../lib/portal/documents.ts",
+    "../../lib/coach-tasks/generate.ts"
   ]
 }

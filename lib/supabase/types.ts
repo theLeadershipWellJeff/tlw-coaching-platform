@@ -141,9 +141,21 @@ export type Note = {
   sent_to_client_at: Timestamp | null
   // The communications row holding the exact email the client received.
   client_communication_id: string | null
+  // Session-note close-out (migration 067). status is a VIEW FILTER ONLY —
+  // data consumers (prep, nudges, scoring, aggregates) never filter on it.
+  // A note is "sent" when status === 'sent' OR sent_to_client_at is set (the
+  // 050 column stays the truth; no backfill). Read defensively pre-067.
+  status?: NoteStatus
+  generated_narrative?: string | null
+  narrative_generated_at?: Timestamp | null
+  filed_at?: Timestamp | null
+  reopened_at?: Timestamp | null
+  reopen_count?: number
   created_at: Timestamp
   updated_at: Timestamp
 }
+
+export type NoteStatus = 'draft' | 'sent' | 'filed'
 
 export type Action = {
   id: string
@@ -266,6 +278,13 @@ export type Coach = {
   google_refresh_token: string | null
   timezone: string
   supervisor_email: string | null
+  // Daily "Needs Your Attention" digest (migration 067). digest_hour = local
+  // hour 0-23 in `timezone` (default 17); digest_enabled = on/off; the date
+  // stamp is the once-a-day idempotency guard (coach-local date, only set when
+  // a digest was actually sent). All read defensively pre-067.
+  digest_hour?: number
+  digest_enabled?: boolean
+  last_digest_sent_on?: DateString | null
   // Per-competency improvement focus, keyed by competency id ("1".."8").
   competency_focus: Record<string, string> | null
   // Per-coach custom labels for the fixed Library nodes (migration 019), keyed by
@@ -812,12 +831,47 @@ export type SessionReport = {
   updated_at: Timestamp
 }
 
+// Coach attention queue (migration 067). Generic per-coach task queue; v1 holds
+// session-note tasks only. subject_type/task_type are open text so new kinds
+// need no migration. Isolation = every query filters by coach_id (app code).
+export type CoachTaskType = 'write_note' | 'send_note'
+export type CoachTaskState = 'pending' | 'sent' | 'filed' | 'dismissed'
+export type CoachTask = {
+  id: string
+  org_id: string
+  coach_id: string
+  client_id: string | null
+  appointment_id: string | null
+  subject_type: string // 'session_note' (extensible)
+  task_type: string // CoachTaskType (extensible)
+  state: string // CoachTaskState
+  due_at: Timestamp
+  resolved_at: Timestamp | null
+  resolved_by: string | null // null = the system (cron reconcile)
+  resolution_note: string | null
+  digest_count: number
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
+// Cron run log (migration 067) — the reviewable failure queue for every cron.
+export type CronRun = {
+  id: string
+  org_id: string
+  job: string
+  status: string // running | ok | failed
+  started_at: Timestamp
+  finished_at: Timestamp | null
+  summary: Record<string, unknown> | null
+  error: string | null
+}
+
 /**
  * Insert shape: columns with DB defaults (id, timestamps) are optional, and
  * any nullable column is optional too (Postgres fills NULL). Everything else
  * is required.
  */
-type Defaulted = 'id' | 'created_at' | 'updated_at' | 'sent_at' | 'agreement_on_file' | 'client_type' | 'org_id' | 'portal_onboarded' | 'failed_attempts' | 'first_seen_at' | 'last_seen_at' | 'portal_features' | 'seats_purchased' | 'status' | 'version' | 'is_active' | 'extraction_status' | 'visible_to_coach' | 'include_in_chat' | 'mode' | 'tasks' | 'body'
+type Defaulted = 'id' | 'created_at' | 'updated_at' | 'sent_at' | 'agreement_on_file' | 'client_type' | 'org_id' | 'portal_onboarded' | 'failed_attempts' | 'first_seen_at' | 'last_seen_at' | 'portal_features' | 'seats_purchased' | 'status' | 'version' | 'is_active' | 'extraction_status' | 'visible_to_coach' | 'include_in_chat' | 'mode' | 'tasks' | 'body' | 'state' | 'subject_type' | 'digest_count' | 'started_at'
 type NullableKeys<T> = { [K in keyof T]-?: null extends T[K] ? K : never }[keyof T]
 type OptionalOnInsert<T> = Defaulted | Extract<keyof T, NullableKeys<T>>
 
@@ -981,6 +1035,18 @@ export type Database = {
         Row: PortalReminder
         Insert: Insertable<PortalReminder>
         Update: Updatable<PortalReminder>
+        Relationships: []
+      }
+      coach_tasks: {
+        Row: CoachTask
+        Insert: Insertable<CoachTask>
+        Update: Updatable<CoachTask>
+        Relationships: []
+      }
+      cron_runs: {
+        Row: CronRun
+        Insert: Insertable<CronRun>
+        Update: Updatable<CronRun>
         Relationships: []
       }
       coaching_hours_entries: {
