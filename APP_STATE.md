@@ -134,12 +134,24 @@ quick, current "what exists right now" ledger._
   intact). Revisit after two weeks of real use if the moment feels light.
 - **Claim-before-send + idempotency key** (billing pattern) extends to note
   sending in Phase 3 — not yet built.
+- **Claim-before-send + idempotency key — DONE (Phase 3, migration 068).**
+  The billing charge-path pattern extended to note sending: a compare-and-set
+  on `notes.send_attempt` (+ `send_claimed_at`, `send_idempotency_key`) is the
+  claim; the Gmail send is awaited; only then the communications row, the
+  note's sent stamps, and the coach_task resolve. One transport
+  (`lib/notes/send.ts`) serves both the close-out route and the older
+  `/send-note` route. The sent client narrative is read-only forever; the
+  coach note has "Reopen and revise" (logged). 068 needs the same additive-only
+  staging exception as 067.
 - **Phase status:** Phase 1 shipped (#255, 067 applied in production
-  2026-09-09; Jeff skipped the live cron check). **Phase 2 shipped** — the
+  2026-09-09; Jeff skipped the live cron check). Phase 2 shipped (#256) — the
   "Needs your attention" panel is a fixed element at the top of the dashboard
   (not an opt-in card), with Write note / Open note to send / File / Dismiss
-  (confirm step, coach-scoped conditional resolve). Phases 3–4 pending Jeff's
-  confirmation each.
+  (confirm step, coach-scoped conditional resolve). **Phase 3 shipped** — send
+  flow + close-out (`SendNoteFlow`, streamed + cached narrative, blank compose
+  when there is no source, "Sent notes (n)" collapsed section, read-only sent
+  message, reopen). Phase 4 (daily digest + settings) pending Jeff's
+  confirmation.
 
 ## Known isolation gaps (do NOT rely on DB enforcement)
 

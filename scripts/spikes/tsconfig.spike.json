@@ -31,6 +31,8 @@
     "../../lib/scoring/engine.ts",
     "../../lib/documents/failure.ts",
     "../../lib/portal/documents.ts",
-    "../../lib/coach-tasks/generate.ts"
+    "../../lib/coach-tasks/generate.ts",
+    "../../lib/notes/narrative-format.ts",
+    "../../lib/notes/status.ts"
   ]
 }

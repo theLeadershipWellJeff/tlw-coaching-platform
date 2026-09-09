@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
 import { AppShell } from '@/app/components/layout/AppShell'
 import { PlanSessionWindowProvider } from '@/app/components/plan/PlanSessionWindows'
+import { ToastHost } from '@/app/components/shared/Toast'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { getSessionCoach } from '@/lib/coach'
 
@@ -31,6 +32,7 @@ export default async function AuthenticatedLayout({
   return (
     <AppShell isSupervisor={isSupervisor}>
       <PlanSessionWindowProvider>{children}</PlanSessionWindowProvider>
+      <ToastHost />
     </AppShell>
   )
 }

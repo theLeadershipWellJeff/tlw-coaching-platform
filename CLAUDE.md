@@ -126,8 +126,10 @@ client will read MUST include:
 
 - `CLIENT_VOICE_STANDARDS` — anything written **as the coach** to a client.
   Wired into: nudge drafts (`lib/nudges/draft.ts` SYSTEM — covers the pipeline,
-  manual create, and draft-one), the send-to-client recap
-  (`/api/notes/client-email`), and the session-prep email (`/api/generate`).
+  manual create, and draft-one), the send-to-client narrative
+  (`lib/notes/narrative.ts` — the streamed Phase 3 draft; the older
+  `/api/notes/client-email` route is superseded and unused by the UI), and the
+  session-prep email (`/api/generate`).
 - `PORTAL_CHAT_VOICE_STANDARDS` — the portal reflection chat
   (`lib/portal/chat.ts#buildChatContext`), which speaks as an assistant, not
   the coach.
@@ -1804,6 +1806,56 @@ defensive, so a missing table can never break the job it logs.
 **`coaches.digest_hour` (default 17, 0–23, CHECK) / `digest_enabled` /
 `last_digest_sent_on`** are in place for Phase 4; nothing reads them yet.
 
+**Phase 3 — send flow + close-out (shipped 2026-09-09; migration 068).**
+The editor's **"Send to client →"** opens `SendNoteFlow.tsx` (replaces the
+deleted `SendToClientModal`). Order, non-negotiable: (1) `POST
+/api/clients/[id]/notes/[noteId]/narrative` — **blocked with 409 `no_source`**
+when the note has no text AND no matched transcript for that `session_date`
+(`lib/notes/narrative.ts#loadNarrativeSource`; the modal then offers a blank
+compose — Claude never invents a session); otherwise the narrative **streams**
+(plain text, `SUBJECT:` line first — format in `lib/notes/narrative-format.ts`)
+and is **cached to `notes.generated_narrative`** the moment the stream ends; a
+reopen serves the cache as one chunk (`X-Narrative-Cached`), only ↻ redraft
+(`?force=1`) regenerates. `X-Narrative-Source` = note | transcript |
+note+transcript. Key info is never loaded. (2) The coach edits subject + body in
+a **plain textarea on every screen size** (brand type, not TipTap — prose, and a
+rich editor fights the mobile keyboard); edits autosave to the draft (`PATCH
+…/narrative`, debounced + `keepalive` flush on close/pagehide). (3) Final send
+`POST …/notes/[noteId]/send` → **claim-before-send** (`lib/notes/send.ts#
+claimNoteSend`: compare-and-set on `notes.send_attempt` — the UPDATE matches
+only the value the request read, `sent_to_client_at IS NULL`, and no live
+claim (`send_claimed_at` null or > 3 min stale); key `note:<id>:<attempt>` in
+`send_idempotency_key`; two tabs / a double-tap → one 200, one 409) → Gmail via
+the ONE transport `sendSessionNoteEmail` (also what the older `/send-note`
+route now calls — no parallel path) → **await success** → `communications`
+`type='session_note'` row (the portal gate) → note `status='sent'` +
+`sent_to_client_at` + `client_communication_id` + the exact sent text into
+`generated_narrative` → `resolveTasksForNote` clears the pending
+`coach_task` → 200. A transport failure logs `status='failed'`, releases the
+claim, marks nothing; the modal stays open with the error. **Never closes
+optimistically** — only on 200 does the editor close, toast (`app/components/
+shared/Toast.tsx`, `ToastHost` in the authenticated layout), and return to the
+workspace. Send button = navy; the footer's **2px Signal Orange top border**
+marks the irreversible moment (accepted default, rule intact).
+
+**Workspace after close-out.** `NotesPanel` splits on `lib/notes/status.ts`
+(`isNoteActive` / `isNoteSent` / `isNoteFiled` — sent = status OR the 050
+stamp, so pre-067 sends read correctly): the "Last session notes" list shows
+**active** notes only; a collapsed **"Sent notes (n)"** section (sent + filed
+chips) reopens one on tap. A sent/filed note opens **read-only** (title/date/
+editor disabled, toolbar hidden, no autosave, no Send button on a sent note —
+the same artifact is never re-sent) with a banner: **"View sent message"**
+(subject, recipient, sent time, the stored text — read-only forever) and
+**"Reopen and revise"** (`POST …/notes/[noteId]/reopen` → `reopen_count`+1,
+`reopened_at`; a filed note returns to `draft`, a sent note stays `sent` but
+becomes editable). Actions captured from the note live in `actions` keyed to
+the client and survive close-out unchanged. Verify the pure rules:
+`node_modules/.bin/tsc -p scripts/spikes/tsconfig.spike.json && node
+scripts/spikes/verify-note-send.js` (16 checks). **Not browser-tested here:**
+the double-tap/two-tab send and the simulated Gmail failure were verified at
+the SQL level (claim CAS on Postgres 16) and by reading the code path, not by
+a live send.
+
 **Phase 2 — "Needs your attention" (shipped 2026-09-09).** The durable surface
 for the queue: `app/(authenticated)/dashboard/NeedsAttentionPanel.tsx`,
 mounted at the **top of the dashboard page above the arrangeable board** —
@@ -2535,7 +2587,17 @@ them defensively (absent = first-name greeting) and the name field of the
 Profile card saves independently, so only the three new fields wait on it.
 Reversible via `064_coach_profile_down.sql`.
 
-**`067_coach_tasks.sql` — APPLIED (production, verified by the audit query 2026-09-09; staging exception approved by Jeff).** The coach attention queue: `coach_tasks` (generic per-coach
+**`068_note_send_claim.sql` — APPLIED (production, confirmed 2026-09-09; same
+additive-only staging exception as 067).** Adds `notes.send_attempt` (CAS counter, default
+0), `notes.send_claimed_at`, `notes.send_idempotency_key` — the
+claim-before-send guard the Phase 3 send route needs (the send route refuses
+with a clear "apply migration 068" error if the columns are ever absent, so
+nothing can double-send in a gap). Verified up → down → re-up on Postgres 16, plus the
+CAS semantics (two claims → one winner; stale claim re-claimable; sent note
+never claimable). Reversible via `068_note_send_claim_down.sql`.
+
+**`067_coach_tasks.sql` — APPLIED (production, confirmed 2026-09-09 and verified by
+`scripts/sql/audit-migrations.sql`; staging exception approved by Jeff).** The coach attention queue: `coach_tasks` (generic per-coach
 task table, partial unique pending index, RLS), `cron_runs` (the cron failure
 queue, RLS), `notes.status/generated_narrative/narrative_generated_at/filed_at/
 reopened_at/reopen_count` (status = view filter only; sent truth stays on the
