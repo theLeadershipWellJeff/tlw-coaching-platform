@@ -2581,13 +2581,12 @@ them defensively (absent = first-name greeting) and the name field of the
 Profile card saves independently, so only the three new fields wait on it.
 Reversible via `064_coach_profile_down.sql`.
 
-**`068_note_send_claim.sql` — PENDING (production; same additive-only
-staging exception as 067).** Adds `notes.send_attempt` (CAS counter, default
+**`068_note_send_claim.sql` — APPLIED (production, confirmed 2026-09-09; same
+additive-only staging exception as 067).** Adds `notes.send_attempt` (CAS counter, default
 0), `notes.send_claimed_at`, `notes.send_idempotency_key` — the
-claim-before-send guard the Phase 3 send route needs. **Apply before
-deploying Phase 3: the send route refuses with a clear "apply migration 068"
-error until the columns exist**, so nothing can double-send in the gap, but
-nothing can send either. Verified up → down → re-up on Postgres 16, plus the
+claim-before-send guard the Phase 3 send route needs (the send route refuses
+with a clear "apply migration 068" error if the columns are ever absent, so
+nothing can double-send in a gap). Verified up → down → re-up on Postgres 16, plus the
 CAS semantics (two claims → one winner; stale claim re-claimable; sent note
 never claimable). Reversible via `068_note_send_claim_down.sql`.
 
