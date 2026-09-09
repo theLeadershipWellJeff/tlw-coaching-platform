@@ -43,6 +43,8 @@ with checks(migration, applied, note) as (values
      (select count(*) > 0 from prompt_briefs where slug = 'portal_chat'), 'data only'),
   ('066_publish_360_brief_v2_1',
      (select count(*) > 0 from prompt_briefs where slug = 'assessment_360' and version >= 2), 'data only'),
-  ('067_coach_tasks',              to_regclass('public.coach_tasks') is not null, '')
+  ('067_coach_tasks',              to_regclass('public.coach_tasks') is not null, ''),
+  ('068_note_send_claim',
+     (select count(*) > 0 from information_schema.columns where table_name = 'notes' and column_name = 'send_attempt'), 'send-note claim guard')
 )
 select migration, applied, note from checks order by migration;
