@@ -153,6 +153,41 @@ quick, current "what exists right now" ledger._
   message, reopen). Phase 4 (daily digest + settings) pending Jeff's
   confirmation.
 
+## Security decisions
+
+### 2026-09-09 — get-only coach sign-in; no coach creation from webhooks; Zoom routes scoped
+
+Decision (Jeff, P0 fix, branch `claude/route-scoping-audit-40cezr`; audit evidence in
+`docs/qa/route-scoping-audit.md`):
+
+1. **The `coaches` table is the sign-in allowlist.** `lib/authOptions.ts#callbacks.signIn`
+   admits a Google account only when a `coaches` row already exists for its email
+   (`lib/coach.ts#getCoachByEmail`). Sign-in creates nothing; `events.signIn` only updates
+   the refresh token on the existing row, so Jeff's stored Gmail/Calendar tokens are
+   untouched. A lookup ERROR fails **closed** (deny + server log) — approved over the old
+   fail-open promise. `getSessionCoach` is get-only too: a still-valid JWT whose coach row
+   was removed now reads as signed out (API → 401, `(authenticated)` layout → redirect to
+   `/auth/error?error=AccessDenied`), instead of silently re-creating the row. All 88
+   `getSessionCoach` call sites were checked for null handling in the same pass.
+   `getOrCreateCoach` is retained for a future explicit admin path only and has **zero
+   callers** (no auth, webhook, or cron may call it). Refusal page: `app/auth/error/page.tsx`
+   (`pages.error`), plain copy, no error detail echoed. `BETA_COACH_EMAILS` no longer grants
+   entry; it stays in `.env.example` for now and is ignored by code.
+2. **A webhook can never create a coach.** `POST /api/transcripts/ingest` resolves
+   `coachEmail` get-only; no row → 403 `coach_not_found` and a reviewable record in
+   `cron_runs` (`job='transcripts-ingest'`, `status='failed'`, summary = coach email,
+   filename, title, source, driveFileId, 180-char preview — the full markdown is not stored;
+   Zapier's Drive archive keeps it). Review at
+   `GET /api/admin/cron-runs?job=transcripts-ingest&status=failed`. No migration.
+3. **Zoom.** `/api/zoom-test` deleted. `/api/zoom-summaries` now requires a coach row
+   (`requireCoach`) and resolves the requested client by email → exact name **only within
+   the caller's `accessibleClientIds`**; no match → empty result and no Zoom call; the
+   calendar/Zoom matching uses the stored client name/email, never the caller's strings.
+   The Zoom account is firm-wide (server-to-server), so this route is the boundary.
+
+Onboarding a coach from here on: supervisor adds the row (Command Center → Add coach), then
+the coach signs in with that Google account.
+
 ## Known isolation gaps (do NOT rely on DB enforcement)
 
 Enforcement is app-code only; service-role bypasses RLS. Confirmed defects, logged for

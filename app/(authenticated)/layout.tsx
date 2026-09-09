@@ -19,12 +19,18 @@ export default async function AuthenticatedLayout({
   // so it never renders in a regular coach's HTML (the /api/admin and
   // /api/coaches routes enforce the same gate). Any hiccup = no entry.
   let isSupervisor = false
+  // undefined = lookup errored (keep the shell, no supervisor entry);
+  // null = the session's email has NO coaches row (a JWT can outlive a removed
+  // coach) — treat as signed out and send them to the plain not-authorized
+  // page. redirect() throws, so it must run outside the try/catch.
+  let coach: Awaited<ReturnType<typeof getSessionCoach>> | undefined
   try {
-    const coach = await getSessionCoach(getSupabaseAdmin())
+    coach = await getSessionCoach(getSupabaseAdmin())
     isSupervisor = coach?.role === 'supervisor'
   } catch {
     isSupervisor = false
   }
+  if (coach === null) redirect('/auth/error?error=AccessDenied')
 
   // PlanSessionWindowProvider lives at the layout level so an open floating
   // "Plan next session" window survives navigation between pages (e.g. from

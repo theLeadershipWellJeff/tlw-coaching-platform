@@ -67,7 +67,10 @@ export async function GET() {
 
   const supabase = getSupabaseAdmin()
   const coach = await getSessionCoach(supabase)
-  const tz = coach?.timezone || process.env.DEFAULT_TIMEZONE || 'America/Los_Angeles'
+  // A valid JWT whose coaches row is gone must read as signed out, not as an
+  // empty practice.
+  if (!coach) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const tz = coach.timezone || process.env.DEFAULT_TIMEZONE || 'America/Los_Angeles'
 
   const today = ymdInTz(tz, new Date())
   const dow = new Date(Date.UTC(today.y, today.m - 1, today.d)).getUTCDay() // 0=Sun..6=Sat
@@ -81,7 +84,7 @@ export async function GET() {
 
   // Per-client fee + name/email lookup — SCOPED to this coach's own clients, so
   // one coach's revenue never leaks into another's dashboard.
-  const clientIds = coach ? await accessibleClientIds(supabase, coach.id) : []
+  const clientIds = await accessibleClientIds(supabase, coach.id)
   const clientRes = clientIds.length
     ? await supabase.from('clients').select('id, name, email, session_fee').in('id', clientIds)
     : null
@@ -169,7 +172,7 @@ export async function GET() {
   let projectedSessions = 0
   let projectedRemainder = 0
   const monthlyProjected = new Array(13).fill(0) // index 1..12
-  if (coach?.google_refresh_token) {
+  if (coach.google_refresh_token) {
     const nextMondayMs = zonedWallClockToUtc(ymdStr(nextMonday), '00:00', tz)?.getTime() ?? Infinity
     for (const ch of monthlyChunks(thisMonday, yearEndYmd)) {
       const s = zonedWallClockToUtc(ymdStr(ch.start), '00:00', tz)
@@ -203,41 +206,39 @@ export async function GET() {
   // ONLY non-'session' lines — hourly invoices are assembled from the same notes
   // already counted above, so their 'session' lines would double-count. Refunds
   // reduce the amount actually brought in.
-  if (coach) {
-    const { data: invoiceRows } = await supabase
-      .from('invoices')
-      .select('id, status, paid_at, sent_at, created_at, refunded_cents, billing_account_id, billing_accounts ( name ), invoice_lines ( amount, source )')
-      .eq('coach_id', coach.id)
-      .in('status', ['sent', 'overdue', 'failed', 'paid'])
-    for (const inv of (invoiceRows as any[]) || []) {
-      const lines: any[] = inv.invoice_lines ?? []
-      const nonSession = lines
-        .filter((l) => l.source !== 'session')
-        .reduce((s, l) => s + (typeof l.amount === 'number' ? l.amount : 0), 0)
-      if (nonSession <= 0) continue
-      const refunded = typeof inv.refunded_cents === 'number' ? inv.refunded_cents / 100 : 0
-      const amount = Math.max(0, nonSession - refunded)
-      if (amount <= 0) continue
-      // Bucket by when it became income: paid date, else the sent date, else created.
-      const whenIso: string | null = inv.paid_at || inv.sent_at || inv.created_at || null
-      if (!whenIso) continue
-      const when = ymdInTz(tz, new Date(whenIso))
-      if (when.y !== today.y) continue
-      actualsYtd += amount
-      monthlyActual[when.m] += amount
-      // Roll up by billing account for the breakdown pie (keyed apart from clients).
-      const key = `acct:${inv.billing_account_id ?? inv.id}`
-      const name = inv.billing_accounts?.name || 'Invoice'
-      const cur = annualByClient.get(key) ?? { client: name, sessions: 0, amount: 0 }
-      cur.sessions++
-      cur.amount += amount
-      annualByClient.set(key, cur)
-    }
+  const { data: invoiceRows } = await supabase
+    .from('invoices')
+    .select('id, status, paid_at, sent_at, created_at, refunded_cents, billing_account_id, billing_accounts ( name ), invoice_lines ( amount, source )')
+    .eq('coach_id', coach.id)
+    .in('status', ['sent', 'overdue', 'failed', 'paid'])
+  for (const inv of (invoiceRows as any[]) || []) {
+    const lines: any[] = inv.invoice_lines ?? []
+    const nonSession = lines
+      .filter((l) => l.source !== 'session')
+      .reduce((s, l) => s + (typeof l.amount === 'number' ? l.amount : 0), 0)
+    if (nonSession <= 0) continue
+    const refunded = typeof inv.refunded_cents === 'number' ? inv.refunded_cents / 100 : 0
+    const amount = Math.max(0, nonSession - refunded)
+    if (amount <= 0) continue
+    // Bucket by when it became income: paid date, else the sent date, else created.
+    const whenIso: string | null = inv.paid_at || inv.sent_at || inv.created_at || null
+    if (!whenIso) continue
+    const when = ymdInTz(tz, new Date(whenIso))
+    if (when.y !== today.y) continue
+    actualsYtd += amount
+    monthlyActual[when.m] += amount
+    // Roll up by billing account for the breakdown pie (keyed apart from clients).
+    const key = `acct:${inv.billing_account_id ?? inv.id}`
+    const name = inv.billing_accounts?.name || 'Invoice'
+    const cur = annualByClient.get(key) ?? { client: name, sessions: 0, amount: 0 }
+    cur.sessions++
+    cur.amount += amount
+    annualByClient.set(key, cur)
   }
 
   return NextResponse.json({
     timezone: tz,
-    calendarConnected: !!coach?.google_refresh_token,
+    calendarConnected: !!coach.google_refresh_token,
     past: { weekStart: ymdStr(lastMonday), sessions: pastSessions, hours: pastHours, total: pastTotal },
     prior: { weekStart: ymdStr(priorMonday), total: priorTotal },
     pastSessions: pastLines,
