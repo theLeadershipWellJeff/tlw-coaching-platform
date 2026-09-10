@@ -5,6 +5,7 @@
  *   1. the portal role preamble
  *   2. PORTAL_CHAT_VOICE_STANDARDS (house rule)
  *   2b. the active `portal_chat` coaching-conversation brief, when one exists
+ *   2c. GOAL_SETTING_FLOOR (rubrics/03 §1 — shared with the weekly-plan mode)
  *   3. assessment grounding rules (the non-negotiable floor) + the ACTIVE
  *      interpretation brief for the document kind
  *   4. company vision & values — OMITTED ENTIRELY when the client has none
@@ -124,6 +125,9 @@ Guidelines:
   if (p.coachingBrief) sections.push(`COACHING CONVERSATION RUBRIC (${p.coachingBrief.slug} v${p.coachingBrief.version}):
 ${p.coachingBrief.body.trim()}`)
 
+  // 2c. Goal-setting rules (rubrics/03 §1) — the "Save as a goal" path lives here too.
+  sections.push(GOAL_SETTING_FLOOR)
+
   // 3. Grounding rules + brief (only when an assessment is in play)
   if (p.assessment) {
     sections.push(ASSESSMENT_GROUNDING_RULES)
@@ -206,6 +210,17 @@ export type WeeklyPlanPromptParts = {
   weekStart: string
 }
 
+/**
+ * Goal-setting rules shared by BOTH chat modes (rubrics/03 §1, v2.0). Sits
+ * under whatever brief is active — a brief can add to it, not override it.
+ * Not every client has Rocks, OKRs, or KPIs; none are assumed or required.
+ */
+export const GOAL_SETTING_FLOOR = `GOAL SETTING (rubrics/03):
+- When goal-setting starts, ask whether they have a goal framework they already use (OKRs, Traction Rocks, KPIs, or none) and, if they do, work inside it and use its language. If they don't, SMART (specific, measurable, achievable, relevant, time-bound) is the standard — held lightly: use it to sharpen a goal, never as a checklist, never as a reason to hold one back.
+- A goal needs at least one measure — one way they will know it is working. One is enough; up to three is plenty. Never hold up a goal waiting for more measures.
+- Encourage three big goals for the engagement (enough to matter, few enough to hold; more → ask which three matter most this season; fewer is fine) and the Top 5 Things as the shape of each week.
+- Their coaching goals below are their engagement goals whatever they call them — goals, OKRs, KPIs, Rocks, the label doesn't matter.`
+
 const WEEKLY_PLAN_FLOOR = `You are a coach helping the person plan their week. Ask what a successful week would look like, draw on their goals and material below to suggest the most impactful actions, and work toward an agreed Top 5 for the week. One question per turn. Peer, not expert.`
 
 /**
@@ -221,6 +236,7 @@ export function composeWeeklyPlanSystem(p: WeeklyPlanPromptParts): string {
   const name = p.clientName.toUpperCase()
   sections.push(p.brief ? `${p.brief.body.trim()}` : WEEKLY_PLAN_FLOOR)
   sections.push(PORTAL_CHAT_VOICE_STANDARDS)
+  sections.push(GOAL_SETTING_FLOOR)
   sections.push(
     `PORTAL MECHANICS:
 - Today is ${p.today}; this week began Monday ${p.weekStart}. "This week" means that week.
@@ -238,7 +254,7 @@ export function composeWeeklyPlanSystem(p: WeeklyPlanPromptParts): string {
         return `- ${g.title}${g.description ? `: ${g.description}` : ''}${prog}${metrics.length ? `\n  measures: ${metrics.join('; ')}` : ''}`
       })
       .join('\n')
-    sections.push(`${name}'S COACHING GOALS (treat these as their Objectives; the measures as Key Results; progress is their own report):\n${goalsText}`)
+    sections.push(`${name}'S COACHING GOALS (their engagement goals, whatever they call them; each measure is how they will know it is working; progress is their own report):\n${goalsText}`)
   }
   if (!p.assessmentSummary && p.assessmentStatus) sections.push(`${name}'S 360 REPORT — STATUS: ${p.assessmentStatus}`)
   if (p.assessmentSummary) sections.push(`${name}'S 360 DEVELOPMENT PICTURE (perception data from their most recent report — remind them of it in your first reply and use it to suggest where a week's effort compounds; describe and ask, never prescribe; never quote it as ability, never attribute to individual raters):\n${p.assessmentSummary}`)
