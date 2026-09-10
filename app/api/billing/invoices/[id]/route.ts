@@ -71,8 +71,11 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   return NextResponse.json({ invoice: data })
 }
 
-// Skip (void) a draft or approved invoice — clears any billed-session locks so
-// they can be picked up in the next billing run.
+// Delete (skip) a draft or approved invoice that has not reached Stripe —
+// clears any billed-session locks so they can be picked up in the next billing
+// run. Lines, reminders, charge attempts and adjustments cascade in the DB.
+// Anything already finalized in Stripe must be voided (/adjust), never deleted,
+// or the Stripe record would be orphaned.
 export async function DELETE(_req: NextRequest, { params }: Params) {
   const supabase = getSupabaseAdmin()
   const coach = await getSessionCoach(supabase)
@@ -80,13 +83,19 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
 
   const { data: existing } = await supabase
     .from('invoices')
-    .select('id, status')
+    .select('id, status, stripe_invoice_id')
     .eq('id', params.id)
     .eq('coach_id', coach.id)
     .maybeSingle()
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   if (!['draft', 'approved'].includes(existing.status)) {
-    return NextResponse.json({ error: 'Only draft or approved invoices can be skipped' }, { status: 409 })
+    return NextResponse.json({ error: 'Only draft or approved invoices can be deleted' }, { status: 409 })
+  }
+  if ((existing as any).stripe_invoice_id) {
+    return NextResponse.json(
+      { error: 'This invoice already exists in Stripe — void it instead of deleting it' },
+      { status: 409 },
+    )
   }
 
   // Un-bill any sessions that were locked to this invoice so they can be re-billed.
