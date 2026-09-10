@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { PageHeader } from '@/app/components/layout/PageHeader'
 import type { InvoiceWithLines, InvoiceLine } from '@/lib/billing/types'
 
@@ -319,6 +319,7 @@ function AdjustModal({ invoice, onClose, onDone }: {
 
 export default function InvoiceDetailPage() {
   const { id } = useParams<{ id: string }>()
+  const router = useRouter()
   const [invoice, setInvoice] = useState<InvoiceWithLines | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
@@ -335,6 +336,9 @@ export default function InvoiceDetailPage() {
   const [resendErr, setResendErr] = useState('')
   const [actionErr, setActionErr] = useState('')
   const [showAdjust, setShowAdjust] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteErr, setDeleteErr] = useState('')
 
   async function loadInvoice() {
     if (!id) return
@@ -461,6 +465,28 @@ export default function InvoiceDetailPage() {
       setResendErr(data.error ?? 'Failed to re-send invoice')
     }
     setResending(false)
+  }
+
+  // Hard-deletes a draft (or approved-but-never-sent) invoice. The route
+  // releases any sessions locked to it back to the next billing run and refuses
+  // anything that already exists in Stripe — those are voided, not deleted.
+  async function deleteInvoice() {
+    if (!invoice) return
+    setDeleting(true)
+    setDeleteErr('')
+    try {
+      const res = await fetch(`/api/billing/invoices/${invoice.id}`, { method: 'DELETE' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setDeleteErr(data.error ?? 'Could not delete this invoice.')
+        setDeleting(false)
+        return
+      }
+      router.replace('/business-center/invoices')
+    } catch {
+      setDeleteErr('Network error — try again.')
+      setDeleting(false)
+    }
   }
 
   function addLine(line: InvoiceLine) {
@@ -760,6 +786,44 @@ export default function InvoiceDetailPage() {
               >
                 {invoice.status === 'paid' ? 'Adjust invoice' : 'Void invoice'}
               </button>
+            </section>
+          )}
+
+          {/* Delete — a draft (or approved-but-unsent) invoice that never reached Stripe */}
+          {['draft', 'approved'].includes(invoice.status) && !invoice.stripe_invoice_id && (
+            <section className="rounded-tlw-2xl border border-red-100 bg-tlw-surface px-5 py-4">
+              <p className="mb-1 text-[13px] font-semibold text-tlw-navy-deep">Delete invoice</p>
+              <p className="mb-3 text-[12px] text-tlw-warm-gray">
+                Removes this {invoice.status} invoice and its line items. Nothing has been sent to the client or to
+                Stripe. Any sessions billed on it are released back to the next billing run. This can&apos;t be undone.
+              </p>
+              {!confirmDelete ? (
+                <button
+                  onClick={() => setConfirmDelete(true)}
+                  className="rounded-tlw-lg border border-red-300 bg-red-50 px-4 py-2 text-[13px] font-medium text-red-700 transition-colors hover:bg-red-100"
+                >
+                  Delete invoice
+                </button>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[12px] text-red-700">Delete this invoice ({money(invoice.total)})?</span>
+                  <button
+                    onClick={deleteInvoice}
+                    disabled={deleting}
+                    className="rounded-tlw-lg bg-red-600 px-3 py-1.5 text-[13px] font-medium text-white disabled:opacity-50"
+                  >
+                    {deleting ? 'Deleting…' : 'Yes, delete'}
+                  </button>
+                  <button
+                    onClick={() => { setConfirmDelete(false); setDeleteErr('') }}
+                    disabled={deleting}
+                    className="px-3 py-1.5 text-[13px] text-tlw-warm-gray hover:text-tlw-espresso disabled:opacity-50"
+                  >
+                    Keep it
+                  </button>
+                </div>
+              )}
+              {deleteErr && <p className="mt-2 text-[12px] text-red-600">{deleteErr}</p>}
             </section>
           )}
 

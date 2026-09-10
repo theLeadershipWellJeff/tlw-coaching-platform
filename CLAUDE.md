@@ -2176,6 +2176,16 @@ All Stripe interaction is in `lib/billing/stripe.ts` (singleton + helpers) and
   status unchanged. The `failed`-status "Re-send payment link" button routes
   here too (the old "Retry send" hit `/send`, which 409s on non-approved
   invoices).
+- **Delete a draft (2026-09-10).** `DELETE /api/billing/invoices/[id]` hard-
+  deletes a `draft` or `approved` invoice that has **no `stripe_invoice_id`**
+  (lines/reminders/charge attempts/adjustments cascade; billed sessions and run
+  warnings null out, so the sessions rejoin the next billing run). Anything
+  already in Stripe is refused with a 409 — void it via `/adjust` instead.
+  Surfaces: the Invoices list shows a hover **Delete** on draft rows (inline
+  Yes/No confirm, optimistic removal with rollback on refusal), the invoice
+  page has a red-bordered **Delete invoice** section for draft / approved-
+  unsent (inline confirm, returns to the list on success), and the billing
+  run's existing **Skip** button calls the same route.
 
 ### Stripe go-live checklist
 1. Add `STRIPE_SECRET_KEY` (live) and `STRIPE_WEBHOOK_SECRET` to Vercel env vars.

@@ -12,6 +12,7 @@ type Invoice = {
   total: number
   received_at: string | null
   reminders_exhausted_at?: string | null
+  stripe_invoice_id?: string | null
   billing_accounts: {
     id: string
     name: string
@@ -314,6 +315,33 @@ function InvoicesContent() {
 
   useEffect(() => { loadInvoices() }, [loadInvoices])
 
+  // Draft rows carry a hover Delete with an inline confirm step. The row is
+  // removed optimistically and put back if the route refuses.
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [deleteErr, setDeleteErr] = useState('')
+
+  async function deleteDraft(inv: Invoice) {
+    setDeletingId(inv.id)
+    setDeleteErr('')
+    const snapshot = invoices
+    setInvoices((cur) => cur.filter((i) => i.id !== inv.id))
+    try {
+      const res = await fetch(`/api/billing/invoices/${inv.id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        setInvoices(snapshot)
+        setDeleteErr(d.error ?? 'Could not delete that invoice.')
+      }
+    } catch {
+      setInvoices(snapshot)
+      setDeleteErr('Network error — try again.')
+    } finally {
+      setDeletingId(null)
+      setConfirmDeleteId(null)
+    }
+  }
+
   const filtered = invoices.filter((inv) => {
     if (!search.trim()) return true
     const q = search.toLowerCase()
@@ -377,49 +405,87 @@ function InvoicesContent() {
         </div>
       )}
 
+      {deleteErr && (
+        <p className="mb-3 rounded-tlw-lg border border-red-100 bg-red-50 px-3 py-2 text-[12px] text-red-700">{deleteErr}</p>
+      )}
+
       {!loading && filtered.length > 0 && (
         <div className="divide-y divide-tlw-warm-gray/10 rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface">
           {filtered.map((inv) => (
-            <Link
-              key={inv.id}
-              href={`/business-center/invoices/${inv.id}`}
-              className="flex items-center justify-between gap-4 px-5 py-4 transition-colors hover:bg-tlw-canvas"
-            >
-              <div className="min-w-0">
-                <p className="text-[14px] font-medium text-tlw-navy-deep">
-                  {inv.billing_accounts?.name ?? 'Unknown account'}
-                </p>
-                <p className="text-[12px] text-tlw-warm-gray">
-                  {inv.billing_accounts?.billing_email ?? ''}
-                  {inv.billing_accounts?.billing_email && ' · '}
-                  {formatPeriod(inv.period_start, inv.period_end)}
-                </p>
-              </div>
-              <div className="flex shrink-0 items-center gap-3">
-                <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium capitalize ${STATUS_STYLES[inv.status] ?? 'bg-tlw-canvas text-tlw-warm-gray'}`}>
-                  {inv.status}
-                </span>
-                {inv.received_at && ['sent', 'overdue'].includes(inv.status) && (
-                  <span
-                    className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700"
-                    title={`Client opened the invoice ${new Date(inv.received_at).toLocaleString()}`}
-                  >
-                    received ✓
+            <div key={inv.id} className="group flex items-center gap-2 pr-3 transition-colors hover:bg-tlw-canvas">
+              <Link
+                href={`/business-center/invoices/${inv.id}`}
+                className="flex min-w-0 flex-1 items-center justify-between gap-4 px-5 py-4"
+              >
+                <div className="min-w-0">
+                  <p className="text-[14px] font-medium text-tlw-navy-deep">
+                    {inv.billing_accounts?.name ?? 'Unknown account'}
+                  </p>
+                  <p className="text-[12px] text-tlw-warm-gray">
+                    {inv.billing_accounts?.billing_email ?? ''}
+                    {inv.billing_accounts?.billing_email && ' · '}
+                    {formatPeriod(inv.period_start, inv.period_end)}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-3">
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium capitalize ${STATUS_STYLES[inv.status] ?? 'bg-tlw-canvas text-tlw-warm-gray'}`}>
+                    {inv.status}
                   </span>
-                )}
-                {inv.reminders_exhausted_at && ['sent', 'overdue'].includes(inv.status) && (
-                  <span
-                    className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700"
-                    title={`Automated reminders exhausted ${new Date(inv.reminders_exhausted_at).toLocaleString()} — needs a personal follow-up`}
-                  >
-                    needs attention
+                  {inv.received_at && ['sent', 'overdue'].includes(inv.status) && (
+                    <span
+                      className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700"
+                      title={`Client opened the invoice ${new Date(inv.received_at).toLocaleString()}`}
+                    >
+                      received ✓
+                    </span>
+                  )}
+                  {inv.reminders_exhausted_at && ['sent', 'overdue'].includes(inv.status) && (
+                    <span
+                      className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700"
+                      title={`Automated reminders exhausted ${new Date(inv.reminders_exhausted_at).toLocaleString()} — needs a personal follow-up`}
+                    >
+                      needs attention
+                    </span>
+                  )}
+                  <span className="text-[13px] font-medium text-tlw-navy-deep">
+                    {(inv.total ?? 0).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })}
                   </span>
-                )}
-                <span className="text-[13px] font-medium text-tlw-navy-deep">
-                  {(inv.total ?? 0).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })}
-                </span>
-              </div>
-            </Link>
+                </div>
+              </Link>
+              {inv.status === 'draft' && !inv.stripe_invoice_id && (
+                confirmDeleteId === inv.id ? (
+                  <div className="flex shrink-0 items-center gap-1">
+                    <span className="text-[11px] text-red-700">Delete?</span>
+                    <button
+                      type="button"
+                      onClick={() => deleteDraft(inv)}
+                      disabled={deletingId === inv.id}
+                      className="rounded-tlw-md bg-red-600 px-2 py-1 text-[11px] font-medium text-white disabled:opacity-50"
+                    >
+                      {deletingId === inv.id ? 'Deleting…' : 'Yes'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDeleteId(null)}
+                      disabled={deletingId === inv.id}
+                      className="px-2 py-1 text-[11px] text-tlw-warm-gray hover:text-tlw-espresso disabled:opacity-50"
+                    >
+                      No
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => { setDeleteErr(''); setConfirmDeleteId(inv.id) }}
+                    title="Delete this draft invoice"
+                    aria-label="Delete draft invoice"
+                    className="shrink-0 rounded-tlw-md px-2 py-1 text-[11px] font-medium text-tlw-warm-gray opacity-0 transition-opacity hover:text-red-700 focus:opacity-100 group-hover:opacity-100"
+                  >
+                    Delete
+                  </button>
+                )
+              )}
+            </div>
           ))}
         </div>
       )}
