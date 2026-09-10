@@ -1142,9 +1142,11 @@ is never accepted here, and vice-versa.
   turn's last user message for the model; only a `📎 filename` marker is persisted.
 - **Onboarding + tips (Phase 7; rebuilt in 053; steps refreshed 2026-09-09).**
   `PortalTour` walks the home page **top to bottom in its current order** —
-  booking button, 360 report, assistant chat (+ "Save as a goal"), Plan your
-  week / This-week card, goals with progress, sessions + transcripts + notes +
-  search, Your documents, My notes, contact, Settings + email reminders, the
+  booking button, 360 report (its "Chat with your coaching assistant" link
+  appears once a report is on file), assistant chat (+ "Save as a goal"),
+  Plan your week / This-week card, My notes (beside This week on large
+  screens, 2026-09-10), goals with progress, sessions + transcripts + notes +
+  search, Your documents, contact, Settings + email reminders, the
   ⓘ tips (progress dots double as navigation, skippable). The list is built
   per person by `PortalTour.tsx#buildTourSteps({hasCoach, assessmentsEnabled,
   hasBooking})` — a step whose card the page does not render for them is left
