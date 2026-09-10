@@ -22,9 +22,12 @@ function fmtDate(ymd: string | null): string {
  * double-checks). With no report yet it says so and points at Your documents,
  * so a participant sees where their report will land before it is uploaded.
  * "View report" opens the PDF in a tab; download is always available (no
- * setting can disable it). Identical for a coaching client and a participant.
+ * setting can disable it). Once a report is on file the card carries the
+ * "Chat with your coaching assistant" link (the home page's chat CTA wording;
+ * "thinking partner" for a coach-less participant) so the next step is one
+ * tap away. Otherwise identical for a coaching client and a participant.
  */
-export function AssessmentCard({ bookingUrl }: { bookingUrl: string | null }) {
+export function AssessmentCard({ bookingUrl, hasCoach = true }: { bookingUrl: string | null; hasCoach?: boolean }) {
   const [items, setItems] = useState<Assessment[] | null>(null)
 
   useEffect(() => {
@@ -108,7 +111,7 @@ export function AssessmentCard({ bookingUrl }: { bookingUrl: string | null }) {
               href="/portal/chat"
               className="rounded-tlw-lg bg-tlw-navy-deep px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-tlw-navy-rich"
             >
-              Work through it in the chat
+              {hasCoach ? 'Chat with your coaching assistant' : 'Chat with your thinking partner'}
             </Link>
             {bookingUrl && (
               <a

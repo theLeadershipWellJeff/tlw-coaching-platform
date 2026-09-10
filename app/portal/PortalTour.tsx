@@ -87,6 +87,16 @@ export function buildTourSteps(ctx: TourContext): Step[] {
       body: 'A short coaching conversation that ends in your Top 5 for the week. Save it and it appears in the “This week” card, where you tick things off as they get done and add a to-do without opening the chat. Next week the assistant knows what got done.',
     },
     {
+      key: 'notes',
+      icon: '📓',
+      title: 'My notes',
+      body: 'Your own space to think: projects, intentions, things you noticed between sessions. Nobody else can read it, your coach included. The assistant reads your newest notes so it can work with your current thinking.',
+      noCoach: {
+        title: 'My notes',
+        body: 'Your own space to think: projects, intentions, things you noticed. Nobody else can read it. The assistant reads your newest notes so it can work with your current thinking.',
+      },
+    },
+    {
       key: 'goals',
       icon: '🎯',
       title: 'Your goals, with progress you report',
@@ -111,16 +121,6 @@ export function buildTourSteps(ctx: TourContext): Step[] {
       noCoach: {
         title: 'Your documents',
         body: 'Add a 360 report, a personnel review, or any document you want the assistant to know about: a role description, a plan, feedback you received. Everything here is private to you, and you can download it any time.',
-      },
-    },
-    {
-      key: 'notes',
-      icon: '📓',
-      title: 'My notes',
-      body: 'Your own space to think: projects, intentions, things you noticed between sessions. Nobody else can read it, your coach included. The assistant reads your newest notes so it can work with your current thinking.',
-      noCoach: {
-        title: 'My notes',
-        body: 'Your own space to think: projects, intentions, things you noticed. Nobody else can read it. The assistant reads your newest notes so it can work with your current thinking.',
       },
     },
     {

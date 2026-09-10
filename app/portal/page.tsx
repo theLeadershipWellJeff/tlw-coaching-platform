@@ -124,7 +124,7 @@ export default async function PortalHome() {
       {/* Your 360 report — first thing a participant sees, whenever the flag is on */}
       {assessmentsEnabled && (
         <div className="mt-6">
-          <AssessmentCard bookingUrl={data.bookingUrl} />
+          <AssessmentCard bookingUrl={data.bookingUrl} hasCoach={hasCoach} />
         </div>
       )}
 
@@ -170,10 +170,10 @@ export default async function PortalHome() {
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {/* This week's plan — the Top 5 saved from a Plan-your-week chat */}
-        <div className="lg:col-span-2">
-          <WeeklyPlanCard />
-        </div>
+        {/* This week's plan — the Top 5 saved from a Plan-your-week chat —
+            beside My notes, the client's private journal (feeds the assistant) */}
+        <WeeklyPlanCard />
+        <MyNotesCard />
 
         {/* Upcoming sessions */}
         {showSessions && (
@@ -292,11 +292,6 @@ export default async function PortalHome() {
         {/* Documents the client has added — every portal, coach or not */}
         <div className="lg:col-span-2">
           <DocumentsCard hasCoach={hasCoach} />
-        </div>
-
-        {/* My notes — the client's private journal; feeds the assistant */}
-        <div className="lg:col-span-2">
-          <MyNotesCard />
         </div>
 
         {/* Frameworks surfaced to this client (self-hides when none) */}
