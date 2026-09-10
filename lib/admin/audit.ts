@@ -17,6 +17,7 @@ export type AdminAction =
   | 'billing_checkout_link'
   | 'coach_added'
   | 'coach_removed'
+  | 'coach_invite_sent'
   // Assessment debrief command center (Phase 4)
   | 'company_created'
   | 'company_updated'

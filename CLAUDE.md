@@ -1980,6 +1980,23 @@ support tickets — counts only), the whole card clicking through to
   `PATCH /api/coaches/[id]`; a live subscription auto-promotes to paying, see
   below), a **Portal** stat (`portal_active_count/client_count`), and billing
   actions.
+- **Coach invite / re-send sign-in link (2026-09-10).** Each coach row (not
+  the supervisor's own) carries **"Send invite"** (never invited), **"Re-send
+  invite"** (invited, never signed in) or **"Re-send sign-in link"** (has
+  signed in) → `POST /api/coaches/[id]/invite` (supervisor-only). Coach
+  sign-in is Google OAuth gated on the `coaches` table, so the email carries
+  **no token**: it names the exact Google account to use (the row's email —
+  the gate matches on it), links to `/api/auth/signin?callbackUrl=/dashboard`,
+  and explains the first-run Gmail/Calendar consent. Transport
+  (`lib/admin/coach-invite.ts#sendCoachInviteEmail`) = Resend when configured
+  (Reply-To the acting supervisor) with the Gmail-fallback-and-warn rule from
+  `lib/portal/send.ts`, else the acting supervisor's Gmail. Every send writes
+  `admin_audit_log` `coach_invite_sent`, and `GET /api/coaches` reads the
+  latest row back as `last_invited_at` ("Invite sent Sep 10") — no coach
+  column, no migration. The **Add coach** modal has an "Email them a sign-in
+  invitation now" checkbox (default on) that fires the same route after the
+  row is created; a failed send keeps the modal open with the error (the row
+  already exists — "Done" closes it) and the row shows "No invite sent yet".
 - **Client drill-down** — `GET /api/coaches/[id]/clients` (deliberately
   cross-tenant, the ONE supervised window over `requireClientCoach`'s
   boundary; never selects `key_info`). Per client: portal state from

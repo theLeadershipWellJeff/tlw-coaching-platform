@@ -142,6 +142,19 @@ export async function GET() {
     }
   }
 
+  // Last coach-invite email per coach, read from the audit trail (the invite
+  // route writes `coach_invite_sent`). Best-effort: a missing table just means
+  // no "invited" label.
+  const lastInvited: Record<string, string> = {}
+  if (coachIds.length > 0) {
+    const { data: inviteRows } = await supabase
+      .from('admin_audit_log' as any)
+      .select('target_coach_id, created_at')
+      .eq('action', 'coach_invite_sent')
+      .in('target_coach_id', coachIds)
+    for (const row of (inviteRows ?? []) as any[]) later(lastInvited, row.target_coach_id, row.created_at)
+  }
+
   const coaches = (data ?? []).map((c: any) => ({
     id: c.id,
     name: c.name,
@@ -161,6 +174,7 @@ export async function GET() {
     // A coach row can be pre-created from the Add-coach modal; the refresh token
     // only exists once they've actually signed in with Google and consented.
     has_signed_in: !!c.google_refresh_token,
+    last_invited_at: lastInvited[c.id] ?? null,
     usage: {
       transcript_count: transcriptsByCoach[c.id] ?? 0,
       report_count: reportsByCoach[c.id] ?? 0,

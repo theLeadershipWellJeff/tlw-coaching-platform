@@ -38,6 +38,7 @@ type Coach = {
   portal_invited_count: number
   portal_active_count: number
   has_signed_in: boolean
+  last_invited_at: string | null
   usage: CoachUsage
   is_me: boolean
 }
@@ -292,14 +293,73 @@ function BillingActions({ coach }: { coach: Coach }) {
   )
 }
 
+// ── Invite / sign-in link ─────────────────────────────────────────────────────
+
+/**
+ * "Send invite" for a coach who has never signed in, "Re-send sign-in link"
+ * for one who has. Coach sign-in is Google OAuth gated on the coaches table,
+ * so the email carries no token — it names the Google account to use and
+ * links to the sign-in page. Sent by POST /api/coaches/[id]/invite.
+ */
+function InviteActions({ coach, onUpdated }: { coach: Coach; onUpdated: (c: Coach) => void }) {
+  const [busy, setBusy] = useState(false)
+  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null)
+
+  async function send() {
+    setBusy(true)
+    setNote(null)
+    const res = await fetch(`/api/coaches/${coach.id}/invite`, { method: 'POST' })
+    const d = await res.json().catch(() => ({}))
+    setBusy(false)
+    if (res.ok) {
+      onUpdated({ ...coach, last_invited_at: d.lastInvitedAt ?? new Date().toISOString() })
+      setNote({
+        ok: true,
+        text: d.warning ? `Sent to ${d.sentTo} (${d.warning})` : `Sent to ${d.sentTo}`,
+      })
+    } else {
+      setNote({ ok: false, text: d.error ?? 'Could not send the invite' })
+    }
+  }
+
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+      <span className="text-[11px] text-tlw-warm-gray">
+        {coach.last_invited_at ? `Invite sent ${shortDate(coach.last_invited_at)}` : 'No invite sent yet'}
+      </span>
+      <button
+        onClick={send}
+        disabled={busy}
+        className={`rounded-md border px-2.5 py-1 text-[11px] font-medium transition-colors disabled:opacity-50 ${
+          coach.has_signed_in
+            ? 'border-tlw-warm-gray/30 text-tlw-navy-deep hover:bg-tlw-canvas'
+            : 'border-tlw-navy-deep bg-tlw-navy-deep text-white hover:bg-tlw-navy-deep/90'
+        }`}
+      >
+        {busy ? 'Sending…' : coach.has_signed_in ? 'Re-send sign-in link' : coach.last_invited_at ? 'Re-send invite' : 'Send invite'}
+      </button>
+      {note && (
+        <span className={`text-[11px] ${note.ok ? 'text-emerald-700' : 'text-red-600'}`}>{note.text}</span>
+      )}
+    </div>
+  )
+}
+
 // ── Add coach ─────────────────────────────────────────────────────────────────
 
-function AddCoachModal({ onAdded, onClose }: { onAdded: (c: Coach) => void; onClose: () => void }) {
+function AddCoachModal({ onAdded, onClose }: {
+  onAdded: (c: Coach, opts: { close: boolean }) => void
+  onClose: () => void
+}) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<'coach' | 'supervisor'>('coach')
+  const [sendInvite, setSendInvite] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  // Set once the row exists but the invite failed: the modal stays open to show
+  // the error, and the only way out is "Done" (the coach is already in the list).
+  const [addedWithError, setAddedWithError] = useState(false)
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -312,6 +372,17 @@ function AddCoachModal({ onAdded, onClose }: { onAdded: (c: Coach) => void; onCl
     })
     const d = await res.json()
     if (!res.ok) { setError(d.error ?? 'Failed'); setSaving(false); return }
+    // The row exists now; the invite is best-effort on top of it. A failed
+    // send leaves the coach in the list with "No invite sent yet" and the
+    // Send invite button, so nothing is lost.
+    let lastInvitedAt: string | null = null
+    let inviteError = ''
+    if (sendInvite) {
+      const inv = await fetch(`/api/coaches/${d.coach.id}/invite`, { method: 'POST' })
+      const invBody = await inv.json().catch(() => ({}))
+      if (inv.ok) lastInvitedAt = invBody.lastInvitedAt ?? new Date().toISOString()
+      else inviteError = `Coach added, but the invite email failed: ${invBody.error ?? 'unknown error'}. Use "Send invite" on their row.`
+    }
     onAdded({
       ...d.coach,
       client_count: 0,
@@ -323,9 +394,11 @@ function AddCoachModal({ onAdded, onClose }: { onAdded: (c: Coach) => void; onCl
       portal_invited_count: 0,
       portal_active_count: 0,
       has_signed_in: false,
+      last_invited_at: lastInvitedAt,
       usage: EMPTY_USAGE,
       is_me: false,
-    })
+    }, { close: !inviteError })
+    if (inviteError) { setError(inviteError); setAddedWithError(true); setSaving(false) }
   }
 
   return (
@@ -377,18 +450,44 @@ function AddCoachModal({ onAdded, onClose }: { onAdded: (c: Coach) => void; onCl
               ))}
             </div>
           </div>
+          <label className="flex items-start gap-2 text-[12px] text-tlw-espresso">
+            <input
+              type="checkbox"
+              checked={sendInvite}
+              onChange={(e) => setSendInvite(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>
+              Email them a sign-in invitation now
+              <span className="block text-[11px] text-tlw-warm-gray">
+                Tells them which Google account to use and links to the sign-in page. You can re-send it from their row any time.
+              </span>
+            </span>
+          </label>
           {error && <p className="text-[12px] text-red-600">{error}</p>}
           <div className="flex items-center justify-end gap-2 pt-1">
-            <button type="button" onClick={onClose} className="px-3 py-1.5 text-[13px] text-tlw-warm-gray hover:text-tlw-espresso">
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="rounded-tlw-lg bg-tlw-navy-deep px-4 py-1.5 text-[13px] font-medium text-white disabled:opacity-50"
-            >
-              {saving ? 'Adding…' : 'Add coach'}
-            </button>
+            {addedWithError ? (
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-tlw-lg bg-tlw-navy-deep px-4 py-1.5 text-[13px] font-medium text-white"
+              >
+                Done
+              </button>
+            ) : (
+              <>
+                <button type="button" onClick={onClose} className="px-3 py-1.5 text-[13px] text-tlw-warm-gray hover:text-tlw-espresso">
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="rounded-tlw-lg bg-tlw-navy-deep px-4 py-1.5 text-[13px] font-medium text-white disabled:opacity-50"
+                >
+                  {saving ? (sendInvite ? 'Adding & inviting…' : 'Adding…') : 'Add coach'}
+                </button>
+              </>
+            )}
           </div>
         </form>
       </div>
@@ -457,6 +556,7 @@ function CoachRow({ coach, onUpdated, onRemoved }: {
             {coach.timezone && ` · ${coach.timezone}`}
             {coach.plan_note && ` · ${coach.plan_note}`}
           </p>
+          {!coach.is_me && <InviteActions coach={coach} onUpdated={onUpdated} />}
           <BillingActions coach={coach} />
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -695,7 +795,7 @@ export default function CommandCenterPage() {
 
       {showAdd && (
         <AddCoachModal
-          onAdded={(c) => { setCoaches((all) => [...all, c]); setShowAdd(false) }}
+          onAdded={(c, { close }) => { setCoaches((all) => [...all, c]); if (close) setShowAdd(false) }}
           onClose={() => setShowAdd(false)}
         />
       )}
