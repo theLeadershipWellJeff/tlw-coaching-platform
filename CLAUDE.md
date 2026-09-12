@@ -1944,7 +1944,10 @@ post-beta (Tier 3 of the plan).
   `getSessionCoach`, by the ingest webhook, or by any cron — a new coach is
   added by a supervisor (Command Center → `POST /api/coaches`).
   `getOrCreateCoach` remains in `lib/coach.ts` for an explicit admin path only
-  and has no callers. A refused account lands on the plain `/auth/error` page
+  and has no callers. **Since 2026-09-12 a paid self-serve signup (`/join`)
+  also creates the row** — `lib/coach-signup.ts`, on checkout completion,
+  never at sign-in — and a lapsed plan walls the account without touching
+  the allowlist (see "Coach paywall"). A refused account lands on the plain `/auth/error` page
   ("This account isn't authorized"). `BETA_COACH_EMAILS` no longer grants entry
   (left in `.env.example` for now; ignored by code).
 - **First-run checklist** (`dashboard/WelcomeChecklist.tsx`): shows while the
@@ -2028,6 +2031,93 @@ support tickets — counts only), the whole card clicking through to
   (`lib/admin/audit.ts`, append-only, best-effort so a missing table never
   blocks the action).
 
+### Coach paywall + self-serve signup (2026-09-12) — the rule lives in `lib/access.ts`
+
+**Plan = the switch.** `coaches.plan` (057, unconstrained text) is now
+`beta | paying | lapsed` (the pre-paywall value `free` reads as `lapsed`;
+`normalizePlan`). `coachAccess(coach)` → supervisor never locked; `beta` and
+`paying` open; anything else **locked**. The webhook demotes a dead
+subscription `paying → lapsed` (never stomps a hand-set `beta`), promotes
+active/trialing/past_due → `paying`, and resolves a coach by `tlw_coach_id`
+metadata OR the stored `stripe_subscription_id` (a signup-flow subscription
+is tagged after creation).
+
+**Enforcement = one choke point.** `lib/coach.ts#getSessionCoach` returns
+**null for a locked coach** unless called with `{ allowLocked: true }`, so
+every API route that resolves the coach through it (directly or via
+`requireCoach` / `requireClientCoach` / `requireSupervisor`) answers 401 —
+no tenant data leaves the wall. `getSessionCoachAny` = the allowLocked
+spelling. The `(authenticated)` layout reads with allowLocked and
+`redirect('/subscription')`s a locked coach before the shell renders. Only
+these opt in: `/api/subscription/*`, the wall + return pages, and the
+export. Portal, crons, and webhooks carry no coach session and are untouched.
+
+**THE WALL — `app/subscription/page.tsx` + `SubscriptionWall.tsx`.** Outside
+the app shell (no sidebar, nothing tenant-scoped rendered). Three actions
+only: **subscribe** (`PlanPicker` → `POST /api/subscription/checkout
+{interval}` → Stripe hosted Checkout with `allow_promotion_codes`, NO trial —
+they have used the platform; success/cancel → `/subscription/return`, which
+sends an open coach to the dashboard and otherwise shows "finishing up" with a
+re-check link because the webhook can land after the redirect), **Download my
+data** (`GET /api/subscription/export` → `lib/export/coach-export.ts`, a ZIP
+built by the dependency-free `lib/zip.ts` — `clients.csv`, per-client
+folders of notes (HTML + the sent narrative), transcripts (md), scorecards
+(JSON), session plans, signed agreements, plus actions / appointments /
+communications / nudges / coaching-hours / billing / templates and a README;
+`key_info` IS included, it is the coach's own; deliberately available while
+locked — lapsing loses the app, never the work; `maxDuration = 300`, logged
+as `coach_data_export`), and **sign out**. `POST /api/subscription/portal` =
+the coach's own Stripe Billing Portal (card / invoices / cancel), also open
+while locked so a failed card can be fixed. `GET /api/subscription/status` =
+plan, locked, live Stripe summary (trial end, renewal, cancel-at-period-end),
+configured intervals, pricing.
+
+**Account → Subscription (`SubscriptionSettings.tsx`, under Profile).** The
+same status line for an open coach; a beta or lapsed coach without a live
+subscription sees the `PlanPicker` to convert themselves; Manage billing +
+Download my data always.
+
+**Self-serve signup — PUBLIC `/join`.** Pricing ($95/mo, $950/yr = two
+months free, 14-day free trial, card required; `COACH_PRICING` in
+`lib/access.ts` is the copy source) + `JoinForm` (name, Google-account
+email, interval) → `POST /api/join/checkout` → `createCoachSignupCheckout`:
+subscription-mode Checkout with `trial_period_days: 14`,
+`allow_promotion_codes`, `customer_email`, and the identity in metadata
+(`tlw_signup_email` / `tlw_signup_name`) — **no coaches row is created
+until the checkout completes**, so an abandoned checkout leaves nothing. An
+email that already has a coaches row gets no trial (updated, never
+duplicated). Completion is provisioned by
+**`lib/coach-signup.ts#provisionCoachFromCheckout`** from BOTH the
+`checkout.session.completed` webhook and the `/join/welcome?session_id=`
+success page (whichever runs first; idempotent — unique email, 23505 →
+re-read the winner; the invite is deduped on the checkout session id in
+`admin_audit_log.detail`): get-or-create the row (`plan: paying`, Stripe ids,
+real subscription status), `tagCoachSubscription` stamps `tlw_coach_id` on
+the subscription + customer, then `sendCoachInviteEmail` from the house coach
+(`DEFAULT_COACH_EMAIL` row, else the earliest supervisor; Resend first) —
+audit `coach_signup` + `coach_invite_sent` with `actor_coach_id NULL` = the
+system. The welcome page names the exact Google account and links to
+sign-in; `/auth/error` explains an email mismatch. The sign-in page links to
+`/join`. **Discount codes = Stripe promotion codes** created in the Dashboard
+(a 100%-off coupon is how a tester gets in free); nothing in code.
+
+**Beta coaches.** Stay `beta` (free) until Jeff acts: **Remove** (existing,
+deletes the row) or convert — flip the chip to `lapsed` (they hit the wall
+and subscribe themselves, no trial), send the Command Center billing link
+(now also promo-enabled, lands them on `/subscription/return`), or point
+them at Account → Subscription. Command Center chips read beta / paying /
+lapsed; the pulse strip counts `lapsed (walled)`.
+
+**Not built (deliberate):** tiered pricing (one price per interval for now —
+tiers = more Price ids + a `tier` column later), a grace period on the wall
+(a cancelled subscription keeps access to period end via Stripe itself;
+`past_due` stays open while Stripe retries), a beta end DATE (manual flip),
+seat/firm plans, an in-app promo-code field (Stripe's page has it), and rate
+limiting on the public checkout route (nothing is written on our side and
+Stripe rate-limits its own API). **Not browser-tested here** — typecheck +
+build only; the ZIP writer was verified with Python's zipfile
+(`testzip` clean, deflate, UTF-8 names, duplicate suffixing).
+
 ### Coach billing go-live checklist — ⚠️ NOT DONE (deliberately deferred)
 
 The code + schema (057) are deployed, but Jeff is bringing coach billing online
@@ -2035,10 +2125,15 @@ later. Until every step below is done, "Send billing link" fails with a clear
 error naming `STRIPE_COACH_PRICE_ID`, plan chips stay hand-set, and nothing can
 charge a coach. **Do these in the live Stripe account when ready:**
 
-1. **Create the subscription Price** — Stripe Dashboard → Products → Add
-   product (e.g. "TLW Coaching Platform — Monthly") with a **recurring** price.
-   Copy the `price_…` id → set `STRIPE_COACH_PRICE_ID` in Vercel env vars →
-   redeploy (env changes only take effect on the next deploy).
+1. **Create the subscription Prices** — Stripe Dashboard → Products → Add
+   product ("theLeadershipWell Coaching Platform") with TWO **recurring**
+   prices: $95 / month → `STRIPE_COACH_PRICE_ID`, $950 / year →
+   `STRIPE_COACH_PRICE_ID_ANNUAL` in Vercel env vars → redeploy (env changes
+   only take effect on the next deploy). Until the monthly id is set, `/join`,
+   the wall, and Account say subscriptions are not open yet; the annual id is
+   optional (unset = monthly only). Then create the **promotion codes** you
+   want (Products → Coupons → add a coupon, e.g. 100% off forever for
+   testers, then "Add promotion code" for the word they type).
 2. **Register three webhook events** on the existing endpoint ("TLW Strip
    Connection", the Vercel URL): `checkout.session.completed`,
    `customer.subscription.updated`, `customer.subscription.deleted`. Same
@@ -2047,11 +2142,14 @@ charge a coach. **Do these in the live Stripe account when ready:**
    Billing → Customer portal → save the default configuration. This is what
    the Command Center's "Stripe billing portal" button opens (card updates,
    invoice history, cancel).
-4. **Verify end-to-end** — Command Center → a test coach row → "Send billing
-   link" → complete checkout with a real card (or a 100%-off coupon) → confirm
-   the row shows "Subscription · active" and the plan chip flips to `paying`
-   on its own; then cancel from the billing portal and confirm the plan drops
-   to `free`.
+4. **Verify end-to-end** — (a) `/join` with a fresh email + a 100%-off
+   promotion code → complete checkout → the welcome page names the email →
+   the invite lands → sign in with that Google account → dashboard; Command
+   Center shows the new row as `paying` / "Subscription · trialing". (b) A
+   test coach row → "Send billing link" → complete checkout → the chip flips
+   to `paying` on its own. (c) Cancel from the billing portal → the chip
+   drops to `lapsed` and that coach lands on `/subscription`, where
+   "Download my data" returns a ZIP and subscribing again reopens the app.
 
 (053 + 054 were reported applied 2026-08-24 but were NOT — both landed 2026-09-09. Since then the client drill-down shows full portal state — last-seen, lockouts, and portal-unlock all live.)
 
@@ -2095,9 +2193,10 @@ Stripe (billing): `STRIPE_SECRET_KEY` (from Stripe Dashboard → Developers → 
 use the test key `sk_test_…` in dev, live key `sk_live_…` in production),
 `STRIPE_WEBHOOK_SECRET` (from Stripe Dashboard → Developers → Webhooks → signing
 secret for the `POST /api/billing/webhooks/stripe` endpoint),
-`STRIPE_COACH_PRICE_ID` (the recurring Price id for the coach platform
-subscription — Command Center "Send billing link"; without it coach billing
-links fail with a clear error).
+`STRIPE_COACH_PRICE_ID` (the recurring monthly Price id for the coach
+platform subscription — `/join`, the paywall, Account, and the Command
+Center "Send billing link"; without it those say subscriptions aren't open
+yet) and optional `STRIPE_COACH_PRICE_ID_ANNUAL` (the annual Price).
 Transactional email (Client Portal sign-in links/invitations — see the Assessment
 debrief section): `RESEND_API_KEY`, `PORTAL_FROM_EMAIL`, optional
 `PORTAL_FROM_NAME`; unset = portal links fall back to the coach's Gmail.

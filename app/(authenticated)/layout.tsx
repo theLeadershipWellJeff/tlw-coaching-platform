@@ -6,6 +6,7 @@ import { PlanSessionWindowProvider } from '@/app/components/plan/PlanSessionWind
 import { ToastHost } from '@/app/components/shared/Toast'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { getSessionCoach } from '@/lib/coach'
+import { coachIsLocked } from '@/lib/access'
 
 export default async function AuthenticatedLayout({
   children,
@@ -25,12 +26,16 @@ export default async function AuthenticatedLayout({
   // page. redirect() throws, so it must run outside the try/catch.
   let coach: Awaited<ReturnType<typeof getSessionCoach>> | undefined
   try {
-    coach = await getSessionCoach(getSupabaseAdmin())
+    coach = await getSessionCoach(getSupabaseAdmin(), { allowLocked: true })
     isSupervisor = coach?.role === 'supervisor'
   } catch {
     isSupervisor = false
   }
   if (coach === null) redirect('/auth/error?error=AccessDenied')
+  // THE PAYWALL (lib/access.ts): a lapsed coach never sees the app shell —
+  // they go to the wall (subscribe / download data / sign out). The API side
+  // enforces the same rule by resolving a locked coach as null.
+  if (coach && coachIsLocked(coach)) redirect('/subscription')
 
   // PlanSessionWindowProvider lives at the layout level so an open floating
   // "Plan next session" window survives navigation between pages (e.g. from

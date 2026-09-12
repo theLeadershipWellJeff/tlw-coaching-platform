@@ -9,6 +9,7 @@ import { SignatureSettings } from './SignatureSettings'
 import { CalendarSettings } from './CalendarSettings'
 import { TranscriptSourceSettings } from './TranscriptSourceSettings'
 import { VaultSettings } from './VaultSettings'
+import { SubscriptionSettings } from './SubscriptionSettings'
 
 export default async function AccountPage() {
   const session = await getServerSession(authOptions)
@@ -38,6 +39,9 @@ export default async function AccountPage() {
 
         {/* How the app refers to the coach — name, greeting name, title, phone. */}
         <CoachProfileSettings />
+
+        {/* Plan state, Stripe billing portal, start-a-subscription, data export. */}
+        <SubscriptionSettings />
 
         <TimezoneSettings />
 

@@ -18,6 +18,8 @@ export type AdminAction =
   | 'coach_added'
   | 'coach_removed'
   | 'coach_invite_sent'
+  | 'coach_signup'
+  | 'coach_data_export'
   // Assessment debrief command center (Phase 4)
   | 'company_created'
   | 'company_updated'
@@ -38,7 +40,8 @@ export type AdminAction =
 export async function logAdminAction(
   supabase: SupabaseClient<Database>,
   entry: {
-    actorCoachId: string
+    /** null = the system (a Stripe webhook, a self-serve signup). */
+    actorCoachId: string | null
     action: AdminAction
     targetCoachId?: string | null
     targetClientId?: string | null

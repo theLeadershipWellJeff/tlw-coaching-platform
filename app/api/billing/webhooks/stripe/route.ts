@@ -30,12 +30,15 @@
  *   charge.dispute.created
  */
 import { NextRequest, NextResponse } from 'next/server'
+import { provisionCoachFromCheckout } from '@/lib/coach-signup'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import {
   constructWebhookEvent,
   attachPaymentMethodAsDefault,
   retrievePaymentMethod,
   cardDisplayFields,
+  getStripe,
+  retrieveCheckoutSession,
 } from '@/lib/billing/stripe'
 import { cancelReminders } from '@/lib/billing/reminders'
 import { sendPaymentThankYou } from '@/lib/billing/send'
@@ -146,6 +149,13 @@ export async function POST(req: NextRequest) {
         const session = event.data.object as Stripe.Checkout.Session
         if (session.mode === 'subscription' && session.metadata?.tlw_coach_id) {
           await handleCoachSubscriptionStarted(supabase, session, now)
+        } else if (session.mode === 'subscription' && session.metadata?.tlw_signup_email) {
+          // Self-serve signup (/join): no coaches row yet — create it, tag the
+          // subscription, email the sign-in invite. Idempotent with the
+          // welcome page, which does the same on redirect.
+          const full = await retrieveCheckoutSession(session.id)
+          const r = await provisionCoachFromCheckout(supabase, full)
+          if (!r.ok) console.error('[stripe webhook] coach signup provisioning failed:', r.error)
         }
         break
       }
@@ -153,9 +163,7 @@ export async function POST(req: NextRequest) {
       case 'customer.subscription.updated':
       case 'customer.subscription.deleted': {
         const sub = event.data.object as Stripe.Subscription
-        if (sub.metadata?.tlw_coach_id) {
-          await handleCoachSubscriptionChanged(supabase, sub, now)
-        }
+        await handleCoachSubscriptionChanged(supabase, sub, now)
         break
       }
 
@@ -486,12 +494,20 @@ async function handleCoachSubscriptionStarted(supabase: Admin, session: Stripe.C
   const customerId = typeof session.customer === 'string' ? session.customer : session.customer?.id
   if (!subId) return
 
+  // The real status matters now that Checkout can start a trial ('trialing').
+  let status = 'active'
+  try {
+    status = (await getStripe().subscriptions.retrieve(subId)).status
+  } catch (e) {
+    console.error('[stripe webhook] could not read the new subscription status:', e)
+  }
+
   await supabase
     .from('coaches')
     .update({
       stripe_customer_id: customerId ?? undefined,
       stripe_subscription_id: subId,
-      subscription_status: 'active',
+      subscription_status: status,
       plan: 'paying',
       updated_at: now,
     } as any)
@@ -499,7 +515,19 @@ async function handleCoachSubscriptionStarted(supabase: Admin, session: Stripe.C
 }
 
 async function handleCoachSubscriptionChanged(supabase: Admin, sub: Stripe.Subscription, now: string) {
-  const coachId = sub.metadata!.tlw_coach_id
+  // Resolve the coach: the metadata stamp first, else the stored subscription
+  // id (a signup-flow subscription is tagged after creation, so an early event
+  // can arrive untagged). No match = not a coach subscription; ignore.
+  let coachId = sub.metadata?.tlw_coach_id ?? null
+  if (!coachId) {
+    const { data } = await supabase
+      .from('coaches')
+      .select('id')
+      .eq('stripe_subscription_id', sub.id)
+      .maybeSingle()
+    coachId = (data as any)?.id ?? null
+  }
+  if (!coachId) return
   const status = sub.status
 
   const updates: Record<string, unknown> = {
@@ -513,12 +541,13 @@ async function handleCoachSubscriptionChanged(supabase: Admin, sub: Stripe.Subsc
 
   await supabase.from('coaches').update(updates as any).eq('id', coachId)
 
-  // A dead subscription demotes 'paying' → 'free', but never stomps a hand-set
-  // 'beta'/'free' — the supervisor's label survives everything but real payment.
+  // A dead subscription demotes 'paying' → 'lapsed' (THE WALL — lib/access.ts),
+  // but never stomps a hand-set 'beta' — the supervisor's label survives
+  // everything but real payment.
   if (!PAYING_STATUSES.includes(status)) {
     await supabase
       .from('coaches')
-      .update({ plan: 'free', updated_at: now } as any)
+      .update({ plan: 'lapsed', updated_at: now } as any)
       .eq('id', coachId)
       .eq('plan', 'paying')
   }

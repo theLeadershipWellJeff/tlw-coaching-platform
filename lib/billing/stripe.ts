@@ -389,11 +389,26 @@ export async function hostedInvoiceUrl(stripeInvoiceId: string): Promise<string 
 // Stripe (env STRIPE_COACH_PRICE_ID names it) so pricing changes are a
 // dashboard edit, not a deploy.
 
-/** The Stripe Price id for the coach platform subscription. */
-export function coachPriceId(): string {
-  const id = process.env.STRIPE_COACH_PRICE_ID
-  if (!id) throw new Error('STRIPE_COACH_PRICE_ID is not set — create a recurring Price in Stripe and set its id.')
+export type CoachBillingInterval = 'month' | 'year'
+
+/**
+ * The Stripe Price id for the coach platform subscription — monthly
+ * (STRIPE_COACH_PRICE_ID) or annual (STRIPE_COACH_PRICE_ID_ANNUAL, two months
+ * free). Both are recurring Prices created in the Stripe Dashboard.
+ */
+export function coachPriceId(interval: CoachBillingInterval = 'month'): string {
+  const env = interval === 'year' ? 'STRIPE_COACH_PRICE_ID_ANNUAL' : 'STRIPE_COACH_PRICE_ID'
+  const id = process.env[env]
+  if (!id) throw new Error(`${env} is not set — create a recurring Price in Stripe and set its id.`)
   return id
+}
+
+/** Which intervals are configured (the join page / wall only offer these). */
+export function configuredCoachIntervals(): CoachBillingInterval[] {
+  const out: CoachBillingInterval[] = []
+  if (process.env.STRIPE_COACH_PRICE_ID) out.push('month')
+  if (process.env.STRIPE_COACH_PRICE_ID_ANNUAL) out.push('year')
+  return out
 }
 
 /**
@@ -427,17 +442,104 @@ export async function createCoachSubscriptionCheckout(opts: {
   coachId: string
   successUrl: string
   cancelUrl: string
+  interval?: CoachBillingInterval
+  /** Days of free trial (0 / undefined = none). Card is still collected. */
+  trialDays?: number
 }): Promise<Stripe.Checkout.Session> {
   const stripe = getStripe()
   return stripe.checkout.sessions.create({
     mode: 'subscription',
     customer: opts.customerId,
-    line_items: [{ price: coachPriceId(), quantity: 1 }],
+    line_items: [{ price: coachPriceId(opts.interval ?? 'month'), quantity: 1 }],
     success_url: opts.successUrl,
     cancel_url: opts.cancelUrl,
-    subscription_data: { metadata: { tlw_coach_id: opts.coachId } },
+    // Discount codes (testers, comps, launch offers) are Stripe promotion codes
+    // typed on the hosted page — created in the Dashboard, never in code.
+    allow_promotion_codes: true,
+    subscription_data: {
+      metadata: { tlw_coach_id: opts.coachId },
+      ...(opts.trialDays ? { trial_period_days: opts.trialDays } : {}),
+    },
     metadata: { tlw_coach_id: opts.coachId },
   })
+}
+
+/**
+ * Self-serve signup Checkout (the public /join page): there is NO coaches row
+ * yet, so the session carries the signup identity in metadata
+ * (tlw_signup_email / tlw_signup_name) and the row is created on completion —
+ * by the checkout.session.completed webhook AND by the /join/welcome page,
+ * whichever runs first (lib/coach-signup.ts is idempotent). Card required;
+ * the trial converts to a charge on day `trialDays` unless cancelled.
+ */
+export async function createCoachSignupCheckout(opts: {
+  email: string
+  name: string
+  interval: CoachBillingInterval
+  trialDays: number
+  successUrl: string
+  cancelUrl: string
+}): Promise<Stripe.Checkout.Session> {
+  const stripe = getStripe()
+  const meta = { tlw_signup_email: opts.email, tlw_signup_name: opts.name }
+  return stripe.checkout.sessions.create({
+    mode: 'subscription',
+    customer_email: opts.email,
+    line_items: [{ price: coachPriceId(opts.interval), quantity: 1 }],
+    success_url: opts.successUrl,
+    cancel_url: opts.cancelUrl,
+    allow_promotion_codes: true,
+    subscription_data: {
+      metadata: meta,
+      ...(opts.trialDays > 0 ? { trial_period_days: opts.trialDays } : {}),
+    },
+    metadata: meta,
+  })
+}
+
+/** Read a Checkout session (with its subscription expanded) — the welcome page + provisioning. */
+export async function retrieveCheckoutSession(id: string): Promise<Stripe.Checkout.Session> {
+  return getStripe().checkout.sessions.retrieve(id, { expand: ['subscription'] })
+}
+
+/** Stamp our coach id onto a subscription + customer created by the signup flow. */
+export async function tagCoachSubscription(opts: {
+  subscriptionId: string | null
+  customerId: string | null
+  coachId: string
+}): Promise<void> {
+  const stripe = getStripe()
+  if (opts.subscriptionId) {
+    await stripe.subscriptions.update(opts.subscriptionId, { metadata: { tlw_coach_id: opts.coachId } })
+  }
+  if (opts.customerId) {
+    await stripe.customers.update(opts.customerId, { metadata: { tlw_coach_id: opts.coachId, source: 'tlw-coaching-platform' } })
+  }
+}
+
+/** The live subscription (status, trial end, period end, interval) — best-effort summary for the Account card. */
+export async function coachSubscriptionSummary(subscriptionId: string): Promise<{
+  status: string
+  trialEnd: string | null
+  currentPeriodEnd: string | null
+  cancelAtPeriodEnd: boolean
+  interval: CoachBillingInterval | null
+} | null> {
+  try {
+    const sub: any = await getStripe().subscriptions.retrieve(subscriptionId)
+    const item = sub.items?.data?.[0]
+    const periodEnd = item?.current_period_end ?? sub.current_period_end ?? null
+    return {
+      status: sub.status,
+      trialEnd: sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null,
+      currentPeriodEnd: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
+      cancelAtPeriodEnd: !!sub.cancel_at_period_end,
+      interval: item?.price?.recurring?.interval === 'year' ? 'year' : item?.price?.recurring?.interval === 'month' ? 'month' : null,
+    }
+  } catch (e) {
+    console.error('[coach subscription] summary failed:', e)
+    return null
+  }
 }
 
 /**

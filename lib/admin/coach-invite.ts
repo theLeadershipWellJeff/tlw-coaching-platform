@@ -74,13 +74,16 @@ export function buildCoachInviteEmailHtml(opts: {
  */
 export async function sendCoachInviteEmail(opts: {
   coach: Pick<Coach, 'id' | 'name' | 'email' | 'google_refresh_token'>
-  actor: Coach
+  /** The supervisor clicking the button; `sender` is the same thing by another name for system callers (null = no Gmail path). */
+  actor?: Coach | null
+  sender?: Coach | null
 }): Promise<CoachInviteResult> {
-  const { coach, actor } = opts
+  const { coach } = opts
+  const actor = opts.actor ?? opts.sender ?? null
   if (!coach.email) return { ok: false, via: 'none', error: 'This coach has no email on file.' }
 
   const firstName = (coach.name || '').split(' ')[0] || 'there'
-  const fromName = actor.name || process.env.DEFAULT_COACH_NAME || 'theLeadershipWell'
+  const fromName = actor?.name || process.env.DEFAULT_COACH_NAME || 'theLeadershipWell'
   const subject = coach.google_refresh_token
     ? 'Your theLeadershipWell platform sign-in link'
     : 'Your theLeadershipWell coaching platform account is ready'
@@ -93,7 +96,7 @@ export async function sendCoachInviteEmail(opts: {
   })
 
   async function viaGmail(): Promise<CoachInviteResult> {
-    if (!actor.google_refresh_token) {
+    if (!actor?.google_refresh_token) {
       return {
         ok: false,
         via: 'none',
@@ -110,7 +113,7 @@ export async function sendCoachInviteEmail(opts: {
 
   if (!isTransactionalEmailConfigured()) return viaGmail()
 
-  const r = await sendTransactionalEmail({ to: coach.email, subject, html, replyTo: actor.email || undefined })
+  const r = await sendTransactionalEmail({ to: coach.email, subject, html, replyTo: actor?.email || undefined })
   if (r.ok) return { ok: true, via: 'resend' }
   // Resend refused — carry it over Gmail and say so (same rule as portal mail).
   const g = await viaGmail()

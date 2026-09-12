@@ -31,7 +31,7 @@ type Coach = {
   timezone: string | null
   client_count: number
   account_count: number
-  plan: 'beta' | 'free' | 'paying'
+  plan: 'beta' | 'paying' | 'lapsed' | 'free'
   plan_note: string | null
   subscription_status: string | null
   has_subscription: boolean
@@ -79,13 +79,16 @@ const ROLE_STYLES: Record<string, string> = {
   supervisor: 'bg-tlw-navy-deep/10 text-tlw-navy-deep',
 }
 
+// Plan = the paywall switch (lib/access.ts): beta + paying open the app,
+// lapsed (and the legacy value `free`) lands the coach on the wall.
 const PLAN_STYLES: Record<string, string> = {
   beta: 'bg-violet-100 text-violet-700',
-  free: 'bg-tlw-canvas text-tlw-warm-gray',
   paying: 'bg-emerald-100 text-emerald-700',
+  lapsed: 'bg-red-50 text-red-700',
+  free: 'bg-red-50 text-red-700',
 }
 
-const PLANS = ['beta', 'free', 'paying'] as const
+const PLANS = ['beta', 'paying', 'lapsed'] as const
 
 // ── Firm pulse ────────────────────────────────────────────────────────────────
 
@@ -116,7 +119,7 @@ function FirmPulse({ coaches }: { coaches: Coach[] }) {
   const active = coaches.reduce((s, c) => s + c.portal_active_count, 0)
   const paying = coaches.filter((c) => c.plan === 'paying').length
   const beta = coaches.filter((c) => c.plan === 'beta').length
-  const free = coaches.filter((c) => c.plan === 'free').length
+  const lapsed = coaches.length - paying - beta
 
   return (
     <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -135,7 +138,7 @@ function FirmPulse({ coaches }: { coaches: Coach[] }) {
       <PulseStat
         value={String(paying)}
         label="Paying"
-        sub={`${beta} beta · ${free} free`}
+        sub={`${beta} beta · ${lapsed} lapsed (walled)`}
       />
     </div>
   )
@@ -168,9 +171,9 @@ function PlanChip({ coach, onUpdated }: { coach: Coach; onUpdated: (c: Coach) =>
       <button
         onClick={() => setOpen((o) => !o)}
         title={coach.plan_note ?? 'Set plan'}
-        className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${PLAN_STYLES[coach.plan] ?? PLAN_STYLES.free}`}
+        className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${PLAN_STYLES[coach.plan] ?? PLAN_STYLES.lapsed}`}
       >
-        {coach.plan}
+        {coach.plan === 'free' ? 'lapsed' : coach.plan}
       </button>
       {open && (
         <div className="absolute left-0 top-6 z-20 w-56 rounded-tlw-lg border border-tlw-warm-gray/25 bg-white p-3 shadow-lg">
@@ -199,7 +202,7 @@ function PlanChip({ coach, onUpdated }: { coach: Coach; onUpdated: (c: Coach) =>
             className="mt-2 w-full rounded-tlw-md border border-tlw-warm-gray/30 bg-tlw-canvas px-2 py-1 text-[11px] text-tlw-espresso focus:outline-none"
           />
           <p className="mt-1.5 text-[10px] leading-snug text-tlw-warm-gray">
-            A live subscription sets this to paying automatically.
+            Beta = free access until you convert or remove them. Lapsed = the paywall (they can only subscribe or download their data). A live subscription sets paying automatically; a cancelled one sets lapsed.
           </p>
         </div>
       )}

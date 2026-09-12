@@ -11,7 +11,8 @@ type Params = { params: { id: string } }
 // a coach is destructive — neither may be reachable by an ordinary coach
 // (ISOLATION_AUDIT Decision #2).
 
-const PLANS = ['beta', 'free', 'paying'] as const
+// beta | paying | lapsed (lib/access.ts). `free` is the pre-paywall spelling of lapsed and still accepted.
+const PLANS = ['beta', 'paying', 'lapsed', 'free'] as const
 
 export async function PATCH(req: NextRequest, { params }: Params) {
   const supabase = getSupabaseAdmin()

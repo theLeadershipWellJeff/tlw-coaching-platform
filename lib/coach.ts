@@ -11,6 +11,7 @@
  * auth, a webhook, or a cron.
  */
 import { getServerSession } from 'next-auth'
+import { coachIsLocked } from './access'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { authOptions } from './authOptions'
 import type { Database, Coach } from './supabase/types'
@@ -95,12 +96,24 @@ export async function storeCoachRefreshToken(
  * re-create the row here.
  */
 export async function getSessionCoach(
-  supabase: SupabaseClient<Database>
+  supabase: SupabaseClient<Database>,
+  opts: { allowLocked?: boolean } = {}
 ): Promise<Coach | null> {
   const session = await getServerSession(authOptions)
   const email = session?.user?.email
   if (!email) return null
-  return getCoachByEmail(supabase, email)
+  const coach = await getCoachByEmail(supabase, email)
+  // THE PAYWALL (lib/access.ts). A lapsed coach is signed in but not
+  // authorized: every route that resolves the coach through here sees null
+  // (→ 401), so no data leaves the wall. Only the subscription, export, and
+  // layout callers pass allowLocked to see who is standing at it.
+  if (coach && !opts.allowLocked && coachIsLocked(coach)) return null
+  return coach
+}
+
+/** The signed-in coach even when locked behind the paywall (wall + subscription routes). */
+export async function getSessionCoachAny(supabase: SupabaseClient<Database>): Promise<Coach | null> {
+  return getSessionCoach(supabase, { allowLocked: true })
 }
 
 /**
