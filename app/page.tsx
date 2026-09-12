@@ -19,6 +19,12 @@ export default async function Home() {
       >
         Sign in with Google
       </a>
+      <p className="mt-8 text-[12px] text-tlw-warm-gray">
+        New here?{' '}
+        <a href="/join" className="underline hover:text-tlw-cream">
+          Start a 14-day free trial
+        </a>
+      </p>
     </div>
   )
 }

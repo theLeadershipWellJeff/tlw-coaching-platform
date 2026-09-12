@@ -23,7 +23,7 @@ export default function AuthErrorPage({ searchParams }: { searchParams?: { error
       </h1>
       <p className="text-tlw-warm-gray text-sm max-w-md mb-10">
         {denied
-          ? 'The Google account you chose is not set up as a coach on this platform. If you were expecting access, ask your supervisor to add you, then sign in again.'
+          ? 'The Google account you chose is not set up as a coach on this platform. If you subscribed, sign in with the Google account for the exact email you used at checkout. If you were invited, ask your supervisor to check the address on your invitation, then sign in again.'
           : 'Something went wrong during sign-in. Please try again.'}
       </p>
       <Link

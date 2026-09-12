@@ -42,8 +42,11 @@ export async function requireSession() {
 }
 
 /** Require the signed-in coach; throws ApiError(401) otherwise. */
-export async function requireCoach(supabase: SupabaseClient<Database>): Promise<Coach> {
-  const coach = await getSessionCoach(supabase)
+export async function requireCoach(
+  supabase: SupabaseClient<Database>,
+  opts: { allowLocked?: boolean } = {}
+): Promise<Coach> {
+  const coach = await getSessionCoach(supabase, opts)
   if (!coach) throw new ApiError(401, 'Unauthorized')
   return coach
 }
