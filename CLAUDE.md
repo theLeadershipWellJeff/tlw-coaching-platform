@@ -2024,8 +2024,8 @@ support tickets — counts only), the whole card clicking through to
   a dead subscription demotes `paying` → `free` but never stomps a hand-set
   beta/free. "Stripe billing portal" (`POST .../billing/portal`) opens the
   customer portal (configure once: Stripe Dashboard → Settings → Billing →
-  Customer portal). **Register the three new webhook events on the existing
-  endpoint** in the Stripe Dashboard.
+  Customer portal). The three subscription webhook events are registered on
+  the existing endpoint (confirmed 2026-09-14).
 - **Cancel account (2026-09-14).** The "please cancel my account" email,
   handled from the coach row: **"Cancel account"** (under the billing line,
   hidden for the supervisor's own row and for an already-walled coach) opens
@@ -2158,10 +2158,12 @@ charge a coach. **Do these in the live Stripe account when ready:**
    optional (unset = monthly only). Then create the **promotion codes** you
    want (Products → Coupons → add a coupon, e.g. 100% off forever for
    testers, then "Add promotion code" for the word they type).
-2. **Register three webhook events** on the existing endpoint ("TLW Strip
-   Connection", the Vercel URL): `checkout.session.completed`,
-   `customer.subscription.updated`, `customer.subscription.deleted`. Same
-   endpoint, same signing secret — nothing else changes.
+2. **Register three webhook events — DONE (confirmed by Jeff 2026-09-14).**
+   `checkout.session.completed`, `customer.subscription.updated`,
+   `customer.subscription.deleted` are registered on the existing endpoint
+   ("TLW Strip Connection", the Vercel URL; 14 events now). Same signing
+   secret. So a period-end "Cancel account" lands the wall on its own when
+   the paid period ends.
 3. **Configure the Customer portal once** — Stripe Dashboard → Settings →
    Billing → Customer portal → save the default configuration. This is what
    the Command Center's "Stripe billing portal" button opens (card updates,
