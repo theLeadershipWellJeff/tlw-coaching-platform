@@ -2026,8 +2026,32 @@ support tickets — counts only), the whole card clicking through to
   customer portal (configure once: Stripe Dashboard → Settings → Billing →
   Customer portal). **Register the three new webhook events on the existing
   endpoint** in the Stripe Dashboard.
+- **Cancel account (2026-09-14).** The "please cancel my account" email,
+  handled from the coach row: **"Cancel account"** (under the billing line,
+  hidden for the supervisor's own row and for an already-walled coach) opens
+  an inline confirm — **at the end of the paid period** (default; they keep
+  what they paid for, Stripe `cancel_at_period_end`, the
+  `customer.subscription.deleted` webhook lands the wall when it runs out;
+  the row's `plan_note` reads "Cancels YYYY-MM-DD" meanwhile) or **now**
+  (Stripe `subscriptions.cancel`, no proration/refund; plan → `lapsed` +
+  `subscription_status='canceled'` immediately), an "email a confirmation"
+  checkbox (from the acting supervisor's Gmail — no further charges, when
+  access ends, the data download + resubscribe path on `/subscription`) and
+  an optional audit reason → `POST /api/coaches/[id]/billing/cancel`
+  `{when, email, reason}` → `lib/admin/coach-cancel.ts#cancelCoachAccount`.
+  **Stripe first, then our row**: a Stripe refusal changes nothing and
+  returns the error, so a walled coach can never be left with a charging
+  subscription; a coach with no live subscription (beta / comp) is walled
+  immediately either way. Nothing is deleted — the wall (`lib/access.ts`),
+  not removal. Audit `coach_account_cancelled` (requested vs effective,
+  previous plan, Stripe result, access end). **Remove** now cancels a live
+  Stripe subscription immediately before deleting the row (the button reads
+  "Confirm (cancels billing too)"), and refuses the delete with a 502 if
+  Stripe won't cancel — a deleted coach is never still billed. Shared helper:
+  `lib/billing/stripe.ts#cancelCoachSubscription` (resource_missing / already
+  ended read as `alreadyEnded`).
 - **Audit trail** — every admin action (plan change, invite resend, unlock,
-  billing link, coach add/remove) writes `admin_audit_log`
+  billing link, coach add/remove/cancel) writes `admin_audit_log`
   (`lib/admin/audit.ts`, append-only, best-effort so a missing table never
   blocks the action).
 
@@ -2102,7 +2126,7 @@ sign-in; `/auth/error` explains an email mismatch. The sign-in page links to
 (a 100%-off coupon is how a tester gets in free); nothing in code.
 
 **Beta coaches.** Stay `beta` (free) until Jeff acts: **Remove** (existing,
-deletes the row) or convert — flip the chip to `lapsed` (they hit the wall
+deletes the row), **Cancel account** (walls them, keeps everything) or convert — flip the chip to `lapsed` (they hit the wall
 and subscribe themselves, no trial), send the Command Center billing link
 (now also promo-enabled, lands them on `/subscription/return`), or point
 them at Account → Subscription. Command Center chips read beta / paying /

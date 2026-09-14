@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { requireSupervisor, toErrorResponse } from '@/lib/api-handler'
 import { logAdminAction } from '@/lib/admin/audit'
+import { cancelCoachSubscription } from '@/lib/billing/stripe'
 
 export const runtime = 'nodejs'
 
@@ -83,9 +84,26 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   // Capture identity for the audit row before the FK goes away.
   const { data: target } = await supabase
     .from('coaches')
-    .select('email, name')
+    .select('email, name, stripe_subscription_id, subscription_status')
     .eq('id', params.id)
     .maybeSingle()
+
+  // Never orphan a charging subscription: a removed coach's Stripe
+  // subscription is cancelled immediately FIRST, and a Stripe refusal keeps
+  // the row (report the error instead of deleting a coach Stripe still bills).
+  let stripeCancelled = false
+  const subId: string | null = (target as any)?.stripe_subscription_id ?? null
+  if (subId) {
+    try {
+      const r = await cancelCoachSubscription(subId, 'now')
+      stripeCancelled = !r.alreadyEnded
+    } catch (e: any) {
+      return NextResponse.json(
+        { error: `Could not cancel this coach's Stripe subscription (${e?.message ?? 'Stripe error'}). The account was not removed — cancel the subscription in Stripe first, or try again.` },
+        { status: 502 }
+      )
+    }
+  }
 
   const { error } = await supabase
     .from('coaches')
@@ -97,8 +115,13 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   await logAdminAction(supabase, {
     actorCoachId: coach.id,
     action: 'coach_removed',
-    detail: { email: (target as any)?.email ?? null, name: (target as any)?.name ?? null },
+    detail: {
+      email: (target as any)?.email ?? null,
+      name: (target as any)?.name ?? null,
+      stripe_subscription_id: subId,
+      stripe_cancelled: stripeCancelled,
+    },
   })
 
-  return NextResponse.json({ deleted: true })
+  return NextResponse.json({ deleted: true, stripe_cancelled: stripeCancelled })
 }

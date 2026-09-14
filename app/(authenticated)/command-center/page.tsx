@@ -202,7 +202,7 @@ function PlanChip({ coach, onUpdated }: { coach: Coach; onUpdated: (c: Coach) =>
             className="mt-2 w-full rounded-tlw-md border border-tlw-warm-gray/30 bg-tlw-canvas px-2 py-1 text-[11px] text-tlw-espresso focus:outline-none"
           />
           <p className="mt-1.5 text-[10px] leading-snug text-tlw-warm-gray">
-            Beta = free access until you convert or remove them. Lapsed = the paywall (they can only subscribe or download their data). A live subscription sets paying automatically; a cancelled one sets lapsed.
+            Beta = free access until you convert or remove them. Lapsed = the paywall (they can only subscribe or download their data). A live subscription sets paying automatically; a cancelled one sets lapsed. To cancel on a coach&apos;s behalf use &ldquo;Cancel account&rdquo; below — it cancels their Stripe billing too.
           </p>
         </div>
       )}
@@ -291,6 +291,133 @@ function BillingActions({ coach }: { coach: Coach }) {
         >
           Copy link
         </button>
+      )}
+    </div>
+  )
+}
+
+// ── Cancel account ────────────────────────────────────────────────────────────
+//
+// The "please cancel my account" email, handled in one place: cancels the
+// coach's Stripe subscription (Stripe first — a refusal changes nothing) and
+// walls the account (plan → lapsed). Nothing is deleted; the coach can still
+// download their data or resubscribe from /subscription.
+
+function CancelAccountAction({ coach, onUpdated }: { coach: Coach; onUpdated: (c: Coach) => void }) {
+  const [open, setOpen] = useState(false)
+  const [when, setWhen] = useState<'period_end' | 'now'>('period_end')
+  const [email, setEmail] = useState(true)
+  const [reason, setReason] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null)
+
+  const live = coach.has_subscription &&
+    ['active', 'trialing', 'past_due'].includes(coach.subscription_status ?? '')
+  const alreadyWalled = (coach.plan === 'lapsed' || coach.plan === 'free') && !live
+  const pendingEnd = live && /^Cancels \d{4}-\d{2}-\d{2}$/.test(coach.plan_note ?? '')
+
+  async function confirm() {
+    setBusy(true)
+    setNote(null)
+    const res = await fetch(`/api/coaches/${coach.id}/billing/cancel`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ when: live ? when : 'now', email, reason: reason || undefined }),
+    })
+    const d = await res.json().catch(() => ({}))
+    setBusy(false)
+    if (!res.ok) {
+      setNote({ ok: false, text: d.error ?? 'Could not cancel the account' })
+      return
+    }
+    const endsOn = d.access_ends_at ? shortDate(d.access_ends_at) : null
+    setNote({
+      ok: true,
+      text: [
+        d.stripe_cancelled
+          ? d.effective === 'period_end' ? `Subscription ends ${endsOn} — no further charges` : 'Subscription cancelled — no further charges'
+          : 'No live subscription to cancel',
+        d.effective === 'period_end' ? `access continues until ${endsOn}` : 'access ended now',
+        d.emailed ? `confirmation emailed to ${coach.email}` : email ? 'confirmation email not sent' : null,
+      ].filter(Boolean).join(' · '),
+    })
+    setOpen(false)
+    onUpdated({
+      ...coach,
+      plan: d.plan ?? coach.plan,
+      subscription_status: d.subscription_status ?? coach.subscription_status,
+      plan_note: d.effective === 'period_end' && d.access_ends_at
+        ? `Cancels ${d.access_ends_at.slice(0, 10)}`
+        : `Account cancelled ${new Date().toISOString().slice(0, 10)}`,
+    })
+  }
+
+  if (alreadyWalled && !note) return null
+
+  return (
+    <div className="mt-2">
+      {!open ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          {!alreadyWalled && !pendingEnd && (
+            <button
+              onClick={() => { setOpen(true); setNote(null) }}
+              className="text-[11px] text-tlw-warm-gray hover:text-red-600 hover:underline"
+            >
+              Cancel account
+            </button>
+          )}
+          {pendingEnd && !note && (
+            <span className="text-[11px] text-amber-700">Cancellation scheduled — {coach.plan_note}</span>
+          )}
+          {note && (
+            <span className={`text-[11px] ${note.ok ? 'text-emerald-700' : 'text-red-600'}`}>{note.text}</span>
+          )}
+        </div>
+      ) : (
+        <div className="mt-1 max-w-md rounded-lg border border-red-200 bg-red-50/60 p-3">
+          <p className="text-[12px] font-medium text-red-700">Cancel {coach.name}&apos;s account?</p>
+          <p className="mt-1 text-[11px] text-tlw-warm-gray">
+            {live
+              ? 'Their Stripe subscription is cancelled so nothing further is charged, and the app closes to them. '
+              : 'They have no live subscription — the app closes to them today. '}
+            Nothing is deleted: their notes, transcripts, reports and clients stay, and they can download everything or resubscribe from the subscription page.
+          </p>
+          {live && (
+            <div className="mt-2 space-y-1">
+              <label className="flex items-start gap-2 text-[11px] text-tlw-navy-deep">
+                <input type="radio" name={`cancel-when-${coach.id}`} checked={when === 'period_end'} onChange={() => setWhen('period_end')} className="mt-0.5" />
+                <span><strong>At the end of the paid period</strong> (recommended) — they keep access to what they have paid for; no renewal.</span>
+              </label>
+              <label className="flex items-start gap-2 text-[11px] text-tlw-navy-deep">
+                <input type="radio" name={`cancel-when-${coach.id}`} checked={when === 'now'} onChange={() => setWhen('now')} className="mt-0.5" />
+                <span><strong>Now</strong> — access ends today. Stripe does not refund the unused time on its own.</span>
+              </label>
+            </div>
+          )}
+          <label className="mt-2 flex items-center gap-2 text-[11px] text-tlw-navy-deep">
+            <input type="checkbox" checked={email} onChange={(e) => setEmail(e.target.checked)} />
+            Email {coach.email} a confirmation
+          </label>
+          <input
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Reason for the audit log (optional) — e.g. asked by email Sep 14"
+            className="mt-2 w-full rounded border border-tlw-warm-gray/40 bg-white px-2 py-1 text-[11px] text-tlw-navy-deep"
+          />
+          <div className="mt-2 flex items-center gap-3">
+            <button
+              onClick={confirm}
+              disabled={busy}
+              className="rounded bg-red-600 px-3 py-1 text-[11px] font-medium text-white hover:bg-red-700 disabled:opacity-50"
+            >
+              {busy ? 'Cancelling…' : 'Confirm cancellation'}
+            </button>
+            <button onClick={() => setOpen(false)} disabled={busy} className="text-[11px] text-tlw-warm-gray hover:underline">
+              keep the account
+            </button>
+            {note && !note.ok && <span className="text-[11px] text-red-600">{note.text}</span>}
+          </div>
+        </div>
       )}
     </div>
   )
@@ -525,11 +652,18 @@ function CoachRow({ coach, onUpdated, onRemoved }: {
     if (res.ok) { onUpdated({ ...coach, ...d.coach }); setEditing(false) }
   }
 
+  const [removeError, setRemoveError] = useState<string | null>(null)
+  const liveSubscription = coach.has_subscription &&
+    ['active', 'trialing', 'past_due'].includes(coach.subscription_status ?? '')
+
   async function remove() {
     setRemoving(true)
+    setRemoveError(null)
     const res = await fetch(`/api/coaches/${coach.id}`, { method: 'DELETE' })
+    const d = await res.json().catch(() => ({}))
     setRemoving(false)
     if (res.ok) onRemoved(coach.id)
+    else setRemoveError(d.error ?? 'Could not remove this coach')
   }
 
   return (
@@ -561,6 +695,7 @@ function CoachRow({ coach, onUpdated, onRemoved }: {
           </p>
           {!coach.is_me && <InviteActions coach={coach} onUpdated={onUpdated} />}
           <BillingActions coach={coach} />
+          {!coach.is_me && <CancelAccountAction coach={coach} onUpdated={onUpdated} />}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <button
@@ -580,16 +715,23 @@ function CoachRow({ coach, onUpdated, onRemoved }: {
                 </button>
               ) : (
                 <span className="flex items-center gap-1">
-                  <button onClick={remove} disabled={removing} className="text-[11px] font-medium text-red-600 hover:underline disabled:opacity-50">
-                    {removing ? 'Removing…' : 'Confirm'}
+                  <button
+                    onClick={remove}
+                    disabled={removing}
+                    title={liveSubscription ? 'Deletes the row and cancels their Stripe subscription immediately' : 'Deletes the coach row'}
+                    className="text-[11px] font-medium text-red-600 hover:underline disabled:opacity-50"
+                  >
+                    {removing ? 'Removing…' : liveSubscription ? 'Confirm (cancels billing too)' : 'Confirm'}
                   </button>
-                  <button onClick={() => setConfirmRemove(false)} className="text-[11px] text-tlw-warm-gray hover:underline">cancel</button>
+                  <button onClick={() => { setConfirmRemove(false); setRemoveError(null) }} className="text-[11px] text-tlw-warm-gray hover:underline">cancel</button>
                 </span>
               )}
             </>
           )}
         </div>
       </div>
+
+      {removeError && <p className="mt-1 text-[11px] text-red-600">{removeError}</p>}
 
       {/* Usage rollup — how much this coach is actually using the platform. */}
       <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-9">
