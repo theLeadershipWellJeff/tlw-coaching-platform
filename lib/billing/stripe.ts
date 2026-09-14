@@ -542,6 +542,54 @@ export async function coachSubscriptionSummary(subscriptionId: string): Promise<
   }
 }
 
+export type CoachCancelWhen = 'now' | 'period_end'
+
+/**
+ * Cancel a COACH's platform subscription (the Command Center "Cancel account"
+ * action, and the Remove path). `now` ends it immediately — Stripe stops all
+ * future charges and the customer.subscription.deleted webhook lands the
+ * wall; `period_end` flags it to end when the paid period runs out (the
+ * coach keeps what they paid for; the deleted event flips the plan then).
+ * A subscription Stripe no longer knows (resource_missing) or has already
+ * ended reads as `alreadyEnded` — the caller walls the coach regardless.
+ */
+export async function cancelCoachSubscription(
+  subscriptionId: string,
+  when: CoachCancelWhen,
+): Promise<{
+  status: string
+  cancelAtPeriodEnd: boolean
+  currentPeriodEnd: string | null
+  alreadyEnded: boolean
+}> {
+  const stripe = getStripe()
+  const read = (sub: any) => {
+    const item = sub.items?.data?.[0]
+    const periodEnd = item?.current_period_end ?? sub.current_period_end ?? null
+    return {
+      status: String(sub.status),
+      cancelAtPeriodEnd: !!sub.cancel_at_period_end,
+      currentPeriodEnd: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
+      alreadyEnded: sub.status === 'canceled' || sub.status === 'incomplete_expired',
+    }
+  }
+  try {
+    const current: any = await stripe.subscriptions.retrieve(subscriptionId)
+    if (current.status === 'canceled' || current.status === 'incomplete_expired') return read(current)
+    if (when === 'now') {
+      // Stripe refunds nothing on its own; the unused time is simply not billed again.
+      return read(await stripe.subscriptions.cancel(subscriptionId, { prorate: false }))
+    }
+    if (current.cancel_at_period_end) return read(current)
+    return read(await stripe.subscriptions.update(subscriptionId, { cancel_at_period_end: true }))
+  } catch (e: any) {
+    if (e?.code === 'resource_missing') {
+      return { status: 'canceled', cancelAtPeriodEnd: false, currentPeriodEnd: null, alreadyEnded: true }
+    }
+    throw e
+  }
+}
+
 /**
  * Stripe customer Billing Portal session — where a subscribed coach updates
  * their card or cancels. Requires the portal to be configured once in the

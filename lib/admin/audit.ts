@@ -17,6 +17,7 @@ export type AdminAction =
   | 'billing_checkout_link'
   | 'coach_added'
   | 'coach_removed'
+  | 'coach_account_cancelled'
   | 'coach_invite_sent'
   | 'coach_signup'
   | 'coach_data_export'
