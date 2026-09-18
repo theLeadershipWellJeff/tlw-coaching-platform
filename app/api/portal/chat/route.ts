@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPortalClientId } from '@/lib/portal/server'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
-import { buildChatContext, streamChatReply, type ChatContextMeta, type ChatMsg } from '@/lib/portal/chat'
+import { buildChatContext, streamChatReply, type ChatAttribution, type ChatContextMeta, type ChatMsg } from '@/lib/portal/chat'
 import { checkPortalRateLimit, logPortalAccess } from '@/lib/portal/access'
 import { logPortalEvent } from '@/lib/portal/events'
 import { isChatMode, weekLabel, weekStartFor } from '@/lib/portal/weekly-plan'
@@ -139,9 +139,10 @@ export async function POST(req: NextRequest) {
 
   let system: string
   let meta: ChatContextMeta = {}
+  let attribution: ChatAttribution
   try {
     // The current question drives retrieval across the client's whole history.
-    ;({ system, meta } = await buildChatContext(clientId, content, mode))
+    ;({ system, meta, attribution } = await buildChatContext(clientId, content, mode))
   } catch (e) {
     console.error('portal chat context failed:', e)
     return NextResponse.json(
@@ -168,7 +169,7 @@ export async function POST(req: NextRequest) {
     async start(controller) {
       let full = ''
       try {
-        for await (const delta of streamChatReply(system, msgs)) {
+        for await (const delta of streamChatReply(system, msgs, attribution, mode)) {
           full += delta
           controller.enqueue(encoder.encode(delta))
         }

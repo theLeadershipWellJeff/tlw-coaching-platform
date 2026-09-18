@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
+import { aiCreate, textOf } from '@/lib/ai/client'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { toErrorResponse } from '@/lib/api-handler'
 import { requireClientCoach } from '@/lib/client-access'
@@ -8,7 +8,7 @@ import type { CoachingGoal, Database } from '@/lib/supabase/types'
 export const runtime = 'nodejs'
 export const maxDuration = 60
 
-const MODEL = process.env.GOALS_MODEL || 'claude-sonnet-4-6'
+// Model: purpose `goals_generate` in lib/ai/models.ts (legacy GOALS_MODEL honoured).
 
 // Strip HTML tags from rich-text note content for the prompt.
 function toText(html: string): string {
@@ -69,19 +69,13 @@ Return ONLY a valid JSON array — no markdown fences, no preamble. 3 to 4 goals
 SESSION NOTES (most recent first):
 ${notesText}`
 
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   let goals: CoachingGoal[]
   try {
-    const message = await anthropic.messages.create(
-      {
-        model: MODEL,
-        max_tokens: 1500,
-        messages: [{ role: 'user', content: prompt }],
-      },
-      { timeout: 50_000, maxRetries: 1 }
+    const message = await aiCreate(
+      { purpose: 'goals_generate', principal: 'coach', orgId: coach.org_id, coachId: coach.id, clientId: params.id },
+      { max_tokens: 1500, messages: [{ role: 'user', content: prompt }], timeoutMs: 50_000 }
     )
-    const block = message.content.find((b) => b.type === 'text')
-    const raw = block && 'text' in block ? block.text : ''
+    const raw = textOf(message)
     const clean = raw.replace(/```json\n?|```/g, '').trim()
     const match = clean.match(/\[[\s\S]*\]/)
     const parsed = JSON.parse(match ? match[0] : clean)

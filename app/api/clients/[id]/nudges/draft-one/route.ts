@@ -93,6 +93,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       },
       frameworkContext,
       goalsContext,
+      meta: { orgId: coach.org_id, coachId: coach.id, clientId: params.id, principal: 'coach', feature: 'nudge_draft:draft-one' },
     })
     if (!draft) throw new ApiError(502, 'Could not draft a nudge — try again.')
 

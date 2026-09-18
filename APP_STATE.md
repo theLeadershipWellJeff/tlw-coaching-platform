@@ -319,6 +319,50 @@ per workspace). Recommended regardless: a second workspace + key
 (`ANTHROPIC_API_KEY_PORTAL`) so the portal's spend is a separate line on the
 invoice, which also makes the Phase 4 ±5% reconciliation trivial.
 
+### Phase 1 — shipped 2026-09-18 (gateway + models + ledger; migration 069 PENDING)
+
+- **SDK `^0.24.3` → `^0.127.0`.** `tsc` was clean after the upgrade with no
+  call-site changes — the 0.24 shapes still type-check on 0.127. Lockfile
+  remains gitignored (repo policy, not changed here).
+- **`lib/ai/models.ts`** (purpose → model map, `AI_MODEL_<PURPOSE>` overrides,
+  legacy env fallbacks with deprecation warnings, one retired-id guard,
+  per-model tokenizer/effort/cache-prefix facts), **`lib/ai/pricing.ts`**
+  (integer-micros cost math, price cache), **`lib/ai/client.ts`** (`aiCreate`
+  / `aiStream` / `ledgerDone` / `aiCountTokens`; reserve → call → settle |
+  release; fail closed on ledger errors).
+- **All 14 call sites rewritten** onto the gateway; the three duplicated
+  retired-model guards and eight per-file env reads are gone. Attribution
+  threaded through: scoring (`ScoringContext.ledger`, feature
+  `scoring` / `scoring:rescore`), growth pass, nudge extract/draft
+  (`principal` = system after scoring, coach on demand; feature
+  `nudge_draft:<type>` / `nudge_draft:draft-one`), transcript title, note
+  narrative, client-email, session prep, goals, plan-session, portal chat
+  (`ChatAttribution` from the client record — never the request body;
+  feature `portal_chat:<mode>`), weekly-plan extraction.
+- **Portal chat → Opus 5 at effort `medium`** (brief). Effort is set now, not
+  in Phase 3, because Opus 5 thinks by default and thinking counts inside the
+  unchanged `max_tokens` 4096 — without it the model switch could truncate
+  replies. Context assembly untouched.
+- **Build gate**: `prebuild` grep + ESLint `no-restricted-imports`; both
+  proven to catch a stray import (the gate blocked a build during the run).
+- **Migration 069** verified on Postgres 16 (up, CAS settle matches one row,
+  duplicate request_id / bad principal / mid-month period refused, coach
+  delete keeps the ledger row, idempotent re-up, down, re-up). **Not applied
+  in production yet** — the gateway refuses every AI call until it is.
+- **Verified**: `npx tsc --noEmit` clean; `next lint` clean; `next build`
+  compiles + type-checks (the only failures are the documented prerender
+  errors from a clone without Supabase env); `verify-ai-gateway.js` 45/45.
+- **Not verified here**: a live Anthropic call through the gateway (no
+  `ANTHROPIC_API_KEY` in this environment) — first production traffic after
+  069 is the validation that every feature writes a `settled` row (Phase 1
+  exit criterion; check `select purpose, status, count(*) from ai_usage group
+  by 1,2` after a day).
+- **Deferred to Phase 2** (recorded): budget check inside the reserve
+  (`ai_budgets` rows are seeded but `enabled=false`), stale-reservation
+  release cron, refusing calls whose model has no price row (Phase 1 settles
+  them with `actual_usd_micros` NULL and logs), the per-minute/per-day chat
+  limits, the kill switch, the ZF-participant chat-off default.
+
 ### File plan (Phases 1–4; stop-and-confirm between each)
 
 **Phase 1 — gateway + models + ledger.**

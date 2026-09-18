@@ -14,15 +14,15 @@
  * Key info hard wall: this function receives only transcript text and coach notes.
  * client.key_info is never passed in; callers must not include it.
  */
-import Anthropic from '@anthropic-ai/sdk'
+import { aiCreate, isAiConfigured, textOf } from '@/lib/ai/client'
 import type { CoachGrowthArea, GrowthAreaAssessment } from '@/lib/supabase/types'
-
-const MODEL = process.env.SUGGEST_MODEL || process.env.SCORING_MODEL || 'claude-sonnet-4-6'
 
 export interface GrowthPassInput {
   transcriptBody: string
   coachNotes?: string
   areas: CoachGrowthArea[]
+  /** Ledger attribution (purpose `growth_pass`, runs after scoring as 'system'). */
+  meta: { orgId: string | null; coachId: string | null; clientId: string | null; principal?: 'coach' | 'system' }
 }
 
 export type GrowthPassResult = Omit<GrowthAreaAssessment, 'id' | 'session_id' | 'coach_id' | 'created_at'>[]
@@ -40,12 +40,10 @@ Rules:
 - Return ONLY the JSON array described below. No prose, no markdown fences.`
 
 export async function runGrowthPass(input: GrowthPassInput): Promise<GrowthPassResult> {
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!isAiConfigured()) {
     throw new Error('ANTHROPIC_API_KEY is not configured.')
   }
   if (input.areas.length === 0) return []
-
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
   // Build a compact representation of each area for the prompt.
   const areasBlock = input.areas
@@ -87,18 +85,23 @@ Return a JSON array with exactly ${input.areas.length} object(s), one per growth
   }
 ]`
 
-  const message = await client.messages.create(
+  const message = await aiCreate(
     {
-      model: MODEL,
+      purpose: 'growth_pass',
+      principal: input.meta.principal ?? 'system',
+      orgId: input.meta.orgId,
+      coachId: input.meta.coachId,
+      clientId: input.meta.clientId,
+    },
+    {
       max_tokens: 2000,
       system: SYSTEM,
       messages: [{ role: 'user', content: prompt }],
-    },
-    { timeout: 90_000, maxRetries: 1 }
+      timeoutMs: 90_000,
+    }
   )
 
-  const block = message.content.find((b) => b.type === 'text')
-  const raw = block && 'text' in block ? block.text.trim() : ''
+  const raw = textOf(message)
   if (!raw) throw new Error('Growth pass returned no output.')
 
   let parsed: unknown

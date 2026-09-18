@@ -34,9 +34,12 @@ export type GenerateResult = { created: number; nudges: Nudge[] }
 
 export async function generateNudgesForClient(
   supabase: SupabaseClient<Database>,
-  opts: { clientId: string; coachId: string; sourceSessionId?: string | null }
+  opts: { clientId: string; coachId: string; sourceSessionId?: string | null; principal?: 'coach' | 'system' }
 ): Promise<GenerateResult> {
   const { clientId, coachId } = opts
+  // Ledger attribution: the post-scoring trigger is 'system'; the workspace
+  // "Draft nudges" button passes 'coach'.
+  const principal = opts.principal ?? 'system'
   const sourceSessionId = opts.sourceSessionId ?? null
 
   // --- Load context (NO key_info) ---
@@ -87,6 +90,7 @@ export async function generateNudgesForClient(
     recentNotes,
     transcript: transcriptBody,
     frameworks,
+    meta: { orgId: client.org_id, coachId, clientId, principal },
   })
   if (!candidates.length) return { created: 0, nudges: [] }
 
@@ -127,7 +131,7 @@ export async function generateNudgesForClient(
     // A framework whose context can't be loaded (e.g. leaf pruned) is skipped.
     if (candidate.type === 'framework' && !frameworkContext) continue
 
-    const draft = await draftNudge({ clientFirstName: firstName, candidate, upcomingContext, frameworkContext })
+    const draft = await draftNudge({ clientFirstName: firstName, candidate, upcomingContext, frameworkContext, meta: { orgId: client.org_id, coachId, clientId, principal } })
     if (!draft) continue
     // Point a framework nudge at one genuinely related (surfaceable) leaf, if any.
     const linkedResourceSlug = frameworkContext?.related[0]?.id ?? null

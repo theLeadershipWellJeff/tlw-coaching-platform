@@ -7,13 +7,13 @@
  *
  * Every read/write here is scoped to the client id the caller authenticated.
  */
-import Anthropic from '@anthropic-ai/sdk'
+import { aiCreate, isAiConfigured, textOf } from '@/lib/ai/client'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import type { PortalChatMode, WeeklyPlan, WeeklyPlanTask } from '@/lib/supabase/types'
 import type { ChatMsg } from './chat'
 
 export const MAX_WEEKLY_TASKS = 7
-const MODEL = process.env.PORTAL_CHAT_MODEL || 'claude-sonnet-4-6'
+// Model: purpose `portal_weekly_plan_extract` in lib/ai/models.ts.
 
 /** The Monday (YYYY-MM-DD) of the week containing `date` in the given zone. */
 export function weekStartFor(date: Date = new Date(), timeZone?: string | null): string {
@@ -193,26 +193,27 @@ export function formatPlansForPrompt(plans: WeeklyPlan[]): string {
  * Ask the model for the Top 5 the conversation agreed on, as JSON. Returns
  * strings only — the client reviews and edits before anything is saved.
  */
-export async function extractTasksFromConversation(messages: ChatMsg[]): Promise<{ title: string | null; tasks: string[] }> {
-  if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not configured.')
+export async function extractTasksFromConversation(
+  messages: ChatMsg[],
+  meta: { clientId: string; orgId: string | null; coachId?: string | null }
+): Promise<{ title: string | null; tasks: string[] }> {
+  if (!isAiConfigured()) throw new Error('ANTHROPIC_API_KEY is not configured.')
   const transcript = messages
     .slice(-30)
     .map((m) => `${m.role === 'user' ? 'CLIENT' : 'COACH'}: ${m.content}`)
     .join('\n\n')
     .slice(-40000)
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-  const res = await client.messages.create(
+  const res = await aiCreate(
+    { purpose: 'portal_weekly_plan_extract', principal: 'client', orgId: meta.orgId, coachId: meta.coachId ?? null, clientId: meta.clientId },
     {
-      model: MODEL,
       max_tokens: 800,
       system:
         'You read a planning conversation and return ONLY a JSON object: {"title": string|null, "tasks": string[]}. "tasks" = the concrete actions for the week the CLIENT agreed to or chose (at most 7, ideally 5), each a short imperative sentence in the client\'s own terms, ordered by the priority the conversation gave them. Prefer what the client confirmed over what the coach merely suggested; if nothing was confirmed, take the most recent proposed list. "title" = a 3–8 word theme for the week if one was named, else null. No prose, no markdown, no code fence.',
       messages: [{ role: 'user', content: `CONVERSATION:\n\n${transcript}\n\nReturn the JSON now.` }],
-    },
-    { timeout: 60_000, maxRetries: 1 }
+      timeoutMs: 60_000,
+    }
   )
-  const text = res.content.find((b) => b.type === 'text')
-  const raw = text && 'text' in text ? text.text.trim() : ''
+  const raw = textOf(res)
   const json = raw.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '')
   let parsed: { title?: unknown; tasks?: unknown } = {}
   try {

@@ -26,6 +26,9 @@ export type ExtractionInput = {
   // The coach's client-surfaceable frameworks (garden leaves). Empty = no framework
   // candidates are possible this run.
   frameworks?: SurfaceableLeaf[]
+  // Ledger attribution (who this run is for). principal defaults to 'system'
+  // (the post-scoring pipeline); the on-demand route passes 'coach'.
+  meta: { orgId: string | null; coachId: string | null; clientId: string | null; principal?: 'coach' | 'system' }
 }
 
 const SYSTEM = `You are an assistant to an executive coach. After a coaching session you propose short, warm, between-session "nudges" the coach might send the client. You propose at most three kinds:
@@ -86,7 +89,18 @@ export async function extractNudgeCandidates(input: ExtractionInput): Promise<Nu
   // Nothing to work from → nothing to propose.
   if (!input.openActions.length && !input.recentNotes.length && !input.transcript) return []
 
-  const raw = await complete({ system: SYSTEM, user: buildUser(input), maxTokens: 1400 })
+  const raw = await complete({
+    system: SYSTEM,
+    user: buildUser(input),
+    maxTokens: 1400,
+    meta: {
+      purpose: 'nudge_extract',
+      principal: input.meta.principal ?? 'system',
+      orgId: input.meta.orgId,
+      coachId: input.meta.coachId,
+      clientId: input.meta.clientId,
+    },
+  })
   let parsed: any[]
   try {
     parsed = parseJsonFrom<any[]>(raw)

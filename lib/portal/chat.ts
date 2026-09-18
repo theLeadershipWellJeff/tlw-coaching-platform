@@ -21,7 +21,7 @@
  * — layered by lib/portal/prompt.ts. The 360 is another grounded source blended
  * with notes and transcripts, never a separate mode.
  */
-import Anthropic from '@anthropic-ai/sdk'
+import { aiCreate, aiStream, isAiConfigured, ledgerDone, textOf } from '@/lib/ai/client'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { htmlToPlainText } from '@/lib/communications'
 import type { CoachingGoal } from '@/lib/supabase/types'
@@ -33,7 +33,8 @@ import { formatPlansForPrompt, loadWeeklyPlans, weekStartFor } from './weekly-pl
 import { formatNotesForPrompt, loadNotesForChat } from './notes'
 import type { PortalChatMode } from '@/lib/supabase/types'
 
-const MODEL = process.env.PORTAL_CHAT_MODEL || 'claude-sonnet-4-6'
+// Model + effort: purpose `portal_chat` in lib/ai/models.ts (Opus 5, effort
+// medium). Override with AI_MODEL_PORTAL_CHAT — PORTAL_CHAT_MODEL is ignored here.
 
 /** Newest sessions always included, and how much of each. */
 const RECENT_SESSION_COUNT = 4
@@ -104,11 +105,14 @@ export type ChatContextMeta = {
   has_comparison?: boolean
 }
 
+/** Who a portal call is billed to on the usage ledger (never request-supplied). */
+export type ChatAttribution = { clientId: string; orgId: string | null; coachId: string | null }
+
 export async function buildChatContext(
   clientId: string,
   query?: string,
   mode: PortalChatMode = 'general'
-): Promise<{ clientName: string; system: string; meta: ChatContextMeta }> {
+): Promise<{ clientName: string; system: string; meta: ChatContextMeta; attribution: ChatAttribution }> {
   const supabase = getSupabaseAdmin()
 
   const { data: client } = await supabase
@@ -163,6 +167,9 @@ export async function buildChatContext(
   // Same rule as the home page: a portal participant's house-coach link is
   // structural, not a coaching relationship.
   const hasCoach = (coachLinks?.length ?? 0) > 0 && client?.client_type !== 'portal'
+  // Ledger attribution: the client's org and (house) coach, from the records —
+  // the request body never supplies these.
+  const attribution: ChatAttribution = { clientId, orgId: client?.org_id ?? null, coachId: coachLinks?.[0]?.coach_id ?? null }
   const brief = assessment && client?.org_id ? await loadActiveBrief(client.org_id, 'assessment_360').catch(() => null) : null
   // The coaching-conversation rubric for the general chat (rubrics/02). Absent
   // row = the built-in preamble alone, exactly as before it existed.
@@ -207,7 +214,7 @@ export async function buildChatContext(
       meta.brief_slug = planBrief.slug
       meta.brief_version = planBrief.version
     }
-    return { clientName, system, meta }
+    return { clientName, system, meta, attribution }
   }
 
   const recentIds = new Set((recent ?? []).map((t) => t.id))
@@ -290,15 +297,22 @@ export async function buildChatContext(
     meta.has_comparison = !!assessment.data.comparison
   }
 
-  return { clientName, system, meta }
-}
-
-function anthropic(): Anthropic {
-  if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not configured.')
-  return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+  return { clientName, system, meta, attribution }
 }
 
 const MAX_TOKENS = 4096
+
+function chatCallMeta(attribution: ChatAttribution, mode: PortalChatMode) {
+  return {
+    purpose: 'portal_chat' as const,
+    feature: `portal_chat:${mode}`,
+    principal: 'client' as const,
+    orgId: attribution.orgId,
+    coachId: attribution.coachId,
+    clientId: attribution.clientId,
+    metadata: { mode },
+  }
+}
 
 /**
  * Stream the assistant's reply. Yields text deltas as they arrive so the portal
@@ -306,35 +320,42 @@ const MAX_TOKENS = 4096
  */
 export async function* streamChatReply(
   system: string,
-  messages: ChatMsg[]
+  messages: ChatMsg[],
+  attribution: ChatAttribution,
+  mode: PortalChatMode = 'general'
 ): AsyncGenerator<string, void, unknown> {
-  const stream = anthropic().messages.stream(
-    {
-      model: MODEL,
-      max_tokens: MAX_TOKENS,
-      system,
-      messages: messages.map((m) => ({ role: m.role, content: m.content })),
-    },
-    { timeout: 120_000, maxRetries: 1 }
-  )
-  for await (const event of stream) {
-    if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-      yield event.delta.text
+  if (!isAiConfigured()) throw new Error('ANTHROPIC_API_KEY is not configured.')
+  const stream = await aiStream(chatCallMeta(attribution, mode), {
+    max_tokens: MAX_TOKENS,
+    system,
+    messages: messages.map((m) => ({ role: m.role, content: m.content })),
+    timeoutMs: 120_000,
+  })
+  try {
+    for await (const event of stream) {
+      if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+        yield event.delta.text
+      }
     }
+  } finally {
+    // Settle the ledger row before the serverless function is allowed to return.
+    await ledgerDone(stream)
   }
 }
 
 /** Non-streaming reply. Returns '' on failure (caller handles). */
-export async function generateChatReply(system: string, messages: ChatMsg[]): Promise<string> {
-  const message = await anthropic().messages.create(
-    {
-      model: MODEL,
-      max_tokens: MAX_TOKENS,
-      system,
-      messages: messages.map((m) => ({ role: m.role, content: m.content })),
-    },
-    { timeout: 120_000, maxRetries: 1 }
-  )
-  const block = message.content.find((b) => b.type === 'text')
-  return block && 'text' in block ? block.text.trim() : ''
+export async function generateChatReply(
+  system: string,
+  messages: ChatMsg[],
+  attribution: ChatAttribution,
+  mode: PortalChatMode = 'general'
+): Promise<string> {
+  if (!isAiConfigured()) throw new Error('ANTHROPIC_API_KEY is not configured.')
+  const message = await aiCreate(chatCallMeta(attribution, mode), {
+    max_tokens: MAX_TOKENS,
+    system,
+    messages: messages.map((m) => ({ role: m.role, content: m.content })),
+    timeoutMs: 120_000,
+  })
+  return textOf(message)
 }

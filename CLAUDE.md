@@ -27,7 +27,8 @@ Plus a **client workspace** (per-client hub) and **roster**.
   **NextAuth** (Google OAuth). **Anthropic SDK** for generation/scoring.
   Deployed on **Vercel** (production builds from `main`), domain
   `theleadershipwell.online`.
-- `npm run dev` · `npm run build` · `npm run lint`
+- `npm run dev` · `npm run build` (runs `prebuild` = `scripts/check-ai-imports.sh`) ·
+  `npm run lint` · `npm run check:ai-imports`
 - Always run `npx tsc --noEmit` and `npm run build` before committing. There is
   no automated test suite; verify pure logic with throwaway node scripts.
 
@@ -1897,6 +1898,67 @@ in a 2-column grid under `sm`, nothing hover-dependent. The 375 px check was
 done by inspection of the classes, not in a browser — verify on a phone after
 deploy.
 
+## AI gateway, model routing & usage ledger (2026-09-18; migration 069) — Phase 1 of the cost-controls brief
+
+Brief: "AI Cost Controls, Model Routing & Context Budgeting" (Jeff, 2026-09-18;
+Phase 0 audit + file plan in `APP_STATE.md`). Four phases, confirmed one at a
+time. **Phase 1 shipped** = single gateway + model map + usage ledger.
+Phases 2–4 (budget enforcement, context budgeter, cockpit) follow on Jeff's go.
+
+- **`lib/ai/models.ts` is the ONLY place a model id lives.** Every call is keyed
+  by a `purpose` (`portal_chat` → `claude-opus-5` at effort `medium`,
+  `portal_degraded` → `claude-sonnet-5` (Phase 2 only), `background_compact` +
+  `transcript_title` → `claude-haiku-4-5-20251001`, and the coach-side purposes
+  `scoring`, `scoring_suggest`, `growth_pass`, `growth_bands`, `nudge_extract`,
+  `nudge_draft`, `note_narrative`, `note_client_email`, `session_prep`,
+  `goals_generate`, `plan_session`, `portal_weekly_plan_extract` — all still
+  `claude-sonnet-4-6`, exactly as before). Override with `AI_MODEL_<PURPOSE>`;
+  the old per-feature env vars (`SCORING_MODEL`, `GENERATE_MODEL`, …) are
+  honoured as deprecated fallbacks for the purposes they configured, except
+  `PORTAL_CHAT_MODEL`, which is **ignored for `portal_chat`** (a stale value
+  must not undo the Opus 5 decision). Retired/unknown overrides are ignored
+  with a one-time warning (the three old copies of the retired-id guard live
+  here now); a retired DEFAULT throws. `KNOWN_MODELS` carries each model's
+  tokenizer generation (Opus 5 / Sonnet 5 count ~30% more tokens than Sonnet
+  4.6), effort support (Haiku 4.5 has none), and minimum cacheable prefix.
+- **`lib/ai/client.ts` is the ONLY path to Anthropic** — `aiCreate` (buffered)
+  and `aiStream` (streamed; `ledgerDone(stream)` resolves once its row is
+  written — await it before a route returns). Every call passes `{purpose,
+  feature?, principal: coach|client|system, orgId, coachId, clientId?}`. The
+  gateway reserves a ledger row **before** the request (worst case = estimated
+  input tokens × input price + `max_tokens` × output price) and settles it with
+  the response's real `usage` after (or releases it with the error). **Fail
+  closed**: a ledger write failure refuses the call (`AiGatewayError`
+  `ledger_unavailable` names migration 069) — nothing reaches Anthropic
+  unmetered. Shared client, `maxRetries: 1` (one automatic retry), per-call
+  connect timeout. `aiCountTokens` wraps the free `count_tokens` endpoint with
+  the char estimator as fallback (Phase 3 uses it). `textOf(message)` = first
+  text block.
+- **Build gate.** `scripts/check-ai-imports.sh` runs as `prebuild` (so Vercel
+  enforces it) and fails on any `@anthropic-ai/sdk` import outside `lib/ai/**`;
+  `.eslintrc.json` `no-restricted-imports` gives the same message in the
+  editor. `scripts/spikes/**` (manual verification scripts) are exempt.
+- **Ledger (069).** `ai_model_prices` (per-MTok prices in USD micros, newest
+  `effective_from` ≤ today wins; **prices are data — add a row, don't edit
+  code**), `ai_usage` (one row per request: `request_id` unique, org/coach/
+  client, principal, purpose, feature, model, `reserved|settled|released`,
+  reserved + actual micros, the four token counts, stop_reason, error,
+  duration, metadata), `ai_budgets` (caps per `org|client|feature` scope;
+  `period_month` NULL = standing default, a dated row overrides that month;
+  seeded with the brief's defaults **`enabled=false`** — Phase 2 enforces).
+  `lib/ai/pricing.ts` = the deterministic cost arithmetic (integer micros,
+  rounds up). No AI in budget math.
+- **SDK upgraded `^0.24.3` → `^0.127.0`** (the old pin predated `count_tokens`,
+  `cache_control`, `output_config.effort`, thinking, and cache usage fields —
+  none of the brief was expressible on it). Existing call shapes were
+  unaffected; `package-lock.json` stays gitignored (repo policy).
+- **Portal chat now runs on Opus 5 at effort `medium`** (`max_tokens` 4096
+  unchanged; thinking counts inside it, hence the explicit effort). Context
+  assembly is unchanged until Phase 3.
+- Verify the pure rules: `node_modules/.bin/tsc -p
+  scripts/spikes/tsconfig.spike.json && node scripts/spikes/verify-ai-gateway.js`
+  (45 checks: routing, overrides, retired guard, estimator, price math).
+
 ## Multi-coach beta (2026-08 — coach onboarding readiness)
 
 Plan: `docs/BETA_COACH_ONBOARDING_PLAN.md`. Beta scope decision: **transcript
@@ -2209,8 +2271,10 @@ value in Vercel), `DEFAULT_COACH_EMAIL` (= `jeff@jeffkholmes.com`),
 `DEFAULT_COACH_NAME`. Vault (framework nudges): `VAULT_GITHUB_TOKEN` (read-only
 fine-grained PAT on the vault repo), optional `VAULT_REPO` (default
 `theLeadershipWellJeff/TheLeadershipWell-Vault`), `VAULT_BRANCH` (default `main`).
-Optional: `SCORING_MODEL`, `GOALS_MODEL`, `NUDGE_MODEL`, `PLAN_SESSION_MODEL`,
-`AUTO_SCORE`, `DEFAULT_TIMEZONE`, `PLAUD_DRIVE_FOLDER` (default `Plaud-Transcripts`),
+AI models: `AI_MODEL_<PURPOSE>` per `lib/ai/models.ts` (legacy `SCORING_MODEL`,
+`SUGGEST_MODEL`, `GENERATE_MODEL`, `GOALS_MODEL`, `NUDGE_MODEL`, `PLAN_SESSION_MODEL`,
+`TITLE_MODEL`, `PORTAL_CHAT_MODEL` still honoured with a warning — see the AI
+gateway section). Optional: `AUTO_SCORE`, `DEFAULT_TIMEZONE`, `PLAUD_DRIVE_FOLDER` (default `Plaud-Transcripts`),
 `COACH_ZOOM_LINK` (default meeting link for invites/reminders when a coach hasn't
 set one in Account → Scheduling; falls back to `DEFAULT_MEETING_LINK` in code).
 Stripe (billing): `STRIPE_SECRET_KEY` (from Stripe Dashboard → Developers → API keys;
@@ -2767,6 +2831,17 @@ with a clear "apply migration 068" error if the columns are ever absent, so
 nothing can double-send in a gap). Verified up → down → re-up on Postgres 16, plus the
 CAS semantics (two claims → one winner; stale claim re-claimable; sent note
 never claimable). Reversible via `068_note_send_claim_down.sql`.
+
+**`069_ai_cost_controls.sql` — PENDING (apply before merging the Phase 1 gateway
+PR).** `ai_model_prices` (seeded: Opus 5, Sonnet 5, Haiku 4.5 + alias, Sonnet
+4.6, Opus 4.8 at the 2026-09-18 list prices), `ai_usage` (the ledger),
+`ai_budgets` (seeded defaults, `enabled=false`). Additive only, RLS enabled,
+`org_id` defaulted to org #1. **The gateway fails closed without it** — every AI
+feature (scoring, prep, nudges, portal chat) refuses with "apply migration 069"
+until the tables exist, by design (nothing may call Anthropic unmetered).
+Verified up → CAS semantics → idempotent re-up → down → re-up on Postgres 16.
+Reversible via `069_ai_cost_controls_down.sql` (drops the ledger — export
+first if the history matters).
 
 **`067_coach_tasks.sql` — APPLIED (production, confirmed 2026-09-09 and verified by
 `scripts/sql/audit-migrations.sql`; staging exception approved by Jeff).** The coach attention queue: `coach_tasks` (generic per-coach

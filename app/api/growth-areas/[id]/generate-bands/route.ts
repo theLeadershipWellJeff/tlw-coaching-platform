@@ -65,7 +65,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   }
 
   try {
-    const bands = await generateBandScale(title, description, leastProficientWhen, mostProficientWhen)
+    const bands = await generateBandScale(title, description, leastProficientWhen, mostProficientWhen, { orgId: coach.org_id, coachId: coach.id })
     return NextResponse.json({ bands })
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Band scale generation failed.'

@@ -33,6 +33,8 @@
     "../../lib/portal/documents.ts",
     "../../lib/coach-tasks/generate.ts",
     "../../lib/notes/narrative-format.ts",
-    "../../lib/notes/status.ts"
+    "../../lib/notes/status.ts",
+    "../../lib/ai/models.ts",
+    "../../lib/ai/pricing.ts"
   ]
 }
