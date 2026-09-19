@@ -2925,9 +2925,8 @@ nothing can double-send in a gap). Verified up → down → re-up on Postgres 16
 CAS semantics (two claims → one winner; stale claim re-claimable; sent note
 never claimable). Reversible via `068_note_send_claim_down.sql`.
 
-**`071_portal_history_summary.sql` — PENDING (apply with the Phase 3 deploy;
-the chat runs without it — older turns then drop instead of being
-summarised).** Adds `portal_conversations.history_summary` (text),
+**`071_portal_history_summary.sql` — APPLIED (production, confirmed by Jeff
+2026-09-19).** Adds `portal_conversations.history_summary` (text),
 `history_summary_through` (integer, default 0 — how many of the thread's
 messages, oldest first, the summary covers) and `history_summary_at`. The
 portal chat sends only the last 6 turns verbatim; the running summary of the

@@ -416,7 +416,7 @@ meeting the capability, ties to the faster. **Consequences (recorded):**
   budgets; the Console spend limit; Batch API for scoring/nudges (50 % off,
   fire-and-forget already — first post-Phase-4 option).
 
-### Phase 3 — shipped 2026-09-19 (portal context budgeter; migration 071 PENDING)
+### Phase 3 — shipped 2026-09-19 (portal context budgeter; migration 071 APPLIED, confirmed by Jeff 2026-09-19)
 
 - **Fixed slices under a 40k-token ceiling** (`lib/ai/context-budget.ts`,
   pure; `lib/portal/context.ts` loads + fits + verifies): system ≤ 12k
