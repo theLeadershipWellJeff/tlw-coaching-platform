@@ -4,15 +4,16 @@
  * Every model call in the app goes through `aiCreate` (buffered) or `aiStream`
  * (streamed). Both:
  *   1. resolve the model from the call's `purpose` (lib/ai/models.ts),
- *   2. write a `reserved` row to the usage ledger (`ai_usage`, migration 069)
- *      BEFORE the request — worst-case cost = estimated input × input price +
- *      max_tokens × output price — and
+ *   2. RESERVE a ledger row (`ai_usage`, migration 069) BEFORE the request —
+ *      worst-case cost = estimated input × input price + max_tokens × output
+ *      price — through `ai_reserve()` (migration 070), which checks that
+ *      reservation against every enabled cap (client · org · feature) in one
+ *      transaction and refuses with `budget_exceeded` when it would overshoot;
  *   3. settle that row with the response's real token usage AFTER (or release
  *      it with the error).
  *
- * Fail closed: if the ledger cannot be written the call is refused. Nothing
- * may reach Anthropic unmetered. (Phase 2 adds the budget check to step 2 —
- * the reserve is already the atomic unit it will need.)
+ * Fail closed: if the ledger or the budget check cannot run, the call is
+ * refused. Nothing may reach Anthropic unmetered.
  *
  * Direct `@anthropic-ai/sdk` imports anywhere else fail the build
  * (scripts/check-ai-imports.sh, run as `prebuild`).
@@ -20,9 +21,12 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { randomUUID } from 'crypto'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
-import type { AiPrincipal, Database } from '@/lib/supabase/types'
-import { effortFor, estimateTokens, modelInfo, resolveModel, type AiEffort, type AiPurpose } from './models'
+import type { AiPrincipal } from '@/lib/supabase/types'
+import { effortFor, estimateTokens, modelInfo, resolveModel, thinkingAllowance, type AiEffort, type AiPurpose } from './models'
 import { loadModelPrice, usageCostMicros, worstCaseMicros, type ModelPrice, type TokenUsage } from './pricing'
+import { AiGatewayError } from './errors'
+import { reserve } from './budget'
+import { checkOrgAlerts } from './alerts'
 
 export type { AiPrincipal }
 export type AiMessageStream = ReturnType<Anthropic['messages']['stream']>
@@ -48,24 +52,23 @@ export type AiCallMeta = {
 export type AiRequest = {
   system?: string | Anthropic.TextBlockParam[]
   messages: Anthropic.MessageParam[]
+  /**
+   * The VISIBLE output the caller needs. Models that think by default (Sonnet
+   * 5, Opus 5) count thinking inside `max_tokens`, so the gateway adds the
+   * routed effort's thinking allowance on top — unless
+   * `max_tokens_includes_thinking` is set, in which case this is the total.
+   */
   max_tokens: number
+  max_tokens_includes_thinking?: boolean
   /** Connect/first-byte timeout (retried once). Default 60 s. */
   timeoutMs?: number
 }
 
-export type AiGatewayErrorCode = 'not_configured' | 'unknown_model' | 'ledger_unavailable' | 'ledger_error' | 'price_error'
-
-export class AiGatewayError extends Error {
-  code: AiGatewayErrorCode
-  constructor(code: AiGatewayErrorCode, message: string) {
-    super(message)
-    this.name = 'AiGatewayError'
-    this.code = code
-  }
-}
+export { AiGatewayError, type AiGatewayErrorCode } from './errors'
+export { AiBudgetExceededError } from './budget'
 
 type Db = ReturnType<typeof getSupabaseAdmin>
-type LedgerRow = { id: string; request_id: string; model: string; price: ModelPrice | null }
+type LedgerRow = { id: string; request_id: string; model: string; price: ModelPrice | null; principal: AiPrincipal; orgId: string | null }
 
 const DEFAULT_TIMEOUT_MS = 60_000
 /** One automatic retry per call (brief: "max 1 automatic retry"). */
@@ -116,10 +119,6 @@ function errorText(e: unknown): string {
   return String(e).slice(0, 2000)
 }
 
-function isMissingTable(error: { code?: string; message?: string }): boolean {
-  return error.code === '42P01' || error.code === 'PGRST205' || /ai_usage|schema cache/i.test(error.message || '')
-}
-
 /** Resolve model + effort + params and RESERVE the ledger row. Throws before any API call. */
 async function prepare(meta: AiCallMeta, req: AiRequest) {
   const client = getClient()
@@ -136,46 +135,39 @@ async function prepare(meta: AiCallMeta, req: AiRequest) {
   } catch (e) {
     throw new AiGatewayError('price_error', errorText(e))
   }
+  const allowance = req.max_tokens_includes_thinking ? 0 : thinkingAllowance(model, effort)
+  const maxOutput = modelInfo(model)?.maxOutput ?? req.max_tokens
+  const totalMaxTokens = Math.min(req.max_tokens + allowance, maxOutput)
   const estimatedInput = estimateTokens(charsOf(req), model)
-  const reserved = price ? worstCaseMicros(estimatedInput, req.max_tokens, price) : 0
+  const reserved = price ? worstCaseMicros(estimatedInput, totalMaxTokens, price) : 0
   if (!price) console.error(`[ai] no price row for ${model} — settling with actual_usd_micros NULL (add it to ai_model_prices).`)
 
   const requestId = randomUUID()
-  const insert: Database['public']['Tables']['ai_usage']['Insert'] = {
-    request_id: requestId,
-    ...(meta.orgId ? { org_id: meta.orgId } : {}),
-    coach_id: meta.coachId ?? null,
-    client_id: meta.clientId ?? null,
+  const rowId = await reserve(supabase, {
+    requestId,
+    orgId: meta.orgId,
+    coachId: meta.coachId ?? null,
+    clientId: meta.clientId ?? null,
     principal: meta.principal,
     purpose: meta.purpose,
     feature: meta.feature ?? meta.purpose,
     model,
-    status: 'reserved',
-    reserved_usd_micros: reserved,
+    reservedMicros: reserved,
     metadata: {
       ...(meta.metadata ?? {}),
       ...(effort ? { effort } : {}),
       estimated_input_tokens: estimatedInput,
-      max_tokens: req.max_tokens,
+      max_tokens: totalMaxTokens,
+      visible_max_tokens: req.max_tokens,
+      thinking_allowance: allowance,
       ...(price ? {} : { price_missing: true }),
     },
-  }
-  const { data, error } = await supabase.from('ai_usage').insert(insert).select('id').single()
-  if (error || !data) {
-    const err = error ?? { message: 'no row returned' }
-    if (isMissingTable(err)) {
-      throw new AiGatewayError(
-        'ledger_unavailable',
-        'AI usage ledger is not available (apply migration 069_ai_cost_controls.sql) — refusing to call the model unmetered.'
-      )
-    }
-    throw new AiGatewayError('ledger_error', `AI usage ledger write failed — refusing to call the model unmetered: ${err.message}`)
-  }
-  const ledger: LedgerRow = { id: data.id, request_id: requestId, model, price }
+  })
+  const ledger: LedgerRow = { id: rowId, request_id: requestId, model, price, principal: meta.principal, orgId: meta.orgId }
 
   const params: Anthropic.MessageCreateParamsNonStreaming = {
     model,
-    max_tokens: req.max_tokens,
+    max_tokens: totalMaxTokens,
     messages: req.messages,
     ...(req.system !== undefined ? { system: req.system } : {}),
     ...(effort ? { output_config: { effort } } : {}),
@@ -206,6 +198,8 @@ async function settle(supabase: Db, ledger: LedgerRow, message: Anthropic.Messag
   } catch (e) {
     console.error(`[ai] ledger settle failed for ${ledger.request_id}:`, errorText(e))
   }
+  // Org ceiling thresholds (50/80/100 %) — client-principal spend only; claim-before-send inside.
+  if (ledger.principal === 'client') await checkOrgAlerts(supabase, ledger.orgId)
 }
 
 async function release(supabase: Db, ledger: LedgerRow, e: unknown, durationMs: number): Promise<void> {

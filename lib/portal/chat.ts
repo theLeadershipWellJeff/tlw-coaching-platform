@@ -22,6 +22,7 @@
  * with notes and transcripts, never a separate mode.
  */
 import { aiCreate, aiStream, isAiConfigured, ledgerDone, textOf } from '@/lib/ai/client'
+import { effortFor, resolveModel } from '@/lib/ai/models'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { htmlToPlainText } from '@/lib/communications'
 import type { CoachingGoal } from '@/lib/supabase/types'
@@ -302,7 +303,12 @@ export async function buildChatContext(
 
 const MAX_TOKENS = 4096
 
-function chatCallMeta(attribution: ChatAttribution, mode: PortalChatMode) {
+/**
+ * `degraded` = the client is past their soft cap this month (Phase 2): the
+ * call is routed to `portal_degraded` (the cheaper model) and the ledger row
+ * says so. The prompt, context, and everything else are identical.
+ */
+function chatCallMeta(attribution: ChatAttribution, mode: PortalChatMode, degraded = false) {
   return {
     purpose: 'portal_chat' as const,
     feature: `portal_chat:${mode}`,
@@ -310,7 +316,8 @@ function chatCallMeta(attribution: ChatAttribution, mode: PortalChatMode) {
     orgId: attribution.orgId,
     coachId: attribution.coachId,
     clientId: attribution.clientId,
-    metadata: { mode },
+    ...(degraded ? { model: resolveModel('portal_degraded'), effort: effortFor('portal_degraded', resolveModel('portal_degraded')) } : {}),
+    metadata: { mode, ...(degraded ? { degraded: true } : {}) },
   }
 }
 
@@ -322,11 +329,14 @@ export async function* streamChatReply(
   system: string,
   messages: ChatMsg[],
   attribution: ChatAttribution,
-  mode: PortalChatMode = 'general'
+  mode: PortalChatMode = 'general',
+  opts: { degraded?: boolean } = {}
 ): AsyncGenerator<string, void, unknown> {
   if (!isAiConfigured()) throw new Error('ANTHROPIC_API_KEY is not configured.')
-  const stream = await aiStream(chatCallMeta(attribution, mode), {
+  const stream = await aiStream(chatCallMeta(attribution, mode, opts.degraded), {
     max_tokens: MAX_TOKENS,
+    // Phase 1 kept 4096 as the whole budget; Phase 3 sets the brief's 4000 incl. thinking.
+    max_tokens_includes_thinking: true,
     system,
     messages: messages.map((m) => ({ role: m.role, content: m.content })),
     timeoutMs: 120_000,
@@ -348,11 +358,13 @@ export async function generateChatReply(
   system: string,
   messages: ChatMsg[],
   attribution: ChatAttribution,
-  mode: PortalChatMode = 'general'
+  mode: PortalChatMode = 'general',
+  opts: { degraded?: boolean } = {}
 ): Promise<string> {
   if (!isAiConfigured()) throw new Error('ANTHROPIC_API_KEY is not configured.')
-  const message = await aiCreate(chatCallMeta(attribution, mode), {
+  const message = await aiCreate(chatCallMeta(attribution, mode, opts.degraded), {
     max_tokens: MAX_TOKENS,
+    max_tokens_includes_thinking: true,
     system,
     messages: messages.map((m) => ({ role: m.role, content: m.content })),
     timeoutMs: 120_000,

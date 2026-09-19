@@ -1898,66 +1898,115 @@ in a 2-column grid under `sm`, nothing hover-dependent. The 375 px check was
 done by inspection of the classes, not in a browser — verify on a phone after
 deploy.
 
-## AI gateway, model routing & usage ledger (2026-09-18; migration 069) — Phase 1 of the cost-controls brief
+## AI gateway, model routing, usage ledger & budget enforcement (2026-09-18/19; migrations 069–070) — cost-controls brief, Phases 1–2
 
 Brief: "AI Cost Controls, Model Routing & Context Budgeting" (Jeff, 2026-09-18;
 Phase 0 audit + file plan in `APP_STATE.md`). Four phases, confirmed one at a
-time. **Phase 1 shipped** = single gateway + model map + usage ledger.
-Phases 2–4 (budget enforcement, context budgeter, cockpit) follow on Jeff's go.
+time. **Phase 1 (gateway + ledger) and Phase 2 (enforcement) shipped.** Phase 3
+(context budgeter) and Phase 4 (cockpit) follow on Jeff's go.
 
-- **`lib/ai/models.ts` is the ONLY place a model id lives.** Every call is keyed
-  by a `purpose` (`portal_chat` → `claude-opus-5` at effort `medium`,
-  `portal_degraded` → `claude-sonnet-5` (Phase 2 only), `background_compact` +
-  `transcript_title` → `claude-haiku-4-5-20251001`, and the coach-side purposes
-  `scoring`, `scoring_suggest`, `growth_pass`, `growth_bands`, `nudge_extract`,
-  `nudge_draft`, `note_narrative`, `note_client_email`, `session_prep`,
-  `goals_generate`, `plan_session`, `portal_weekly_plan_extract` — all still
-  `claude-sonnet-4-6`, exactly as before). Override with `AI_MODEL_<PURPOSE>`;
-  the old per-feature env vars (`SCORING_MODEL`, `GENERATE_MODEL`, …) are
-  honoured as deprecated fallbacks for the purposes they configured, except
-  `PORTAL_CHAT_MODEL`, which is **ignored for `portal_chat`** (a stale value
-  must not undo the Opus 5 decision). Retired/unknown overrides are ignored
-  with a one-time warning (the three old copies of the retired-id guard live
-  here now); a retired DEFAULT throws. `KNOWN_MODELS` carries each model's
-  tokenizer generation (Opus 5 / Sonnet 5 count ~30% more tokens than Sonnet
-  4.6), effort support (Haiku 4.5 has none), and minimum cacheable prefix.
-- **`lib/ai/client.ts` is the ONLY path to Anthropic** — `aiCreate` (buffered)
-  and `aiStream` (streamed; `ledgerDone(stream)` resolves once its row is
-  written — await it before a route returns). Every call passes `{purpose,
-  feature?, principal: coach|client|system, orgId, coachId, clientId?}`. The
-  gateway reserves a ledger row **before** the request (worst case = estimated
-  input tokens × input price + `max_tokens` × output price) and settles it with
-  the response's real `usage` after (or releases it with the error). **Fail
-  closed**: a ledger write failure refuses the call (`AiGatewayError`
-  `ledger_unavailable` names migration 069) — nothing reaches Anthropic
-  unmetered. Shared client, `maxRetries: 1` (one automatic retry), per-call
-  connect timeout. `aiCountTokens` wraps the free `count_tokens` endpoint with
-  the char estimator as fallback (Phase 3 uses it). `textOf(message)` = first
-  text block.
-- **Build gate.** `scripts/check-ai-imports.sh` runs as `prebuild` (so Vercel
-  enforces it) and fails on any `@anthropic-ai/sdk` import outside `lib/ai/**`;
-  `.eslintrc.json` `no-restricted-imports` gives the same message in the
-  editor. `scripts/spikes/**` (manual verification scripts) are exempt.
-- **Ledger (069).** `ai_model_prices` (per-MTok prices in USD micros, newest
-  `effective_from` ≤ today wins; **prices are data — add a row, don't edit
-  code**), `ai_usage` (one row per request: `request_id` unique, org/coach/
-  client, principal, purpose, feature, model, `reserved|settled|released`,
-  reserved + actual micros, the four token counts, stop_reason, error,
-  duration, metadata), `ai_budgets` (caps per `org|client|feature` scope;
-  `period_month` NULL = standing default, a dated row overrides that month;
-  seeded with the brief's defaults **`enabled=false`** — Phase 2 enforces).
-  `lib/ai/pricing.ts` = the deterministic cost arithmetic (integer micros,
-  rounds up). No AI in budget math.
-- **SDK upgraded `^0.24.3` → `^0.127.0`** (the old pin predated `count_tokens`,
-  `cache_control`, `output_config.effort`, thinking, and cache usage fields —
-  none of the brief was expressible on it). Existing call shapes were
-  unaffected; `package-lock.json` stays gitignored (repo policy).
-- **Portal chat now runs on Opus 5 at effort `medium`** (`max_tokens` 4096
-  unchanged; thinking counts inside it, hence the explicit effort). Context
-  assembly is unchanged until Phase 3.
-- Verify the pure rules: `node_modules/.bin/tsc -p
-  scripts/spikes/tsconfig.spike.json && node scripts/spikes/verify-ai-gateway.js`
-  (45 checks: routing, overrides, retired guard, estimator, price math).
+- **No purpose hard-codes a model — `lib/ai/models.ts` routes by the nature
+  of the problem.** Each purpose declares a `TaskProfile` (`reasoning`
+  light|moderate|deep, `audience`, `latency`, optional `quality: 'frontier'`);
+  `routeModel` picks the CHEAPEST routable model in the catalog whose
+  `capability` meets it, ties to the faster one (Jeff, 2026-09-19: "as cost
+  effective and fast as possible; choose by speed, nature of the problem, and
+  cost"). Today that resolves to: light (`transcript_title`,
+  `background_compact`, `portal_weekly_plan_extract`) → `claude-haiku-4-5-20251001`;
+  moderate/deep (every coach-side purpose: scoring, growth, nudges, narrative,
+  prep, goals, plan) → `claude-sonnet-5` (cheaper AND stronger than the Sonnet
+  4.6 they ran on until 2026-09-19; 4.6 and Opus 4.8 are in the catalog as
+  `routable: false` — override-only, dominated); `portal_chat` (quality
+  'frontier' — the brief's "quality is the product") → `claude-opus-5`;
+  `portal_degraded` → `claude-sonnet-5`. The catalog (`KNOWN_MODELS`) carries
+  per model: capability tier, cost rank (from `ai_model_prices` — keep in step
+  when prices move), speed rank, tokenizer generation, effort support, whether
+  it thinks by default, min cache prefix. Add/retire a model there and every
+  purpose re-routes. Overrides: `AI_MODEL_<PURPOSE>` pins a purpose (any known
+  model, routable or not); legacy `SCORING_MODEL`/`GENERATE_MODEL`/… still
+  honoured with a warning, `PORTAL_CHAT_MODEL` ignored for `portal_chat`.
+  Retired/unknown overrides are ignored (warned once); a retired ROUTED model
+  throws.
+- **Effort + thinking headroom.** Sonnet 5 / Opus 5 run adaptive thinking by
+  default and thinking counts inside `max_tokens`. `effortFor` sets the dial per
+  reasoning tier (light → n/a on Haiku; moderate → `medium`, the documented
+  Sonnet-4.6-at-default equivalent; deep → `high`; portal → `medium`), and the
+  gateway ADDS `thinkingAllowance(model, effort)` (1.5k/3k/6k for low/medium/
+  high) on top of the caller's `max_tokens`, which now means VISIBLE output —
+  unless `max_tokens_includes_thinking` (the portal chat: 4096 total until
+  Phase 3 sets 4000). Both figures land in `ai_usage.metadata`.
+- **`lib/ai/client.ts` is the ONLY path to Anthropic** — `aiCreate` / `aiStream`
+  (`ledgerDone(stream)` before a route returns). Every call passes `{purpose,
+  feature?, principal: coach|client|system, orgId, coachId, clientId?}`. Order:
+  resolve model → estimate worst case (est. input × input price + total
+  max_tokens × output price) → **`ai_reserve()`** (migration 070: in one
+  transaction under a per-org advisory lock, sums the month's spend for every
+  scope the call falls under and refuses with `AiBudgetExceededError`
+  (`budget_exceeded`, scope, cap, spent, resets_on) when spend + worst case would
+  exceed an enabled cap; else inserts the `reserved` row) → call → settle with
+  real usage (or release with the error) → for client-principal calls, the
+  50/80/100 % org-ceiling check. **Fail closed** at every step (`ledger_
+  unavailable` names the missing migration). Shared client, `maxRetries: 1`.
+  `aiCountTokens` wraps the free `count_tokens` endpoint (Phase 3).
+- **Scopes and caps (`ai_budgets`, `lib/ai/budget.ts`).** `client` (client-
+  principal spend for one client; resolution order: dated row for the client →
+  standing row → `default:<client_type>` → `default`), `org` (ALL client-
+  principal spend — the portal ceiling; coach-side features are never counted
+  against it, so portal use can never starve scoring/prep/nudges), `feature`
+  (a purpose, any principal; then `principal:<p>`). A row dated THIS month
+  outranks the standing NULL-month row — that is how **Extend** works. Enabled
+  defaults since 070: org **$500**/month, client **$10**, `default:portal`
+  (ZF participant) **$3**, soft_pct 80. No coach-side cap is enabled (the brief
+  gave no number). Spend = Σ coalesce(actual, reserved) over reserved+settled
+  rows in the UTC month; reset = the 1st of next month (UTC).
+- **Portal chat wiring (`app/api/portal/chat/route.ts`).** In order: kill
+  switch `AI_PORTAL_CHAT_ENABLED=false` → 503 (`chat_disabled`, warm copy in
+  `lib/ai/portal-gate.ts`); rate limits **6/min + 30/day** per client
+  (`lib/portal/access.ts` multi-window `chat`); per-client switch
+  `portal_features.chat === false` → 403 (`chat_off`; toggled per user in the
+  Command Center → Portal users "Assistant" column, `PATCH /api/admin/portal-
+  users/[id] {chat}`; default ON for everyone, ZF participants included — the
+  360 debrief IS the chat, so the brief's "OFF by default" was not applied,
+  flagged to Jeff); budget pre-check `ai_budget_status` → **hard** → 429
+  `budget_exhausted` with the on-brand pause ("Your reflection space has used
+  its allowance for this month and resets on {date} — your coach can extend it
+  anytime", `budget.ts#pausedMessage`) + coach notice; **soft** (≥80 %) →
+  the reply runs on `portal_degraded` (Sonnet 5, `metadata.degraded`) + coach
+  notice once per month; a race lost at the cap inside the stream yields the
+  same pause text. Fail closed if the status read errors.
+- **Extend (`GET/PATCH /api/clients/[id]/ai-budget`, workspace block
+  `ws-ai-usage` "Assistant usage" — in the default layout, compact; existing
+  coaches add it via "+ Add card").** Shows this month's portal spend vs cap,
+  state chip (on track / lighter model / paused), reset date, and **Extend to
+  $N this month** (default cap + $10, or a typed whole-dollar amount ≤ $100;
+  never below what is already spent) → writes the dated `ai_budgets` row →
+  audit `ai_budget_extended`. Reopens a paused assistant immediately (the next
+  message re-reads status).
+- **Alerts (`lib/ai/alerts.ts`, `ai_alerts` claim-before-send).** Org ceiling
+  50/80/100 % → email the house coach (`DEFAULT_COACH_EMAIL`, else the earliest
+  supervisor) once per threshold per month, checked after every settled client
+  call and by the hourly sweep; per-client soft/hard → email the client's
+  primary coach once per kind per month with a link to the workspace. All
+  best-effort; a mail failure never touches the call.
+- **Cron `GET /api/cron/ai-budget`** (hourly, `CRON_SECRET`, `cronHandler`):
+  `ai_release_stale(15)` releases reservations older than 15 min (a killed
+  function) so they stop counting at worst case, then the org alert sweep.
+- **Build gate.** `scripts/check-ai-imports.sh` runs as `prebuild` and fails
+  on any `@anthropic-ai/sdk` import outside `lib/ai/**`; ESLint
+  `no-restricted-imports` mirrors it. `scripts/spikes/**` exempt.
+- **Ledger (069).** `ai_model_prices` (per-MTok USD micros; **prices are
+  data**), `ai_usage` (one row per request; `reserved|settled|released`),
+  `ai_budgets`. `lib/ai/pricing.ts` = integer-micros arithmetic. **070** adds
+  `ai_alerts` + the SQL functions `ai_reserve`, `ai_budget_status`,
+  `ai_release_stale`, `ai_month_spend`, `ai_resolve_cap`.
+- **SDK `^0.127.0`** (was `^0.24.3`, which predated every parameter above).
+- Verify: `node_modules/.bin/tsc -p scripts/spikes/tsconfig.spike.json && node
+  scripts/spikes/verify-ai-gateway.js` (51 checks: routing, overrides, effort,
+  allowance, price math) and, against a real Postgres, `PG=env PG*=… node
+  scripts/spikes/verify-ai-budget-concurrency.js` (20 checks: 20 concurrent
+  reserves at a nearly exhausted cap → exactly the affordable one passes; soft/
+  hard states; coach calls never touch the client cap; Extend; participant $3;
+  org ceiling; feature cap; stale release; alert-claim uniqueness).
 
 ## Multi-coach beta (2026-08 — coach onboarding readiness)
 
@@ -2271,7 +2320,7 @@ value in Vercel), `DEFAULT_COACH_EMAIL` (= `jeff@jeffkholmes.com`),
 `DEFAULT_COACH_NAME`. Vault (framework nudges): `VAULT_GITHUB_TOKEN` (read-only
 fine-grained PAT on the vault repo), optional `VAULT_REPO` (default
 `theLeadershipWellJeff/TheLeadershipWell-Vault`), `VAULT_BRANCH` (default `main`).
-AI models: `AI_MODEL_<PURPOSE>` per `lib/ai/models.ts` (legacy `SCORING_MODEL`,
+AI: `AI_PORTAL_CHAT_ENABLED` (`false` = portal assistant kill switch), `AI_MODEL_<PURPOSE>` per `lib/ai/models.ts` (legacy `SCORING_MODEL`,
 `SUGGEST_MODEL`, `GENERATE_MODEL`, `GOALS_MODEL`, `NUDGE_MODEL`, `PLAN_SESSION_MODEL`,
 `TITLE_MODEL`, `PORTAL_CHAT_MODEL` still honoured with a warning — see the AI
 gateway section). Optional: `AUTO_SCORE`, `DEFAULT_TIMEZONE`, `PLAUD_DRIVE_FOLDER` (default `Plaud-Transcripts`),
@@ -2832,8 +2881,17 @@ nothing can double-send in a gap). Verified up → down → re-up on Postgres 16
 CAS semantics (two claims → one winner; stale claim re-claimable; sent note
 never claimable). Reversible via `068_note_send_claim_down.sql`.
 
-**`069_ai_cost_controls.sql` — PENDING (apply before merging the Phase 1 gateway
-PR).** `ai_model_prices` (seeded: Opus 5, Sonnet 5, Haiku 4.5 + alias, Sonnet
+**`070_ai_budget_enforcement.sql` — PENDING (apply before merging the Phase 2
+PR; the gateway refuses every AI call with "apply migration 070" until it is
+in).** Adds `ai_alerts` and the functions `ai_resolve_cap`, `ai_month_spend`,
+`ai_reserve` (the atomic check-and-insert every model call now goes through),
+`ai_budget_status`, `ai_release_stale`; ENABLES the three caps 069 seeded
+(org $500 · client $10 · portal participant $3). Additive. Verified up →
+down → re-up on Postgres 16 + the 20-check concurrency proof. Reversible via
+`070_ai_budget_enforcement_down.sql` (drops the functions + alert ledger,
+re-disables the seeded caps).
+
+**`069_ai_cost_controls.sql` — APPLIED (production, confirmed by Jeff 2026-09-19).** `ai_model_prices` (seeded: Opus 5, Sonnet 5, Haiku 4.5 + alias, Sonnet
 4.6, Opus 4.8 at the 2026-09-18 list prices), `ai_usage` (the ledger),
 `ai_budgets` (seeded defaults, `enabled=false`). Additive only, RLS enabled,
 `org_id` defaulted to org #1. **The gateway fails closed without it** — every AI

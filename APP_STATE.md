@@ -25,7 +25,7 @@ quick, current "what exists right now" ledger._
 
 - **123 API route files** under `app/api/**` (down from 126 — Phase 0 removed 3 CA
   routes). Full route-by-route isolation classification: **`ISOLATION_AUDIT.md` §2**.
-- **7 Vercel crons** (`vercel.json`): hourly `reminders` (+ the coach-task pass),
+- **8 Vercel crons** (`vercel.json`): hourly `reminders` (+ the coach-task pass), `ai-budget` (stale reservations + spend alerts),
   `nudges`, `vault-sync`, `calendar-sync`, `billing-reminders`, `billing-retries`;
   daily `portal-reminders`. Every run logged to `cron_runs` (067). Audit: `ISOLATION_AUDIT.md` §3.
 - **42 migrations**, strict `001`–`042` (Phase 0 renumbered the old `026`/`034`
@@ -319,7 +319,7 @@ per workspace). Recommended regardless: a second workspace + key
 (`ANTHROPIC_API_KEY_PORTAL`) so the portal's spend is a separate line on the
 invoice, which also makes the Phase 4 ±5% reconciliation trivial.
 
-### Phase 1 — shipped 2026-09-18 (gateway + models + ledger; migration 069 PENDING)
+### Phase 1 — shipped 2026-09-18 (gateway + models + ledger; migration 069 APPLIED in production 2026-09-19)
 
 - **SDK `^0.24.3` → `^0.127.0`.** `tsc` was clean after the upgrade with no
   call-site changes — the 0.24 shapes still type-check on 0.127. Lockfile
@@ -362,6 +362,59 @@ invoice, which also makes the Phase 4 ±5% reconciliation trivial.
   release cron, refusing calls whose model has no price row (Phase 1 settles
   them with `actual_usd_micros` NULL and logs), the per-minute/per-day chat
   limits, the kill switch, the ZF-participant chat-off default.
+
+### Routing change (Jeff, 2026-09-19) — models chosen by cost, speed, and the nature of the task
+
+Jeff: "as cost effective and as fast as possible… don't hard code a certain
+model; choose based on speed, the nature of the problem, and cost." Done in
+`lib/ai/models.ts`: a catalog with capability / cost rank / speed rank per
+model and a `TaskProfile` per purpose; `routeModel` = cheapest routable model
+meeting the capability, ties to the faster. **Consequences (recorded):**
+- Every coach-side purpose moved **Sonnet 4.6 → Sonnet 5** ($3/$15 → $2/$10,
+  documented as equal-or-better; effort `medium` = the 4.6-at-default
+  equivalent, `high` for scoring + growth). Sonnet 4.6 and Opus 4.8 stay in
+  the catalog as override-only (dominated).
+- Three light tasks moved to **Haiku 4.5**: transcript titles (already),
+  weekly-plan Top-5 extraction, background_compact.
+- **Scoring now runs on Sonnet 5 at effort `high`** with `max_tokens` 10 000
+  visible + 6 000 thinking headroom. The rubric text is unchanged, but the
+  model IS the judge — **Jeff to rescore one known transcript and compare
+  bands before trusting a batch** (rubrics/01 golden check). Override with
+  `AI_MODEL_SCORING=claude-sonnet-4-6` to fall back instantly.
+- Portal chat stays on Opus 5 by the profile's `quality: 'frontier'` (the
+  brief's decision), not by a pinned id — flip that one field to re-route.
+- Haiku 4.5's retirement (not before 2026-10-15): when it goes, mark it
+  non-routable and light tasks fall to Sonnet 5 at `low` automatically.
+
+### Phase 2 — shipped 2026-09-19 (budget enforcement; migration 070 PENDING)
+
+- **Atomic reserve** in Postgres (`ai_reserve`, per-org advisory lock, every
+  scope summed in the same transaction) — proven by
+  `verify-ai-budget-concurrency.js`: 20 concurrent $1 reserves with $1.50
+  left → exactly 1 passes. Caps: org $500 (client-principal only), client
+  $10, portal participant $3 — the brief defaults, now `enabled=true`.
+- **Portal**: kill switch env, 6/min + 30/day, per-client `portal_features.
+  chat` (Command Center toggle), soft cap → Sonnet 5 + coach email, hard cap
+  → 429 with the on-brand pause + coach email, fail closed on a status error.
+- **Extend**: workspace "Assistant usage" card (`ws-ai-usage`) → dated
+  `ai_budgets` row, audited.
+- **Alerts** (50/80/100 % org; client soft/hard) via `ai_alerts` claims;
+  hourly `/api/cron/ai-budget` releases stale reservations + sweeps alerts.
+- **Decisions taken on the brief's defaults without a separate confirmation
+  (Jeff said "go")**: $500 / $10 / $3 / 80 % soft / downgrade-to-Sonnet-5 on
+  soft / pause-with-extend on hard. **One deliberate deviation:** the ZF
+  participant chat is **ON** by default (flag exists, default off would have
+  switched off the 360 debrief's main surface for the live cohort). Flip per
+  user in the Command Center, or set `default:portal` cap to 0 to pause them
+  all. Separate Anthropic workspace/key: still Jeff's Console decision.
+- **Not verified here**: a live call through the reserve (no API key); the
+  alert emails (no Gmail token); the workspace card in a browser (typecheck +
+  build only). First production day after 070: check `select status,
+  count(*) from ai_usage group by 1` (no lingering `reserved`) and that
+  `ai_alerts` stays empty until the thresholds are real.
+- **Deferred**: coach-side feature cap number (none enabled); per-coach
+  budgets; the Console spend limit; Batch API for scoring/nudges (50 % off,
+  fire-and-forget already — first post-Phase-4 option).
 
 ### File plan (Phases 1–4; stop-and-confirm between each)
 

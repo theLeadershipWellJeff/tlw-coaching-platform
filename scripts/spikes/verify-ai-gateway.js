@@ -39,19 +39,26 @@ function withEnv(vars, fn) {
 const warn = console.warn
 console.warn = () => {}
 
-console.log('models.ts — routing')
+console.log('models.ts — routing (cost/speed/capability, no hard-coded model per purpose)')
 withEnv({}, () => {
-  check('portal_chat → claude-opus-5 (brief)', models.resolveModel('portal_chat') === 'claude-opus-5')
-  check('portal_degraded → claude-sonnet-5 (brief)', models.resolveModel('portal_degraded') === 'claude-sonnet-5')
-  check('background_compact → claude-haiku-4-5-20251001 (brief)', models.resolveModel('background_compact') === 'claude-haiku-4-5-20251001')
-  check('transcript_title keeps its old default (haiku)', models.resolveModel('transcript_title') === 'claude-haiku-4-5-20251001')
-  for (const p of ['scoring', 'scoring_suggest', 'growth_pass', 'growth_bands', 'nudge_extract', 'nudge_draft', 'note_narrative', 'note_client_email', 'session_prep', 'goals_generate', 'plan_session', 'portal_weekly_plan_extract']) {
-    check(`${p} keeps today's model (claude-sonnet-4-6)`, models.resolveModel(p) === 'claude-sonnet-4-6')
+  check('portal_chat (frontier quality) → claude-opus-5', models.resolveModel('portal_chat') === 'claude-opus-5')
+  check('portal_degraded → claude-sonnet-5', models.resolveModel('portal_degraded') === 'claude-sonnet-5')
+  for (const p of ['background_compact', 'transcript_title', 'portal_weekly_plan_extract']) {
+    check(`${p} (light) → cheapest+fastest: claude-haiku-4-5-20251001`, models.resolveModel(p) === 'claude-haiku-4-5-20251001')
   }
-  check('every default is a known, non-retired model', Object.values(models.DEFAULT_MODELS).every((m) => models.KNOWN_MODELS[m] && !models.RETIRED_MODELS.has(m)))
-  check('portal effort = medium', models.effortFor('portal_chat', 'claude-opus-5') === 'medium')
-  check('coach-side purposes send no effort (API default)', models.effortFor('scoring', 'claude-sonnet-4-6') === undefined)
-  check('effort never sent to Haiku (unsupported)', models.effortFor('portal_chat', 'claude-haiku-4-5-20251001') === undefined)
+  for (const p of ['scoring', 'scoring_suggest', 'growth_pass', 'growth_bands', 'nudge_extract', 'nudge_draft', 'note_narrative', 'note_client_email', 'session_prep', 'goals_generate', 'plan_session']) {
+    check(`${p} (moderate/deep) → cheapest strong model: claude-sonnet-5`, models.resolveModel(p) === 'claude-sonnet-5')
+  }
+  check('every routed default is a known, routable, non-retired model', Object.values(models.DEFAULT_MODELS).every((m) => models.KNOWN_MODELS[m]?.routable && !models.RETIRED_MODELS.has(m)))
+  check('routeModel picks by cost then speed', models.routeModel({ reasoning: 'moderate', audience: 'coach', latency: 'background' }) === 'claude-sonnet-5')
+  check('dominated models (sonnet-4-6, opus-4-8) are never routed', !Object.values(models.DEFAULT_MODELS).some((m) => m === 'claude-sonnet-4-6' || m === 'claude-opus-4-8'))
+  check('effort: portal medium', models.effortFor('portal_chat', 'claude-opus-5') === 'medium')
+  check('effort: deep → high (scoring)', models.effortFor('scoring', 'claude-sonnet-5') === 'high')
+  check('effort: moderate → medium (nudge_draft)', models.effortFor('nudge_draft', 'claude-sonnet-5') === 'medium')
+  check('effort never sent to Haiku (unsupported)', models.effortFor('transcript_title', 'claude-haiku-4-5-20251001') === undefined)
+  check('thinking allowance: 0 on Haiku', models.thinkingAllowance('claude-haiku-4-5-20251001', undefined) === 0)
+  check('thinking allowance: high > medium > low on Sonnet 5', models.thinkingAllowance('claude-sonnet-5', 'high') > models.thinkingAllowance('claude-sonnet-5', 'medium') && models.thinkingAllowance('claude-sonnet-5', 'medium') > models.thinkingAllowance('claude-sonnet-5', 'low'))
+  check('thinking allowance: 0 on Sonnet 4.6 (no default thinking)', models.thinkingAllowance('claude-sonnet-4-6', 'medium') === 0)
   let threw = false
   try {
     models.resolveModel('not_a_purpose')
@@ -60,28 +67,28 @@ withEnv({}, () => {
   }
   check('unknown purpose throws', threw)
 })
-withEnv({ AI_MODEL_SCORING: 'claude-sonnet-5' }, () => {
-  check('AI_MODEL_<PURPOSE> override wins', models.resolveModel('scoring') === 'claude-sonnet-5')
+withEnv({ AI_MODEL_SCORING: 'claude-opus-5' }, () => {
+  check('AI_MODEL_<PURPOSE> override wins (pins a model)', models.resolveModel('scoring') === 'claude-opus-5')
 })
-withEnv({ AI_MODEL_SCORING: 'claude-sonnet-5', SCORING_MODEL: 'claude-opus-4-8' }, () => {
-  check('AI_MODEL_SCORING beats legacy SCORING_MODEL', models.resolveModel('scoring') === 'claude-sonnet-5')
+withEnv({ AI_MODEL_SCORING: 'claude-opus-5', SCORING_MODEL: 'claude-opus-4-8' }, () => {
+  check('AI_MODEL_SCORING beats legacy SCORING_MODEL', models.resolveModel('scoring') === 'claude-opus-5')
 })
 withEnv({ SCORING_MODEL: 'claude-opus-4-8' }, () => {
-  check('legacy SCORING_MODEL still honoured for scoring', models.resolveModel('scoring') === 'claude-opus-4-8')
+  check('legacy SCORING_MODEL still honoured for scoring (even a non-routable model)', models.resolveModel('scoring') === 'claude-opus-4-8')
   check('legacy SCORING_MODEL still honoured for scoring_suggest (old chain)', models.resolveModel('scoring_suggest') === 'claude-opus-4-8')
 })
-withEnv({ SUGGEST_MODEL: 'claude-sonnet-5', SCORING_MODEL: 'claude-opus-4-8' }, () => {
-  check('SUGGEST_MODEL beats SCORING_MODEL for growth_pass (old precedence)', models.resolveModel('growth_pass') === 'claude-sonnet-5')
+withEnv({ SUGGEST_MODEL: 'claude-sonnet-4-6', SCORING_MODEL: 'claude-opus-4-8' }, () => {
+  check('SUGGEST_MODEL beats SCORING_MODEL for growth_pass (old precedence)', models.resolveModel('growth_pass') === 'claude-sonnet-4-6')
   check('scoring itself ignores SUGGEST_MODEL', models.resolveModel('scoring') === 'claude-opus-4-8')
 })
 withEnv({ SCORING_MODEL: 'claude-sonnet-4-20250514' }, () => {
-  check('retired override ignored → default', models.resolveModel('scoring') === 'claude-sonnet-4-6')
+  check('retired override ignored → routed model', models.resolveModel('scoring') === 'claude-sonnet-5')
 })
 withEnv({ AI_MODEL_SCORING: 'claude-made-up-9' }, () => {
-  check('unknown (unpriced) override ignored → default', models.resolveModel('scoring') === 'claude-sonnet-4-6')
+  check('unknown (unpriced) override ignored → routed model', models.resolveModel('scoring') === 'claude-sonnet-5')
 })
 withEnv({ PORTAL_CHAT_MODEL: 'claude-sonnet-4-6' }, () => {
-  check('PORTAL_CHAT_MODEL does NOT move portal_chat off Opus 5', models.resolveModel('portal_chat') === 'claude-opus-5')
+  check('PORTAL_CHAT_MODEL does NOT move portal_chat off its routed model', models.resolveModel('portal_chat') === 'claude-opus-5')
   check('PORTAL_CHAT_MODEL still configures the weekly-plan extraction', models.resolveModel('portal_weekly_plan_extract') === 'claude-sonnet-4-6')
 })
 withEnv({ AI_MODEL_PORTAL_CHAT: 'claude-sonnet-5' }, () => {

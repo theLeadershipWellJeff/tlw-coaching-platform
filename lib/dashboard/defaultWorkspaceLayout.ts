@@ -20,4 +20,5 @@ export const DEFAULT_WORKSPACE_LAYOUT: CardPlacement[] = [
   { blockId: 'ws-key-info', size: 'standard', order: 10 },
   { blockId: 'ws-billing', size: 'standard', order: 11 },
   { blockId: 'ws-coaching-map', size: 'standard', order: 12 },
+  { blockId: 'ws-ai-usage', size: 'compact', order: 13 },
 ]

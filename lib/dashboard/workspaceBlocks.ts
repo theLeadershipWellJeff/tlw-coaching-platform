@@ -108,6 +108,13 @@ export const WORKSPACE_BLOCK_META: Record<string, WorkspaceBlockMeta> = {
     defaultSize: 'standard',
     selfHeader: true,
   },
+  'ws-ai-usage': {
+    id: 'ws-ai-usage',
+    title: 'Assistant usage',
+    supportedSizes: ['compact', 'standard'],
+    defaultSize: 'compact',
+    selfHeader: true,
+  },
 }
 
 /** Workspace blocks not already placed in the layout — feeds the add-card menu. */
