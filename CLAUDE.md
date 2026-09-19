@@ -1898,12 +1898,14 @@ in a 2-column grid under `sm`, nothing hover-dependent. The 375 px check was
 done by inspection of the classes, not in a browser — verify on a phone after
 deploy.
 
-## AI gateway, model routing, usage ledger, budget enforcement & context budgeter (2026-09-18/19; migrations 069–071) — cost-controls brief, Phases 1–3
+## AI gateway, model routing, usage ledger, budget enforcement, context budgeter & cost cockpit (2026-09-18/19; migrations 069–071) — cost-controls brief, Phases 1–4
 
 Brief: "AI Cost Controls, Model Routing & Context Budgeting" (Jeff, 2026-09-18;
 Phase 0 audit + file plan in `APP_STATE.md`). Four phases, confirmed one at a
-time. **Phase 1 (gateway + ledger), Phase 2 (enforcement) and Phase 3 (the
-portal context budgeter) shipped.** Phase 4 (cockpit) follows on Jeff's go.
+time. **All four phases shipped:** Phase 1 (gateway + ledger), Phase 2
+(enforcement), Phase 3 (the portal context budgeter), Phase 4 (the cost
+cockpit). The one thing left is Jeff's: reconcile a full billing month
+against the Console invoice (`scripts/reconcile-ai-costs.js`, ±5 %).
 
 - **No purpose hard-codes a model — `lib/ai/models.ts` routes by the nature
   of the problem.** Each purpose declares a `TaskProfile` (`reasoning`
@@ -1923,10 +1925,12 @@ portal context budgeter) shipped.** Phase 4 (cockpit) follows on Jeff's go.
   when prices move), speed rank, tokenizer generation, effort support, whether
   it thinks by default, min cache prefix. Add/retire a model there and every
   purpose re-routes. Overrides: `AI_MODEL_<PURPOSE>` pins a purpose (any known
-  model, routable or not); legacy `SCORING_MODEL`/`GENERATE_MODEL`/… still
-  honoured with a warning, `PORTAL_CHAT_MODEL` ignored for `portal_chat`.
-  Retired/unknown overrides are ignored (warned once); a retired ROUTED model
-  throws.
+  model, routable or not). The pre-Phase-1 env vars (`SCORING_MODEL`,
+  `SUGGEST_MODEL`, `GENERATE_MODEL`, `GOALS_MODEL`, `NUDGE_MODEL`,
+  `PLAN_SESSION_MODEL`, `TITLE_MODEL`, `PORTAL_CHAT_MODEL`) are **retired
+  since Phase 4** — set, they are ignored with one warning naming the
+  `AI_MODEL_<PURPOSE>` key; remove them from Vercel. Retired/unknown
+  overrides are ignored (warned once); a retired ROUTED model throws.
 - **Effort + thinking headroom.** Sonnet 5 / Opus 5 run adaptive thinking by
   default and thinking counts inside `max_tokens`. `effortFor` sets the dial per
   reasoning tier (light → n/a on Haiku; moderate → `medium`, the documented
@@ -2034,6 +2038,41 @@ portal context budgeter) shipped.** Phase 4 (cockpit) follows on Jeff's go.
   `node scripts/spikes/verify-context-budget.js` (23 checks: clipping,
   upload note, whole-item excerpts, newest-first history, ceiling drop order,
   system never dropped).
+- **Cost cockpit (Phase 4).** `lib/ai/costs-math.ts` (pure: row cost =
+  actual for settled / reserved worst case for open / 0 for released; UTC
+  month bounds + straight-line month-end projection; `aggregateUsage` by
+  purpose / model / client / coach / principal; `resolveCap` = a TS mirror of
+  the SQL `ai_resolve_cap` (dated row beats standing, first scope id with a
+  row wins); `capState` / `pctOfCap`; cache-read ratio = reads ÷ all input-
+  side tokens) and `lib/ai/costs.ts` (paged ledger reads past PostgREST's
+  1000-row default, enabled caps, client/coach names, and the **invoiced-
+  revenue join**: every line of an issued invoice — sent/overdue/failed/paid,
+  income date = paid, else sent, else created, in the month — attributed to
+  the client through `invoice_lines.coachee_id → coachees.client_id`;
+  account-level lines with no coachee are not attributable). Two reports:
+  `buildOrgCostReport` (supervisor) and `buildCoachCostReport` (a coach's OWN
+  clients' client-principal spend, selected by the `coach_clients` link —
+  never their own scoring/prep spend, never another coach's clients). Client
+  spend = client-principal rows only (a coach scoring that client's session
+  is the coach's cost). Routes: `GET /api/admin/ai-costs?month=YYYY-MM`
+  (`adminContext`) and `GET /api/ai-costs?month=` (`requireCoach`); both
+  answer `{report: null, unavailable: true}` pre-069. Surfaces: **`/command-
+  center/ai-costs`** (month stepper; spent / month-end projection / portal vs
+  the org ceiling / coach-side / requests with failed + open / portal-chat
+  cache-read ratio against the 60 % target; top-10 clients with cap bar,
+  state chip, invoiced revenue and spend ÷ revenue; by feature with any
+  feature cap; by model with tokens; by coach), the Command Center **AI costs
+  pulse card** + header link, and the dashboard / Business Center card
+  **`ai-costs` "Assistant usage"** (compact = the coach's clients' total this
+  month + paused / lighter-model counts; standard = top 5 with cap bars;
+  expanded = everyone; rows link to the workspace, where `ws-ai-usage`
+  carries Extend). Opt-in via "+ Add card" (not in the default layouts).
+  Reconcile: `node scripts/reconcile-ai-costs.js --month YYYY-MM --invoice
+  <usd> [--csv <Console usage export>] [--tolerance 5]` (needs the Supabase
+  URL + secret key in the env; prints the ledger by model, compares tokens/
+  cost per model against the export and the total against the invoice, exit
+  1 over tolerance). Verify the arithmetic: `node scripts/spikes/verify-ai-
+  costs.js` (36 checks).
 - **Build gate.** `scripts/check-ai-imports.sh` runs as `prebuild` and fails
   on any `@anthropic-ai/sdk` import outside `lib/ai/**`; ESLint
   `no-restricted-imports` mirrors it. `scripts/spikes/**` exempt.
@@ -2046,7 +2085,8 @@ portal context budgeter) shipped.** Phase 4 (cockpit) follows on Jeff's go.
 - Verify: `node_modules/.bin/tsc -p scripts/spikes/tsconfig.spike.json && node
   scripts/spikes/verify-ai-gateway.js` (51 checks: routing, overrides, effort,
   allowance, price math), `node scripts/spikes/verify-context-budget.js`
-  (23 checks) and, against a real Postgres, `PG=env PG*=… node
+  (23 checks), `node scripts/spikes/verify-ai-costs.js` (36 checks) and,
+  against a real Postgres, `PG=env PG*=… node
   scripts/spikes/verify-ai-budget-concurrency.js` (20 checks: 20 concurrent
   reserves at a nearly exhausted cap → exactly the affordable one passes; soft/
   hard states; coach calls never touch the client cap; Extend; participant $3;
@@ -2364,10 +2404,10 @@ value in Vercel), `DEFAULT_COACH_EMAIL` (= `jeff@jeffkholmes.com`),
 `DEFAULT_COACH_NAME`. Vault (framework nudges): `VAULT_GITHUB_TOKEN` (read-only
 fine-grained PAT on the vault repo), optional `VAULT_REPO` (default
 `theLeadershipWellJeff/TheLeadershipWell-Vault`), `VAULT_BRANCH` (default `main`).
-AI: `AI_PORTAL_CHAT_ENABLED` (`false` = portal assistant kill switch), `AI_MODEL_<PURPOSE>` per `lib/ai/models.ts` (legacy `SCORING_MODEL`,
+AI: `AI_PORTAL_CHAT_ENABLED` (`false` = portal assistant kill switch), `AI_MODEL_<PURPOSE>` per `lib/ai/models.ts` (the pre-Phase-1 `SCORING_MODEL`,
 `SUGGEST_MODEL`, `GENERATE_MODEL`, `GOALS_MODEL`, `NUDGE_MODEL`, `PLAN_SESSION_MODEL`,
-`TITLE_MODEL`, `PORTAL_CHAT_MODEL` still honoured with a warning — see the AI
-gateway section). Optional: `AUTO_SCORE`, `DEFAULT_TIMEZONE`, `PLAUD_DRIVE_FOLDER` (default `Plaud-Transcripts`),
+`TITLE_MODEL`, `PORTAL_CHAT_MODEL` are retired and ignored — remove them; see
+the AI gateway section). Optional: `AUTO_SCORE`, `DEFAULT_TIMEZONE`, `PLAUD_DRIVE_FOLDER` (default `Plaud-Transcripts`),
 `COACH_ZOOM_LINK` (default meeting link for invites/reminders when a coach hasn't
 set one in Account → Scheduling; falls back to `DEFAULT_MEETING_LINK` in code).
 Stripe (billing): `STRIPE_SECRET_KEY` (from Stripe Dashboard → Developers → API keys;

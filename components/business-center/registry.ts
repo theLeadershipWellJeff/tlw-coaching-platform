@@ -7,6 +7,7 @@ import { coachingHoursCard } from '@/components/dashboard/cards/CoachingHoursCar
 import { pastRevenueCard } from '@/components/dashboard/cards/PastRevenueCard'
 import { projectedRevenueCard } from '@/components/dashboard/cards/ProjectedRevenueCard'
 import { annualRevenueCard } from '@/components/dashboard/cards/AnnualRevenueCard'
+import { aiCostsCard } from '@/components/dashboard/cards/AiCostsCard'
 
 export const BUSINESS_CENTER_CARDS: Record<string, DashboardCard<any>> = {
   'bc-outstanding-ar': outstandingARCard,
@@ -16,6 +17,7 @@ export const BUSINESS_CENTER_CARDS: Record<string, DashboardCard<any>> = {
   'past-revenue': pastRevenueCard,
   'projected-revenue': projectedRevenueCard,
   'annual-revenue': annualRevenueCard,
+  'ai-costs': aiCostsCard,
 }
 
 export function getBusinessCenterCard(id: string): DashboardCard<any> | undefined {

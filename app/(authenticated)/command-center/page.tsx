@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react'
 import { PageHeader } from '@/app/components/layout/PageHeader'
 import { CoachClientsPanel } from './CoachClientsPanel'
 import { PortalPulseCard } from './PortalPulseCard'
+import { AiCostsPulseCard } from './AiCostsPulseCard'
 
 type CoachUsage = {
   transcript_count: number
@@ -863,6 +864,12 @@ export default function CommandCenterPage() {
         actions={
           <div className="flex items-center gap-2">
             <a
+              href="/command-center/ai-costs"
+              className="rounded-tlw-lg border border-tlw-navy-deep/30 px-3 py-1.5 text-[13px] font-medium text-tlw-navy-deep transition-colors hover:bg-tlw-navy-deep/[0.06]"
+            >
+              AI costs
+            </a>
+            <a
               href="/command-center/portal"
               className="rounded-tlw-lg border border-tlw-navy-deep/30 px-3 py-1.5 text-[13px] font-medium text-tlw-navy-deep transition-colors hover:bg-tlw-navy-deep/[0.06]"
             >
@@ -892,6 +899,9 @@ export default function CommandCenterPage() {
 
           {/* Client Portal at a glance — the whole card opens the portal admin */}
           <PortalPulseCard />
+
+          {/* AI spend against the caps — the whole card opens the cost cockpit */}
+          <AiCostsPulseCard />
 
           {/* Coaches */}
           <section>

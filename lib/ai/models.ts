@@ -10,11 +10,10 @@
  *
  * Overrides: `AI_MODEL_<PURPOSE>` (upper-cased purpose, e.g.
  * AI_MODEL_PORTAL_CHAT) pins a purpose to a model. The pre-Phase-1 env vars
- * (SCORING_MODEL, GENERATE_MODEL, …) are honoured as legacy fallbacks for the
- * coach-side purposes they used to configure, with a deprecation warning.
- * PORTAL_CHAT_MODEL is deliberately NOT honoured for `portal_chat` (a stale
- * override must not quietly move the portal off its routed model; it still
- * applies to the weekly-plan extraction it also configured).
+ * (SCORING_MODEL, GENERATE_MODEL, …, PORTAL_CHAT_MODEL) are RETIRED since
+ * Phase 4 (2026-09-19): still set, they are ignored with one warning naming
+ * the AI_MODEL_<PURPOSE> key to use instead — a stale override can never
+ * quietly pin a purpose off its routed model.
  *
  * Retired ids: an override naming a retired model is ignored with a warning
  * and the routed model is used. A routed model that is retired or unpriced is
@@ -176,22 +175,8 @@ const EFFORT_BY_REASONING: Record<TaskProfile['reasoning'], AiEffort> = { light:
  */
 const THINKING_ALLOWANCE: Record<AiEffort, number> = { low: 1500, medium: 3000, high: 6000, xhigh: 12000, max: 16000 }
 
-/** Pre-Phase-1 env vars, in the precedence each purpose used to apply. */
-const LEGACY_ENV: Partial<Record<AiPurpose, string[]>> = {
-  scoring: ['SCORING_MODEL'],
-  scoring_suggest: ['SUGGEST_MODEL', 'SCORING_MODEL'],
-  growth_pass: ['SUGGEST_MODEL', 'SCORING_MODEL'],
-  growth_bands: ['SUGGEST_MODEL', 'SCORING_MODEL'],
-  nudge_extract: ['NUDGE_MODEL'],
-  nudge_draft: ['NUDGE_MODEL'],
-  transcript_title: ['TITLE_MODEL'],
-  note_narrative: ['GENERATE_MODEL'],
-  note_client_email: ['GENERATE_MODEL'],
-  session_prep: ['GENERATE_MODEL'],
-  goals_generate: ['GOALS_MODEL'],
-  plan_session: ['PLAN_SESSION_MODEL'],
-  portal_weekly_plan_extract: ['PORTAL_CHAT_MODEL'],
-}
+/** Pre-Phase-1 env vars — retired in Phase 4. Set, they are ignored with a warning. */
+const LEGACY_ENV_KEYS = ['SCORING_MODEL', 'SUGGEST_MODEL', 'GENERATE_MODEL', 'GOALS_MODEL', 'NUDGE_MODEL', 'PLAN_SESSION_MODEL', 'TITLE_MODEL', 'PORTAL_CHAT_MODEL'] as const
 
 const warned = new Set<string>()
 function warnOnce(key: string, message: string) {
@@ -205,8 +190,9 @@ export function envKeyFor(purpose: AiPurpose): string {
 }
 
 /**
- * Resolve the model id for a purpose: AI_MODEL_<PURPOSE> → legacy env → default.
- * An override naming a retired or unknown model is ignored (warned once).
+ * Resolve the model id for a purpose: AI_MODEL_<PURPOSE> → the routed default.
+ * An override naming a retired or unknown model is ignored (warned once); a
+ * retired legacy env var is ignored (warned once).
  */
 export function resolveModel(purpose: AiPurpose): string {
   const fallback = DEFAULT_MODELS[purpose]
@@ -216,28 +202,19 @@ export function resolveModel(purpose: AiPurpose): string {
     throw new Error(`Routed model for "${purpose}" (${fallback}) is retired or unknown — update the catalog in lib/ai/models.ts.`)
   }
 
-  const candidates: Array<{ key: string; value: string | undefined; legacy: boolean }> = [
-    { key: envKeyFor(purpose), value: process.env[envKeyFor(purpose)], legacy: false },
-    ...(LEGACY_ENV[purpose] ?? []).map((key) => ({ key, value: process.env[key], legacy: true })),
-  ]
-  for (const c of candidates) {
-    const value = c.value?.trim()
-    if (!value) continue
-    if (RETIRED_MODELS.has(value)) {
-      warnOnce(`${c.key}:${value}`, `${c.key}="${value}" is retired; using ${fallback} for ${purpose}. Update the env var to a current model id.`)
-      continue
-    }
-    if (!KNOWN_MODELS[value]) {
-      warnOnce(`${c.key}:${value}`, `${c.key}="${value}" is not a model the AI gateway knows (no price/config); using ${fallback} for ${purpose}. Add it to lib/ai/models.ts + ai_model_prices first.`)
-      continue
-    }
-    if (c.legacy) {
-      warnOnce(`legacy:${c.key}`, `${c.key} is deprecated — set ${envKeyFor(purpose)} instead (still honoured for ${purpose}).`)
-    }
-    return value
+  for (const key of LEGACY_ENV_KEYS) {
+    if (process.env[key]?.trim()) warnOnce(`legacy:${key}`, `${key} is retired and ignored since Phase 4 — models are routed per purpose; pin one with AI_MODEL_<PURPOSE> (e.g. ${envKeyFor(purpose)}).`)
   }
-  if (purpose === 'portal_chat' && process.env.PORTAL_CHAT_MODEL?.trim()) {
-    warnOnce('portal_chat:legacy', `PORTAL_CHAT_MODEL is ignored for portal_chat since Phase 1 (routed, not pinned); set ${envKeyFor('portal_chat')} to override.`)
+  const key = envKeyFor(purpose)
+  const value = process.env[key]?.trim()
+  if (value) {
+    if (RETIRED_MODELS.has(value)) {
+      warnOnce(`${key}:${value}`, `${key}="${value}" is retired; using ${fallback} for ${purpose}. Update the env var to a current model id.`)
+    } else if (!KNOWN_MODELS[value]) {
+      warnOnce(`${key}:${value}`, `${key}="${value}" is not a model the AI gateway knows (no price/config); using ${fallback} for ${purpose}. Add it to lib/ai/models.ts + ai_model_prices first.`)
+    } else {
+      return value
+    }
   }
   return fallback
 }

@@ -470,6 +470,46 @@ meeting the capability, ties to the faster. **Consequences (recorded):**
   `verify-portal-phase3.js` on a stub 360, `verify-weekly-plan.js`,
   `verify-ai-gateway.js` (51), tsc, lint, `next build`, 071 up/down/re-up.
 
+### Phase 4 — shipped 2026-09-19 (cost cockpit; no migration)
+
+- **Admin page `/command-center/ai-costs`** (+ pulse card and header link on
+  the Command Center): month-to-date spend by feature / model / coach /
+  client, % of every enabled cap (org ceiling, per-client, per-feature),
+  top-10 clients with **invoiced revenue this month** beside assistant spend
+  (and spend ÷ revenue), request counts with failed / open, the portal-chat
+  cache-read ratio against the 60 % target, and a straight-line month-end
+  projection. Month stepper for history. `GET /api/admin/ai-costs`.
+- **Coach view** = the dashboard / Business Center card `ai-costs`
+  ("Assistant usage"): their own clients' portal usage and cap state only,
+  scoped by `coach_clients` (`GET /api/ai-costs`). Opt-in via "+ Add card".
+- **Revenue join, as built:** invoiced income (issued invoices, income date =
+  paid → sent → created, in the UTC month) attributed through
+  `invoice_lines.coachee_id`. Not the session-fee estimate the dashboard
+  revenue cards project, and account-level lines with no coachee are left
+  out — so a retainer billed to an enterprise account without per-coachee
+  lines shows no revenue against its coachees. Recorded, not fixed: the
+  billing run already writes coachee lines for sessions, which is the common
+  case.
+- **Reconciliation** = `scripts/reconcile-ai-costs.js` (ledger by model;
+  `--csv` a Console usage export matched by column name; `--invoice` the
+  month's total; ±5 % → exit 0/1). **The ±5 % validation itself is Jeff's to
+  run after a full billing cycle** — the first complete month on the ledger is
+  October 2026 (069 landed 2026-09-19). What can legitimately differ is
+  listed in the script header (open reservations, refused calls, price lag,
+  the Console's timezone).
+- **Legacy env vars retired** (the file plan's Phase 4 item): `SCORING_MODEL`,
+  `SUGGEST_MODEL`, `GENERATE_MODEL`, `GOALS_MODEL`, `NUDGE_MODEL`,
+  `PLAN_SESSION_MODEL`, `TITLE_MODEL`, `PORTAL_CHAT_MODEL` are ignored with
+  one warning. **Action for Jeff:** delete them from Vercel; if any purpose
+  must stay pinned, set `AI_MODEL_<PURPOSE>`.
+- **Not built (deliberately, per the brief's non-goals):** per-coach budgets,
+  a cost-vs-revenue chart over time, CSV export of the cockpit, the Admin
+  API cost-report pull (the Console export + invoice total cover the ±5 %
+  check without a second credential).
+- **Not verified here:** the pages in a browser (typecheck + build only); a
+  ledger with real rows (no database) — the arithmetic is covered by the
+  36-check spike and the loaders mirror the SQL functions' scope rules.
+
 ### File plan (Phases 1–4; stop-and-confirm between each)
 
 **Phase 1 — gateway + models + ledger.**
@@ -543,11 +583,14 @@ summary, upload fit, `count_tokens` verify, cache-controlled blocks),
 `client_snapshots` cache and an `ai_usage.slices` column were not needed
 (reasoning above).
 
-**Phase 4 — cockpit.** `app/(authenticated)/command-center/ai-costs/page.tsx`
-(supervisor), `app/api/admin/ai-costs/route.ts` (MTD by org/feature/client/
-model, % of cap, cost vs `billing` revenue join, top 10), a coach-scoped
-`app/api/ai-costs/route.ts` + dashboard card, reconciliation script against
-the Console CSV export.
+**Phase 4 — cockpit (shipped; see the status above).**
+`lib/ai/costs-math.ts` + `lib/ai/costs.ts`, `app/(authenticated)/command-
+center/ai-costs/page.tsx` + `AiCostsPulseCard.tsx`, `app/api/admin/ai-costs/
+route.ts`, `app/api/ai-costs/route.ts`, `components/dashboard/cards/
+AiCostsCard.tsx` + `lib/dashboard/useAiCostsData.ts` (registered on the
+dashboard and Business Center), `scripts/reconcile-ai-costs.js`,
+`scripts/spikes/verify-ai-costs.js`; legacy env fallbacks removed from
+`lib/ai/models.ts`.
 
 ### Deferred / logged (with reasoning)
 - **Batch API for existing features** — scoring, growth pass, nudge extract

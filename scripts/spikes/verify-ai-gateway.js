@@ -71,17 +71,17 @@ withEnv({ AI_MODEL_SCORING: 'claude-opus-5' }, () => {
   check('AI_MODEL_<PURPOSE> override wins (pins a model)', models.resolveModel('scoring') === 'claude-opus-5')
 })
 withEnv({ AI_MODEL_SCORING: 'claude-opus-5', SCORING_MODEL: 'claude-opus-4-8' }, () => {
-  check('AI_MODEL_SCORING beats legacy SCORING_MODEL', models.resolveModel('scoring') === 'claude-opus-5')
+  check('AI_MODEL_SCORING wins; retired SCORING_MODEL ignored', models.resolveModel('scoring') === 'claude-opus-5')
 })
 withEnv({ SCORING_MODEL: 'claude-opus-4-8' }, () => {
-  check('legacy SCORING_MODEL still honoured for scoring (even a non-routable model)', models.resolveModel('scoring') === 'claude-opus-4-8')
-  check('legacy SCORING_MODEL still honoured for scoring_suggest (old chain)', models.resolveModel('scoring_suggest') === 'claude-opus-4-8')
+  check('retired SCORING_MODEL no longer pins scoring (Phase 4) → routed model', models.resolveModel('scoring') === 'claude-sonnet-5')
+  check('retired SCORING_MODEL no longer pins scoring_suggest → routed model', models.resolveModel('scoring_suggest') === 'claude-sonnet-5')
 })
 withEnv({ SUGGEST_MODEL: 'claude-sonnet-4-6', SCORING_MODEL: 'claude-opus-4-8' }, () => {
-  check('SUGGEST_MODEL beats SCORING_MODEL for growth_pass (old precedence)', models.resolveModel('growth_pass') === 'claude-sonnet-4-6')
-  check('scoring itself ignores SUGGEST_MODEL', models.resolveModel('scoring') === 'claude-opus-4-8')
+  check('retired SUGGEST_MODEL no longer pins growth_pass → routed model', models.resolveModel('growth_pass') === 'claude-sonnet-5')
+  check('scoring routed regardless of retired keys', models.resolveModel('scoring') === 'claude-sonnet-5')
 })
-withEnv({ SCORING_MODEL: 'claude-sonnet-4-20250514' }, () => {
+withEnv({ AI_MODEL_SCORING: 'claude-sonnet-4-20250514' }, () => {
   check('retired override ignored → routed model', models.resolveModel('scoring') === 'claude-sonnet-5')
 })
 withEnv({ AI_MODEL_SCORING: 'claude-made-up-9' }, () => {
@@ -89,7 +89,7 @@ withEnv({ AI_MODEL_SCORING: 'claude-made-up-9' }, () => {
 })
 withEnv({ PORTAL_CHAT_MODEL: 'claude-sonnet-4-6' }, () => {
   check('PORTAL_CHAT_MODEL does NOT move portal_chat off its routed model', models.resolveModel('portal_chat') === 'claude-opus-5')
-  check('PORTAL_CHAT_MODEL still configures the weekly-plan extraction', models.resolveModel('portal_weekly_plan_extract') === 'claude-sonnet-4-6')
+  check('PORTAL_CHAT_MODEL no longer configures the weekly-plan extraction (Phase 4) → routed model', models.resolveModel('portal_weekly_plan_extract') === 'claude-haiku-4-5-20251001')
 })
 withEnv({ AI_MODEL_PORTAL_CHAT: 'claude-sonnet-5' }, () => {
   check('AI_MODEL_PORTAL_CHAT overrides portal_chat', models.resolveModel('portal_chat') === 'claude-sonnet-5')
