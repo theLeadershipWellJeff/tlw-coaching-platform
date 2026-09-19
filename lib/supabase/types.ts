@@ -967,7 +967,7 @@ export type AiBudgetStatus = {
  * any nullable column is optional too (Postgres fills NULL). Everything else
  * is required.
  */
-type Defaulted = 'id' | 'created_at' | 'updated_at' | 'sent_at' | 'reserved_usd_micros' | 'soft_pct' | 'enabled' | 'effective_from' | 'threshold' | 'agreement_on_file' | 'client_type' | 'org_id' | 'portal_onboarded' | 'failed_attempts' | 'first_seen_at' | 'last_seen_at' | 'portal_features' | 'seats_purchased' | 'status' | 'version' | 'is_active' | 'extraction_status' | 'visible_to_coach' | 'include_in_chat' | 'mode' | 'tasks' | 'body' | 'state' | 'subject_type' | 'digest_count' | 'started_at'
+type Defaulted = 'id' | 'created_at' | 'updated_at' | 'sent_at' | 'reserved_usd_micros' | 'soft_pct' | 'enabled' | 'effective_from' | 'threshold' | 'history_summary_through' | 'agreement_on_file' | 'client_type' | 'org_id' | 'portal_onboarded' | 'failed_attempts' | 'first_seen_at' | 'last_seen_at' | 'portal_features' | 'seats_purchased' | 'status' | 'version' | 'is_active' | 'extraction_status' | 'visible_to_coach' | 'include_in_chat' | 'mode' | 'tasks' | 'body' | 'state' | 'subject_type' | 'digest_count' | 'started_at'
 type NullableKeys<T> = { [K in keyof T]-?: null extends T[K] ? K : never }[keyof T]
 type OptionalOnInsert<T> = Defaulted | Extract<keyof T, NullableKeys<T>>
 
@@ -999,6 +999,12 @@ export type PortalConversation = {
   // 'general' = the reflection chat; 'weekly_plan' = a Plan-your-week thread
   // that runs under the weekly_plan brief (migration 061). Default 'general'.
   mode: PortalChatMode
+  // Context budgeter (migration 071): a summary of the turns older than the
+  // verbatim window, and how many messages (oldest first) it covers. Read
+  // defensively — pre-071 older turns are dropped instead of summarised.
+  history_summary?: string | null
+  history_summary_through?: number
+  history_summary_at?: Timestamp | null
   created_at: Timestamp
   updated_at: Timestamp
 }

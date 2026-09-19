@@ -31,6 +31,8 @@ import { checkOrgAlerts } from './alerts'
 export type { AiPrincipal }
 export type AiMessageStream = ReturnType<Anthropic['messages']['stream']>
 export type AiMessage = Anthropic.Message
+/** A system-prompt block (with optional cache_control) — callers outside lib/ai use this instead of the SDK type. */
+export type AiTextBlock = Anthropic.TextBlockParam
 
 export type AiCallMeta = {
   purpose: AiPurpose

@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPortalClientId } from '@/lib/portal/server'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
-import { buildChatContext, streamChatReply, type ChatAttribution, type ChatContextMeta, type ChatMsg } from '@/lib/portal/chat'
+import { streamChatReply } from '@/lib/portal/chat'
+import { buildChatRequest, type ChatRequest, type StoredMessage } from '@/lib/portal/context'
 import { AiBudgetExceededError, budgetStatus, pausedMessage } from '@/lib/ai/budget'
 import { notifyClientCap } from '@/lib/ai/alerts'
 import { portalChatEnabled, portalChatOffMessage } from '@/lib/ai/portal-gate'
+import { resolveModel } from '@/lib/ai/models'
 import type { PortalFeatures } from '@/lib/supabase/types'
 import { checkPortalRateLimit, logPortalAccess } from '@/lib/portal/access'
 import { logPortalEvent } from '@/lib/portal/events'
@@ -156,29 +158,36 @@ export async function POST(req: NextRequest) {
     .from('portal_messages')
     .insert({ conversation_id: conversationId, org_id: client.org_id, role: 'user', content: persistedContent })
 
+  // The whole thread, oldest first, current message included. The request
+  // builder keeps the last turns verbatim and summarises the rest (Phase 3),
+  // so the model never sees the thread grow unbounded.
   const { data: history } = await supabase
     .from('portal_messages')
     .select('role, content')
     .eq('conversation_id', conversationId)
     .order('created_at', { ascending: true })
-    .limit(40)
-  const msgs: ChatMsg[] = (history || []).map((m) => ({
+    .limit(400)
+  const stored: StoredMessage[] = (history || []).map((m) => ({
     role: m.role === 'assistant' ? 'assistant' : 'user',
     content: m.content,
   }))
-  if (attachment && msgs.length) {
-    const last = msgs[msgs.length - 1]
-    last.content = `${last.content}\n\n[Attached document "${attachment.filename}"]:\n${attachment.text}`
-  }
 
   await logPortalAccess(clientId, 'chat', { detail: conversationId ?? undefined })
 
-  let system: string
-  let meta: ChatContextMeta = {}
-  let attribution: ChatAttribution
+  let request: ChatRequest
   try {
-    // The current question drives retrieval across the client's whole history.
-    ;({ system, meta, attribution } = await buildChatContext(clientId, content, mode))
+    // Loads the client's parts, the excerpts for THIS question, the history
+    // window + summary, fits the upload, and verifies the total with count_tokens
+    // — counted under the model that will actually answer.
+    request = await buildChatRequest({
+      clientId,
+      conversationId,
+      mode,
+      content,
+      attachment,
+      stored,
+      model: degraded ? resolveModel('portal_degraded') : undefined,
+    })
   } catch (e) {
     console.error('portal chat context failed:', e)
     return NextResponse.json(
@@ -186,6 +195,7 @@ export async function POST(req: NextRequest) {
       { status: 502 }
     )
   }
+  const { system, messages: msgs, meta, attribution, slices, note } = request
 
   // Outcomes instrumentation (portal_events) — never blocks the reply.
   if (isNewConversation) await logPortalEvent(clientId, 'chat_started', { conversation_id: conversationId, ...meta })
@@ -205,7 +215,7 @@ export async function POST(req: NextRequest) {
     async start(controller) {
       let full = ''
       try {
-        for await (const delta of streamChatReply(system, msgs, attribution, mode, { degraded })) {
+        for await (const delta of streamChatReply(system, msgs, attribution, mode, { degraded, slices })) {
           full += delta
           controller.enqueue(encoder.encode(delta))
         }
@@ -248,6 +258,8 @@ export async function POST(req: NextRequest) {
       'Cache-Control': 'no-cache, no-transform',
       'X-Conversation-Id': conversationId,
       'X-Conversation-Mode': mode,
+      // A trimmed upload is said plainly to the client (URI-encoded: header values are ASCII).
+      ...(note ? { 'X-Context-Note': encodeURIComponent(note) } : {}),
     },
   })
 }

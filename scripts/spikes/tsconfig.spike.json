@@ -35,6 +35,7 @@
     "../../lib/notes/narrative-format.ts",
     "../../lib/notes/status.ts",
     "../../lib/ai/models.ts",
-    "../../lib/ai/pricing.ts"
+    "../../lib/ai/pricing.ts",
+    "../../lib/ai/context-budget.ts"
   ]
 }

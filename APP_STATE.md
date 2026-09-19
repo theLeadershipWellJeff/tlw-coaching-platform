@@ -386,7 +386,7 @@ meeting the capability, ties to the faster. **Consequences (recorded):**
 - Haiku 4.5's retirement (not before 2026-10-15): when it goes, mark it
   non-routable and light tasks fall to Sonnet 5 at `low` automatically.
 
-### Phase 2 — shipped 2026-09-19 (budget enforcement; migration 070 PENDING)
+### Phase 2 — shipped 2026-09-19 (budget enforcement; migration 070 APPLIED, confirmed by Jeff 2026-09-19)
 
 - **Atomic reserve** in Postgres (`ai_reserve`, per-org advisory lock, every
   scope summed in the same transaction) — proven by
@@ -415,6 +415,60 @@ meeting the capability, ties to the faster. **Consequences (recorded):**
 - **Deferred**: coach-side feature cap number (none enabled); per-coach
   budgets; the Console spend limit; Batch API for scoring/nudges (50 % off,
   fire-and-forget already — first post-Phase-4 option).
+
+### Phase 3 — shipped 2026-09-19 (portal context budgeter; migration 071 PENDING)
+
+- **Fixed slices under a 40k-token ceiling** (`lib/ai/context-budget.ts`,
+  pure; `lib/portal/context.ts` loads + fits + verifies): system ≤ 12k
+  (cached 1h, cross-client) · snapshot ≤ 6k (cached 5m, per client) · memory
+  ≤ 2k (reserved, empty) · excerpts ≤ 10k · history ≤ 6k · current ≤ 6k.
+  Drop order over the ceiling: excerpts → history → snapshot; system never.
+  `max_tokens` 4,000 incl. thinking; effort `medium` (unchanged from the
+  route). Slice figures + the `count_tokens` measurement on every ledger row
+  (`ai_usage.metadata.slices`).
+- **Deviation, recorded:** the brief's system slice was 3k. The preamble
+  alone fits 3k, but the practice's briefs (rubrics/02 `portal_chat` ≈ 3–4k,
+  the 360 interpretation brief ≈ 6k) are system material and the brief says
+  nothing about shrinking them, so the slice is 12k. It is the cached prefix
+  (0.1× after the first turn), so the cost effect is small; shrinking the
+  briefs is Jeff's call, not the budgeter's.
+- **Never a full transcript.** Excerpts = the newest 2 sessions' openings
+  (2.5k chars each) + ≤ 12 ranked passages (`portal_chat_context`, `p_limit`
+  12). Before: 4 sessions × 6k chars + 24k chars of passages + up to 40
+  verbatim turns in the system string, re-sent uncached every message.
+- **History:** last 6 turns verbatim; older turns summarised once per batch
+  of ≥ 4 by `background_compact` (Haiku, client principal, feature
+  `portal_chat:summary`, ≤ 600 output tokens) and persisted (071). Pre-071
+  the summary is not attempted (a call whose result cannot be kept would
+  repeat every message) — older turns fall off instead.
+- **Cache layout:** the client's name moved out of the preamble into the
+  snapshot ("WHO YOU ARE TALKING WITH") so the prefix is byte-identical for
+  every client of the org; rubrics/02 v1.3 records the layer-order change.
+  Known edge: with NO active `portal_chat` brief the plain prefix (~700
+  tokens) is under Sonnet 5's 1024-token cache minimum, so on the degraded
+  model only the snapshot breakpoint caches. Production has the brief active.
+- **Upload trimming** is said to the client (`X-Context-Note` → a muted line
+  under the reply) and to the model (a bracketed marker on the message).
+- **Not built (deliberately):** the file plan's `client_snapshots` cache
+  table — the snapshot is rebuilt from source each turn (the loaders are a
+  handful of indexed reads) and cached at the API for 5 min, which is the
+  cache that matters for cost; a stored snapshot would add invalidation for
+  no token saving. The memory slice stays reserved. No per-message
+  `ai_usage.slices` column — the figures ride in the existing `metadata`
+  jsonb (no migration needed for them).
+- **Validate after the first day of real traffic** (needs 071 + a warm cache):
+  `select sum(cache_read_tokens)::float / nullif(sum(input_tokens +
+  cache_read_tokens + cache_write_tokens), 0) from ai_usage where purpose =
+  'portal_chat' and status = 'settled'` → expect > 0.6; and
+  `select metadata->'slices'->>'total', metadata->'slices'->>'measured' from
+  ai_usage where purpose = 'portal_chat' order by created_at desc limit 20`
+  → measured ≤ 40000 on every row. If the measured count runs well above the
+  estimate, the 3.1 chars/token figure in `lib/ai/models.ts` is what to tune.
+- **Not verified here:** a live streamed reply through the block-typed
+  system (no API key); the `count_tokens` call; the chat page's note line in
+  a browser. Verified: 23 budgeter checks, the prompt-order assertions of
+  `verify-portal-phase3.js` on a stub 360, `verify-weekly-plan.js`,
+  `verify-ai-gateway.js` (51), tsc, lint, `next build`, 071 up/down/re-up.
 
 ### File plan (Phases 1–4; stop-and-confirm between each)
 
@@ -479,17 +533,15 @@ default OFF for ZF participants (flag read in `page.tsx` + chat route),
 `scripts/spikes/verify-ai-budget-concurrency.js` (N concurrent reserves at a
 near-exhausted cap → exactly the affordable count succeed; real Postgres).
 
-**Phase 3 — context budgeter.** `lib/ai/context-budget.ts` (slices in the
-brief's order with per-slice token caps, drop order excerpts → history →
-snapshot, 40k hard ceiling, effort `medium`, `max_tokens` 4000 incl.
-thinking), `lib/portal/chat.ts` rebuilt on it (stable prefix = system +
-snapshot with `cache_control`; retrieval and history move OUT of the system
-string into the messages array so the prefix caches), a
-`client_snapshots`-style cache for slice 2 (rebuilt on source change —
-column on `clients` or a small table, decided then), Haiku summarisation of
-turns older than 6 (`background_compact`), upload truncation notice, slice
-sizes logged to `ai_usage.slices` jsonb (added in the Phase 3 migration),
-`scripts/spikes/verify-context-budget.js`.
+**Phase 3 — context budgeter (shipped; see the status above).**
+`lib/ai/context-budget.ts` (slices, drop order, 40k ceiling, 4000 output),
+`lib/portal/context.ts` (loaders + `buildChatRequest`: excerpts, history
+summary, upload fit, `count_tokens` verify, cache-controlled blocks),
+`lib/portal/prompt.ts` split into `{prefix, snapshot, tail}`,
+`lib/portal/chat.ts` on the parts, the chat route + page, migration 071
+(history summary), `scripts/spikes/verify-context-budget.js`. The
+`client_snapshots` cache and an `ai_usage.slices` column were not needed
+(reasoning above).
 
 **Phase 4 — cockpit.** `app/(authenticated)/command-center/ai-costs/page.tsx`
 (supervisor), `app/api/admin/ai-costs/route.ts` (MTD by org/feature/client/

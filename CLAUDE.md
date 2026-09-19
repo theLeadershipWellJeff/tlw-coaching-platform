@@ -1898,12 +1898,12 @@ in a 2-column grid under `sm`, nothing hover-dependent. The 375 px check was
 done by inspection of the classes, not in a browser — verify on a phone after
 deploy.
 
-## AI gateway, model routing, usage ledger & budget enforcement (2026-09-18/19; migrations 069–070) — cost-controls brief, Phases 1–2
+## AI gateway, model routing, usage ledger, budget enforcement & context budgeter (2026-09-18/19; migrations 069–071) — cost-controls brief, Phases 1–3
 
 Brief: "AI Cost Controls, Model Routing & Context Budgeting" (Jeff, 2026-09-18;
 Phase 0 audit + file plan in `APP_STATE.md`). Four phases, confirmed one at a
-time. **Phase 1 (gateway + ledger) and Phase 2 (enforcement) shipped.** Phase 3
-(context budgeter) and Phase 4 (cockpit) follow on Jeff's go.
+time. **Phase 1 (gateway + ledger), Phase 2 (enforcement) and Phase 3 (the
+portal context budgeter) shipped.** Phase 4 (cockpit) follows on Jeff's go.
 
 - **No purpose hard-codes a model — `lib/ai/models.ts` routes by the nature
   of the problem.** Each purpose declares a `TaskProfile` (`reasoning`
@@ -1991,6 +1991,49 @@ time. **Phase 1 (gateway + ledger) and Phase 2 (enforcement) shipped.** Phase 3
 - **Cron `GET /api/cron/ai-budget`** (hourly, `CRON_SECRET`, `cronHandler`):
   `ai_release_stale(15)` releases reservations older than 15 min (a killed
   function) so they stop counting at worst case, then the org alert sweep.
+- **Context budgeter — the portal chat is assembled in fixed slices under a
+  40k-token ceiling (Phase 3; `lib/ai/context-budget.ts`, pure, +
+  `lib/portal/context.ts#buildChatRequest`, the loaders).** Slices, each with
+  its own token budget: **system ≤ 12k** (the cross-client prefix: preamble
+  WITHOUT the client's name + `PORTAL_CHAT_VOICE_STANDARDS` + the active
+  `portal_chat` brief + grounding rules + the 360 brief + company context;
+  the brief's 3k target covered the preamble alone — the practice's briefs
+  live here, hence 12k), **snapshot ≤ 6k** (this client: "WHO YOU ARE TALKING
+  WITH" + human route + 360 status, structured 360 + verbatims, goals, their
+  documents, My notes, sent notes), **memory ≤ 2k** (reserved, always
+  empty), **excerpts ≤ 10k** (the newest 2 sessions' openings, 2.5k chars
+  each, + up to 12 `portal_chat_context` passages ranked against the
+  question — **never a full transcript**; whole items, most relevant first),
+  **history ≤ 6k** (the last 6 turns verbatim; older turns folded into a
+  running summary by `background_compact` (Haiku) once ≥ 4 sit outside it,
+  persisted on `portal_conversations.history_summary/_through/_at`
+  (migration 071) so the same turns are never summarised twice — pre-071 no
+  summary is written and older turns simply fall off), **current ≤ 6k** (the
+  message + the upload, trimmed by `fitAttachment` with a client-facing
+  note returned on the `X-Context-Note` response header and shown under the
+  reply). Over the ceiling → drop **excerpts → history → snapshot**; the
+  system slice is never dropped. `lib/portal/prompt.ts#composeChatSystemParts`
+  / `composeWeeklyPlanParts` produce `{prefix, snapshot, tail}` (the joined
+  `composeChatSystem` / `composeWeeklyPlanSystem` wrappers are what the
+  spikes assert on — the layer order is unchanged except the client line,
+  which now follows the company context so the prefix is identical for every
+  client of the org). Sent as three system blocks: prefix `cache_control`
+  ephemeral **1h**, snapshot ephemeral **5m**, tail (summary + excerpts)
+  uncached; the API's minimum cacheable prefix is 512 tokens on Opus 5 /
+  1024 on Sonnet 5 — the plain prefix is ~700 tokens, so with NO active
+  `portal_chat` brief the 1h breakpoint only takes on Opus 5 (the snapshot
+  breakpoint's cumulative prefix still caches). Before the call
+  `aiCountTokens` measures the assembled request and, if over the ceiling,
+  the variable slices are scaled down and re-fitted (two rounds). Output cap
+  **4,000 tokens including thinking** (`CONTEXT_BUDGET.MAX_OUTPUT_TOKENS`,
+  effort `medium` from the route). Per-request slice figures + the measured
+  count land in `ai_usage.metadata.slices`. Cache-read ratio (target > 60 %
+  after warm-up): `select sum(cache_read_tokens)::float / nullif(sum(input_
+  tokens + cache_read_tokens + cache_write_tokens), 0) from ai_usage where
+  purpose = 'portal_chat' and status = 'settled'`. Verify:
+  `node scripts/spikes/verify-context-budget.js` (23 checks: clipping,
+  upload note, whole-item excerpts, newest-first history, ceiling drop order,
+  system never dropped).
 - **Build gate.** `scripts/check-ai-imports.sh` runs as `prebuild` and fails
   on any `@anthropic-ai/sdk` import outside `lib/ai/**`; ESLint
   `no-restricted-imports` mirrors it. `scripts/spikes/**` exempt.
@@ -2002,7 +2045,8 @@ time. **Phase 1 (gateway + ledger) and Phase 2 (enforcement) shipped.** Phase 3
 - **SDK `^0.127.0`** (was `^0.24.3`, which predated every parameter above).
 - Verify: `node_modules/.bin/tsc -p scripts/spikes/tsconfig.spike.json && node
   scripts/spikes/verify-ai-gateway.js` (51 checks: routing, overrides, effort,
-  allowance, price math) and, against a real Postgres, `PG=env PG*=… node
+  allowance, price math), `node scripts/spikes/verify-context-budget.js`
+  (23 checks) and, against a real Postgres, `PG=env PG*=… node
   scripts/spikes/verify-ai-budget-concurrency.js` (20 checks: 20 concurrent
   reserves at a nearly exhausted cap → exactly the affordable one passes; soft/
   hard states; coach calls never touch the client cap; Extend; participant $3;
@@ -2881,9 +2925,20 @@ nothing can double-send in a gap). Verified up → down → re-up on Postgres 16
 CAS semantics (two claims → one winner; stale claim re-claimable; sent note
 never claimable). Reversible via `068_note_send_claim_down.sql`.
 
-**`070_ai_budget_enforcement.sql` — PENDING (apply before merging the Phase 2
-PR; the gateway refuses every AI call with "apply migration 070" until it is
-in).** Adds `ai_alerts` and the functions `ai_resolve_cap`, `ai_month_spend`,
+**`071_portal_history_summary.sql` — PENDING (apply with the Phase 3 deploy;
+the chat runs without it — older turns then drop instead of being
+summarised).** Adds `portal_conversations.history_summary` (text),
+`history_summary_through` (integer, default 0 — how many of the thread's
+messages, oldest first, the summary covers) and `history_summary_at`. The
+portal chat sends only the last 6 turns verbatim; the running summary of the
+older ones is written once per batch by the light background model and kept
+here, so a long thread never re-summarises the same turns. Additive; reads
+are defensive (a select error = unavailable = no summary written). Verified
+up → down → re-up + idempotent re-run on Postgres 16. Reversible via
+`071_portal_history_summary_down.sql`.
+
+**`070_ai_budget_enforcement.sql` — APPLIED (production, confirmed by Jeff
+2026-09-19).** Adds `ai_alerts` and the functions `ai_resolve_cap`, `ai_month_spend`,
 `ai_reserve` (the atomic check-and-insert every model call now goes through),
 `ai_budget_status`, `ai_release_stale`; ENABLES the three caps 069 seeded
 (org $500 · client $10 · portal participant $3). Additive. Verified up →

@@ -1,20 +1,34 @@
 /**
  * Pure composition of the Client Portal chat system prompt.
  *
- * Layered outermost to innermost (build prompt §6):
- *   1. the portal role preamble
+ * Layered outermost to innermost (build prompt §6), in THREE PARTS so the
+ * context budgeter (lib/ai/context-budget.ts, cost-controls Phase 3) can
+ * cache what is stable and keep what changes per turn out of the cache:
+ *
+ *   PREFIX — identical for every client of the org (cached 1 h):
+ *   1. the portal role preamble (no client name — that is snapshot material)
  *   2. PORTAL_CHAT_VOICE_STANDARDS (house rule)
  *   2b. the active `portal_chat` coaching-conversation brief, when one exists
  *   3. assessment grounding rules (the non-negotiable floor) + the ACTIVE
- *      interpretation brief for the document kind
+ *      interpretation brief for the document kind (only with a report)
  *   4. company vision & values — OMITTED ENTIRELY when the client has none
- *   5. the most recent assessment's structured data (+ its comparison block)
- *   6. the verbatim sections
- *   7. goals, sent notes, sessions — each omitted when empty (a portal-only
- *      participant never sees "no sessions on file" in their prompt)
  *
- * Kept free of I/O so scripts/spikes/verify-portal-phase3.js can assert the
- * order, the omissions, and that nothing coach-private is ever mentioned.
+ *   SNAPSHOT — this client's standing material (cached 5 min):
+ *   5. who they are + where "talk to a human" points + a 360 status line
+ *   6. the most recent assessment's structured data (+ its comparison block)
+ *      and the verbatim sections
+ *   7. goals, their documents, their own notes, sent notes — each omitted
+ *      when empty (a portal-only participant never sees "no sessions on
+ *      file" in their prompt)
+ *
+ *   TAIL — per question, never cached: recent-session openings and the
+ *   passages retrieved for THIS question.
+ *
+ * `composeChatSystem` joins the three in order (what the spikes assert on);
+ * the chat builder uses `composeChatSystemParts` and sends them as separate
+ * cache-controlled blocks. Kept free of I/O so
+ * scripts/spikes/verify-portal-phase3.js can assert the order, the
+ * omissions, and that nothing coach-private is ever mentioned.
  */
 import type { Assessment360Data } from '../documents/assessment-360/types'
 import type { CoachingGoal } from '../supabase/types'
@@ -101,36 +115,51 @@ export function formatAssessmentForPrompt(data: Assessment360Data): { structured
   return { structured, verbatims: parts.join('\n\n') }
 }
 
-export function composeChatSystem(p: PromptParts): string {
-  const { clientName } = p
-  const sections: string[] = []
+export type SystemPromptParts = {
+  /** Cross-client, stable for the org: preamble, standards, briefs, company. */
+  prefix: string
+  /** This client's standing material: identity, 360, goals, documents, notes. */
+  snapshot: string
+  /** Per-question material: recent sessions + retrieved passages. */
+  tail: string
+}
 
-  // 1. Preamble
-  sections.push(`You are a warm, insightful coaching assistant for ${clientName}, a client of theLeadershipWell coaching practice. You help them reflect between sessions, drawing on their own material below.
+/**
+ * The preamble is deliberately client-agnostic so the cached prefix is shared
+ * across every client of the org; the client's name and human route follow in
+ * the snapshot ("WHO YOU ARE TALKING WITH").
+ */
+const CHAT_PREAMBLE = `You are a warm, insightful coaching assistant for a client of theLeadershipWell coaching practice (who they are is stated below). You help them reflect between sessions, drawing on their own material below.
 
 Guidelines:
-- Be supportive, concise, and reflective. Ask thoughtful questions that help ${clientName} think for themselves rather than just giving answers.
+- Be supportive, concise, and reflective. Ask thoughtful questions that help them think for themselves rather than just giving answers.
 - Ground responses in their material when relevant; refer to specifics from it.
 - When you draw on a specific session, set of notes, or report section, say which one (by date or title) so they can go read it themselves.
-- ${humanRouteLine(p.hasCoach)}
 - Never invent facts. If something isn't in the material below, say you don't have it. The material below is a relevant selection, not their complete history — if they ask about something you can't see, say so.
 - How material reaches you: anything they add under "Your documents" on their portal home page is read and included here (a 360 feedback report is read in full as structured data; other documents as text). The paperclip in this chat attaches a file to the current conversation only. You cannot receive files yourself — if they say they uploaded something you cannot see, say what you can see and point them to "Your documents" on their home page rather than to their coach.
-- Keep a natural, encouraging tone. No clinical or diagnostic language.`)
+- Keep a natural, encouraging tone. No clinical or diagnostic language.`
+
+export function composeChatSystemParts(p: PromptParts): SystemPromptParts {
+  const { clientName } = p
+  const prefix: string[] = []
+  const snapshot: string[] = []
+  const tail: string[] = []
+
+  // ── PREFIX ────────────────────────────────────────────────────────────
+  // 1. Preamble (client-agnostic)
+  prefix.push(CHAT_PREAMBLE)
 
   // 2. Voice standards
-  sections.push(PORTAL_CHAT_VOICE_STANDARDS)
+  prefix.push(PORTAL_CHAT_VOICE_STANDARDS)
 
   // 2b. The coaching-conversation rubric (portal_chat brief), when one is active.
-  if (p.coachingBrief) sections.push(`COACHING CONVERSATION RUBRIC (${p.coachingBrief.slug} v${p.coachingBrief.version}):
+  if (p.coachingBrief) prefix.push(`COACHING CONVERSATION RUBRIC (${p.coachingBrief.slug} v${p.coachingBrief.version}):
 ${p.coachingBrief.body.trim()}`)
 
   // 3. Grounding rules + brief (only when an assessment is in play)
   if (p.assessment) {
-    sections.push(ASSESSMENT_GROUNDING_RULES)
-    if (p.brief) sections.push(`INTERPRETATION BRIEF (${p.brief.slug} v${p.brief.version}):\n${p.brief.body.trim()}`)
-  } else if (p.assessmentStatus) {
-    // A 360 exists but is not surfaced — say the true state, never "no report".
-    sections.push(`THEIR 360 REPORT — STATUS: ${p.assessmentStatus}`)
+    prefix.push(ASSESSMENT_GROUNDING_RULES)
+    if (p.brief) prefix.push(`INTERPRETATION BRIEF (${p.brief.slug} v${p.brief.version}):\n${p.brief.body.trim()}`)
   }
 
   // 4. Company context — omitted entirely when absent
@@ -140,20 +169,27 @@ ${p.coachingBrief.body.trim()}`)
     if (p.company.vision) lines.push(`Vision: ${p.company.vision.trim()}`)
     if (p.company.values) lines.push(`Values: ${p.company.values.trim()}`)
     for (const d of companyDocs) lines.push(`\n## Company document: ${d.title}\n${d.text.trim()}`)
-    sections.push(lines.join('\n'))
+    prefix.push(lines.join('\n'))
   }
 
-  // 5 + 6. Structured data, then verbatims
+  // ── SNAPSHOT ──────────────────────────────────────────────────────────
+  // 5. Who they are + the human route (+ a 360 status line when the report
+  //    exists but is not surfaced — say the true state, never "no report").
+  const who = [`WHO YOU ARE TALKING WITH: ${clientName}.`, `- ${humanRouteLine(p.hasCoach)}`]
+  if (!p.assessment && p.assessmentStatus) who.push(`- THEIR 360 REPORT — STATUS: ${p.assessmentStatus}`)
+  snapshot.push(who.join('\n'))
+
+  // 6. Structured data, then verbatims
   if (p.assessment) {
     const { structured, verbatims } = formatAssessmentForPrompt(p.assessment.data)
     const count = p.assessment.assessmentCount
-    sections.push(
+    snapshot.push(
       `${clientName.toUpperCase()}'S MOST RECENT ASSESSMENT — STRUCTURED DATA (${p.assessment.data.instrument}, ${p.assessment.data.report_date}${count > 1 ? `; ${count} assessments on file, the most recent is given in full and its "comparison" block covers the change from the prior one` : ''}). The sole source of truth for every number:\n${structured}`
     )
-    if (verbatims) sections.push(`${clientName.toUpperCase()}'S ASSESSMENT — VERBATIM RATER COMMENTS (grouped by rater group only; individual raters are anonymous):\n${verbatims}`)
+    if (verbatims) snapshot.push(`${clientName.toUpperCase()}'S ASSESSMENT — VERBATIM RATER COMMENTS (grouped by rater group only; individual raters are anonymous):\n${verbatims}`)
   }
 
-  // 7. Goals, notes, sessions — omitted when empty
+  // 7. Goals, documents, notes — omitted when empty
   if (p.goals.length) {
     const goalsText = p.goals
       .map((g) => {
@@ -163,22 +199,30 @@ ${p.coachingBrief.body.trim()}`)
         return `- ${g.title}${g.description ? `: ${g.description}` : ''}${who}${prog}${metrics.length ? `\n  measures: ${metrics.join('; ')}` : ''}`
       })
       .join('\n')
-    sections.push(`${clientName.toUpperCase()}'S COACHING GOALS:\n${goalsText}`)
+    snapshot.push(`${clientName.toUpperCase()}'S COACHING GOALS:\n${goalsText}`)
   }
   const clientDocs = (p.clientDocuments || []).filter((d) => d.text.trim())
   if (clientDocs.length) {
-    sections.push(
+    snapshot.push(
       `DOCUMENTS ${clientName.toUpperCase()} ADDED TO THEIR PORTAL (their own material; refer to it by title when you draw on it):\n${clientDocs
         .map((d) => `## ${d.title}\n${d.text.trim()}`)
         .join('\n\n')}`
     )
   }
-  if (p.myNotes) sections.push(`NOTES ${clientName.toUpperCase()} WROTE FOR THEMSELVES IN THEIR PORTAL (their private journal — treat as their own current thinking; refer to a note by its title when you draw on it):\n${p.myNotes}`)
-  if (p.noteParts.length) sections.push(`SESSION NOTES ${clientName.toUpperCase()} RECEIVED FROM THEIR COACH:\n${p.noteParts.join('\n\n')}`)
-  if (p.recentParts.length) sections.push(`MOST RECENT SESSIONS:\n${p.recentParts.join('\n\n')}`)
-  if (p.retrievedParts.length) sections.push(`EARLIER SESSIONS AND NOTES RELEVANT TO THIS QUESTION:\n${p.retrievedParts.join('\n\n')}`)
+  if (p.myNotes) snapshot.push(`NOTES ${clientName.toUpperCase()} WROTE FOR THEMSELVES IN THEIR PORTAL (their private journal — treat as their own current thinking; refer to a note by its title when you draw on it):\n${p.myNotes}`)
+  if (p.noteParts.length) snapshot.push(`SESSION NOTES ${clientName.toUpperCase()} RECEIVED FROM THEIR COACH:\n${p.noteParts.join('\n\n')}`)
 
-  return sections.join('\n\n')
+  // ── TAIL ──────────────────────────────────────────────────────────────
+  if (p.recentParts.length) tail.push(`MOST RECENT SESSIONS:\n${p.recentParts.join('\n\n')}`)
+  if (p.retrievedParts.length) tail.push(`EARLIER SESSIONS AND NOTES RELEVANT TO THIS QUESTION:\n${p.retrievedParts.join('\n\n')}`)
+
+  return { prefix: prefix.join('\n\n'), snapshot: snapshot.join('\n\n'), tail: tail.join('\n\n') }
+}
+
+/** The whole prompt as one string (prefix → snapshot → tail). */
+export function composeChatSystem(p: PromptParts): string {
+  const parts = composeChatSystemParts(p)
+  return [parts.prefix, parts.snapshot, parts.tail].filter(Boolean).join('\n\n')
 }
 
 // ── Plan your week ──────────────────────────────────────────────────────────
@@ -216,12 +260,15 @@ const WEEKLY_PLAN_FLOOR = `You are a coach helping the person plan their week. A
  * empty. The 360's structured data is summarised, not dumped — a weekly plan
  * needs the development areas, not every item score.
  */
-export function composeWeeklyPlanSystem(p: WeeklyPlanPromptParts): string {
-  const sections: string[] = []
+export function composeWeeklyPlanParts(p: WeeklyPlanPromptParts): SystemPromptParts {
+  const prefix: string[] = []
+  const snapshot: string[] = []
   const name = p.clientName.toUpperCase()
-  sections.push(p.brief ? `${p.brief.body.trim()}` : WEEKLY_PLAN_FLOOR)
-  sections.push(PORTAL_CHAT_VOICE_STANDARDS)
-  sections.push(
+  // PREFIX — the brief IS the persona; shared by every client of the org.
+  prefix.push(p.brief ? `${p.brief.body.trim()}` : WEEKLY_PLAN_FLOOR)
+  prefix.push(PORTAL_CHAT_VOICE_STANDARDS)
+  // SNAPSHOT — the mechanics carry today's date and the person, so they sit here.
+  snapshot.push(
     `PORTAL MECHANICS:
 - Today is ${p.today}; this week began Monday ${p.weekStart}. "This week" means that week.
 - The person is in theLeadershipWell client portal. When the Top 5 is agreed, restate it once as a plain numbered list (1–5, one line each, imperative) and tell them they can press "Save this week's plan" to put it on their home page as a checklist. You cannot save it yourself.
@@ -238,16 +285,22 @@ export function composeWeeklyPlanSystem(p: WeeklyPlanPromptParts): string {
         return `- ${g.title}${g.description ? `: ${g.description}` : ''}${prog}${metrics.length ? `\n  measures: ${metrics.join('; ')}` : ''}`
       })
       .join('\n')
-    sections.push(`${name}'S COACHING GOALS (treat these as their Objectives; the measures as Key Results; progress is their own report):\n${goalsText}`)
+    snapshot.push(`${name}'S COACHING GOALS (treat these as their Objectives; the measures as Key Results; progress is their own report):\n${goalsText}`)
   }
-  if (!p.assessmentSummary && p.assessmentStatus) sections.push(`${name}'S 360 REPORT — STATUS: ${p.assessmentStatus}`)
-  if (p.assessmentSummary) sections.push(`${name}'S 360 DEVELOPMENT PICTURE (perception data from their most recent report — remind them of it in your first reply and use it to suggest where a week's effort compounds; describe and ask, never prescribe; never quote it as ability, never attribute to individual raters):\n${p.assessmentSummary}`)
+  if (!p.assessmentSummary && p.assessmentStatus) snapshot.push(`${name}'S 360 REPORT — STATUS: ${p.assessmentStatus}`)
+  if (p.assessmentSummary) snapshot.push(`${name}'S 360 DEVELOPMENT PICTURE (perception data from their most recent report — remind them of it in your first reply and use it to suggest where a week's effort compounds; describe and ask, never prescribe; never quote it as ability, never attribute to individual raters):\n${p.assessmentSummary}`)
   const docs = (p.clientDocuments || []).filter((d) => d.text.trim())
-  if (docs.length) sections.push(`DOCUMENTS ${name} ADDED TO THEIR PORTAL (their projects, plans, role material — refer to them by title):\n${docs.map((d) => `## ${d.title}\n${d.text.trim()}`).join('\n\n')}`)
-  if (p.myNotes) sections.push(`NOTES ${name} WROTE FOR THEMSELVES IN THEIR PORTAL (their private journal; often where projects and intentions live):\n${p.myNotes}`)
-  if (p.recentPlans) sections.push(`${name}'S RECENT WEEKLY PLANS (what they committed to and what got done — carry unfinished items forward only if they still matter; ask):\n${p.recentPlans}`)
-  if (p.noteParts.length) sections.push(`SESSION NOTES ${name} RECEIVED FROM THEIR COACH:\n${p.noteParts.join('\n\n')}`)
-  return sections.join('\n\n')
+  if (docs.length) snapshot.push(`DOCUMENTS ${name} ADDED TO THEIR PORTAL (their projects, plans, role material — refer to them by title):\n${docs.map((d) => `## ${d.title}\n${d.text.trim()}`).join('\n\n')}`)
+  if (p.myNotes) snapshot.push(`NOTES ${name} WROTE FOR THEMSELVES IN THEIR PORTAL (their private journal; often where projects and intentions live):\n${p.myNotes}`)
+  if (p.recentPlans) snapshot.push(`${name}'S RECENT WEEKLY PLANS (what they committed to and what got done — carry unfinished items forward only if they still matter; ask):\n${p.recentPlans}`)
+  if (p.noteParts.length) snapshot.push(`SESSION NOTES ${name} RECEIVED FROM THEIR COACH:\n${p.noteParts.join('\n\n')}`)
+  return { prefix: prefix.join('\n\n'), snapshot: snapshot.join('\n\n'), tail: '' }
+}
+
+/** The whole Plan-your-week prompt as one string (prefix → snapshot). */
+export function composeWeeklyPlanSystem(p: WeeklyPlanPromptParts): string {
+  const parts = composeWeeklyPlanParts(p)
+  return [parts.prefix, parts.snapshot, parts.tail].filter(Boolean).join('\n\n')
 }
 
 /**
