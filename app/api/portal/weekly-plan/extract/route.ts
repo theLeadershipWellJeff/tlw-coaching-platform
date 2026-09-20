@@ -23,11 +23,12 @@ export async function POST(req: NextRequest) {
   const supabase = getSupabaseAdmin()
   const { data: conv } = await supabase.from('portal_conversations').select('id').eq('id', conversationId).eq('client_id', clientId).maybeSingle()
   if (!conv) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  const { data: owner } = await supabase.from('clients').select('org_id').eq('id', clientId).maybeSingle()
   const { data: history } = await supabase.from('portal_messages').select('role, content').eq('conversation_id', conversationId).order('created_at', { ascending: true }).limit(60)
   const msgs: ChatMsg[] = (history || []).map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content }))
   if (!msgs.some((m) => m.role === 'assistant')) return NextResponse.json({ error: 'Have the conversation first — there is nothing to save yet.' }, { status: 400 })
   try {
-    const proposal = await extractTasksFromConversation(msgs)
+    const proposal = await extractTasksFromConversation(msgs, { clientId, orgId: owner?.org_id ?? null })
     return NextResponse.json(proposal)
   } catch (e) {
     console.error('weekly plan extract failed:', e)

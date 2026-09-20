@@ -9,45 +9,28 @@
  *
  * Best-effort by design: any failure (no API key, timeout, unparseable output)
  * returns null and the deterministic title chain in parse.ts stands. Mirrors
- * the retired-model guard used by the scoring engine and nudge pipeline.
+ * the retired-model guard in lib/ai/models.ts.
  */
-import Anthropic from '@anthropic-ai/sdk'
+import { aiCreate, isAiConfigured, textOf } from '@/lib/ai/client'
 
-// Titling is a trivial extraction task — the small fast model is plenty.
-const SAFE_DEFAULT_MODEL = 'claude-haiku-4-5-20251001'
-const RETIRED_MODELS = new Set([
-  'claude-sonnet-4-20250514',
-  'claude-3-5-sonnet-20240620',
-  'claude-3-5-sonnet-20241022',
-  'claude-3-opus-20240229',
-  'claude-3-haiku-20240307',
-])
-
-function resolveTitleModel(): string {
-  const configured = process.env.TITLE_MODEL?.trim()
-  if (configured && RETIRED_MODELS.has(configured)) {
-    console.warn(`TITLE_MODEL "${configured}" is retired; falling back to ${SAFE_DEFAULT_MODEL}.`)
-    return SAFE_DEFAULT_MODEL
-  }
-  return configured || SAFE_DEFAULT_MODEL
-}
+// Titling is a trivial extraction task — the small fast model is plenty
+// (purpose `transcript_title` in lib/ai/models.ts).
 
 const OPENING_CHARS = 6000
 const MAX_TITLE = 80
 
 export async function proposeTranscriptTitle(
   body: string,
-  opts: { coachName?: string | null } = {}
+  opts: { coachName?: string | null; coachId?: string | null; orgId?: string | null } = {}
 ): Promise<string | null> {
-  if (!process.env.ANTHROPIC_API_KEY) return null
+  if (!isAiConfigured()) return null
   const opening = body.trim().slice(0, OPENING_CHARS)
   if (!opening) return null
 
   try {
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-    const message = await client.messages.create(
+    const message = await aiCreate(
+      { purpose: 'transcript_title', principal: 'system', orgId: opts.orgId ?? null, coachId: opts.coachId ?? null },
       {
-        model: resolveTitleModel(),
         max_tokens: 200,
         system: [
           'You title coaching-session recordings from the opening of a transcript.',
@@ -62,11 +45,10 @@ export async function proposeTranscriptTitle(
           .filter(Boolean)
           .join('\n'),
         messages: [{ role: 'user', content: `Transcript opening:\n\n${opening}` }],
-      },
-      { timeout: 25_000, maxRetries: 1 }
+        timeoutMs: 25_000,
+      }
     )
-    const block = message.content.find((b) => b.type === 'text')
-    const raw = block && 'text' in block ? block.text : ''
+    const raw = textOf(message)
     const match = raw.replace(/```json\n?|```/g, '').match(/\{[\s\S]*\}/)
     if (!match) return null
     const parsed = JSON.parse(match[0]) as { participants?: unknown; topic?: unknown }

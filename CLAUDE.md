@@ -27,7 +27,8 @@ Plus a **client workspace** (per-client hub) and **roster**.
   **NextAuth** (Google OAuth). **Anthropic SDK** for generation/scoring.
   Deployed on **Vercel** (production builds from `main`), domain
   `theleadershipwell.online`.
-- `npm run dev` · `npm run build` · `npm run lint`
+- `npm run dev` · `npm run build` (runs `prebuild` = `scripts/check-ai-imports.sh`) ·
+  `npm run lint` · `npm run check:ai-imports`
 - Always run `npx tsc --noEmit` and `npm run build` before committing. There is
   no automated test suite; verify pure logic with throwaway node scripts.
 
@@ -1897,6 +1898,200 @@ in a 2-column grid under `sm`, nothing hover-dependent. The 375 px check was
 done by inspection of the classes, not in a browser — verify on a phone after
 deploy.
 
+## AI gateway, model routing, usage ledger, budget enforcement, context budgeter & cost cockpit (2026-09-18/19; migrations 069–071) — cost-controls brief, Phases 1–4
+
+Brief: "AI Cost Controls, Model Routing & Context Budgeting" (Jeff, 2026-09-18;
+Phase 0 audit + file plan in `APP_STATE.md`). Four phases, confirmed one at a
+time. **All four phases shipped:** Phase 1 (gateway + ledger), Phase 2
+(enforcement), Phase 3 (the portal context budgeter), Phase 4 (the cost
+cockpit). The one thing left is Jeff's: reconcile a full billing month
+against the Console invoice (`scripts/reconcile-ai-costs.js`, ±5 %).
+
+- **No purpose hard-codes a model — `lib/ai/models.ts` routes by the nature
+  of the problem.** Each purpose declares a `TaskProfile` (`reasoning`
+  light|moderate|deep, `audience`, `latency`, optional `quality: 'frontier'`);
+  `routeModel` picks the CHEAPEST routable model in the catalog whose
+  `capability` meets it, ties to the faster one (Jeff, 2026-09-19: "as cost
+  effective and fast as possible; choose by speed, nature of the problem, and
+  cost"). Today that resolves to: light (`transcript_title`,
+  `background_compact`, `portal_weekly_plan_extract`) → `claude-haiku-4-5-20251001`;
+  moderate/deep (every coach-side purpose: scoring, growth, nudges, narrative,
+  prep, goals, plan) → `claude-sonnet-5` (cheaper AND stronger than the Sonnet
+  4.6 they ran on until 2026-09-19; 4.6 and Opus 4.8 are in the catalog as
+  `routable: false` — override-only, dominated); `portal_chat` (quality
+  'frontier' — the brief's "quality is the product") → `claude-opus-5`;
+  `portal_degraded` → `claude-sonnet-5`. The catalog (`KNOWN_MODELS`) carries
+  per model: capability tier, cost rank (from `ai_model_prices` — keep in step
+  when prices move), speed rank, tokenizer generation, effort support, whether
+  it thinks by default, min cache prefix. Add/retire a model there and every
+  purpose re-routes. Overrides: `AI_MODEL_<PURPOSE>` pins a purpose (any known
+  model, routable or not). The pre-Phase-1 env vars (`SCORING_MODEL`,
+  `SUGGEST_MODEL`, `GENERATE_MODEL`, `GOALS_MODEL`, `NUDGE_MODEL`,
+  `PLAN_SESSION_MODEL`, `TITLE_MODEL`, `PORTAL_CHAT_MODEL`) are **retired
+  since Phase 4** — set, they are ignored with one warning naming the
+  `AI_MODEL_<PURPOSE>` key; remove them from Vercel. Retired/unknown
+  overrides are ignored (warned once); a retired ROUTED model throws.
+- **Effort + thinking headroom.** Sonnet 5 / Opus 5 run adaptive thinking by
+  default and thinking counts inside `max_tokens`. `effortFor` sets the dial per
+  reasoning tier (light → n/a on Haiku; moderate → `medium`, the documented
+  Sonnet-4.6-at-default equivalent; deep → `high`; portal → `medium`), and the
+  gateway ADDS `thinkingAllowance(model, effort)` (1.5k/3k/6k for low/medium/
+  high) on top of the caller's `max_tokens`, which now means VISIBLE output —
+  unless `max_tokens_includes_thinking` (the portal chat: 4096 total until
+  Phase 3 sets 4000). Both figures land in `ai_usage.metadata`.
+- **`lib/ai/client.ts` is the ONLY path to Anthropic** — `aiCreate` / `aiStream`
+  (`ledgerDone(stream)` before a route returns). Every call passes `{purpose,
+  feature?, principal: coach|client|system, orgId, coachId, clientId?}`. Order:
+  resolve model → estimate worst case (est. input × input price + total
+  max_tokens × output price) → **`ai_reserve()`** (migration 070: in one
+  transaction under a per-org advisory lock, sums the month's spend for every
+  scope the call falls under and refuses with `AiBudgetExceededError`
+  (`budget_exceeded`, scope, cap, spent, resets_on) when spend + worst case would
+  exceed an enabled cap; else inserts the `reserved` row) → call → settle with
+  real usage (or release with the error) → for client-principal calls, the
+  50/80/100 % org-ceiling check. **Fail closed** at every step (`ledger_
+  unavailable` names the missing migration). Shared client, `maxRetries: 1`.
+  `aiCountTokens` wraps the free `count_tokens` endpoint (Phase 3).
+- **Scopes and caps (`ai_budgets`, `lib/ai/budget.ts`).** `client` (client-
+  principal spend for one client; resolution order: dated row for the client →
+  standing row → `default:<client_type>` → `default`), `org` (ALL client-
+  principal spend — the portal ceiling; coach-side features are never counted
+  against it, so portal use can never starve scoring/prep/nudges), `feature`
+  (a purpose, any principal; then `principal:<p>`). A row dated THIS month
+  outranks the standing NULL-month row — that is how **Extend** works. Enabled
+  defaults since 070: org **$500**/month, client **$10**, `default:portal`
+  (ZF participant) **$3**, soft_pct 80. No coach-side cap is enabled (the brief
+  gave no number). Spend = Σ coalesce(actual, reserved) over reserved+settled
+  rows in the UTC month; reset = the 1st of next month (UTC).
+- **Portal chat wiring (`app/api/portal/chat/route.ts`).** In order: kill
+  switch `AI_PORTAL_CHAT_ENABLED=false` → 503 (`chat_disabled`, warm copy in
+  `lib/ai/portal-gate.ts`); rate limits **6/min + 30/day** per client
+  (`lib/portal/access.ts` multi-window `chat`); per-client switch
+  `portal_features.chat === false` → 403 (`chat_off`; toggled per user in the
+  Command Center → Portal users "Assistant" column, `PATCH /api/admin/portal-
+  users/[id] {chat}`; default ON for everyone, ZF participants included — the
+  360 debrief IS the chat, so the brief's "OFF by default" was not applied,
+  flagged to Jeff); budget pre-check `ai_budget_status` → **hard** → 429
+  `budget_exhausted` with the on-brand pause ("Your reflection space has used
+  its allowance for this month and resets on {date} — your coach can extend it
+  anytime", `budget.ts#pausedMessage`) + coach notice; **soft** (≥80 %) →
+  the reply runs on `portal_degraded` (Sonnet 5, `metadata.degraded`) + coach
+  notice once per month; a race lost at the cap inside the stream yields the
+  same pause text. Fail closed if the status read errors.
+- **Extend (`GET/PATCH /api/clients/[id]/ai-budget`, workspace block
+  `ws-ai-usage` "Assistant usage" — in the default layout, compact; existing
+  coaches add it via "+ Add card").** Shows this month's portal spend vs cap,
+  state chip (on track / lighter model / paused), reset date, and **Extend to
+  $N this month** (default cap + $10, or a typed whole-dollar amount ≤ $100;
+  never below what is already spent) → writes the dated `ai_budgets` row →
+  audit `ai_budget_extended`. Reopens a paused assistant immediately (the next
+  message re-reads status).
+- **Alerts (`lib/ai/alerts.ts`, `ai_alerts` claim-before-send).** Org ceiling
+  50/80/100 % → email the house coach (`DEFAULT_COACH_EMAIL`, else the earliest
+  supervisor) once per threshold per month, checked after every settled client
+  call and by the hourly sweep; per-client soft/hard → email the client's
+  primary coach once per kind per month with a link to the workspace. All
+  best-effort; a mail failure never touches the call.
+- **Cron `GET /api/cron/ai-budget`** (hourly, `CRON_SECRET`, `cronHandler`):
+  `ai_release_stale(15)` releases reservations older than 15 min (a killed
+  function) so they stop counting at worst case, then the org alert sweep.
+- **Context budgeter — the portal chat is assembled in fixed slices under a
+  40k-token ceiling (Phase 3; `lib/ai/context-budget.ts`, pure, +
+  `lib/portal/context.ts#buildChatRequest`, the loaders).** Slices, each with
+  its own token budget: **system ≤ 12k** (the cross-client prefix: preamble
+  WITHOUT the client's name + `PORTAL_CHAT_VOICE_STANDARDS` + the active
+  `portal_chat` brief + grounding rules + the 360 brief + company context;
+  the brief's 3k target covered the preamble alone — the practice's briefs
+  live here, hence 12k), **snapshot ≤ 6k** (this client: "WHO YOU ARE TALKING
+  WITH" + human route + 360 status, structured 360 + verbatims, goals, their
+  documents, My notes, sent notes), **memory ≤ 2k** (reserved, always
+  empty), **excerpts ≤ 10k** (the newest 2 sessions' openings, 2.5k chars
+  each, + up to 12 `portal_chat_context` passages ranked against the
+  question — **never a full transcript**; whole items, most relevant first),
+  **history ≤ 6k** (the last 6 turns verbatim; older turns folded into a
+  running summary by `background_compact` (Haiku) once ≥ 4 sit outside it,
+  persisted on `portal_conversations.history_summary/_through/_at`
+  (migration 071) so the same turns are never summarised twice — pre-071 no
+  summary is written and older turns simply fall off), **current ≤ 6k** (the
+  message + the upload, trimmed by `fitAttachment` with a client-facing
+  note returned on the `X-Context-Note` response header and shown under the
+  reply). Over the ceiling → drop **excerpts → history → snapshot**; the
+  system slice is never dropped. `lib/portal/prompt.ts#composeChatSystemParts`
+  / `composeWeeklyPlanParts` produce `{prefix, snapshot, tail}` (the joined
+  `composeChatSystem` / `composeWeeklyPlanSystem` wrappers are what the
+  spikes assert on — the layer order is unchanged except the client line,
+  which now follows the company context so the prefix is identical for every
+  client of the org). Sent as three system blocks: prefix `cache_control`
+  ephemeral **1h**, snapshot ephemeral **5m**, tail (summary + excerpts)
+  uncached; the API's minimum cacheable prefix is 512 tokens on Opus 5 /
+  1024 on Sonnet 5 — the plain prefix is ~700 tokens, so with NO active
+  `portal_chat` brief the 1h breakpoint only takes on Opus 5 (the snapshot
+  breakpoint's cumulative prefix still caches). Before the call
+  `aiCountTokens` measures the assembled request and, if over the ceiling,
+  the variable slices are scaled down and re-fitted (two rounds). Output cap
+  **4,000 tokens including thinking** (`CONTEXT_BUDGET.MAX_OUTPUT_TOKENS`,
+  effort `medium` from the route). Per-request slice figures + the measured
+  count land in `ai_usage.metadata.slices`. Cache-read ratio (target > 60 %
+  after warm-up): `select sum(cache_read_tokens)::float / nullif(sum(input_
+  tokens + cache_read_tokens + cache_write_tokens), 0) from ai_usage where
+  purpose = 'portal_chat' and status = 'settled'`. Verify:
+  `node scripts/spikes/verify-context-budget.js` (23 checks: clipping,
+  upload note, whole-item excerpts, newest-first history, ceiling drop order,
+  system never dropped).
+- **Cost cockpit (Phase 4).** `lib/ai/costs-math.ts` (pure: row cost =
+  actual for settled / reserved worst case for open / 0 for released; UTC
+  month bounds + straight-line month-end projection; `aggregateUsage` by
+  purpose / model / client / coach / principal; `resolveCap` = a TS mirror of
+  the SQL `ai_resolve_cap` (dated row beats standing, first scope id with a
+  row wins); `capState` / `pctOfCap`; cache-read ratio = reads ÷ all input-
+  side tokens) and `lib/ai/costs.ts` (paged ledger reads past PostgREST's
+  1000-row default, enabled caps, client/coach names, and the **invoiced-
+  revenue join**: every line of an issued invoice — sent/overdue/failed/paid,
+  income date = paid, else sent, else created, in the month — attributed to
+  the client through `invoice_lines.coachee_id → coachees.client_id`;
+  account-level lines with no coachee are not attributable). Two reports:
+  `buildOrgCostReport` (supervisor) and `buildCoachCostReport` (a coach's OWN
+  clients' client-principal spend, selected by the `coach_clients` link —
+  never their own scoring/prep spend, never another coach's clients). Client
+  spend = client-principal rows only (a coach scoring that client's session
+  is the coach's cost). Routes: `GET /api/admin/ai-costs?month=YYYY-MM`
+  (`adminContext`) and `GET /api/ai-costs?month=` (`requireCoach`); both
+  answer `{report: null, unavailable: true}` pre-069. Surfaces: **`/command-
+  center/ai-costs`** (month stepper; spent / month-end projection / portal vs
+  the org ceiling / coach-side / requests with failed + open / portal-chat
+  cache-read ratio against the 60 % target; top-10 clients with cap bar,
+  state chip, invoiced revenue and spend ÷ revenue; by feature with any
+  feature cap; by model with tokens; by coach), the Command Center **AI costs
+  pulse card** + header link, and the dashboard / Business Center card
+  **`ai-costs` "Assistant usage"** (compact = the coach's clients' total this
+  month + paused / lighter-model counts; standard = top 5 with cap bars;
+  expanded = everyone; rows link to the workspace, where `ws-ai-usage`
+  carries Extend). Opt-in via "+ Add card" (not in the default layouts).
+  Reconcile: `node scripts/reconcile-ai-costs.js --month YYYY-MM --invoice
+  <usd> [--csv <Console usage export>] [--tolerance 5]` (needs the Supabase
+  URL + secret key in the env; prints the ledger by model, compares tokens/
+  cost per model against the export and the total against the invoice, exit
+  1 over tolerance). Verify the arithmetic: `node scripts/spikes/verify-ai-
+  costs.js` (36 checks).
+- **Build gate.** `scripts/check-ai-imports.sh` runs as `prebuild` and fails
+  on any `@anthropic-ai/sdk` import outside `lib/ai/**`; ESLint
+  `no-restricted-imports` mirrors it. `scripts/spikes/**` exempt.
+- **Ledger (069).** `ai_model_prices` (per-MTok USD micros; **prices are
+  data**), `ai_usage` (one row per request; `reserved|settled|released`),
+  `ai_budgets`. `lib/ai/pricing.ts` = integer-micros arithmetic. **070** adds
+  `ai_alerts` + the SQL functions `ai_reserve`, `ai_budget_status`,
+  `ai_release_stale`, `ai_month_spend`, `ai_resolve_cap`.
+- **SDK `^0.127.0`** (was `^0.24.3`, which predated every parameter above).
+- Verify: `node_modules/.bin/tsc -p scripts/spikes/tsconfig.spike.json && node
+  scripts/spikes/verify-ai-gateway.js` (51 checks: routing, overrides, effort,
+  allowance, price math), `node scripts/spikes/verify-context-budget.js`
+  (23 checks), `node scripts/spikes/verify-ai-costs.js` (36 checks) and,
+  against a real Postgres, `PG=env PG*=… node
+  scripts/spikes/verify-ai-budget-concurrency.js` (20 checks: 20 concurrent
+  reserves at a nearly exhausted cap → exactly the affordable one passes; soft/
+  hard states; coach calls never touch the client cap; Extend; participant $3;
+  org ceiling; feature cap; stale release; alert-claim uniqueness).
+
 ## Multi-coach beta (2026-08 — coach onboarding readiness)
 
 Plan: `docs/BETA_COACH_ONBOARDING_PLAN.md`. Beta scope decision: **transcript
@@ -2209,8 +2404,10 @@ value in Vercel), `DEFAULT_COACH_EMAIL` (= `jeff@jeffkholmes.com`),
 `DEFAULT_COACH_NAME`. Vault (framework nudges): `VAULT_GITHUB_TOKEN` (read-only
 fine-grained PAT on the vault repo), optional `VAULT_REPO` (default
 `theLeadershipWellJeff/TheLeadershipWell-Vault`), `VAULT_BRANCH` (default `main`).
-Optional: `SCORING_MODEL`, `GOALS_MODEL`, `NUDGE_MODEL`, `PLAN_SESSION_MODEL`,
-`AUTO_SCORE`, `DEFAULT_TIMEZONE`, `PLAUD_DRIVE_FOLDER` (default `Plaud-Transcripts`),
+AI: `AI_PORTAL_CHAT_ENABLED` (`false` = portal assistant kill switch), `AI_MODEL_<PURPOSE>` per `lib/ai/models.ts` (the pre-Phase-1 `SCORING_MODEL`,
+`SUGGEST_MODEL`, `GENERATE_MODEL`, `GOALS_MODEL`, `NUDGE_MODEL`, `PLAN_SESSION_MODEL`,
+`TITLE_MODEL`, `PORTAL_CHAT_MODEL` are retired and ignored — remove them; see
+the AI gateway section). Optional: `AUTO_SCORE`, `DEFAULT_TIMEZONE`, `PLAUD_DRIVE_FOLDER` (default `Plaud-Transcripts`),
 `COACH_ZOOM_LINK` (default meeting link for invites/reminders when a coach hasn't
 set one in Account → Scheduling; falls back to `DEFAULT_MEETING_LINK` in code).
 Stripe (billing): `STRIPE_SECRET_KEY` (from Stripe Dashboard → Developers → API keys;
@@ -2767,6 +2964,36 @@ with a clear "apply migration 068" error if the columns are ever absent, so
 nothing can double-send in a gap). Verified up → down → re-up on Postgres 16, plus the
 CAS semantics (two claims → one winner; stale claim re-claimable; sent note
 never claimable). Reversible via `068_note_send_claim_down.sql`.
+
+**`071_portal_history_summary.sql` — APPLIED (production, confirmed by Jeff
+2026-09-19).** Adds `portal_conversations.history_summary` (text),
+`history_summary_through` (integer, default 0 — how many of the thread's
+messages, oldest first, the summary covers) and `history_summary_at`. The
+portal chat sends only the last 6 turns verbatim; the running summary of the
+older ones is written once per batch by the light background model and kept
+here, so a long thread never re-summarises the same turns. Additive; reads
+are defensive (a select error = unavailable = no summary written). Verified
+up → down → re-up + idempotent re-run on Postgres 16. Reversible via
+`071_portal_history_summary_down.sql`.
+
+**`070_ai_budget_enforcement.sql` — APPLIED (production, confirmed by Jeff
+2026-09-19).** Adds `ai_alerts` and the functions `ai_resolve_cap`, `ai_month_spend`,
+`ai_reserve` (the atomic check-and-insert every model call now goes through),
+`ai_budget_status`, `ai_release_stale`; ENABLES the three caps 069 seeded
+(org $500 · client $10 · portal participant $3). Additive. Verified up →
+down → re-up on Postgres 16 + the 20-check concurrency proof. Reversible via
+`070_ai_budget_enforcement_down.sql` (drops the functions + alert ledger,
+re-disables the seeded caps).
+
+**`069_ai_cost_controls.sql` — APPLIED (production, confirmed by Jeff 2026-09-19).** `ai_model_prices` (seeded: Opus 5, Sonnet 5, Haiku 4.5 + alias, Sonnet
+4.6, Opus 4.8 at the 2026-09-18 list prices), `ai_usage` (the ledger),
+`ai_budgets` (seeded defaults, `enabled=false`). Additive only, RLS enabled,
+`org_id` defaulted to org #1. **The gateway fails closed without it** — every AI
+feature (scoring, prep, nudges, portal chat) refuses with "apply migration 069"
+until the tables exist, by design (nothing may call Anthropic unmetered).
+Verified up → CAS semantics → idempotent re-up → down → re-up on Postgres 16.
+Reversible via `069_ai_cost_controls_down.sql` (drops the ledger — export
+first if the history matters).
 
 **`067_coach_tasks.sql` — APPLIED (production, confirmed 2026-09-09 and verified by
 `scripts/sql/audit-migrations.sql`; staging exception approved by Jeff).** The coach attention queue: `coach_tasks` (generic per-coach

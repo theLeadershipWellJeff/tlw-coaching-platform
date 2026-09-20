@@ -30,9 +30,14 @@ export type PortalAction =
   | 'weekly_plan_write'
   | 'note_write'
 
-/** Per-client ceilings, per rolling window. */
-const LIMITS: Partial<Record<PortalAction, { max: number; windowMinutes: number }>> = {
-  chat: { max: 60, windowMinutes: 60 },
+type Window = { max: number; windowMinutes: number }
+/** Per-client ceilings, per rolling window (an action may carry several windows — all must pass). */
+const LIMITS: Partial<Record<PortalAction, Window | Window[]>> = {
+  // Brief (AI cost controls, Phase 2): 6 per minute and 30 per day per client.
+  chat: [
+    { max: 6, windowMinutes: 1 },
+    { max: 30, windowMinutes: 24 * 60 },
+  ],
   contact: { max: 10, windowMinutes: 60 },
   upload: { max: 20, windowMinutes: 60 },
   document_upload: { max: 10, windowMinutes: 60 },
@@ -83,21 +88,24 @@ export async function checkPortalRateLimit(
   clientId: string,
   action: PortalAction
 ): Promise<{ allowed: boolean; retryAfterMinutes?: number }> {
-  const limit = LIMITS[action]
-  if (!limit) return { allowed: true }
+  const configured = LIMITS[action]
+  if (!configured) return { allowed: true }
+  const windows = Array.isArray(configured) ? configured : [configured]
 
   try {
     const supabase = getSupabaseAdmin()
-    const since = new Date(Date.now() - limit.windowMinutes * 60_000).toISOString()
-    const { count, error } = await supabase
-      .from('portal_access_log')
-      .select('id', { count: 'exact', head: true })
-      .eq('client_id', clientId)
-      .eq('action', action)
-      .gte('created_at', since)
-    if (error) return { allowed: true }
-    if ((count ?? 0) >= limit.max) {
-      return { allowed: false, retryAfterMinutes: limit.windowMinutes }
+    for (const limit of windows) {
+      const since = new Date(Date.now() - limit.windowMinutes * 60_000).toISOString()
+      const { count, error } = await supabase
+        .from('portal_access_log')
+        .select('id', { count: 'exact', head: true })
+        .eq('client_id', clientId)
+        .eq('action', action)
+        .gte('created_at', since)
+      if (error) return { allowed: true }
+      if ((count ?? 0) >= limit.max) {
+        return { allowed: false, retryAfterMinutes: limit.windowMinutes }
+      }
     }
     return { allowed: true }
   } catch {

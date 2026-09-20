@@ -56,6 +56,9 @@ export async function draftNudge(opts: {
   frameworkContext?: FrameworkDraftContext | null
   // Present only for goals nudges — the angle + the goal(s) in focus.
   goalsContext?: GoalsDraftContext | null
+  // Ledger attribution. principal: 'system' for the post-scoring pipeline,
+  // 'coach' for draft-one / manual create.
+  meta: { orgId: string | null; coachId: string | null; clientId: string | null; principal?: 'coach' | 'system'; feature?: string }
 }): Promise<NudgeDraft | null> {
   const { clientFirstName, candidate, upcomingContext, frameworkContext, goalsContext } = opts
 
@@ -100,7 +103,19 @@ export async function draftNudge(opts: {
   }
   if (upcomingContext) lines.push(`UPCOMING CONTEXT (may reference): ${upcomingContext}`)
 
-  const raw = await complete({ system: SYSTEM, user: lines.join('\n'), maxTokens: 700 })
+  const raw = await complete({
+    system: SYSTEM,
+    user: lines.join('\n'),
+    maxTokens: 700,
+    meta: {
+      purpose: 'nudge_draft',
+      feature: opts.meta.feature ?? `nudge_draft:${candidate.type}`,
+      principal: opts.meta.principal ?? 'system',
+      orgId: opts.meta.orgId,
+      coachId: opts.meta.coachId,
+      clientId: opts.meta.clientId,
+    },
+  })
   let parsed: { subject?: unknown; body?: unknown }
   try {
     parsed = parseJsonFrom<{ subject?: unknown; body?: unknown }>(raw)

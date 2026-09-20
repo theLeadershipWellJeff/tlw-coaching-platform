@@ -543,6 +543,12 @@ export type ClientCredential = {
 export type PortalFeatures = {
   assessments?: boolean
   goals?: boolean
+  /**
+   * The AI assistant (chat + plan-your-week). Absent = on. `false` switches it
+   * off for this client (the brief's per-participant lever; the Command Center
+   * toggles it). Independent of `assessments`.
+   */
+  chat?: boolean
   /** Per-client cap overrides (default 5 assessments / 10 documents). */
   max_assessments?: number
   max_documents?: number
@@ -871,12 +877,97 @@ export type CronRun = {
   error: string | null
 }
 
+// ---------------------------------------------------------------------------
+// AI cost controls (migration 069). Money is integer USD micros (1 USD =
+// 1_000_000); per-token prices are micros per MILLION tokens. Written only by
+// lib/ai/* — the gateway (lib/ai/client.ts) is the one path to Anthropic.
+// ---------------------------------------------------------------------------
+export type AiModelPrice = {
+  id: string
+  model: string
+  input_per_mtok_micros: number
+  output_per_mtok_micros: number
+  cache_read_per_mtok_micros: number
+  cache_write_per_mtok_micros: number
+  effective_from: DateString
+  source: string | null
+  created_at: Timestamp
+}
+
+export type AiPrincipal = 'coach' | 'client' | 'system'
+export type AiUsageStatus = 'reserved' | 'settled' | 'released'
+/** One row per Anthropic request: reserved (worst case, before) → settled (actual) | released (error). */
+export type AiUsage = {
+  id: string
+  request_id: string
+  org_id: string
+  coach_id: string | null
+  client_id: string | null
+  principal: AiPrincipal
+  purpose: string
+  feature: string
+  model: string
+  status: AiUsageStatus
+  reserved_usd_micros: number
+  input_tokens: number | null
+  output_tokens: number | null
+  cache_read_tokens: number | null
+  cache_write_tokens: number | null
+  actual_usd_micros: number | null
+  stop_reason: string | null
+  error: string | null
+  duration_ms: number | null
+  metadata: Record<string, unknown> | null
+  created_at: Timestamp
+  settled_at: Timestamp | null
+}
+
+export type AiBudgetScope = 'org' | 'client' | 'feature'
+export type AiBudget = {
+  id: string
+  org_id: string
+  scope: AiBudgetScope
+  scope_id: string
+  /** First of month; NULL = standing default for every month. */
+  period_month: DateString | null
+  cap_usd_micros: number
+  soft_pct: number
+  enabled: boolean
+  note: string | null
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
+export type AiAlertKind = 'org_threshold' | 'client_soft' | 'client_hard'
+/** Claim-before-send ledger for AI spend alerts (migration 070). */
+export type AiAlert = {
+  id: string
+  org_id: string
+  kind: AiAlertKind
+  scope_id: string
+  period_month: DateString
+  threshold: number
+  detail: Record<string, unknown> | null
+  created_at: Timestamp
+}
+
+/** ai_budget_status() (migration 070) — one scope's numbers, USD micros. */
+export type AiScopeStatus = { spent: number; cap: number | null; soft_pct: number | null; source?: string | null }
+export type AiBudgetStatus = {
+  state: 'ok' | 'soft' | 'hard'
+  period_month: DateString
+  resets_on: DateString
+  client: AiScopeStatus | null
+  org: AiScopeStatus | null
+  feature: AiScopeStatus | null
+}
+
 /**
  * Insert shape: columns with DB defaults (id, timestamps) are optional, and
  * any nullable column is optional too (Postgres fills NULL). Everything else
  * is required.
  */
-type Defaulted = 'id' | 'created_at' | 'updated_at' | 'sent_at' | 'agreement_on_file' | 'client_type' | 'org_id' | 'portal_onboarded' | 'failed_attempts' | 'first_seen_at' | 'last_seen_at' | 'portal_features' | 'seats_purchased' | 'status' | 'version' | 'is_active' | 'extraction_status' | 'visible_to_coach' | 'include_in_chat' | 'mode' | 'tasks' | 'body' | 'state' | 'subject_type' | 'digest_count' | 'started_at'
+type Defaulted = 'id' | 'created_at' | 'updated_at' | 'sent_at' | 'reserved_usd_micros' | 'soft_pct' | 'enabled' | 'effective_from' | 'threshold' | 'history_summary_through' | 'agreement_on_file' | 'client_type' | 'org_id' | 'portal_onboarded' | 'failed_attempts' | 'first_seen_at' | 'last_seen_at' | 'portal_features' | 'seats_purchased' | 'status' | 'version' | 'is_active' | 'extraction_status' | 'visible_to_coach' | 'include_in_chat' | 'mode' | 'tasks' | 'body' | 'state' | 'subject_type' | 'digest_count' | 'started_at'
 type NullableKeys<T> = { [K in keyof T]-?: null extends T[K] ? K : never }[keyof T]
 type OptionalOnInsert<T> = Defaulted | Extract<keyof T, NullableKeys<T>>
 
@@ -908,6 +999,12 @@ export type PortalConversation = {
   // 'general' = the reflection chat; 'weekly_plan' = a Plan-your-week thread
   // that runs under the weekly_plan brief (migration 061). Default 'general'.
   mode: PortalChatMode
+  // Context budgeter (migration 071): a summary of the turns older than the
+  // verbatim window, and how many messages (oldest first) it covers. Read
+  // defensively — pre-071 older turns are dropped instead of summarised.
+  history_summary?: string | null
+  history_summary_through?: number
+  history_summary_at?: Timestamp | null
   created_at: Timestamp
   updated_at: Timestamp
 }
@@ -1052,6 +1149,30 @@ export type Database = {
         Row: CronRun
         Insert: Insertable<CronRun>
         Update: Updatable<CronRun>
+        Relationships: []
+      }
+      ai_model_prices: {
+        Row: AiModelPrice
+        Insert: Insertable<AiModelPrice>
+        Update: Updatable<AiModelPrice>
+        Relationships: []
+      }
+      ai_usage: {
+        Row: AiUsage
+        Insert: Insertable<AiUsage>
+        Update: Updatable<AiUsage>
+        Relationships: []
+      }
+      ai_budgets: {
+        Row: AiBudget
+        Insert: Insertable<AiBudget>
+        Update: Updatable<AiBudget>
+        Relationships: []
+      }
+      ai_alerts: {
+        Row: AiAlert
+        Insert: Insertable<AiAlert>
+        Update: Updatable<AiAlert>
         Relationships: []
       }
       coaching_hours_entries: {
@@ -1351,6 +1472,33 @@ export type Database = {
     }
     Views: Record<string, never>
     Functions: {
+      // AI budget enforcement (migration 070). ai_reserve is the atomic
+      // check-and-insert the gateway calls before every model request.
+      ai_reserve: {
+        Args: {
+          p_request_id: string
+          p_org_id: string
+          p_coach_id: string | null
+          p_client_id: string | null
+          p_principal: string
+          p_purpose: string
+          p_feature: string
+          p_model: string
+          p_reserved: number
+          p_metadata: Record<string, unknown> | null
+        }
+        Returns:
+          | { ok: true; id: string }
+          | { ok: false; scope: 'client' | 'org' | 'feature'; cap: number; spent: number; reserved: number; resets_on: DateString }
+      }
+      ai_budget_status: {
+        Args: { p_org_id: string; p_client_id: string | null; p_principal: string | null; p_purpose: string | null }
+        Returns: AiBudgetStatus
+      }
+      ai_release_stale: {
+        Args: { p_minutes?: number }
+        Returns: number
+      }
       // Retrieval for the Client Portal AI chat (migration 053): passages from
       // the client's whole history ranked against the question they asked.
       portal_chat_context: {

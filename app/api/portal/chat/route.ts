@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPortalClientId } from '@/lib/portal/server'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
-import { buildChatContext, streamChatReply, type ChatContextMeta, type ChatMsg } from '@/lib/portal/chat'
+import { streamChatReply } from '@/lib/portal/chat'
+import { buildChatRequest, type ChatRequest, type StoredMessage } from '@/lib/portal/context'
+import { AiBudgetExceededError, budgetStatus, pausedMessage } from '@/lib/ai/budget'
+import { notifyClientCap } from '@/lib/ai/alerts'
+import { portalChatEnabled, portalChatOffMessage } from '@/lib/ai/portal-gate'
+import { resolveModel } from '@/lib/ai/models'
+import type { PortalFeatures } from '@/lib/supabase/types'
 import { checkPortalRateLimit, logPortalAccess } from '@/lib/portal/access'
 import { logPortalEvent } from '@/lib/portal/events'
 import { isChatMode, weekLabel, weekStartFor } from '@/lib/portal/weekly-plan'
@@ -44,6 +50,9 @@ export async function POST(req: NextRequest) {
   const clientId = await getPortalClientId()
   if (!clientId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  // Global kill switch (AI_PORTAL_CHAT_ENABLED=false) — instant, no deploy.
+  if (!portalChatEnabled()) return NextResponse.json({ error: portalChatOffMessage(), code: 'chat_disabled' }, { status: 503 })
+
   const limit = await checkPortalRateLimit(clientId, 'chat')
   if (!limit.allowed) {
     return NextResponse.json(
@@ -75,10 +84,39 @@ export async function POST(req: NextRequest) {
   const supabase = getSupabaseAdmin()
   const { data: client } = await supabase
     .from('clients')
-    .select('id, org_id, timezone')
+    .select('id, org_id, timezone, portal_features')
     .eq('id', clientId)
     .maybeSingle()
   if (!client) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // Per-client switch (portal_features.chat = false; the Command Center toggles it).
+  if (((client.portal_features as PortalFeatures | null) || {}).chat === false) {
+    return NextResponse.json({ error: 'The assistant is not switched on for your account. Your coach or theLeadershipWell can turn it on.', code: 'chat_off' }, { status: 403 })
+  }
+
+  // Budget pre-check (Phase 2): hard cap → pause with the on-brand message;
+  // soft cap → the reply runs on the lighter model and the coach is told once.
+  // The atomic check happens again inside the gateway's reserve, so a race at
+  // the cap still cannot overshoot.
+  let degraded = false
+  try {
+    const status = await budgetStatus(supabase, { orgId: client.org_id, clientId, principal: 'client', purpose: 'portal_chat' })
+    if (status.state === 'hard') {
+      if (status.client?.cap != null && (status.client.spent ?? 0) >= status.client.cap) {
+        void notifyClientCap(supabase, { orgId: client.org_id, clientId, kind: 'client_hard', spent: status.client.spent, cap: status.client.cap, periodMonth: status.period_month, resetsOn: status.resets_on })
+      }
+      return NextResponse.json({ error: pausedMessage(status.resets_on), code: 'budget_exhausted', resetsOn: status.resets_on }, { status: 429 })
+    }
+    if (status.state === 'soft') {
+      degraded = true
+      if (status.client?.cap != null) {
+        void notifyClientCap(supabase, { orgId: client.org_id, clientId, kind: 'client_soft', spent: status.client.spent, cap: status.client.cap, periodMonth: status.period_month, resetsOn: status.resets_on })
+      }
+    }
+  } catch (e) {
+    // Fail closed: no budget read, no model call.
+    console.error('portal chat budget check failed:', e)
+    return NextResponse.json({ error: 'The assistant is unavailable right now. Please try again.', code: 'budget_unavailable' }, { status: 503 })
+  }
 
   // Verify ownership of an existing conversation, or start a new one.
   const isNewConversation = !conversationId
@@ -120,28 +158,36 @@ export async function POST(req: NextRequest) {
     .from('portal_messages')
     .insert({ conversation_id: conversationId, org_id: client.org_id, role: 'user', content: persistedContent })
 
+  // The whole thread, oldest first, current message included. The request
+  // builder keeps the last turns verbatim and summarises the rest (Phase 3),
+  // so the model never sees the thread grow unbounded.
   const { data: history } = await supabase
     .from('portal_messages')
     .select('role, content')
     .eq('conversation_id', conversationId)
     .order('created_at', { ascending: true })
-    .limit(40)
-  const msgs: ChatMsg[] = (history || []).map((m) => ({
+    .limit(400)
+  const stored: StoredMessage[] = (history || []).map((m) => ({
     role: m.role === 'assistant' ? 'assistant' : 'user',
     content: m.content,
   }))
-  if (attachment && msgs.length) {
-    const last = msgs[msgs.length - 1]
-    last.content = `${last.content}\n\n[Attached document "${attachment.filename}"]:\n${attachment.text}`
-  }
 
   await logPortalAccess(clientId, 'chat', { detail: conversationId ?? undefined })
 
-  let system: string
-  let meta: ChatContextMeta = {}
+  let request: ChatRequest
   try {
-    // The current question drives retrieval across the client's whole history.
-    ;({ system, meta } = await buildChatContext(clientId, content, mode))
+    // Loads the client's parts, the excerpts for THIS question, the history
+    // window + summary, fits the upload, and verifies the total with count_tokens
+    // — counted under the model that will actually answer.
+    request = await buildChatRequest({
+      clientId,
+      conversationId,
+      mode,
+      content,
+      attachment,
+      stored,
+      model: degraded ? resolveModel('portal_degraded') : undefined,
+    })
   } catch (e) {
     console.error('portal chat context failed:', e)
     return NextResponse.json(
@@ -149,6 +195,7 @@ export async function POST(req: NextRequest) {
       { status: 502 }
     )
   }
+  const { system, messages: msgs, meta, attribution, slices, note } = request
 
   // Outcomes instrumentation (portal_events) — never blocks the reply.
   if (isNewConversation) await logPortalEvent(clientId, 'chat_started', { conversation_id: conversationId, ...meta })
@@ -168,7 +215,7 @@ export async function POST(req: NextRequest) {
     async start(controller) {
       let full = ''
       try {
-        for await (const delta of streamChatReply(system, msgs)) {
+        for await (const delta of streamChatReply(system, msgs, attribution, mode, { degraded, slices })) {
           full += delta
           controller.enqueue(encoder.encode(delta))
         }
@@ -178,7 +225,11 @@ export async function POST(req: NextRequest) {
         // close cleanly and let what arrived stand rather than throwing it away.
         if (!full) {
           controller.enqueue(
-            encoder.encode('The assistant is unavailable right now. Please try again.')
+            encoder.encode(
+              e instanceof AiBudgetExceededError
+                ? pausedMessage(e.resetsOn) // lost the race at the cap — same words as the pre-check
+                : 'The assistant is unavailable right now. Please try again.'
+            )
           )
         }
       } finally {
@@ -207,6 +258,8 @@ export async function POST(req: NextRequest) {
       'Cache-Control': 'no-cache, no-transform',
       'X-Conversation-Id': conversationId,
       'X-Conversation-Mode': mode,
+      // A trimmed upload is said plainly to the client (URI-encoded: header values are ASCII).
+      ...(note ? { 'X-Context-Note': encodeURIComponent(note) } : {}),
     },
   })
 }

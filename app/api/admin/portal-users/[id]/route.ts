@@ -74,6 +74,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if ('phone' in body) patch.phone = body.phone ? String(body.phone).trim().slice(0, 40) : null
     const features = { ...((client.portal_features as PortalFeatures) || {}) }
     let featuresChanged = false
+    if ('chat' in body) {
+      if (typeof body.chat !== 'boolean') throw new AdminError(400, 'chat must be true or false.')
+      features.chat = body.chat
+      featuresChanged = true
+    }
     if ('assessments' in body) {
       if (typeof body.assessments !== 'boolean') throw new AdminError(400, 'assessments must be true or false.')
       features.assessments = body.assessments

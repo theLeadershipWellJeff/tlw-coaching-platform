@@ -15,6 +15,7 @@ export type PortalUser = {
   cohort_id: string | null
   cohort_name: string | null
   assessments_enabled: boolean
+  chat_enabled: boolean
   portal_access_expires_at: string | null
   portal: { invitedAt: string | null; lastSeenAt: string | null; locked: boolean; username?: string | null }
   document: { id: string; extraction_status: string; extraction_error: string | null; assessment_date: string | null } | null
@@ -87,6 +88,18 @@ export function PortalUsersPanel({ companies, initialCohortId = '' }: { companie
     setError('')
     try {
       const d = await api<{ user: PortalUser | null }>(`/api/admin/portal-users/${u.id}`, { method: 'PATCH', body: JSON.stringify({ assessments: !u.assessments_enabled }) })
+      replace(d.user)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not update.')
+    } finally {
+      setBusy(null)
+    }
+  }
+  async function toggleChat(u: PortalUser) {
+    setBusy(u.id)
+    setError('')
+    try {
+      const d = await api<{ user: PortalUser | null }>(`/api/admin/portal-users/${u.id}`, { method: 'PATCH', body: JSON.stringify({ chat: !u.chat_enabled }) })
       replace(d.user)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not update.')
@@ -184,6 +197,7 @@ export function PortalUsersPanel({ companies, initialCohortId = '' }: { companie
                   <th className="py-2 pr-3">Participant</th>
                   <th className="py-2 pr-3">Cohort</th>
                   <th className="py-2 pr-3">360</th>
+                  <th className="py-2 pr-3">Assistant</th>
                   <th className="py-2 pr-3">Report</th>
                   <th className="py-2 pr-3">Portal</th>
                   <th className="py-2 pr-3">Engagement</th>
@@ -205,6 +219,11 @@ export function PortalUsersPanel({ companies, initialCohortId = '' }: { companie
                     <td className="py-2 pr-3">
                       <button className={btnLink} disabled={busy === u.id} onClick={() => toggleFlag(u)}>
                         {u.assessments_enabled ? <Chip tone="green">on</Chip> : <Chip>off</Chip>}
+                      </button>
+                    </td>
+                    <td className="py-2 pr-3">
+                      <button className={btnLink} disabled={busy === u.id} onClick={() => toggleChat(u)} title="The AI assistant (chat + plan-your-week) for this person">
+                        {u.chat_enabled ? <Chip tone="green">on</Chip> : <Chip>off</Chip>}
                       </button>
                     </td>
                     <td className="py-2 pr-3">

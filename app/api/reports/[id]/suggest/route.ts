@@ -32,7 +32,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const { data: row, error } = await supabase
     .from('session_reports')
-    .select('id, transcript_id, report')
+    .select('id, transcript_id, client_id, report')
     .eq('id', params.id)
     .eq('coach_id', coach.id)
     .maybeSingle()
@@ -59,7 +59,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 
   try {
-    const suggestion = await suggestCompetencyMove({ competency, report, transcriptBody })
+    const suggestion = await suggestCompetencyMove({ competency, report, transcriptBody, meta: { orgId: coach.org_id, coachId: coach.id, clientId: row.client_id ?? null } })
 
     // Persist on the report JSON so re-opening the report is instant (no
     // regeneration). Best-effort — a write failure still returns the suggestion.

@@ -21,6 +21,7 @@ import { KeyInfoBlock } from './blocks/KeyInfoBlock'
 import { BillingBlock } from './blocks/BillingBlock'
 import { CoachingMapBlock } from './blocks/CoachingMapBlock'
 import { SessionPlansBlock } from './blocks/SessionPlansBlock'
+import { AiUsageBlock } from './blocks/AiUsageBlock'
 
 export type WorkspaceBlockComponent = ComponentType<{ size: CardSize }>
 
@@ -38,6 +39,7 @@ export const WORKSPACE_REGISTRY: Record<string, WorkspaceBlockComponent> = {
   'ws-billing': BillingBlock,
   'ws-coaching-map': CoachingMapBlock,
   'ws-session-plans': SessionPlansBlock,
+  'ws-ai-usage': AiUsageBlock,
 }
 
 export function getWorkspaceBlock(id: string): WorkspaceBlockComponent | undefined {

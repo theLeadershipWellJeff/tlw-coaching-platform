@@ -86,7 +86,7 @@
  *       only. The cognitive/structural dimension scores independently. Final C6 =
  *       average of the two capped dimensions. feeling_explorations stays visible.
  */
-import Anthropic from '@anthropic-ai/sdk'
+import { aiStream, isAiConfigured, ledgerDone, type AiMessage } from '@/lib/ai/client'
 import {
   ATTUNEMENT_COMPETENCIES,
   BAND_ORDER,
@@ -118,29 +118,8 @@ import type {
 // is its current drop-in replacement. Override with SCORING_MODEL (e.g. an Opus
 // id like claude-opus-4-8) for stronger judgment — the deterministic gates below
 // hold the line regardless.
-const SAFE_DEFAULT_MODEL = 'claude-sonnet-4-6'
-// Model ids that have retired — calling them throws and breaks scoring. If a
-// stale SCORING_MODEL still points at one (e.g. left in Vercel from before the
-// default was bumped), ignore it and fall back to the safe default so scoring
-// can't silently die again.
-const RETIRED_MODELS = new Set([
-  'claude-sonnet-4-20250514',
-  'claude-3-5-sonnet-20240620',
-  'claude-3-5-sonnet-20241022',
-  'claude-3-opus-20240229',
-])
-function resolveModel(): string {
-  const configured = process.env.SCORING_MODEL?.trim()
-  if (configured && RETIRED_MODELS.has(configured)) {
-    console.warn(
-      `SCORING_MODEL "${configured}" is retired; falling back to ${SAFE_DEFAULT_MODEL}. ` +
-        `Update the env var to a current model id (e.g. claude-opus-4-8).`
-    )
-    return SAFE_DEFAULT_MODEL
-  }
-  return configured || SAFE_DEFAULT_MODEL
-}
-const MODEL = resolveModel()
+// The model is resolved by the AI gateway from purpose `scoring`
+// (lib/ai/models.ts — AI_MODEL_SCORING, legacy SCORING_MODEL, retired-id guard).
 
 export interface ScoringContext {
   coachName: string
@@ -154,6 +133,9 @@ export interface ScoringContext {
   // contracting absence cap. Defaults to 'uncertain' when sessionNumber is null.
   sessionNumberConfidence?: 'confirmed' | 'uncertain'
   sessionDate: string // YYYY-MM-DD
+  // Usage-ledger attribution for the engine call (lib/ai/client.ts). Optional
+  // so pure-rule spikes can build a context without it; store.ts always sets it.
+  ledger?: { orgId: string | null; coachId: string | null; clientId: string | null; feature?: string; principal?: 'coach' | 'system' }
   // True when the platform finds a signed coaching agreement on file for this
   // client (spec v0.4 §9 C1, Tier 1). The agreement is the controlling document
   // for AI-evaluation consent.
@@ -1204,10 +1186,9 @@ export async function scoreTranscript(
   transcript: string,
   ctx: ScoringContext
 ): Promise<SessionReportJson> {
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!isAiConfigured()) {
     throw new Error('ANTHROPIC_API_KEY is not configured.')
   }
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
   // STREAM the response instead of buffering it. On a buffered call the SDK's
   // `timeout` isn't released until the response headers arrive — which for a
@@ -1223,17 +1204,24 @@ export async function scoreTranscript(
   // error — with headroom for the growth/nudge/email passes that follow —
   // rather than as a Vercel-killed function with no response.
   const GENERATION_GUARD_MS = 240_000
-  const stream = client.messages.stream(
+  const stream = await aiStream(
     {
-      model: MODEL,
+      purpose: 'scoring',
+      feature: ctx.ledger?.feature ?? 'scoring',
+      principal: ctx.ledger?.principal ?? 'system',
+      orgId: ctx.ledger?.orgId ?? null,
+      coachId: ctx.ledger?.coachId ?? null,
+      clientId: ctx.ledger?.clientId ?? null,
+    },
+    {
       // The v0.5.3 report JSON (envelopes, taxonomy, evidence moments, quoted
       // spans) can run well past the old 6000 cap on a long session — a capped
       // response truncates mid-JSON and used to surface as "invalid JSON".
       max_tokens: 10000,
       system: SYSTEM,
       messages: [{ role: 'user', content: buildPrompt(transcript, ctx) }],
-    },
-    { timeout: 100_000, maxRetries: 1 }
+      timeoutMs: 100_000,
+    }
   )
 
   let guardFired = false
@@ -1242,7 +1230,7 @@ export async function scoreTranscript(
     stream.abort()
   }, GENERATION_GUARD_MS)
 
-  let message: Anthropic.Message
+  let message: AiMessage
   try {
     message = await stream.finalMessage()
   } catch (e: any) {
@@ -1254,6 +1242,7 @@ export async function scoreTranscript(
     throw e
   } finally {
     clearTimeout(guard)
+    await ledgerDone(stream)
   }
 
   if (message.stop_reason === 'max_tokens') {

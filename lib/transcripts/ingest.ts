@@ -209,7 +209,7 @@ export async function ingestMarkdown(
   // name when audible + topic — so the review queue identifies it at a glance.
   // Best-effort: a failure leaves the deterministic title in place.
   if (match.status !== 'matched' && (!title || /^Session · /.test(title))) {
-    const proposed = await proposeTranscriptTitle(parsed.body, { coachName: coach.name })
+    const proposed = await proposeTranscriptTitle(parsed.body, { coachName: coach.name, coachId: coach.id, orgId: coach.org_id })
     if (proposed) title = proposed
   }
 

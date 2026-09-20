@@ -4,15 +4,16 @@
  * to SEND them (migration 050) — all scoped by clientId. It never sees key_info,
  * the `notes` table, or any other coach-private field.
  *
- * Context is RETRIEVED, not stuffed. The previous version filled a ~40k-character
- * budget with the newest transcripts and stopped, so a client more than a handful
- * of sessions in silently lost their oldest material — which is exactly what they
- * come here to remember. Now each turn combines:
- *   1. the most recent sessions (recency genuinely matters in coaching), and
- *   2. passages retrieved from their WHOLE history by relevance to the question
- *      (`portal_chat_context`, migration 053).
- * If the retrieval function is missing, this degrades to the old recency-only
- * behaviour rather than failing.
+ * Context is RETRIEVED, not stuffed, and BUDGETED (cost-controls Phase 3):
+ * this module loads the client's standing material and composes the prompt
+ * PARTS (lib/portal/prompt.ts — a cross-client prefix and a per-client
+ * snapshot); lib/portal/context.ts adds the per-question excerpts (the
+ * newest sessions' openings + passages ranked against the question by
+ * `portal_chat_context`, migration 053 — never a full transcript), the
+ * conversation history (last turns verbatim, older summarised), fits every
+ * slice to lib/ai/context-budget.ts under the 40k-token ceiling, and sends
+ * the parts as cache-controlled blocks. If the retrieval function is missing
+ * the excerpts are openings only rather than failing.
  *
  * Assessment debrief (Phase 3): when `portal_features.assessments` is on and a
  * completed assessment exists, the prompt additionally carries the grounding
@@ -21,25 +22,23 @@
  * — layered by lib/portal/prompt.ts. The 360 is another grounded source blended
  * with notes and transcripts, never a separate mode.
  */
-import Anthropic from '@anthropic-ai/sdk'
+import { aiCreate, aiStream, isAiConfigured, ledgerDone, textOf, type AiTextBlock } from '@/lib/ai/client'
+import { CONTEXT_BUDGET, type SliceLog } from '@/lib/ai/context-budget'
+import { effortFor, resolveModel } from '@/lib/ai/models'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { htmlToPlainText } from '@/lib/communications'
 import type { CoachingGoal } from '@/lib/supabase/types'
 import { loadAssessmentStatusForChat, loadLatestAssessmentForChat } from './assessments'
 import { loadActiveBrief } from './briefs'
 import { loadCompanyContext } from './company'
-import { composeChatSystem, composeWeeklyPlanSystem, summariseAssessmentForPlanning } from './prompt'
+import { composeChatSystemParts, composeWeeklyPlanParts, summariseAssessmentForPlanning, type SystemPromptParts } from './prompt'
 import { formatPlansForPrompt, loadWeeklyPlans, weekStartFor } from './weekly-plan'
 import { formatNotesForPrompt, loadNotesForChat } from './notes'
 import type { PortalChatMode } from '@/lib/supabase/types'
 
-const MODEL = process.env.PORTAL_CHAT_MODEL || 'claude-sonnet-4-6'
+// Model + effort: purpose `portal_chat` in lib/ai/models.ts (Opus 5, effort
+// medium). Override with AI_MODEL_PORTAL_CHAT — PORTAL_CHAT_MODEL is ignored here.
 
-/** Newest sessions always included, and how much of each. */
-const RECENT_SESSION_COUNT = 4
-const RECENT_SESSION_CHARS = 6000
-/** Budget for question-relevant passages pulled from the full history. */
-const RETRIEVED_CHAR_BUDGET = 24000
 /** Sent notes are short and dense — the coach's own summary of a session. */
 const NOTES_CHAR_BUDGET = 8000
 /** The client's own uploaded documents (kind 'general'), total and per document. */
@@ -87,13 +86,6 @@ function clip(text: string, max: number): string {
   return t.length > max ? `${t.slice(0, max)}…` : t
 }
 
-/**
- * Build the system prompt for a client's chat.
- *
- * `query` is the client's current question — it drives retrieval. With no query
- * (a fresh conversation), the context is recency-only, which is the right
- * default for "what have we been working on lately".
- */
 export type ChatContextMeta = {
   mode?: PortalChatMode
   brief_slug?: string
@@ -104,11 +96,23 @@ export type ChatContextMeta = {
   has_comparison?: boolean
 }
 
-export async function buildChatContext(
+/** Who a portal call is billed to on the usage ledger (never request-supplied). */
+export type ChatAttribution = { clientId: string; orgId: string | null; coachId: string | null }
+
+export type ChatContextParts = SystemPromptParts & { clientName: string; meta: ChatContextMeta; attribution: ChatAttribution }
+
+/**
+ * Build the prompt PARTS for a client's chat: the cross-client prefix and this
+ * client's snapshot (lib/portal/prompt.ts). The per-question excerpts and the
+ * conversation history are added by lib/portal/context.ts#buildChatRequest,
+ * which also fits everything to the slice budgets. `query` is unused here
+ * today (retrieval moved to the request builder) and kept for the wrapper.
+ */
+export async function buildChatContextParts(
   clientId: string,
-  query?: string,
+  _query?: string,
   mode: PortalChatMode = 'general'
-): Promise<{ clientName: string; system: string; meta: ChatContextMeta }> {
+): Promise<ChatContextParts> {
   const supabase = getSupabaseAdmin()
 
   const { data: client } = await supabase
@@ -131,13 +135,7 @@ export async function buildChatContext(
     ? (client!.coaching_goals as CoachingGoal[])
     : []
 
-  const [{ data: recent }, { data: sentNotes }, { data: coachLinks }, assessment, company, clientDocuments, myNotes] = await Promise.all([
-    supabase
-      .from('transcripts')
-      .select('id, title, session_date, raw_md')
-      .eq('client_id', clientId)
-      .order('session_date', { ascending: false, nullsFirst: false })
-      .limit(RECENT_SESSION_COUNT),
+  const [{ data: sentNotes }, { data: coachLinks }, assessment, company, clientDocuments, myNotes] = await Promise.all([
     supabase
       .from('communications')
       .select('subject, body_html, sent_at')
@@ -163,6 +161,9 @@ export async function buildChatContext(
   // Same rule as the home page: a portal participant's house-coach link is
   // structural, not a coaching relationship.
   const hasCoach = (coachLinks?.length ?? 0) > 0 && client?.client_type !== 'portal'
+  // Ledger attribution: the client's org and (house) coach, from the records —
+  // the request body never supplies these.
+  const attribution: ChatAttribution = { clientId, orgId: client?.org_id ?? null, coachId: coachLinks?.[0]?.coach_id ?? null }
   const brief = assessment && client?.org_id ? await loadActiveBrief(client.org_id, 'assessment_360').catch(() => null) : null
   // The coaching-conversation rubric for the general chat (rubrics/02). Absent
   // row = the built-in preamble alone, exactly as before it existed.
@@ -187,7 +188,7 @@ export async function buildChatContext(
       planNoteParts.push(`## Notes${date ? ` — ${date}` : ''}${n.subject ? ` (${n.subject})` : ''}\n${chunk}`)
     }
     const today = new Intl.DateTimeFormat('en-CA', { timeZone: client?.timezone || undefined, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
-    const system = composeWeeklyPlanSystem({
+    const parts = composeWeeklyPlanParts({
       clientName,
       preferredName,
       hasCoach,
@@ -207,49 +208,7 @@ export async function buildChatContext(
       meta.brief_slug = planBrief.slug
       meta.brief_version = planBrief.version
     }
-    return { clientName, system, meta }
-  }
-
-  const recentIds = new Set((recent ?? []).map((t) => t.id))
-  const recentParts = (recent ?? [])
-    .map((t) => {
-      const body = clip(t.raw_md || '', RECENT_SESSION_CHARS)
-      if (!body) return ''
-      return `## Session${t.session_date ? ` — ${t.session_date}` : ''}${
-        t.title ? ` (${t.title})` : ''
-      }\n${body}`
-    })
-    .filter(Boolean)
-
-  // Question-relevant passages from the whole engagement, including sessions far
-  // outside the recent window. Skips anything already included in full above.
-  const retrievedParts: string[] = []
-  const trimmedQuery = (query || '').trim()
-  if (trimmedQuery.length >= 2) {
-    try {
-      const { data: hits, error } = await supabase.rpc('portal_chat_context', {
-        p_client_id: clientId,
-        p_query: trimmedQuery,
-        p_limit: 8,
-      })
-      if (error) throw new Error(error.message)
-      let budget = RETRIEVED_CHAR_BUDGET
-      for (const hit of hits ?? []) {
-        if (budget <= 0) break
-        if (hit.kind === 'session' && recentIds.has(hit.id)) continue
-        const excerpt = clip(hit.excerpt || '', budget)
-        if (!excerpt) continue
-        budget -= excerpt.length
-        const label = hit.kind === 'note' ? 'Notes' : 'Session'
-        retrievedParts.push(
-          `## ${label}${hit.occurred_on ? ` — ${hit.occurred_on}` : ''} (${hit.title})\n${excerpt}`
-        )
-      }
-    } catch (e) {
-      // Migration 053 not applied, or the query produced no lexemes. Recency-only
-      // context is still a working chat.
-      console.error('portal_chat_context unavailable:', e)
-    }
+    return { clientName, ...parts, meta, attribution }
   }
 
   let notesBudget = NOTES_CHAR_BUDGET
@@ -263,7 +222,7 @@ export async function buildChatContext(
     noteParts.push(`## Notes${date ? ` — ${date}` : ''}${n.subject ? ` (${n.subject})` : ''}\n${chunk}`)
   }
 
-  const system = composeChatSystem({
+  const parts = composeChatSystemParts({
     clientName,
     hasCoach,
     brief: brief ? { slug: brief.slug, version: brief.version, body: brief.body } : null,
@@ -275,8 +234,8 @@ export async function buildChatContext(
     assessmentStatus,
     goals,
     noteParts,
-    recentParts,
-    retrievedParts,
+    recentParts: [],
+    retrievedParts: [],
   })
 
   const meta: ChatContextMeta = {}
@@ -290,51 +249,89 @@ export async function buildChatContext(
     meta.has_comparison = !!assessment.data.comparison
   }
 
-  return { clientName, system, meta }
+  return { clientName, ...parts, meta, attribution }
 }
 
-function anthropic(): Anthropic {
-  if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not configured.')
-  return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+/** The parts joined as one string — for scripts and any caller that does not budget. */
+export async function buildChatContext(
+  clientId: string,
+  query?: string,
+  mode: PortalChatMode = 'general'
+): Promise<{ clientName: string; system: string; meta: ChatContextMeta; attribution: ChatAttribution }> {
+  const parts = await buildChatContextParts(clientId, query, mode)
+  return { clientName: parts.clientName, system: [parts.prefix, parts.snapshot, parts.tail].filter(Boolean).join('\n\n'), meta: parts.meta, attribution: parts.attribution }
 }
 
-const MAX_TOKENS = 4096
+/** Output cap INCLUDING thinking (brief: 4,000). */
+const MAX_TOKENS = CONTEXT_BUDGET.MAX_OUTPUT_TOKENS
+
+/**
+ * `degraded` = the client is past their soft cap this month (Phase 2): the
+ * call is routed to `portal_degraded` (the cheaper model) and the ledger row
+ * says so. The prompt, context, and everything else are identical.
+ */
+export type ChatReplyOpts = { degraded?: boolean; slices?: SliceLog }
+
+function chatCallMeta(attribution: ChatAttribution, mode: PortalChatMode, opts: ChatReplyOpts = {}) {
+  const degraded = !!opts.degraded
+  return {
+    purpose: 'portal_chat' as const,
+    feature: `portal_chat:${mode}`,
+    principal: 'client' as const,
+    orgId: attribution.orgId,
+    coachId: attribution.coachId,
+    clientId: attribution.clientId,
+    ...(degraded ? { model: resolveModel('portal_degraded'), effort: effortFor('portal_degraded', resolveModel('portal_degraded')) } : {}),
+    metadata: { mode, ...(degraded ? { degraded: true } : {}), ...(opts.slices ? { slices: opts.slices } : {}) },
+  }
+}
 
 /**
  * Stream the assistant's reply. Yields text deltas as they arrive so the portal
  * can render progressively instead of showing a spinner for the whole call.
  */
 export async function* streamChatReply(
-  system: string,
-  messages: ChatMsg[]
+  system: string | AiTextBlock[],
+  messages: ChatMsg[],
+  attribution: ChatAttribution,
+  mode: PortalChatMode = 'general',
+  opts: ChatReplyOpts = {}
 ): AsyncGenerator<string, void, unknown> {
-  const stream = anthropic().messages.stream(
-    {
-      model: MODEL,
-      max_tokens: MAX_TOKENS,
-      system,
-      messages: messages.map((m) => ({ role: m.role, content: m.content })),
-    },
-    { timeout: 120_000, maxRetries: 1 }
-  )
-  for await (const event of stream) {
-    if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-      yield event.delta.text
+  if (!isAiConfigured()) throw new Error('ANTHROPIC_API_KEY is not configured.')
+  const stream = await aiStream(chatCallMeta(attribution, mode, opts), {
+    max_tokens: MAX_TOKENS,
+    max_tokens_includes_thinking: true,
+    system,
+    messages: messages.map((m) => ({ role: m.role, content: m.content })),
+    timeoutMs: 120_000,
+  })
+  try {
+    for await (const event of stream) {
+      if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+        yield event.delta.text
+      }
     }
+  } finally {
+    // Settle the ledger row before the serverless function is allowed to return.
+    await ledgerDone(stream)
   }
 }
 
 /** Non-streaming reply. Returns '' on failure (caller handles). */
-export async function generateChatReply(system: string, messages: ChatMsg[]): Promise<string> {
-  const message = await anthropic().messages.create(
-    {
-      model: MODEL,
-      max_tokens: MAX_TOKENS,
-      system,
-      messages: messages.map((m) => ({ role: m.role, content: m.content })),
-    },
-    { timeout: 120_000, maxRetries: 1 }
-  )
-  const block = message.content.find((b) => b.type === 'text')
-  return block && 'text' in block ? block.text.trim() : ''
+export async function generateChatReply(
+  system: string | AiTextBlock[],
+  messages: ChatMsg[],
+  attribution: ChatAttribution,
+  mode: PortalChatMode = 'general',
+  opts: ChatReplyOpts = {}
+): Promise<string> {
+  if (!isAiConfigured()) throw new Error('ANTHROPIC_API_KEY is not configured.')
+  const message = await aiCreate(chatCallMeta(attribution, mode, opts), {
+    max_tokens: MAX_TOKENS,
+    max_tokens_includes_thinking: true,
+    system,
+    messages: messages.map((m) => ({ role: m.role, content: m.content })),
+    timeoutMs: 120_000,
+  })
+  return textOf(message)
 }

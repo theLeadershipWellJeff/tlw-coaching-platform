@@ -109,6 +109,14 @@ export async function runAndStoreReport(
     sessionDate,
     agreementOnFile,
     recordingAuthorized,
+    // Usage-ledger attribution. Scoring runs unattended (webhook/cron) or on a
+    // coach's click — either way it is billed to the transcript's coach + client.
+    ledger: {
+      orgId: coach.org_id,
+      coachId: coach.id,
+      clientId: transcript.client_id ?? null,
+      feature: sendEmail ? 'scoring' : 'scoring:rescore',
+    },
   }
 
   // Feed the transcript body (front matter stripped) to the engine.
@@ -171,6 +179,7 @@ export async function runAndStoreReport(
           transcriptBody: parsed.body || transcript.raw_md,
           coachNotes,
           areas: activeAreas,
+          meta: { orgId: coach.org_id, coachId: coach.id, clientId: transcript.client_id ?? null },
         })
 
         for (const result of results) {

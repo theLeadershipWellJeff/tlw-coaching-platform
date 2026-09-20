@@ -78,7 +78,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string;
       async start(controller) {
         let full = ''
         try {
-          for await (const delta of streamNarrative(prompt)) {
+          for await (const delta of streamNarrative(prompt, { orgId: coach.org_id, coachId: coach.id, clientId })) {
             full += delta
             controller.enqueue(encoder.encode(delta))
           }

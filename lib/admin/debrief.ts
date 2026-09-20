@@ -53,6 +53,8 @@ export type PortalUserRow = {
   cohort_name: string | null
   portal_features: PortalFeatures
   assessments_enabled: boolean
+  /** The AI assistant (portal_features.chat !== false). */
+  chat_enabled: boolean
   portal_access_expires_at: string | null
   created_at: string
   portal: ClientPortalState
@@ -142,6 +144,7 @@ export async function listPortalUsers(supabase: SupabaseClient<Database>, opts: 
       cohort_name: c.cohort_id ? cohortName.get(c.cohort_id) || null : null,
       portal_features: f,
       assessments_enabled: f.assessments === true,
+      chat_enabled: f.chat !== false,
       portal_access_expires_at: c.portal_access_expires_at,
       created_at: c.created_at,
       portal: states[c.id],

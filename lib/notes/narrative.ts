@@ -9,7 +9,7 @@
  * The draft streams and is cached once on `notes.generated_narrative`
  * (format: lib/notes/narrative-format.ts); reopening reads the cache.
  */
-import Anthropic from '@anthropic-ai/sdk'
+import { aiStream, isAiConfigured, ledgerDone } from '@/lib/ai/client'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database, Note } from '../supabase/types'
 import { CLIENT_VOICE_STANDARDS } from '../writing-standards'
@@ -17,8 +17,10 @@ import { htmlToPlainText } from '../communications'
 
 type Db = SupabaseClient<Database>
 
-export const NARRATIVE_MODEL = process.env.GENERATE_MODEL || 'claude-sonnet-4-6'
+// Model: purpose `note_narrative` in lib/ai/models.ts (AI_MODEL_NOTE_NARRATIVE, legacy GENERATE_MODEL).
 const TRANSCRIPT_CHAR_CAP = 40_000
+
+export type NarrativeMeta = { orgId: string | null; coachId: string | null; clientId: string | null }
 
 export type NarrativeSource = {
   noteText: string
@@ -86,14 +88,17 @@ ${source.noteText ? `RAW SESSION NOTE${noteTitle ? ` (“${String(noteTitle).tri
 }
 
 /** Stream the narrative text (SUBJECT line first, then body). */
-export async function* streamNarrative(prompt: string): AsyncGenerator<string, void, unknown> {
-  if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not configured.')
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-  const stream = anthropic.messages.stream(
-    { model: NARRATIVE_MODEL, max_tokens: 1500, messages: [{ role: 'user', content: prompt }] },
-    { timeout: 60_000, maxRetries: 1 }
+export async function* streamNarrative(prompt: string, meta: NarrativeMeta): AsyncGenerator<string, void, unknown> {
+  if (!isAiConfigured()) throw new Error('ANTHROPIC_API_KEY is not configured.')
+  const stream = await aiStream(
+    { purpose: 'note_narrative', principal: 'coach', orgId: meta.orgId, coachId: meta.coachId, clientId: meta.clientId },
+    { max_tokens: 1500, messages: [{ role: 'user', content: prompt }], timeoutMs: 60_000 }
   )
-  for await (const event of stream) {
-    if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') yield event.delta.text
+  try {
+    for await (const event of stream) {
+      if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') yield event.delta.text
+    }
+  } finally {
+    await ledgerDone(stream)
   }
 }

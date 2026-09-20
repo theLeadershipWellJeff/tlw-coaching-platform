@@ -30,6 +30,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
       clientId: params.id,
       coachId: coach.id,
       sourceSessionId: latest?.id ?? null,
+      principal: 'coach',
     })
 
     return NextResponse.json({ created: result.created, nudges: result.nudges })

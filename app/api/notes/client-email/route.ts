@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
+import { aiCreate, isAiConfigured, textOf } from '@/lib/ai/client'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
 import { CLIENT_VOICE_STANDARDS } from '@/lib/writing-standards'
@@ -9,7 +9,7 @@ import { getSessionCoach, coachDisplayName } from '@/lib/coach'
 export const runtime = 'nodejs'
 export const maxDuration = 60
 
-const MODEL = process.env.GENERATE_MODEL || 'claude-sonnet-4-6'
+// Model: purpose `note_client_email` in lib/ai/models.ts.
 
 // Strip rich-text HTML to plain text for the prompt.
 function toText(html: string): string {
@@ -32,7 +32,7 @@ function toText(html: string): string {
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!isAiConfigured()) {
     return NextResponse.json({ error: 'ANTHROPIC_API_KEY is not configured.' }, { status: 500 })
   }
 
@@ -45,9 +45,15 @@ export async function POST(req: NextRequest) {
   // Voice the recap as the signed-in coach — the name they set on Account →
   // Profile (falls back to the Google session name if the row can't be read).
   let coachName: string = (session as any).user?.name || 'the coach'
+  let coachId: string | null = null
+  let orgId: string | null = null
   try {
     const coach = await getSessionCoach(getSupabaseAdmin())
-    if (coach) coachName = coachDisplayName(coach)
+    if (coach) {
+      coachName = coachDisplayName(coach)
+      coachId = coach.id
+      orgId = coach.org_id
+    }
   } catch {
     /* keep the session name */
   }
@@ -70,18 +76,12 @@ Return ONLY valid JSON — no markdown fences, no preamble:
 RAW SESSION NOTE${body.noteTitle ? ` (“${String(body.noteTitle).trim()}”)` : ''}:
 ${noteText}`
 
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   try {
-    const message = await anthropic.messages.create(
-      {
-        model: MODEL,
-        max_tokens: 1500,
-        messages: [{ role: 'user', content: prompt }],
-      },
-      { timeout: 50_000, maxRetries: 1 }
+    const message = await aiCreate(
+      { purpose: 'note_client_email', principal: 'coach', orgId, coachId },
+      { max_tokens: 1500, messages: [{ role: 'user', content: prompt }], timeoutMs: 50_000 }
     )
-    const block = message.content.find((b) => b.type === 'text')
-    const raw = block && 'text' in block ? block.text : ''
+    const raw = textOf(message)
     const clean = raw.replace(/```json\n?|```/g, '').trim()
     const match = clean.match(/\{[\s\S]*\}/)
     const parsed = JSON.parse(match ? match[0] : clean)

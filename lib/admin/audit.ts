@@ -36,6 +36,8 @@ export type AdminAction =
   | 'support_reply'
   | 'support_closed'
   | 'brief_version_created'
+  // AI cost controls (Phase 2)
+  | 'ai_budget_extended'
   | 'brief_activated'
 
 export async function logAdminAction(

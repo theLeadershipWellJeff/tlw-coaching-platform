@@ -55,6 +55,13 @@ export const CARD_META: Record<string, CardMeta> = {
     supportedSizes: ['compact', 'standard', 'expanded'],
     defaultSize: 'standard',
   },
+  'ai-costs': {
+    id: 'ai-costs',
+    title: 'Assistant usage',
+    surfaces: ['dashboard', 'business-center'],
+    supportedSizes: ['compact', 'standard', 'expanded'],
+    defaultSize: 'standard',
+  },
   // Wrapped legacy panels — they render their own header, so selfHeader=true.
   roster: {
     id: 'roster',

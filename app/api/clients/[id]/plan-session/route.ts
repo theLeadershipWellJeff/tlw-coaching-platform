@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
+import { aiCreate, textOf } from '@/lib/ai/client'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { toErrorResponse } from '@/lib/api-handler'
 import { requireClientCoach } from '@/lib/client-access'
@@ -9,7 +9,7 @@ import type { CoachingGoal } from '@/lib/supabase/types'
 export const runtime = 'nodejs'
 export const maxDuration = 60
 
-const MODEL = process.env.PLAN_SESSION_MODEL || 'claude-sonnet-4-6'
+// Model: purpose `plan_session` in lib/ai/models.ts (legacy PLAN_SESSION_MODEL honoured).
 
 // Strip rich-text HTML to plain text (block tags → newlines) so captures parse.
 function toText(html: string): string {
@@ -144,18 +144,12 @@ Return ONLY valid JSON — no markdown fences, no preamble:
 
 The three questions are the ones Jeff could actually open the session with — warm, specific to this client's situation, and forward-moving (not generic check-ins). Prioritize anything flagged for next time and any outstanding commitments.`
 
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
     try {
-      const message = await anthropic.messages.create(
-        {
-          model: MODEL,
-          max_tokens: 1200,
-          messages: [{ role: 'user', content: prompt }],
-        },
-        { timeout: 50_000, maxRetries: 1 }
+      const message = await aiCreate(
+        { purpose: 'plan_session', principal: 'coach', orgId: coach.org_id, coachId: coach.id, clientId: params.id },
+        { max_tokens: 1200, messages: [{ role: 'user', content: prompt }], timeoutMs: 50_000 }
       )
-      const block = message.content.find((b) => b.type === 'text')
-      const raw = block && 'text' in block ? block.text : ''
+      const raw = textOf(message)
       const clean = raw.replace(/```json\n?|```/g, '').trim()
       const match = clean.match(/\{[\s\S]*\}/)
       const parsed = JSON.parse(match ? match[0] : clean)

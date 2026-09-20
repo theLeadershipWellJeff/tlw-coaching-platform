@@ -42,6 +42,8 @@ export default function PortalChat() {
   const [sending, setSending] = useState(false)
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState('')
+  // A plain note from the server about this turn's context (e.g. a trimmed upload).
+  const [contextNote, setContextNote] = useState('')
   const [attachment, setAttachment] = useState<{ filename: string; text: string } | null>(null)
   const [uploading, setUploading] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -214,6 +216,7 @@ export default function PortalChat() {
     const sentAttachment = attachment
     setInput('')
     setError('')
+    setContextNote('')
     setAttachment(null)
     setMessages((m) => [
       ...m,
@@ -237,6 +240,14 @@ export default function PortalChat() {
       // is addressable before the reply finishes streaming.
       const newId = res.headers.get('X-Conversation-Id')
       const isNew = !activeId && newId
+      const noteHeader = res.headers.get('X-Context-Note')
+      if (noteHeader) {
+        try {
+          setContextNote(decodeURIComponent(noteHeader))
+        } catch {
+          setContextNote(noteHeader)
+        }
+      }
       if (newId && !activeId) setActiveId(newId)
 
       // Render the reply as it arrives rather than after the whole call.
@@ -416,6 +427,7 @@ export default function PortalChat() {
               </div>
             )}
             {error && <p className="text-center text-[12px] text-tlw-signal-orange">{error}</p>}
+            {contextNote && <p className="text-center text-[12px] text-tlw-warm-gray">{contextNote}</p>}
             {goalSaved && (
               <p className="text-center text-[12px] text-tlw-warm-gray">
                 Saved to your goals. <Link href="/portal" className="font-medium text-tlw-signal-orange hover:underline">See them</Link>

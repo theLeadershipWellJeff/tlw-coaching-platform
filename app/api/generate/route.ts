@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import Anthropic from '@anthropic-ai/sdk'
+import { aiCreate, textOf } from '@/lib/ai/client'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { ApiError, requireCoach, readJson, toErrorResponse } from '@/lib/api-handler'
 import { coachCanAccessClient } from '@/lib/client-access'
@@ -8,7 +8,7 @@ import { findClientByEmailOrName } from '@/lib/client-lookup'
 import type { CoachingGoal } from '@/lib/supabase/types'
 import { CLIENT_VOICE_STANDARDS } from '@/lib/writing-standards'
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+// Model: purpose `session_prep` in lib/ai/models.ts (legacy GENERATE_MODEL honoured).
 
 const GenerateSchema = z.object({
   clientName: z.string().trim().min(1, 'clientName required'),
@@ -256,16 +256,12 @@ ${actionsText}${zoomSection}
 Generate this exact JSON structure:
 ${jsonShape}`
 
-  const message = await client.messages.create(
-    {
-      model: process.env.GENERATE_MODEL || 'claude-sonnet-4-6',
-      max_tokens: 2000,
-      messages: [{ role: 'user', content: prompt }],
-    },
-    { timeout: 50_000, maxRetries: 1 }
+  const message = await aiCreate(
+    { purpose: 'session_prep', principal: 'coach', orgId: coach.org_id, coachId: coach.id, clientId: resolvedClientId },
+    { max_tokens: 2000, messages: [{ role: 'user', content: prompt }], timeoutMs: 50_000 }
   )
 
-  const raw = message.content.find(b => b.type === 'text')?.text || ''
+  const raw = textOf(message)
   const clean = raw.replace(/```json\n?|```/g, '').trim()
   const match = clean.match(/\{[\s\S]*\}/)
 

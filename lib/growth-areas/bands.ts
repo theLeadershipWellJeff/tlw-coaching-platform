@@ -10,10 +10,8 @@
  *
  * Mirrors the shape of lib/scoring/suggest.ts.
  */
-import Anthropic from '@anthropic-ai/sdk'
+import { aiCreate, isAiConfigured, textOf } from '@/lib/ai/client'
 import type { GrowthAreaBand } from '@/lib/supabase/types'
-
-const MODEL = process.env.SUGGEST_MODEL || process.env.SCORING_MODEL || 'claude-sonnet-4-6'
 
 const SYSTEM = `You are a coaching development advisor helping a coach articulate their personal growth trajectory. Given a growth area and two anchor phrases the coach wrote in their own words, generate a 1–5 proficiency scale. Rules:
 - Band 1 MUST be grounded in the coach's "least proficient" phrasing — use their words, expressed as observable in-session behavior.
@@ -27,12 +25,12 @@ export async function generateBandScale(
   title: string,
   description: string,
   leastProficientWhen: string,
-  mostProficientWhen: string
+  mostProficientWhen: string,
+  meta: { orgId: string | null; coachId: string | null }
 ): Promise<GrowthAreaBand[]> {
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!isAiConfigured()) {
     throw new Error('ANTHROPIC_API_KEY is not configured.')
   }
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
   const prompt = `GROWTH AREA
 Title: ${title}
@@ -44,18 +42,17 @@ COACH'S ANCHOR PHRASES
 
 Generate the 1–5 band scale. Return JSON only.`
 
-  const message = await client.messages.create(
+  const message = await aiCreate(
+    { purpose: 'growth_bands', principal: 'coach', orgId: meta.orgId, coachId: meta.coachId },
     {
-      model: MODEL,
       max_tokens: 800,
       system: SYSTEM,
       messages: [{ role: 'user', content: prompt }],
-    },
-    { timeout: 50_000, maxRetries: 1 }
+      timeoutMs: 50_000,
+    }
   )
 
-  const block = message.content.find((b) => b.type === 'text')
-  const raw = block && 'text' in block ? block.text.trim() : ''
+  const raw = textOf(message)
   if (!raw) throw new Error('No band scale was generated.')
 
   let parsed: unknown
