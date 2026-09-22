@@ -1314,7 +1314,31 @@ the reference report to ~±0.01. No OCR, no vision model.
   `namesMatch` (first + last token of the shorter name in the longer).
 - **`fingerprint.ts`** — structural layout check (required section titles,
   legend, vector bars/markers, table header). Unknown → `unsupported`, never
-  parsed. One layout: `extraordinary-leader/2024`.
+  parsed. Two layouts: `extraordinary-leader/2024` (the initial report) and
+  **`extraordinary-leader/2024-followup`** (2026-09-22 — the reassessment
+  report Jeff hit as "missing: rater counts line"). The follow-up is
+  recognised by BOTH its counts wording ("The most recent assessment results
+  include feedback from:") and its extra section ("Differentiating Competency
+  Reassessment vs Previous Assessment Results"); it prints the previous
+  administration's score as a second **tan bar (`#cfc7ad`)** under every
+  current one (overall, engagement, tent, rankings, details). That colour is
+  never in the band legend, so legend-keyed reads ignore it by construction;
+  the follow-up-aware readers (`parseOverall`/`parseEngagement`/
+  `parseTentPoles` with `followUp`) collect it deliberately into
+  **`data.reassessment`** (`Reassessment` in `types.ts`: rating windows,
+  previous rater counts, previous overall by group, previous engagement and
+  tent totals, and the page's own current/previous/gap table with direction
+  from the gap-bar colour — a row with no bar reads irrelevant below the
+  printed .30 rule and stays `null` above it, never "meaningful" without the
+  colour). Distinct from `comparison` (the platform's own two-document
+  diff); both feed the chat, `has_comparison` (starter "What's changed since
+  my last 360?") is true for either, and the grounding rule + rubrics/04 §6
+  cover both. Two latent bugs fixed alongside, both for any report with
+  enough raters: the **wrapped "Direct / Reports" table header** (behaviors +
+  importance read every direct-report score/vote as missing when the column
+  was uncollapsed — `columnsFromHeader` now takes a bare "Direct"), and the
+  **rater-names table spilling onto a second page** (only page one was read,
+  so overflow names escaped the absence assertion).
 - **`index.ts#extractAssessment360`** — pure entry (bytes → outcome). Under 1 s.
 - **`pipeline.ts`** — the ONE persistence path (coach upload, client
   self-upload, retry): **the file decides how it is read, not the picker**
@@ -1356,7 +1380,14 @@ the reference report to ~±0.01. No OCR, no vision model.
   Interpersonal 4.40 = Profound vs Character 4.58 = Promising (tent poles);
   Manager/Self below 75th, Peers/Others at/above 90th; Engagement absent (2
   direct reports); 60 items across 19 competencies. Ask Jeff to re-share the
-  PDF in a new session — it is not in the repo.
+  PDF in a new session — it is not in the repo. **Follow-up layout:**
+  `PDF=fixtures/private/followup-360.pdf node scripts/spikes/verify-followup-360.js`
+  (a real client's reassessment report, also private) pins the current-only
+  reads (five tent poles, overall 4.17, engagement 3.93 with the previous
+  4.48 kept apart), the Direct Reports column, 22 rater names across two
+  pages, and the reassessment block (windows 2025-05-28→10-05 vs
+  2023-10-18→12-15; Inspires −0.30 coloured irrelevant while Communicates
+  −0.32 is negative — colour, not score, decides).
 - **Failure reasons + client retry (2026-09-08).** `lib/documents/failure.ts#
   describeFailure` shapes a failed row for the portal — `name_mismatch` with
   BOTH names (the client can see whether their own account name is the

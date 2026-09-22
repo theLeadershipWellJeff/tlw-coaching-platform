@@ -174,6 +174,37 @@ export type Comparison = {
   by_competency: ComparisonEntry[]
 }
 
+/** One row of the follow-up report's own "Reassessment vs Previous Assessment Results" table. */
+export type ReassessmentEntry = {
+  competency: string
+  current_total: number
+  previous_total: number
+  /** current − previous, as printed. */
+  gap: number
+  /** From the bar colour against the page's legend (meaningful = |gap| ≥ .30 by the report's own rule). */
+  direction: 'positive' | 'negative' | 'irrelevant' | null
+}
+
+/**
+ * The follow-up (reassessment) report's OWN comparison with the previous
+ * administration — printed by the vendor inside the same PDF, so it is present
+ * even when the previous report was never uploaded. Distinct from `comparison`,
+ * which the platform computes between two uploaded documents. Same guardrails
+ * apply: reflection, not a verdict; caveats travel with it.
+ */
+export type Reassessment = {
+  /** Rating windows as printed ("results received between … and …"), ISO dates when parseable. */
+  current_window: { from: string | null; to: string | null } | null
+  previous_window: { from: string | null; to: string | null } | null
+  previous_rater_counts: RaterCounts | null
+  rater_sets_differ: boolean
+  overall_previous: { total: number | null; by_rater_group: Array<{ group: RaterGroup; score: number }> } | null
+  engagement_previous_total: number | null
+  tent_poles_previous: Array<{ name: string; score: number }>
+  /** In the report's own order (by gap size, as printed). */
+  by_competency: ReassessmentEntry[]
+}
+
 export type Assessment360Data = {
   participant_name: string
   report_date: string
@@ -194,6 +225,8 @@ export type Assessment360Data = {
   verbatims: Verbatims
   competency_details: CompetencyDetail[]
   comparison?: Comparison
+  /** Follow-up layout only: the report's printed comparison with the previous administration. */
+  reassessment?: Reassessment
   /** Non-fatal observations from the parser (e.g. legend read from fallback). */
   extraction_notes: string[]
 }

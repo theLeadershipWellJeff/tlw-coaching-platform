@@ -19,6 +19,7 @@
  *    can assert their absence — they never enter the returned data or text.
  */
 import { isDecimal, linearFit, rowsOf, type PageData, type Row, type Shape, type TextItem } from '../geometry'
+import { FOLLOWUP_COUNTS_RE, FOLLOWUP_SECTION_RE, INITIAL_COUNTS_RE } from './fingerprint'
 import type {
   Assessment360Data,
   Band,
@@ -33,6 +34,8 @@ import type {
   RaterCounts,
   RaterGroup,
   RaterGroupScore,
+  Reassessment,
+  ReassessmentEntry,
   TentPole,
   VerbatimGroups,
   Verbatims,
@@ -73,6 +76,15 @@ const BAND_LABELS: Array<[RegExp, Band]> = [
   [/^Below Average/i, 'Below Average'],
   [/^Potential Fatal Flaw/i, 'Potential Fatal Flaw'],
 ]
+
+/**
+ * Follow-up layout: the PREVIOUS administration's score is drawn as a second,
+ * tan bar under every current one (overall, engagement, tent poles, rankings,
+ * score details). It is never in the band legend, so every legend-keyed read
+ * ignores it by construction; the follow-up-aware readers below pick it up
+ * deliberately, into the `reassessment` block only.
+ */
+const PRIOR_BAR_FILL = '#cfc7ad'
 
 /** Fallback colour map (2024 layout) — used only when a page prints no legend. */
 const FALLBACK_BAND_COLOURS: Record<string, Band> = {
@@ -126,11 +138,18 @@ function relation(barEnd: number, marker: Shape | undefined): MarkerRelation | n
   return barEnd < marker.cx ? 'below' : 'above'
 }
 
-/** Column map from a header row: label → x centre. */
+/**
+ * Column map from a header row: label → x centre. "Direct Reports" wraps onto
+ * two lines in the behaviors and importance headers ("Direct" on the header
+ * row, "Reports" beneath), so a bare "Direct" on a header row IS that column —
+ * a report with three or more direct reports (an uncollapsed column) would
+ * otherwise read every direct-report score as missing.
+ */
 function columnsFromHeader(row: Row, labels: string[]): Map<string, number> {
   const cols = new Map<string, number>()
   for (const it of row.items) {
-    const label = labels.find((l) => it.str.trim() === l)
+    const str = it.str.trim()
+    const label = labels.find((l) => str === l) ?? (str === 'Direct' && labels.includes('Direct Reports') ? 'Direct Reports' : undefined)
     if (label) cols.set(label, it.x + it.w / 2)
   }
   return cols
@@ -176,8 +195,8 @@ function readBandLegend(page: PageData): { map: Record<string, Band>; fromLegend
 function parseCover(page: PageData): { name: string; date: string } {
   const rows = rowsOf(page.text).map((r) => r.text)
   const date = rows.find((t) => /^[A-Z][a-z]+ \d{1,2}, \d{4}$/.test(t)) || ''
-  const skip = new Set([date, 'Feedback Report', 'The', 'EXTRAORDINARY', 'LEADER'])
-  const name = rows.find((t) => !skip.has(t) && /^[A-Z][\w'.-]+( [A-Z][\w'.-]+)+$/.test(t)) || ''
+  const skip = new Set([date, 'Feedback Report', 'Follow-up Feedback Report', 'The', 'EXTRAORDINARY', 'LEADER'])
+  const name = rows.find((t) => !skip.has(t) && !/Feedback Report$/i.test(t) && /^[A-Z][\w'.-]+( [A-Z][\w'.-]+)+$/.test(t)) || ''
   if (!name) throw new ParseError('Participant name not found on the cover page.', 'cover')
   return { name, date }
 }
@@ -193,55 +212,105 @@ function parseCountsLine(line: string): Partial<Record<'manager' | 'peers' | 'di
   return out
 }
 
-function parseRaterCounts(pages: PageData[]): RaterCounts {
+/** One "…include feedback from:" block: the counts line beneath it, plus the next "reported as follows" line. */
+function readCountsBlock(rows: Row[], i: number): RaterCounts {
+  const received = parseCountsLine(rows[i + 1]?.text || '')
+  const j = rows.findIndex((r, idx) => idx > i && /reported as follows/i.test(r.text))
+  const reported = j >= 0 ? parseCountsLine(rows[j + 1]?.text || '') : {}
+  const differs = Object.keys(reported).length > 0 && JSON.stringify(reported) !== JSON.stringify(received)
+  let note: string | null = null
+  if (differs) {
+    const dr = received.direct_reports ?? 0
+    note =
+      dr < 3
+        ? `Fewer than three Direct Report submissions (${dr} received) — combined into Others; Employee Engagement is not reported.`
+        : 'Rater groups were combined for reporting (small-N rule).'
+  }
+  return {
+    manager: received.manager ?? null,
+    peers: received.peers ?? null,
+    direct_reports: received.direct_reports ?? null,
+    others: received.others ?? null,
+    self: received.self ?? null,
+    ...(differs ? { reported_as: reported } : {}),
+    collapsed_note: note,
+  }
+}
+
+/**
+ * Rater counts. Initial layout: one block ("…includes feedback received from:").
+ * Follow-up layout: two blocks — "The most recent assessment results include
+ * feedback from:" (the current administration → `current`) and "The prior
+ * assessment results include feedback from:" (→ `previous`). The current block
+ * is matched by its own sentence, never by position.
+ */
+function parseRaterCounts(pages: PageData[]): { current: RaterCounts; previous: RaterCounts | null } {
   for (const page of pages) {
     const rows = rowsOf(page.text)
-    const i = rows.findIndex((r) => /includes feedback received from/i.test(r.text))
-    if (i < 0) continue
-    const received = parseCountsLine(rows[i + 1]?.text || '')
-    const j = rows.findIndex((r) => /reported as follows/i.test(r.text))
-    const reported = j >= 0 ? parseCountsLine(rows[j + 1]?.text || '') : {}
-    const differs = Object.keys(reported).length > 0 && JSON.stringify(reported) !== JSON.stringify(received)
-    let note: string | null = null
-    if (differs) {
-      const dr = received.direct_reports ?? 0
-      note =
-        dr < 3
-          ? `Fewer than three Direct Report submissions (${dr} received) — combined into Others; Employee Engagement is not reported.`
-          : 'Rater groups were combined for reporting (small-N rule).'
-    }
-    return {
-      manager: received.manager ?? null,
-      peers: received.peers ?? null,
-      direct_reports: received.direct_reports ?? null,
-      others: received.others ?? null,
-      self: received.self ?? null,
-      ...(differs ? { reported_as: reported } : {}),
-      collapsed_note: note,
-    }
+    const initial = rows.findIndex((r) => INITIAL_COUNTS_RE.test(r.text))
+    if (initial >= 0) return { current: readCountsBlock(rows, initial), previous: null }
+    const recent = rows.findIndex((r) => FOLLOWUP_COUNTS_RE.test(r.text))
+    if (recent < 0) continue
+    const prior = rows.findIndex((r) => /prior assessment results include feedback from/i.test(r.text))
+    return { current: readCountsBlock(rows, recent), previous: prior >= 0 ? readCountsBlock(rows, prior) : null }
   }
   throw new ParseError('Rater counts line not found.', 'rater_counts')
 }
 
-/** The "Your Raters" table: names only for the absence assertion; also which rows to drop from text. */
-function parseRaterNames(pages: PageData[]): { names: string[]; page: number | null; dropRows: (r: Row) => boolean } {
+function toIsoFromUs(s: string): string | null {
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s.trim())
+  if (!m) return null
+  return `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`
+}
+
+/** Follow-up layout: "This report compares your Reassessment results received between A and B with your Previous assessment results received between C and D." */
+function parseAssessmentWindows(pages: PageData[]): Pick<Reassessment, 'current_window' | 'previous_window'> {
+  for (const page of pages) {
+    const rows = rowsOf(page.text)
+    const i = rows.findIndex((r) => /This report compares your Reassessment results/i.test(r.text))
+    if (i < 0) continue
+    const text = rows.slice(i, i + 3).map((r) => r.text).join(' ')
+    const dates: Array<string | null> = []
+    const re = /(\d{1,2}\/\d{1,2}\/\d{4})/g
+    let m: RegExpExecArray | null
+    while ((m = re.exec(text))) dates.push(toIsoFromUs(m[1]))
+    if (dates.length < 4) return { current_window: null, previous_window: null }
+    return {
+      current_window: { from: dates[0], to: dates[1] },
+      previous_window: { from: dates[2], to: dates[3] },
+    }
+  }
+  return { current_window: null, previous_window: null }
+}
+
+/**
+ * The "Your Raters" table: names only for the absence assertion; also which
+ * rows to drop from text. The table spills onto a second page once there are
+ * more than ~9 raters (the header "Rater Type / Rater Name" repeats there), so
+ * EVERY page carrying the header is read — stopping after the first would let
+ * the overflow names escape the absence check.
+ */
+function parseRaterNames(pages: PageData[]): { names: string[]; pages: Set<number>; dropRows: (page: number, r: Row) => boolean } {
+  const names: string[] = []
+  const found = new Set<number>()
+  const dropped = new Set<string>()
   for (const page of pages) {
     const rows = rowsOf(page.text)
     const h = rows.findIndex((r) => /Rater Type/.test(r.text) && /Rater Name/.test(r.text))
     if (h < 0) continue
-    const names: string[] = []
-    const dropped = new Set<number>()
+    found.add(page.pageNumber)
     for (let i = h; i < rows.length; i++) {
       const row = rows[i]
       if (/Copyright/i.test(row.text)) break
-      dropped.add(row.y)
+      // A section title after the table (e.g. the next section's heading) ends it.
+      if (i > h && row.items.length === 1 && row.items[0].x < 47 && !/^Section \d+$/.test(row.text)) break
+      dropped.add(`${page.pageNumber}:${row.y}`)
       if (i === h) continue
       const nameItem = [...row.items].sort((p, q) => q.x - p.x)[0]
       if (nameItem && !RATER_GROUPS.includes(nameItem.str.trim() as RaterGroup)) names.push(nameItem.str.trim())
     }
-    return { names, page: page.pageNumber, dropRows: (r) => dropped.has(r.y) }
   }
-  return { names: [], page: null, dropRows: () => false }
+  return { names, pages: found, dropRows: (page, r) => dropped.has(`${page}:${r.y}`) }
 }
 
 /**
@@ -268,26 +337,43 @@ function calibrateHorizontal(
   return toScore
 }
 
-function parseOverall(pages: PageData[], legend: Record<string, Band>): OverallEffectiveness | null {
+/**
+ * The previous administration's score on a follow-up chart: the unlabeled
+ * decimal on the row directly beneath a labeled one, drawn on a tan bar.
+ */
+function previousScoreBelow(rows: Row[], shapes: Shape[], r: Row): number | null {
+  const next = rows.find((q) => q.y > r.y && q.y <= r.y + 16 && q.items.some((i) => isDecimal(i.str)) && !q.items.some((i) => !isDecimal(i.str) && !/^[\d %]+$/.test(i.str.trim())))
+  if (!next) return null
+  const bar = shapes.find((s) => isHorizontalBar(s) && s.fill === PRIOR_BAR_FILL && rowInShape(next.y, s))
+  if (!bar) return null
+  return num(next.items.find((i) => isDecimal(i.str))!.str)
+}
+
+function parseOverall(
+  pages: PageData[],
+  legend: Record<string, Band>,
+  followUp: boolean
+): { overall: OverallEffectiveness | null; previous: Reassessment['overall_previous'] } {
   const page = findPage(pages, /Overall Leadership Effectiveness/)
-  if (!page) return null
+  if (!page) return { overall: null, previous: null }
   const rows = rowsOf(page.text)
   const engagementAt = rows.find((r) => /^Employee Engagement$/.test(r.text) && r.y > 100)?.y ?? Infinity
   const scoreRows = rows.filter((r) => r.y < engagementAt && r.items.some((i) => isDecimal(i.str)))
-  const bars = page.shapes.filter((s) => isHorizontalBar(s) && s.w > 30 && !/^#e3e8ed|^#ffffff/.test(s.fill))
+  const bars = page.shapes.filter((s) => isHorizontalBar(s) && s.w > 30 && !/^#e3e8ed|^#ffffff/.test(s.fill) && !(followUp && s.fill === PRIOR_BAR_FILL))
 
-  type RowRead = { label: string; score: number; bar: Shape; markers: Shape[] }
+  type RowRead = { label: string; score: number; bar: Shape; markers: Shape[]; previous: number | null }
   const reads: RowRead[] = []
   for (const r of scoreRows) {
     const label = r.items.find((i) => !isDecimal(i.str))?.str.trim() || ''
+    if (followUp && !label) continue // the previous administration's row — read below, never as a current score
     const score = r.items.find((i) => isDecimal(i.str))
     if (!score) continue
     const bar = bars.find((b) => rowInShape(r.y, b))
     if (!bar) continue
     const markers = page.shapes.filter((s) => isMarker(s) && s.cy >= bar.top - 2 && s.cy <= bar.bottom + 2).sort((p, q) => p.cx - q.cx)
-    reads.push({ label, score: num(score.str), bar, markers })
+    reads.push({ label, score: num(score.str), bar, markers, previous: followUp ? previousScoreBelow(rows, page.shapes, r) : null })
   }
-  if (!reads.length) return null
+  if (!reads.length) return { overall: null, previous: null }
   const toScore = calibrateHorizontal(
     reads.map((x) => ({ label: x.label, x1: x.bar.x1, score: x.score })),
     'overall'
@@ -306,55 +392,94 @@ function parseOverall(pages: PageData[], legend: Record<string, Band>): OverallE
       norm_75th: x.markers[0] ? r2(toScore(x.markers[0].cx)) : null,
       norm_90th: x.markers[1] ? r2(toScore(x.markers[1].cx)) : null,
     }))
-  return {
+  const overall: OverallEffectiveness = {
     total: total.score,
     band: legend[total.bar.fill] ?? null,
     norm_75th: m75 ? r2(toScore(m75.cx)) : null,
     norm_90th: m90 ? r2(toScore(m90.cx)) : null,
     by_rater_group,
   }
+  const previous: Reassessment['overall_previous'] = followUp
+    ? {
+        total: total.previous,
+        by_rater_group: reads
+          .filter((x) => RATER_GROUPS.includes(x.label as RaterGroup) && x.previous !== null)
+          .map((x) => ({ group: x.label as RaterGroup, score: x.previous as number })),
+      }
+    : null
+  return { overall, previous }
 }
 
-function parseEngagement(pages: PageData[], counts: RaterCounts, legend: Record<string, Band>): Engagement {
+function parseEngagement(
+  pages: PageData[],
+  counts: RaterCounts,
+  legend: Record<string, Band>,
+  followUp: boolean
+): { engagement: Engagement; previousTotal: number | null } {
   const dr = counts.direct_reports ?? 0
   const page = pages.find((p) => rowsOf(p.text).some((r) => /^Employee Engagement$/.test(r.text) && r.y > 100))
   if (dr < 3 || !page) {
     return {
-      available: false,
-      reason: `Fewer than three Direct Report submissions (${dr} received), so Employee Engagement is not reported.`,
+      engagement: {
+        available: false,
+        reason: `Fewer than three Direct Report submissions (${dr} received), so Employee Engagement is not reported.`,
+      },
+      previousTotal: null,
     }
   }
   const rows = rowsOf(page.text)
   const start = rows.findIndex((r) => /^Employee Engagement$/.test(r.text) && r.y > 100)
   const totalRow = rows.slice(start).find((r) => /Total Score/.test(r.text) && r.items.some((i) => isDecimal(i.str)))
   const total = totalRow ? num(totalRow.items.find((i) => isDecimal(i.str))!.str) : 0
-  if (total <= 0) return { available: false, reason: 'Employee Engagement reads 0.00 — not reported for this administration.' }
+  if (total <= 0) return { engagement: { available: false, reason: 'Employee Engagement reads 0.00 — not reported for this administration.' }, previousTotal: null }
   const bar = totalRow ? page.shapes.find((s) => isHorizontalBar(s) && s.w > 30 && rowInShape(totalRow.y, s) && legend[s.fill]) : undefined
-  return { available: true, total, band: bar ? legend[bar.fill] : null }
+  const previousTotal = followUp && totalRow ? previousScoreBelow(rows, page.shapes, totalRow) : null
+  return { engagement: { available: true, total, band: bar ? legend[bar.fill] : null }, previousTotal }
 }
 
-function parseTentPoles(pages: PageData[], legend: Record<string, Band>, knownCompetencies: string[]): TentPole[] {
+function parseTentPoles(
+  pages: PageData[],
+  legend: Record<string, Band>,
+  knownCompetencies: string[],
+  followUp: boolean
+): { poles: TentPole[]; previous: Array<{ name: string; score: number }> } {
+  const none = { poles: [] as TentPole[], previous: [] as Array<{ name: string; score: number }> }
   const page = findPage(pages, /Leadership Tent/)
-  if (!page) return []
+  if (!page) return none
   const rows = rowsOf(page.text)
   const scoreRow = rows.find((r) => r.items.filter((i) => isDecimal(i.str)).length >= 3)
-  if (!scoreRow) return []
+  if (!scoreRow) return none
   const nameRow = rows.find((r) => r.y > scoreRow.y && r.y < scoreRow.y + 40)
-  if (!nameRow) return []
+  if (!nameRow) return none
   const vbars = page.shapes.filter((s) => s.h > 25 && s.w > 20 && s.w < 80 && legend[s.fill])
+  const priorBars = followUp ? page.shapes.filter((s) => s.h > 25 && s.w > 20 && s.w < 80 && s.fill === PRIOR_BAR_FILL) : []
   const markers = page.shapes.filter(isMarker)
 
-  const poles = scoreRow.items
+  const allScores = scoreRow.items
     .filter((i) => isDecimal(i.str))
     .map((sc) => {
       const cx = sc.x + sc.w / 2
       const bar = vbars.find((b) => cx >= b.x0 - 2 && cx <= b.x1 + 2)
+      const priorBar = priorBars.find((b) => cx >= b.x0 - 2 && cx <= b.x1 + 2)
       const nameItem = nameRow.items.reduce<TextItem | null>((best, it) => {
         const d = Math.abs(it.x + it.w / 2 - cx)
         return !best || d < Math.abs(best.x + best.w / 2 - cx) ? it : best
       }, null)
-      return { cx, score: num(sc.str), bar, name: nameItem?.str.trim() || '' }
+      return { cx, score: num(sc.str), bar, priorBar, name: nameItem?.str.trim() || '' }
     })
+  // Follow-up layout: every pole prints two scores side by side — the current
+  // one over a legend-coloured bar, the previous one over a tan bar. Only the
+  // former is a pole; the latter goes to the reassessment block, keyed to the
+  // nearest current pole on its left.
+  const poles = followUp ? allScores.filter((p) => p.bar) : allScores
+  const previous: Array<{ name: string; score: number }> = []
+  if (followUp) {
+    for (const p of allScores) {
+      if (p.bar || !p.priorBar) continue
+      const owner = [...poles].filter((q) => q.cx < p.cx).sort((a, b) => b.cx - a.cx)[0]
+      if (owner && p.cx - owner.cx < 60) previous.push({ name: owner.name, score: p.score })
+    }
+  }
   // Vertical calibration: fit bar top against printed score.
   const fit = linearFit(poles.filter((p) => p.bar).map((p) => [p.score, p.bar!.top] as [number, number]))
   const toScore = fit ? (y: number) => (y - fit.a) / fit.b : null
@@ -398,7 +523,7 @@ function parseTentPoles(pages: PageData[], legend: Record<string, Band>, knownCo
     }
     return out
   }
-  return poles.map((p, idx) => {
+  const out: TentPole[] = poles.map((p, idx) => {
     const ms = p.bar ? markers.filter((m) => m.cx >= p.bar!.x0 && m.cx <= p.bar!.x1).sort((a, b) => b.cy - a.cy) : []
     // Lower marker (larger y) = 75th, higher marker = 90th.
     return {
@@ -410,6 +535,7 @@ function parseTentPoles(pages: PageData[], legend: Record<string, Band>, knownCo
       competencies: splitKnown((fragments.get(idx) || []).join(' ')),
     }
   })
+  return { poles: out, previous }
 }
 
 function parseRankings(pages: PageData[]): { rankings: CompetencyRanking[]; legend: Record<string, Band>; fromLegend: boolean } {
@@ -637,6 +763,58 @@ function parseGap(pages: PageData[], canon: (s: string) => string): GapRow[] {
   return out
 }
 
+/**
+ * Follow-up layout: "Differentiating Competency Reassessment vs Previous
+ * Assessment Results" — the report's own table of current vs previous totals,
+ * ranked by gap size, with a gap bar coloured by the page's legend (meaningful
+ * positive / irrelevant / meaningful negative, ±.30 by the report's rule).
+ */
+function parseReassessmentTable(pages: PageData[], canon: (s: string) => string, notes: string[]): ReassessmentEntry[] {
+  const page = findPage(pages, FOLLOWUP_SECTION_RE)
+  if (!page) return []
+  const rows = rowsOf(page.text)
+  const legend: Record<string, ReassessmentEntry['direction']> = {}
+  for (const r of rows) {
+    const dir = /Meaningful Positive/.test(r.text) ? 'positive' : /Meaningful Negative/.test(r.text) ? 'negative' : /Irrelevant Gap/.test(r.text) ? 'irrelevant' : null
+    if (!dir) continue
+    const swatch = page.shapes.find((s) => s.w > 60 && s.h > 10 && s.h < 25 && rowInShape(r.y, s))
+    if (swatch) legend[swatch.fill] = dir
+  }
+  const header = rows.find((r) => r.items.some((i) => i.str.trim() === 'Reassessment') && r.items.some((i) => i.str.trim() === 'Previous') && r.items.some((i) => i.str.trim() === 'Gap Size'))
+  if (!header) throw new ParseError('reassessment: table header (Reassessment / Previous / Gap Size) not found.', 'reassessment')
+  const cols = columnsFromHeader(header, ['Reassessment', 'Previous', 'Gap Size'])
+  const gapBars = page.shapes.filter((s) => s.x0 > 400 && s.h > 12 && s.h < 20 && legend[s.fill])
+  const out: ReassessmentEntry[] = []
+  let thresholdFallback = 0
+  for (const r of rows) {
+    if (r.y <= header.y + 8 || /Copyright/i.test(r.text)) continue
+    const decs = r.items.filter((i) => isDecimal(i.str))
+    const label = r.items.find((i) => i.x < 60 && !isDecimal(i.str))
+    if (decs.length < 3 || !label) continue
+    const v: Record<string, number> = {}
+    for (const d of decs) {
+      const col = nearestColumn(cols, d)
+      if (col) v[col] = num(d.str)
+    }
+    if (!Number.isFinite(v.Reassessment) || !Number.isFinite(v.Previous) || !Number.isFinite(v['Gap Size'])) continue
+    if (Math.abs(r2(v.Reassessment - v.Previous) - v['Gap Size']) > 0.011) {
+      throw new ParseError(`reassessment: "${label.str.trim()}" prints ${v.Reassessment} − ${v.Previous} but a gap of ${v['Gap Size']}.`, 'reassessment')
+    }
+    const bar = gapBars.find((b) => rowInShape(r.y, b))
+    let direction: ReassessmentEntry['direction'] = bar ? legend[bar.fill] ?? null : null
+    if (!direction) {
+      // A near-zero gap draws no visible bar. Below the report's printed .30
+      // rule that can only be "irrelevant"; at or beyond it the colour is the
+      // only authority (the report rounds), so the row stays unclassified.
+      thresholdFallback++
+      direction = Math.abs(v['Gap Size']) < 0.3 ? 'irrelevant' : null
+    }
+    out.push({ competency: canon(label.str), current_total: v.Reassessment, previous_total: v.Previous, gap: v['Gap Size'], direction })
+  }
+  if (thresholdFallback) notes.push(`reassessment: ${thresholdFallback} row(s) had no gap bar; small gaps read as irrelevant by the printed .30 rule, larger ones left unclassified.`)
+  return out
+}
+
 function parseDetails(pages: PageData[], startIdx: number, canon: (s: string) => string): CompetencyDetail[] {
   const out: CompetencyDetail[] = []
   let comp: CompetencyDetail | null = null
@@ -684,12 +862,13 @@ function parseDetails(pages: PageData[], startIdx: number, canon: (s: string) =>
 // Entry
 // ---------------------------------------------------------------------------
 
-export function parseAssessment360(pages: PageData[], opts: { formatVersion: string }): ParseOutput {
+export function parseAssessment360(pages: PageData[], opts: { formatVersion: string; followUp?: boolean }): ParseOutput {
   const notes: string[] = []
+  const followUp = opts.followUp === true
   if (!pages.length) throw new ParseError('No pages.', 'document')
 
   const cover = parseCover(pages[0])
-  const counts = parseRaterCounts(pages)
+  const { current: counts, previous: previousCounts } = parseRaterCounts(pages)
   const raters = parseRaterNames(pages)
 
   const { rankings, legend, fromLegend } = parseRankings(pages)
@@ -705,9 +884,9 @@ export function parseAssessment360(pages: PageData[], opts: { formatVersion: str
     return s.replace(/\s+/g, ' ').trim()
   }
 
-  const overall = parseOverall(pages, legend)
-  const engagement = parseEngagement(pages, counts, legend)
-  const tent_poles = parseTentPoles(pages, legend, known)
+  const { overall, previous: overallPrevious } = parseOverall(pages, legend, followUp)
+  const { engagement, previousTotal: engagementPrevious } = parseEngagement(pages, counts, legend, followUp)
+  const { poles: tent_poles, previous: tentPrevious } = parseTentPoles(pages, legend, known, followUp)
   const highest = parseBehaviors(pages, /Highest Scored Behaviors/, canon)
   const lowest = parseBehaviors(pages, /Lowest Scored Behaviors/, canon)
   const importance = parseImportance(pages, canon)
@@ -720,6 +899,26 @@ export function parseAssessment360(pages: PageData[], opts: { formatVersion: str
   const detailsIdx = findPageIndex(pages, /Differentiating Competency Score Details/)
   const competency_details = detailsIdx >= 0 ? parseDetails(pages, detailsIdx, canon) : []
 
+  // Follow-up layout: the report's own comparison with the previous
+  // administration, kept apart from every current-score field.
+  let reassessment: Reassessment | undefined
+  if (followUp) {
+    const by_competency = parseReassessmentTable(pages, canon, notes)
+    if (by_competency.length < 5) throw new ParseError(`reassessment: only ${by_competency.length} rows read from the Reassessment vs Previous table.`, 'reassessment')
+    const windows = parseAssessmentWindows(pages)
+    const c = counts
+    const p = previousCounts
+    reassessment = {
+      ...windows,
+      previous_rater_counts: p,
+      rater_sets_differ: !p || p.manager !== c.manager || p.peers !== c.peers || p.direct_reports !== c.direct_reports || p.others !== c.others || p.self !== c.self,
+      overall_previous: overallPrevious,
+      engagement_previous_total: engagementPrevious,
+      tent_poles_previous: tentPrevious,
+      by_competency,
+    }
+  }
+
   // Text for AI use: from the first results page onward (boilerplate skipped),
   // and never the rater-names table.
   const overallIdx = findPageIndex(pages, /Overall Leadership Effectiveness/)
@@ -728,7 +927,7 @@ export function parseAssessment360(pages: PageData[], opts: { formatVersion: str
     .slice(firstContent)
     .map((p) => {
       const lines = rowsOf(p.text)
-        .filter((r) => !(raters.page === p.pageNumber && raters.dropRows(r)))
+        .filter((r) => !(raters.pages.has(p.pageNumber) && raters.dropRows(p.pageNumber, r)))
         .map((r) => r.text)
       return `--- page ${p.pageNumber} ---\n${lines.join('\n')}`
     })
@@ -751,6 +950,7 @@ export function parseAssessment360(pages: PageData[], opts: { formatVersion: str
     gap_analysis: gap,
     verbatims,
     competency_details,
+    ...(reassessment ? { reassessment } : {}),
     extraction_notes: notes,
   }
   return { data, raterNames: raters.names, extractedText, notes }

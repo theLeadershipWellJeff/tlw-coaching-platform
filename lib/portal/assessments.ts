@@ -25,6 +25,11 @@ export type PortalAssessments = {
   documents: PortalAssessment[]
 }
 
+/** Either change block makes "What's changed since my last 360?" answerable. */
+export function hasChangeData(data: { comparison?: unknown; reassessment?: unknown } | null | undefined): boolean {
+  return !!(data?.comparison || data?.reassessment)
+}
+
 export async function assessmentsEnabled(clientId: string): Promise<boolean> {
   const supabase = getSupabaseAdmin()
   const { data } = await supabase.from('clients').select('portal_features').eq('id', clientId).maybeSingle()
@@ -50,7 +55,9 @@ export async function loadPortalAssessments(clientId: string): Promise<PortalAss
     title: d.title,
     instrument: d.instrument,
     assessment_date: d.assessment_date,
-    has_comparison: !!(d.structured_data as { comparison?: unknown } | null)?.comparison,
+    // A comparison the platform computed between two uploads, OR the follow-up
+    // report's own printed comparison with the previous administration.
+    has_comparison: hasChangeData(d.structured_data as { comparison?: unknown; reassessment?: unknown } | null),
     uploader_role: d.uploader_role as 'coach' | 'client',
     visible_to_coach: d.visible_to_coach,
   }))
