@@ -1319,7 +1319,9 @@ the reference report to ~±0.01. No OCR, no vision model.
   report Jeff hit as "missing: rater counts line"). The follow-up is
   recognised by BOTH its counts wording ("The most recent assessment results
   include feedback from:") and its extra section ("Differentiating Competency
-  Reassessment vs Previous Assessment Results"); it prints the previous
+  Reassessment vs Previous Assessment Results") — **never the cover title**:
+  Jeff confirms reports arrive titled either "Follow-up Feedback Report" or
+  plain "Feedback Report" and either can carry the comparison; it prints the previous
   administration's score as a second **tan bar (`#cfc7ad`)** under every
   current one (overall, engagement, tent, rankings, details). That colour is
   never in the band legend, so legend-keyed reads ignore it by construction;

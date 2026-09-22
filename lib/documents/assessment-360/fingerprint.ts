@@ -35,7 +35,12 @@ export type Fingerprint = {
 
 /** The initial report's rater-counts sentence. */
 export const INITIAL_COUNTS_RE = /includes feedback received from/i
-/** The follow-up report's rater-counts sentence (one block for the most recent, one for the prior administration). */
+/**
+ * The follow-up report's rater-counts sentence (one block for the most recent,
+ * one for the prior administration). This wording + the extra section are the
+ * discriminator — never the cover title, which can read "Feedback Report" or
+ * "Follow-up Feedback Report" for either kind of content.
+ */
 export const FOLLOWUP_COUNTS_RE = /most recent assessment results include feedback from/i
 export const FOLLOWUP_SECTION_RE = /Reassessment vs Previous Assessment Results/
 
