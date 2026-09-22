@@ -6,7 +6,8 @@
  *
  * Outcome shape mirrors client_documents.extraction_status:
  *  - complete    — structured_data is safe to surface;
- *  - unsupported — the layout is not one the parser is calibrated for;
+ *  - unsupported — the layout is not one the parser is calibrated for (the
+ *                  initial and the follow-up Extraordinary Leader reports are);
  *  - failed      — parse error, cross-check disagreement, or validation error.
  */
 import { readPage, type PageData } from '../geometry'
@@ -31,7 +32,10 @@ export type ExtractionOutcome =
 
 export async function readAllPages(pdfBytes: Uint8Array): Promise<PageData[]> {
   const { getDocumentProxy } = await import('unpdf')
-  const pdf = await getDocumentProxy(pdfBytes)
+  // pdf.js transfers (detaches) the buffer it is given, so a caller that runs
+  // detect + extract on the same bytes would find them gone on the second
+  // call ("Cannot transfer object of unsupported type"). Work on a copy.
+  const pdf = await getDocumentProxy(new Uint8Array(pdfBytes))
   const pages: PageData[] = []
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i)
@@ -74,7 +78,7 @@ export async function extractAssessment360(
     }
   }
   try {
-    const parsed = parseAssessment360(pages, { formatVersion: fp.version })
+    const parsed = parseAssessment360(pages, { formatVersion: fp.version, followUp: fp.followUp })
     const data: Assessment360Data = {
       ...parsed.data,
       development_candidates: computeDevelopmentCandidates(parsed.data.competency_rankings, parsed.data.importance, opts.weights),

@@ -246,7 +246,7 @@ export async function buildChatContextParts(
   if (coachingBrief) meta.coaching_brief_version = coachingBrief.version
   if (assessment) {
     meta.assessment_document_id = assessment.documentId
-    meta.has_comparison = !!assessment.data.comparison
+    meta.has_comparison = !!(assessment.data.comparison || assessment.data.reassessment)
   }
 
   return { clientName, ...parts, meta, attribution }

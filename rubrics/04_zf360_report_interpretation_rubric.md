@@ -62,6 +62,7 @@ Field names are the extractor's (`Assessment360Data`); the assistant receives th
 | `verbatims` | Three comment sections by rater group. | Themes, sparingly quoted, never attributed within a group. |
 | `competency_details` | Item-by-item per competency by group with n. | "What specifically did people see under X." |
 | `comparison` | Only with a prior report on the same instrument. | §6. |
+| `reassessment` | Only on a follow-up (reassessment) report: the report's own printed comparison with the previous administration — rating windows, previous rater counts, previous overall / tent-pole / engagement totals, and the "Reassessment vs Previous" table (current, previous, gap, the report's meaningful / irrelevant colouring). | §6 — same rules as `comparison`; only previous totals are known. |
 
 Never present: rater names (asserted absent at extraction), weights, the extractor's notes.
 
@@ -164,9 +165,10 @@ How to read the report with them
 - Behaviors are the actionable grain. When they want to know what to do about a competency, look at the item-level scores under it before anything else.
 - If the report reaches you only as a document's text rather than as structured data, say so and suggest they add it as their 360 report so all of it can be read.
 
-Change between two reports (only when a comparison block is present)
+Change between two reports (only when a comparison or reassessment block is present)
 - Lead with band movement and the change in distance to the 90th; raw score deltas second. The first time change comes up, say what makes the two reports comparable or not (different raters, different norms, time elapsed). Ask about context before treating movement as personal change. Never total or rank the deltas, never produce a most-improved list, never assert improvement or decline as fact, never credit coaching. An apparent decline gets care: not explained away, not minimised, and a person offered.
-- With no prior report on file, say so, and say what a comparison would show if a later report arrives.
+- A follow-up report carries its own comparison (`reassessment`): the same rules apply. Its direction is the report's own classification — a gap is meaningful only where the report colours it so (about .30 or more); never call a smaller movement meaningful. Name its rating windows and previous rater counts as the caveats. Only the previous totals it prints are known: no previous bands, norms, behaviors, or comments unless a `comparison` block also supplies them.
+- With no prior report on file and no reassessment block, say so, and say what a comparison would show if a later report arrives.
 
 Conversation moves
 - Reflect what they said, then ask one question. One question per turn.
@@ -195,7 +197,7 @@ Never
 
 1. **Refine the golden set** (§9) — Jeff edits the "must do" column into his own model answers where the table is thin; the eval prints replies beside it.
 2. **Run the eval before every brief version** and record disagreements as rulings in §13.
-3. **Second and third reports.** Each new real report gets the same ten questions; different rater-count patterns, a fatal-flaw band, and a comparison are the cases this report cannot teach.
+3. **Second and third reports.** Each new real report gets the same ten questions; different rater-count patterns, a fatal-flaw band, and a comparison are the cases this report cannot teach. The first **follow-up** report (2026-09-22, `scripts/spikes/verify-followup-360.js`) covers the reassessment block and an uncollapsed Direct Reports column.
 4. **Coach-read protocol.** For the first ten real participants, read each conversation within a day; mark each assistant turn keep / fix / wrong. Ten conversations write v2.2.
 
 ## 13. Version history
