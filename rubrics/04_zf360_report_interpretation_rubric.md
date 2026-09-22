@@ -121,6 +121,56 @@ The facts the assistant must get right on this report. All from the extractor; t
 | Comment themes | Strengths: vision and inspiration, strategic thinking, relationship focus with accountability, calm positive energy, curiosity. Organisational needs: strategic thinking with customer focus; connecting individual growth to collective vision; capturing and marketing client wins. Potential fatal flaws: most say none; the one theme (others) is that **optimism can hinder recognising weakness and poor performance**; self names positivity and mood-driven follow-through. |
 | Comparison | None on file → say so. |
 
+## 8b. Calibration round 2 — three more real reports (2026-09-22)
+
+Read by hand against every results page and pinned in
+`scripts/spikes/verify-cohort-360.js` (87 checks; fixtures private). With the
+reference report (§8) and the first follow-up (`verify-followup-360.js`) the
+extractor is now calibrated on **five** reports. What each one adds:
+
+| report | layout | what it exercises | facts pinned |
+|---|---|---|---|
+| J.J., March 18 2025 | initial, 2025 print | Every group uncollapsed (M3 P4 DR4 O3); **Employee Engagement 3.37 in the Potential Fatal Flaw band**; two competencies in that band (Makes Decisions 3.44, Takes Initiative 3.38 — ranked below Collaboration 3.30 Below Average); marked self-gaps in **both** directions. | Overall 3.61 Below Average; Peers 4.10 *at* the 75th (4.11); tent all Below Average; Technical Acumen 4.26 the one Above Average; Integrity 8 votes = 1/3/1/2/1; +0.84/+0.83 positive, −0.63/−0.95/−0.99 negative, ±0.44 irrelevant. |
+| T.K., October 5 2025 | follow-up | **Overall 3.02 and all five tent poles in the fatal-flaw band, seventeen of nineteen competencies with them**; no Others group on the counts line; the prior administration's two Others dropped from its "reported as" line; every reassessment gap negative, eighteen meaningful, only Takes Risks −0.13 irrelevant; Self 4.00 now vs 4.88 before. | M2.65 P2.79 DR3.62 S4.00; engagement 3.89 Below Average (prev 3.77); Innovates 3.50 and Values Diversity 3.46 Below Average while Takes Risks 3.46 is fatal-flaw; Innovates 7 votes, passion; Solves Problems −0.31 meaningful negative; Makes Decisions self-gap −0.33 **irrelevant**. |
+| M.H., October 5 2025 | follow-up | Others folded into Peers on **both** administrations (2+4 → 6 peers now; 2+8 → 10 before); eight direct reports who cast only sixteen importance votes; ten meaningful positive reassessment gaps with **three at exactly +0.30**; **no marked self-gap at all** (Integrity +0.47 grey). | Overall 4.21 Promising (prev 3.92; Manager 4.05 vs 4.72 before, Direct Reports 4.32 vs 3.76); engagement 4.52 Promising; Drives for Results 4.49 rank 1 *at* its 90th (4.52); Technical Acumen 4.29 Above Average below Develops Others 4.16 Promising; Takes Risks 3.89 the one Below Average; Learning Agility +0.53 the largest rise. |
+
+**What this round settled (extractor):** the Potential Fatal Flaw colour is read
+correctly for competencies, tent poles, engagement and the overall bar (first
+time seen); an omitted rater group on the counts line now reads **0**, not
+null (null is reserved for a counts line that could not be read); the
+validator gained the arithmetic invariants these pages guarantee — rankings in
+band-then-score order, gap = total − self, importance columns summing to the
+printed total, score-details and behavior-list totals agreeing with the
+rankings page, a follow-up's current column agreeing with the rankings, tent
+poles within 0.05 of their members' mean (the vendor rounds tent poles from
+items, so T.K.'s Personal Capability prints 3.08 against a 3.12 mean).
+
+**What this round taught (reading model — carry into v2.2):**
+
+1. **The self-vs-total gap colouring is not the .30 rule.** Across the three
+   reports every self-gap up to ±0.47 is grey and every gap from ±0.54 is
+   coloured. The report's own guidance (Section 2 of the follow-up print) says
+   a single rater's score needs a gap of **.50** to be meaningful, and the
+   Self is one rater — a theLeadershipWell inference, not stated by ZF on the
+   gap page. The brief's "only the gaps the report marks" already holds the
+   line; never quote .30 for a self-gap.
+2. **The reassessment threshold is applied to unrounded values.** +0.30 is
+   coloured positive three times on M.H. and −0.31 negative on T.K., while the
+   first follow-up's printed −0.30 was irrelevant. Colour governs; the brief
+   wording "about .30" stands.
+3. **Raters may cast fewer than four importance votes.** M.H.'s eight direct
+   reports cast sixteen; T.K.'s three cast eight; J.J.'s thirteen raters cast
+   all sixty. The brief says each rater "chose the four" — v2.2 should read
+   "up to four", and the assistant should never infer a rater count from the
+   votes.
+4. **A follow-up's prior "reported as" line can drop a group entirely** (T.K.'s
+   two prior Others). Say "reported without" rather than "combined into".
+5. **A report can sit almost entirely in the fatal-flaw band.** T.K. is the
+   first: nothing in the brief covers a walkthrough where "strengths first"
+   has two Below Average competencies to work with and the comments carry
+   the weight. A golden set for this shape is the next calibration need
+   (§12).
+
 ## 9. Golden set (the training loop)
 
 Ten canonical questions against the reference report. Each row lists the behaviours a reply must show and the facts it must get right. `scripts/spikes/verify-portal-360-golden.js` runs them against the live model with the brief below and prints the replies beside these expectations (needs `ANTHROPIC_API_KEY` and the private PDF). Jeff refines the expected behaviours here; the script follows the file.
@@ -197,7 +247,7 @@ Never
 
 1. **Refine the golden set** (§9) — Jeff edits the "must do" column into his own model answers where the table is thin; the eval prints replies beside it.
 2. **Run the eval before every brief version** and record disagreements as rulings in §13.
-3. **Second and third reports.** Each new real report gets the same ten questions; different rater-count patterns, a fatal-flaw band, and a comparison are the cases this report cannot teach. The first **follow-up** report (2026-09-22, `scripts/spikes/verify-followup-360.js`) covers the reassessment block and an uncollapsed Direct Reports column.
+3. **Second and third reports.** Each new real report gets the same ten questions; different rater-count patterns, a fatal-flaw band, and a comparison are the cases this report cannot teach. The first **follow-up** report (2026-09-22, `scripts/spikes/verify-followup-360.js`) covers the reassessment block and an uncollapsed Direct Reports column; round 2 (§8b, `verify-cohort-360.js`) adds the fatal-flaw band, a fatal-flaw-dominated report, folded Others, and self-gaps in both directions. **Extraction is now calibrated on five reports; the golden set still runs on one.** Next: a ten-question table for T.K.'s shape (strengths-first with almost nothing above Below Average) and for J.J.'s (engagement in the fatal-flaw band), then the §8b rulings 1, 3 and 4 into brief v2.2.
 4. **Coach-read protocol.** For the first ten real participants, read each conversation within a day; mark each assistant turn keep / fix / wrong. Ten conversations write v2.2.
 
 ## 13. Version history

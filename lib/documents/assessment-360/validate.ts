@@ -91,6 +91,93 @@ export function validateAssessment360(
   if (!data.overall_effectiveness) warnings.push('overall_effectiveness is missing.')
   const passions = data.importance.filter((i) => i.is_passion).length
   if (passions === 0) warnings.push('No leadership passions detected.')
+  else if (passions !== 6) warnings.push(`${passions} leadership passions detected (the instrument asks for six).`)
+
+  // 5. Arithmetic the report itself guarantees. A column misread (the wrong
+  //    x-band, a wrapped header, a digit glued to its neighbour) shows up here
+  //    long before a range check would notice. Calibrated on five real reports
+  //    (2026-09-22); the tolerances allow the vendor's own rounding.
+  const r2 = (v: number) => Math.round(v * 100) / 100
+  const near = (a: number, b: number, tol = 0.011) => Math.abs(a - b) <= tol
+  const rankBy = new Map(data.competency_rankings.map((c) => [c.competency, c]))
+
+  // 5a. The rankings page is ordered by band, then by Total Score within band.
+  const printed = data.competency_rankings
+  const expected = [...printed].sort((a, b) => bandRankOf(b.band) - bandRankOf(a.band) || b.total - a.total)
+  for (let i = 0; i < printed.length; i++) {
+    const p = printed[i]
+    const e = expected[i]
+    if (p.competency !== e.competency && !(p.band === e.band && p.total === e.total)) {
+      errors.push(`Rankings are not in band-then-score order at row ${i + 1}: "${p.competency}" (${p.band} ${p.total}) where "${e.competency}" (${e.band} ${e.total}) was expected.`)
+      break
+    }
+  }
+
+  // 5b. distance_to_90th = norm_90th − total, and no Profound Strength sits below its 90th marker.
+  for (const c of data.competency_rankings) {
+    if (c.norm_90th !== null && c.distance_to_90th !== null && !near(r2(c.norm_90th - c.total), c.distance_to_90th)) warnings.push(`distance_to_90th disagrees with norm − total for ${c.competency}.`)
+    if (c.band === 'Profound Strength' && c.vs_90th === 'below') warnings.push(`${c.competency} is banded Profound Strength but its bar ends below the 90th marker.`)
+  }
+
+  // 5c. Gap analysis: gap = total − self, and the total is the rankings total.
+  for (const g of data.gap_analysis) {
+    if (!near(r2(g.total - g.self), g.gap)) errors.push(`Gap analysis arithmetic fails for ${g.competency}: ${g.total} − ${g.self} ≠ ${g.gap}.`)
+    const rt = rankBy.get(g.competency)?.total
+    if (rt !== undefined && !near(rt, g.total)) errors.push(`Gap analysis total for ${g.competency} (${g.total}) disagrees with the rankings page (${rt}).`)
+    if ((g.direction === 'positive' && g.gap < 0) || (g.direction === 'negative' && g.gap > 0)) errors.push(`Gap direction for ${g.competency} contradicts its sign (${g.gap} ${g.direction}).`)
+  }
+
+  // 5d. Importance: the printed total is the sum of the group columns.
+  for (const i of data.importance) {
+    const sum = i.manager + i.peers + i.others + i.direct_reports + i.self
+    if (sum !== i.total_votes) errors.push(`Importance votes for ${i.competency}: columns sum to ${sum}, printed total ${i.total_votes}.`)
+  }
+
+  // 5e. A tent pole is the average of its competencies' items, which the vendor
+  //     rounds a little differently from the mean of the printed competency
+  //     scores (Koudsi 2025: Personal Capability printed 3.08, mean 3.12).
+  for (const t of data.tent_poles) {
+    const members = t.competencies.map((n) => rankBy.get(n)?.total).filter((v): v is number => v !== undefined)
+    if (members.length !== t.competencies.length) {
+      warnings.push(`Tent pole ${t.name}: ${members.length} of ${t.competencies.length} member competencies found in the rankings.`)
+      continue
+    }
+    if (!members.length) continue
+    const mean = r2(members.reduce((a, b) => a + b, 0) / members.length)
+    if (!near(mean, t.score, 0.05)) warnings.push(`Tent pole ${t.name} reads ${t.score} but its competencies average ${mean}.`)
+  }
+
+  // 5f. Score details agree with the rankings page and the behavior lists.
+  const itemByNumber = new Map<number, { total: number | null }>()
+  for (const c of data.competency_details) {
+    const rt = rankBy.get(c.competency)?.total
+    if (rt !== undefined && c.total !== null && !near(rt, c.total)) errors.push(`Score details total for ${c.competency} (${c.total}) disagrees with the rankings page (${rt}).`)
+    const itemTotals = c.items.map((i) => i.total).filter((v): v is number => v !== null)
+    if (itemTotals.length && c.total !== null) {
+      const mean = r2(itemTotals.reduce((a, b) => a + b, 0) / itemTotals.length)
+      if (!near(mean, c.total, 0.05)) warnings.push(`Score details for ${c.competency}: items average ${mean}, competency total ${c.total}.`)
+    }
+    for (const i of c.items) itemByNumber.set(i.item_number, i)
+  }
+  for (const b of [...data.highest_behaviors, ...data.lowest_behaviors]) {
+    if (b.item_number === null) continue
+    const it = itemByNumber.get(b.item_number)
+    if (!it) {
+      if (data.competency_details.length) warnings.push(`Behavior item ${b.item_number} is not in the score details.`)
+      continue
+    }
+    if (it.total !== null && !near(it.total, b.total)) errors.push(`Behavior item ${b.item_number} reads ${b.total} in the behavior list but ${it.total} in the score details.`)
+  }
+
+  // 5g. A follow-up report's own comparison: the current column is this report.
+  if (data.reassessment) {
+    for (const e of data.reassessment.by_competency) {
+      const rt = rankBy.get(e.competency)?.total
+      if (rt !== undefined && !near(rt, e.current_total)) errors.push(`Reassessment current total for ${e.competency} (${e.current_total}) disagrees with the rankings page (${rt}).`)
+      if (!near(r2(e.current_total - e.previous_total), e.gap)) errors.push(`Reassessment arithmetic fails for ${e.competency}.`)
+    }
+    if (data.reassessment.by_competency.length !== data.competency_rankings.length) warnings.push(`Reassessment table has ${data.reassessment.by_competency.length} rows for ${data.competency_rankings.length} competencies.`)
+  }
 
   return { ok: errors.length === 0, errors, warnings }
 }

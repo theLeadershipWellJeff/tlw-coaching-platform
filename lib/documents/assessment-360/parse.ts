@@ -226,12 +226,18 @@ function readCountsBlock(rows: Row[], i: number): RaterCounts {
         ? `Fewer than three Direct Report submissions (${dr} received) — combined into Others; Employee Engagement is not reported.`
         : 'Rater groups were combined for reporting (small-N rule).'
   }
+  // A group the counts line does not name had no raters (Koudsi 2025: "1
+  // Manager, 6 Peers, 3 Direct Reports, 1 Self" — no Others). Once the line
+  // has parsed at all, an omitted group is 0, not unknown; null is reserved for
+  // a line that could not be read.
+  const parsedAny = Object.keys(received).length > 0
+  const count = (v: number | undefined) => v ?? (parsedAny ? 0 : null)
   return {
-    manager: received.manager ?? null,
-    peers: received.peers ?? null,
-    direct_reports: received.direct_reports ?? null,
-    others: received.others ?? null,
-    self: received.self ?? null,
+    manager: count(received.manager),
+    peers: count(received.peers),
+    direct_reports: count(received.direct_reports),
+    others: count(received.others),
+    self: count(received.self),
     ...(differs ? { reported_as: reported } : {}),
     collapsed_note: note,
   }

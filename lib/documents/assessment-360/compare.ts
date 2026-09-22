@@ -15,7 +15,10 @@ const r2 = (v: number) => Math.round(v * 100) / 100
 
 function countsDiffer(a: RaterCounts | null, b: RaterCounts | null): boolean {
   if (!a || !b) return true
-  return a.manager !== b.manager || a.peers !== b.peers || a.direct_reports !== b.direct_reports || a.others !== b.others || a.self !== b.self
+  // An omitted group reads 0 since 2026-09-22 and null on documents extracted
+  // before then; the two mean the same thing here.
+  const n = (v: number | null) => v ?? 0
+  return n(a.manager) !== n(b.manager) || n(a.peers) !== n(b.peers) || n(a.direct_reports) !== n(b.direct_reports) || n(a.others) !== n(b.others) || n(a.self) !== n(b.self)
 }
 
 function monthsBetween(a: string | null, b: string | null): number | null {

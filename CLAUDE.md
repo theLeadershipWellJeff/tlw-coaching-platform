@@ -1389,7 +1389,18 @@ the reference report to ~±0.01. No OCR, no vision model.
   4.48 kept apart), the Direct Reports column, 22 rater names across two
   pages, and the reassessment block (windows 2025-05-28→10-05 vs
   2023-10-18→12-15; Inspires −0.30 coloured irrelevant while Communicates
-  −0.32 is negative — colour, not score, decides).
+  −0.32 is negative — colour, not score, decides). **Round 2 (2026-09-22):**
+  `node scripts/spikes/verify-cohort-360.js` (87 checks, fixtures
+  `johnson-360.pdf` / `koudsi-360.pdf` / `hindawi-360.pdf`, each skipped when
+  absent) pins three more real reports — the Potential Fatal Flaw band (a
+  report almost entirely in it, engagement in it), Others folded into Peers on
+  both administrations, a counts line with no Others group (now reads **0**,
+  null only when the line is unreadable), self-gaps in both directions, and
+  reassessment gaps at exactly ±0.30. Extraction is calibrated on **five**
+  reports; the facts and the reading-model rulings are in rubrics/04 §8b.
+  `validate.ts` now also checks the arithmetic the pages guarantee (ranking
+  order, gap = total − self, importance sums, details/behaviors/reassessment
+  agreeing with the rankings page; tent poles within 0.05 as a warning).
 - **Failure reasons + client retry (2026-09-08).** `lib/documents/failure.ts#
   describeFailure` shapes a failed row for the portal — `name_mismatch` with
   BOTH names (the client can see whether their own account name is the

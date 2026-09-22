@@ -4,6 +4,10 @@
 //   node_modules/.bin/tsc -p scripts/spikes/tsconfig.spike.json && \
 //   node scripts/spikes/verify-batch-360.js fixtures/private/cohort-x/
 //
+// Every warning is printed in full — "band order follows score order" and
+// "legend not found" are the two that mean a colour read may have silently
+// failed, so read them before a report is uploaded.
+//
 // Per file: status, participant name, report date, rater counts, competency
 // count, band spread, the two integrity checks that matter most (band order not
 // by score somewhere; rater names absent from stored data), and the top three
@@ -58,7 +62,9 @@ const BAND_ORDER = ['Potential Fatal Flaw', 'Below Average', 'Above Average', 'P
       raters: `M${rc.manager ?? '?'} P${rc.peers ?? '?'} DR${rc.direct_reports ?? '?'} O${rc.others ?? '?'} S${rc.self ?? '?'}`,
       competencies: d.competency_rankings.length,
       bands: Object.entries(bands).map(([b, n]) => `${b.split(' ')[0]}:${n}`).join(' '),
-      engagement: d.engagement.available ? 'yes' : 'absent',
+      engagement: d.engagement.available ? `yes (${d.engagement.total} ${d.engagement.band})` : 'absent',
+      reassessment: d.reassessment ? 'yes' : 'no',
+      warningText: out.warnings,
       inversion: inversion ? 'yes' : 'no',
       namesLeak: namesLeak ? 'LEAK' : 'clean',
       warnings: out.warnings.length,
@@ -75,6 +81,8 @@ const BAND_ORDER = ['Potential Fatal Flaw', 'Below Average', 'Above Average', 'P
     console.log(`    ${r.participant} · ${r.date} · raters ${r.raters} · ${r.competencies} competencies · engagement ${r.engagement}`)
     console.log(`    bands ${r.bands} · band-vs-score inversion present: ${r.inversion} · rater names: ${r.namesLeak} · warnings: ${r.warnings}`)
     console.log(`    development candidates: ${r.top3}`)
+    if (r.reassessment === 'yes') console.log('    follow-up report: reassessment block present')
+    for (const w of r.warningText) console.log(`    ⚠ ${w}`)
   }
   const ok = rows.filter((r) => r.status === 'complete').length
   console.log(`\n${ok}/${rows.length} reports extracted cleanly${bad ? ` — ${bad} need attention` : ''}`)
