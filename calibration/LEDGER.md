@@ -21,7 +21,7 @@ compares live against the sheet and logs confirmations and discrepancies.
 | 2 | D.A. (first follow-up, Oct 2025) | follow-up | pass (spike; PDF not in this container) | — | — | — | — | — |
 | 3 | J.J. (Mar 2025) | initial 2025 print | **pass 14/14 (2026-09-23)** | — | — | — | — | — |
 | 4 | T.K. (Oct 2025) | follow-up | **pass 14/14 (2026-09-23)** | — | — | — | — | — |
-| 5 | M.H. (Oct 2025) | follow-up | **pass 14/14 (2026-09-23)** | — | — | — | — | — |
+| 5 | M.H. (Oct 2025) | follow-up | **pass 14/14 (2026-09-23)** | **2026-09-23 (async, Obsidian)** | 16 | 4 | 3 | 8 (rules file §Questions) |
 
 Suggested order: 3 (initial layout, fatal-flaw band, both gap directions) →
 1 (Jeff's own, the existing anchor) → 5 (a rise, folded Others) → 4 (the hard
@@ -31,7 +31,7 @@ one: almost everything in the fatal-flaw band, 18 meaningful declines) → 2.
 
 | session | report | new rules | cumulative | notes |
 |---|---|---|---|---|
-| (none yet) | | | | |
+| 1 | 5 (M.H.) | 16 | 16 | first report walked; 2 tensions with the code floor (asserting meaningful improvement; naming a target), 1 conflict with the brief (never quote fatal-flaw comments), 1 extractor gap (engagement items) |
 
 Report 1 should generate many; by reports 4 and 5 most of what Jeff says
 should already be covered. If report 5 still produces substantial new rules,
@@ -50,10 +50,14 @@ with its transcript reference.
 - "your direct reports scored you…" when they were combined
 - "your top three goals are…"
 - any estimate of a number not in the report
+- calling out a low score (L39, report 5) — strengths focus; a fatal-flaw band is the only exception, and later
+- dwelling on the lowest tent pole (L69, report 5)
+- quoting a potential-fatal-flaw comment (L160, report 5) — itemize and summarize, never quote
 
 ## Open questions carried between sessions
 
-- (none yet)
+- Report 5 → 8 questions in `report-5-rules.md` §Questions (change order; why Collaboration; is the proximity circle Promising-only; how the manager's vote enters; asserting meaningful improvement vs floor 9; naming a target vs floor 6; never-quote scope; A2 ticks on three tables).
+- Extractor gap: engagement items (61–66) with per-item scores and previous — Jeff reads them; the parser stores only the total.
 
 ## Files per session
 
