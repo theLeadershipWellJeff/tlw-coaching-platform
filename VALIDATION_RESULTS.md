@@ -113,7 +113,9 @@ the scribe pre-check (comment text stored as hashes; every number verbatim).
 | 2026-09-22 | T.K. | 3 | rater_counts.others | 0 (group absent from the counts line) | null | parser: omitted group read as unknown | `parse.ts#readCountsBlock` → 0 when the line parsed |
 | 2026-09-22 | T.K. | 7 | Personal Capability tent check | 3.08 | flagged 3.12 by a mean-of-competencies check | harness, not parser | A1 #3 now n-weights items |
 
-No fixture was ever edited.
+| 2026-09-23 | all | — | development_candidates | ranked Promising-first, no 75th floor, equal weights, manager_votes / distance_to_75th carried (Jeff's report-5 rulings) | previous ordering + manager-weighted votes | parser (targets.ts) — a method change, not a misread | fixtures re-frozen with `--force`, reason in the commit |
+
+No fixture was ever edited by hand.
 
 ## Part B — interpretation alignment
 

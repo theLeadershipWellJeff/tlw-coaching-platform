@@ -379,8 +379,8 @@
     "self": 1,
     "direct_reports": 1,
     "is_passion": true,
-    "weighted_score": 14,
-    "weighted_importance": 0.97
+    "weighted_score": 8,
+    "weighted_importance": 1
    },
    {
     "competency": "Collaboration and Teamwork",
@@ -391,8 +391,8 @@
     "self": 1,
     "direct_reports": 3,
     "is_passion": true,
-    "weighted_score": 13.5,
-    "weighted_importance": 0.93
+    "weighted_score": 8,
+    "weighted_importance": 1
    },
    {
     "competency": "Builds Relationships",
@@ -403,8 +403,8 @@
     "self": 0,
     "direct_reports": 3,
     "is_passion": false,
-    "weighted_score": 14.5,
-    "weighted_importance": 1
+    "weighted_score": 7,
+    "weighted_importance": 0.88
    },
    {
     "competency": "Communicates Powerfully and Prolifically",
@@ -415,8 +415,8 @@
     "self": 1,
     "direct_reports": 1,
     "is_passion": true,
-    "weighted_score": 10,
-    "weighted_importance": 0.69
+    "weighted_score": 6,
+    "weighted_importance": 0.75
    },
    {
     "competency": "Inspires and Motivates Others to High Performance",
@@ -427,8 +427,8 @@
     "self": 0,
     "direct_reports": 2,
     "is_passion": false,
-    "weighted_score": 11,
-    "weighted_importance": 0.76
+    "weighted_score": 6,
+    "weighted_importance": 0.75
    },
    {
     "competency": "Develops Others",
@@ -439,8 +439,8 @@
     "self": 1,
     "direct_reports": 1,
     "is_passion": true,
-    "weighted_score": 11,
-    "weighted_importance": 0.76
+    "weighted_score": 5,
+    "weighted_importance": 0.63
    },
    {
     "competency": "Develops Strategic Perspective",
@@ -451,8 +451,8 @@
     "self": 0,
     "direct_reports": 2,
     "is_passion": true,
-    "weighted_score": 8,
-    "weighted_importance": 0.55
+    "weighted_score": 4,
+    "weighted_importance": 0.5
    },
    {
     "competency": "Solves Problems and Analyzes Issues",
@@ -463,8 +463,8 @@
     "self": 0,
     "direct_reports": 0,
     "is_passion": false,
-    "weighted_score": 6.5,
-    "weighted_importance": 0.45
+    "weighted_score": 3,
+    "weighted_importance": 0.38
    },
    {
     "competency": "Innovates",
@@ -475,8 +475,8 @@
     "self": 0,
     "direct_reports": 1,
     "is_passion": false,
-    "weighted_score": 6,
-    "weighted_importance": 0.41
+    "weighted_score": 3,
+    "weighted_importance": 0.38
    },
    {
     "competency": "Makes Decisions",
@@ -487,8 +487,8 @@
     "self": 0,
     "direct_reports": 0,
     "is_passion": false,
-    "weighted_score": 4,
-    "weighted_importance": 0.28
+    "weighted_score": 2,
+    "weighted_importance": 0.25
    },
    {
     "competency": "Takes Risks",
@@ -499,8 +499,8 @@
     "self": 0,
     "direct_reports": 1,
     "is_passion": false,
-    "weighted_score": 3,
-    "weighted_importance": 0.21
+    "weighted_score": 2,
+    "weighted_importance": 0.25
    },
    {
     "competency": "Technical and Professional Acumen",
@@ -511,8 +511,8 @@
     "self": 0,
     "direct_reports": 0,
     "is_passion": false,
-    "weighted_score": 1.5,
-    "weighted_importance": 0.1
+    "weighted_score": 1,
+    "weighted_importance": 0.13
    },
    {
     "competency": "Learning Agility",
@@ -523,8 +523,8 @@
     "self": 0,
     "direct_reports": 0,
     "is_passion": true,
-    "weighted_score": 2,
-    "weighted_importance": 0.14
+    "weighted_score": 1,
+    "weighted_importance": 0.13
    },
    {
     "competency": "Drives for Results",
@@ -535,8 +535,8 @@
     "self": 0,
     "direct_reports": 0,
     "is_passion": false,
-    "weighted_score": 2,
-    "weighted_importance": 0.14
+    "weighted_score": 1,
+    "weighted_importance": 0.13
    },
    {
     "competency": "Takes Initiative",
@@ -547,8 +547,8 @@
     "self": 0,
     "direct_reports": 0,
     "is_passion": false,
-    "weighted_score": 2,
-    "weighted_importance": 0.14
+    "weighted_score": 1,
+    "weighted_importance": 0.13
    },
    {
     "competency": "Champions Change",
@@ -559,8 +559,8 @@
     "self": 0,
     "direct_reports": 0,
     "is_passion": false,
-    "weighted_score": 1.5,
-    "weighted_importance": 0.1
+    "weighted_score": 1,
+    "weighted_importance": 0.13
    },
    {
     "competency": "Customer and External Focus",
@@ -571,8 +571,8 @@
     "self": 0,
     "direct_reports": 1,
     "is_passion": false,
-    "weighted_score": 1.5,
-    "weighted_importance": 0.1
+    "weighted_score": 1,
+    "weighted_importance": 0.13
    },
    {
     "competency": "Establishes Stretch Goals",
@@ -3580,8 +3580,11 @@
     "total": 4.02,
     "band": "Below Average",
     "distance_to_90th": 0.57,
-    "weighted_importance": 0.97,
+    "distance_to_75th": 0.37,
+    "at_or_above_75th": false,
+    "weighted_importance": 1,
     "total_votes": 8,
+    "manager_votes": 1,
     "is_passion": true,
     "circles_met": 3,
     "missing": []
@@ -3591,19 +3594,11 @@
     "total": 3.3,
     "band": "Below Average",
     "distance_to_90th": 1.05,
-    "weighted_importance": 0.93,
+    "distance_to_75th": 0.81,
+    "at_or_above_75th": false,
+    "weighted_importance": 1,
     "total_votes": 8,
-    "is_passion": true,
-    "circles_met": 3,
-    "missing": []
-   },
-   {
-    "competency": "Develops Others",
-    "total": 3.7,
-    "band": "Below Average",
-    "distance_to_90th": 0.72,
-    "weighted_importance": 0.76,
-    "total_votes": 5,
+    "manager_votes": 1,
     "is_passion": true,
     "circles_met": 3,
     "missing": []
@@ -3613,8 +3608,25 @@
     "total": 3.63,
     "band": "Below Average",
     "distance_to_90th": 0.72,
-    "weighted_importance": 0.69,
+    "distance_to_75th": 0.5,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.75,
     "total_votes": 6,
+    "manager_votes": 1,
+    "is_passion": true,
+    "circles_met": 3,
+    "missing": []
+   },
+   {
+    "competency": "Develops Others",
+    "total": 3.7,
+    "band": "Below Average",
+    "distance_to_90th": 0.72,
+    "distance_to_75th": 0.48,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.63,
+    "total_votes": 5,
+    "manager_votes": 3,
     "is_passion": true,
     "circles_met": 3,
     "missing": []
@@ -3624,8 +3636,11 @@
     "total": 3.52,
     "band": "Below Average",
     "distance_to_90th": 0.85,
-    "weighted_importance": 0.55,
+    "distance_to_75th": 0.64,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.5,
     "total_votes": 4,
+    "manager_votes": 1,
     "is_passion": true,
     "circles_met": 3,
     "missing": []
@@ -3635,8 +3650,11 @@
     "total": 3.65,
     "band": "Below Average",
     "distance_to_90th": 0.7,
-    "weighted_importance": 0.14,
+    "distance_to_75th": 0.45,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.13,
     "total_votes": 1,
+    "manager_votes": 0,
     "is_passion": true,
     "circles_met": 3,
     "missing": []
@@ -3646,8 +3664,11 @@
     "total": 3.61,
     "band": "Below Average",
     "distance_to_90th": 0.83,
-    "weighted_importance": 1,
+    "distance_to_75th": 0.61,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.88,
     "total_votes": 7,
+    "manager_votes": 2,
     "is_passion": false,
     "circles_met": 2,
     "missing": [
@@ -3659,8 +3680,11 @@
     "total": 3.44,
     "band": "Below Average",
     "distance_to_90th": 0.95,
-    "weighted_importance": 0.76,
+    "distance_to_75th": 0.67,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.75,
     "total_votes": 6,
+    "manager_votes": 1,
     "is_passion": false,
     "circles_met": 2,
     "missing": [
@@ -3672,8 +3696,11 @@
     "total": 3.67,
     "band": "Below Average",
     "distance_to_90th": 0.77,
-    "weighted_importance": 0.45,
+    "distance_to_75th": 0.57,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.38,
     "total_votes": 3,
+    "manager_votes": 1,
     "is_passion": false,
     "circles_met": 2,
     "missing": [
@@ -3685,21 +3712,11 @@
     "total": 3.34,
     "band": "Below Average",
     "distance_to_90th": 1.04,
-    "weighted_importance": 0.41,
+    "distance_to_75th": 0.82,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.38,
     "total_votes": 3,
-    "is_passion": false,
-    "circles_met": 2,
-    "missing": [
-     "passion"
-    ]
-   },
-   {
-    "competency": "Makes Decisions",
-    "total": 3.44,
-    "band": "Potential Fatal Flaw",
-    "distance_to_90th": 1.04,
-    "weighted_importance": 0.28,
-    "total_votes": 2,
+    "manager_votes": 1,
     "is_passion": false,
     "circles_met": 2,
     "missing": [
@@ -3711,8 +3728,11 @@
     "total": 3.77,
     "band": "Below Average",
     "distance_to_90th": 0.64,
-    "weighted_importance": 0.21,
+    "distance_to_75th": 0.45,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.25,
     "total_votes": 2,
+    "manager_votes": 0,
     "is_passion": false,
     "circles_met": 2,
     "missing": [
@@ -3720,25 +3740,15 @@
     ]
    },
    {
-    "competency": "Drives for Results",
-    "total": 3.5,
-    "band": "Below Average",
-    "distance_to_90th": 1.01,
-    "weighted_importance": 0.14,
-    "total_votes": 1,
-    "is_passion": false,
-    "circles_met": 2,
-    "missing": [
-     "passion"
-    ]
-   },
-   {
-    "competency": "Takes Initiative",
-    "total": 3.38,
+    "competency": "Makes Decisions",
+    "total": 3.44,
     "band": "Potential Fatal Flaw",
-    "distance_to_90th": 1.19,
-    "weighted_importance": 0.14,
-    "total_votes": 1,
+    "distance_to_90th": 1.04,
+    "distance_to_75th": 0.85,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.25,
+    "total_votes": 2,
+    "manager_votes": 0,
     "is_passion": false,
     "circles_met": 2,
     "missing": [
@@ -3750,8 +3760,11 @@
     "total": 4.26,
     "band": "Above Average",
     "distance_to_90th": 0.32,
-    "weighted_importance": 0.1,
+    "distance_to_75th": 0.12,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.13,
     "total_votes": 1,
+    "manager_votes": 0,
     "is_passion": false,
     "circles_met": 2,
     "missing": [
@@ -3763,8 +3776,11 @@
     "total": 3.56,
     "band": "Below Average",
     "distance_to_90th": 0.83,
-    "weighted_importance": 0.1,
+    "distance_to_75th": 0.63,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.13,
     "total_votes": 1,
+    "manager_votes": 0,
     "is_passion": false,
     "circles_met": 2,
     "missing": [
@@ -3776,8 +3792,43 @@
     "total": 3.57,
     "band": "Below Average",
     "distance_to_90th": 0.88,
-    "weighted_importance": 0.1,
+    "distance_to_75th": 0.67,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.13,
     "total_votes": 1,
+    "manager_votes": 0,
+    "is_passion": false,
+    "circles_met": 2,
+    "missing": [
+     "passion"
+    ]
+   },
+   {
+    "competency": "Drives for Results",
+    "total": 3.5,
+    "band": "Below Average",
+    "distance_to_90th": 1.01,
+    "distance_to_75th": 0.81,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.13,
+    "total_votes": 1,
+    "manager_votes": 0,
+    "is_passion": false,
+    "circles_met": 2,
+    "missing": [
+     "passion"
+    ]
+   },
+   {
+    "competency": "Takes Initiative",
+    "total": 3.38,
+    "band": "Potential Fatal Flaw",
+    "distance_to_90th": 1.19,
+    "distance_to_75th": 0.99,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.13,
+    "total_votes": 1,
+    "manager_votes": 0,
     "is_passion": false,
     "circles_met": 2,
     "missing": [

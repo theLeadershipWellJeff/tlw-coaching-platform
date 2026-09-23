@@ -377,7 +377,7 @@
     "self": 0,
     "direct_reports": 2,
     "is_passion": false,
-    "weighted_score": 16,
+    "weighted_score": 8,
     "weighted_importance": 1
    },
    {
@@ -389,8 +389,8 @@
     "self": 1,
     "direct_reports": 1,
     "is_passion": true,
-    "weighted_score": 10,
-    "weighted_importance": 0.63
+    "weighted_score": 6,
+    "weighted_importance": 0.75
    },
    {
     "competency": "Innovates",
@@ -401,8 +401,8 @@
     "self": 1,
     "direct_reports": 1,
     "is_passion": true,
-    "weighted_score": 11,
-    "weighted_importance": 0.69
+    "weighted_score": 6,
+    "weighted_importance": 0.75
    },
    {
     "competency": "Drives for Results",
@@ -413,8 +413,8 @@
     "self": 1,
     "direct_reports": 2,
     "is_passion": true,
-    "weighted_score": 9.5,
-    "weighted_importance": 0.59
+    "weighted_score": 6,
+    "weighted_importance": 0.75
    },
    {
     "competency": "Displays High Integrity and Honesty",
@@ -425,8 +425,8 @@
     "self": 0,
     "direct_reports": 1,
     "is_passion": false,
-    "weighted_score": 7.5,
-    "weighted_importance": 0.47
+    "weighted_score": 4,
+    "weighted_importance": 0.5
    },
    {
     "competency": "Makes Decisions",
@@ -437,8 +437,8 @@
     "self": 1,
     "direct_reports": 3,
     "is_passion": true,
-    "weighted_score": 5,
-    "weighted_importance": 0.31
+    "weighted_score": 4,
+    "weighted_importance": 0.5
    },
    {
     "competency": "Communicates Powerfully and Prolifically",
@@ -449,8 +449,8 @@
     "self": 0,
     "direct_reports": 1,
     "is_passion": false,
-    "weighted_score": 5.5,
-    "weighted_importance": 0.34
+    "weighted_score": 3,
+    "weighted_importance": 0.38
    },
    {
     "competency": "Inspires and Motivates Others to High Performance",
@@ -461,8 +461,8 @@
     "self": 0,
     "direct_reports": 1,
     "is_passion": false,
-    "weighted_score": 6.5,
-    "weighted_importance": 0.41
+    "weighted_score": 3,
+    "weighted_importance": 0.38
    },
    {
     "competency": "Learning Agility",
@@ -473,8 +473,8 @@
     "self": 0,
     "direct_reports": 1,
     "is_passion": false,
-    "weighted_score": 1.5,
-    "weighted_importance": 0.09
+    "weighted_score": 1,
+    "weighted_importance": 0.13
    },
    {
     "competency": "Takes Initiative",
@@ -485,7 +485,7 @@
     "self": 0,
     "direct_reports": 0,
     "is_passion": true,
-    "weighted_score": 2,
+    "weighted_score": 1,
     "weighted_importance": 0.13
    },
    {
@@ -497,8 +497,8 @@
     "self": 0,
     "direct_reports": 1,
     "is_passion": true,
-    "weighted_score": 1.5,
-    "weighted_importance": 0.09
+    "weighted_score": 1,
+    "weighted_importance": 0.13
    },
    {
     "competency": "Builds Relationships",
@@ -509,7 +509,7 @@
     "self": 0,
     "direct_reports": 0,
     "is_passion": false,
-    "weighted_score": 2,
+    "weighted_score": 1,
     "weighted_importance": 0.13
    },
    {
@@ -521,8 +521,8 @@
     "self": 0,
     "direct_reports": 1,
     "is_passion": false,
-    "weighted_score": 1.5,
-    "weighted_importance": 0.09
+    "weighted_score": 1,
+    "weighted_importance": 0.13
    },
    {
     "competency": "Collaboration and Teamwork",
@@ -533,7 +533,7 @@
     "self": 0,
     "direct_reports": 0,
     "is_passion": false,
-    "weighted_score": 2,
+    "weighted_score": 1,
     "weighted_importance": 0.13
    },
    {
@@ -545,8 +545,8 @@
     "self": 0,
     "direct_reports": 0,
     "is_passion": false,
-    "weighted_score": 3,
-    "weighted_importance": 0.19
+    "weighted_score": 1,
+    "weighted_importance": 0.13
    },
    {
     "competency": "Customer and External Focus",
@@ -557,8 +557,8 @@
     "self": 0,
     "direct_reports": 1,
     "is_passion": false,
-    "weighted_score": 1.5,
-    "weighted_importance": 0.09
+    "weighted_score": 1,
+    "weighted_importance": 0.13
    },
    {
     "competency": "Establishes Stretch Goals",
@@ -3410,12 +3410,15 @@
   "extraction_notes": [],
   "development_candidates": [
    {
-    "competency": "Innovates",
-    "total": 4.09,
-    "band": "Above Average",
-    "distance_to_90th": 0.29,
-    "weighted_importance": 0.69,
+    "competency": "Drives for Results",
+    "total": 4.49,
+    "band": "Promising Profound Strength",
+    "distance_to_90th": 0.03,
+    "distance_to_75th": -0.18,
+    "at_or_above_75th": true,
+    "weighted_importance": 0.75,
     "total_votes": 6,
+    "manager_votes": 0,
     "is_passion": true,
     "circles_met": 3,
     "missing": []
@@ -3425,19 +3428,11 @@
     "total": 4.22,
     "band": "Promising Profound Strength",
     "distance_to_90th": 0.22,
-    "weighted_importance": 0.63,
+    "distance_to_75th": 0.02,
+    "at_or_above_75th": true,
+    "weighted_importance": 0.75,
     "total_votes": 6,
-    "is_passion": true,
-    "circles_met": 3,
-    "missing": []
-   },
-   {
-    "competency": "Drives for Results",
-    "total": 4.49,
-    "band": "Promising Profound Strength",
-    "distance_to_90th": 0.03,
-    "weighted_importance": 0.59,
-    "total_votes": 6,
+    "manager_votes": 0,
     "is_passion": true,
     "circles_met": 3,
     "missing": []
@@ -3447,8 +3442,25 @@
     "total": 4.29,
     "band": "Promising Profound Strength",
     "distance_to_90th": 0.19,
-    "weighted_importance": 0.31,
+    "distance_to_75th": 0,
+    "at_or_above_75th": true,
+    "weighted_importance": 0.5,
     "total_votes": 4,
+    "manager_votes": 0,
+    "is_passion": true,
+    "circles_met": 3,
+    "missing": []
+   },
+   {
+    "competency": "Innovates",
+    "total": 4.09,
+    "band": "Above Average",
+    "distance_to_90th": 0.29,
+    "distance_to_75th": 0.07,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.75,
+    "total_votes": 6,
+    "manager_votes": 1,
     "is_passion": true,
     "circles_met": 3,
     "missing": []
@@ -3458,8 +3470,11 @@
     "total": 4.11,
     "band": "Above Average",
     "distance_to_90th": 0.46,
+    "distance_to_75th": 0.26,
+    "at_or_above_75th": false,
     "weighted_importance": 0.13,
     "total_votes": 1,
+    "manager_votes": 0,
     "is_passion": true,
     "circles_met": 3,
     "missing": []
@@ -3469,45 +3484,25 @@
     "total": 3.89,
     "band": "Below Average",
     "distance_to_90th": 0.52,
-    "weighted_importance": 0.09,
+    "distance_to_75th": 0.34,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.13,
     "total_votes": 1,
+    "manager_votes": 0,
     "is_passion": true,
     "circles_met": 3,
     "missing": []
-   },
-   {
-    "competency": "Technical and Professional Acumen",
-    "total": 4.29,
-    "band": "Above Average",
-    "distance_to_90th": 0.29,
-    "weighted_importance": 1,
-    "total_votes": 8,
-    "is_passion": false,
-    "circles_met": 2,
-    "missing": [
-     "passion"
-    ]
    },
    {
     "competency": "Displays High Integrity and Honesty",
     "total": 4.47,
     "band": "Promising Profound Strength",
     "distance_to_90th": 0.12,
-    "weighted_importance": 0.47,
+    "distance_to_75th": -0.08,
+    "at_or_above_75th": true,
+    "weighted_importance": 0.5,
     "total_votes": 4,
-    "is_passion": false,
-    "circles_met": 2,
-    "missing": [
-     "passion"
-    ]
-   },
-   {
-    "competency": "Inspires and Motivates Others to High Performance",
-    "total": 4.07,
-    "band": "Above Average",
-    "distance_to_90th": 0.32,
-    "weighted_importance": 0.41,
-    "total_votes": 3,
+    "manager_votes": 0,
     "is_passion": false,
     "circles_met": 2,
     "missing": [
@@ -3519,47 +3514,11 @@
     "total": 4.24,
     "band": "Promising Profound Strength",
     "distance_to_90th": 0.11,
-    "weighted_importance": 0.34,
+    "distance_to_75th": -0.11,
+    "at_or_above_75th": true,
+    "weighted_importance": 0.38,
     "total_votes": 3,
-    "is_passion": false,
-    "circles_met": 2,
-    "missing": [
-     "passion"
-    ]
-   },
-   {
-    "competency": "Champions Change",
-    "total": 4.22,
-    "band": "Promising Profound Strength",
-    "distance_to_90th": 0.17,
-    "weighted_importance": 0.19,
-    "total_votes": 1,
-    "is_passion": false,
-    "circles_met": 2,
-    "missing": [
-     "passion"
-    ]
-   },
-   {
-    "competency": "Collaboration and Teamwork",
-    "total": 4.22,
-    "band": "Promising Profound Strength",
-    "distance_to_90th": 0.13,
-    "weighted_importance": 0.13,
-    "total_votes": 1,
-    "is_passion": false,
-    "circles_met": 2,
-    "missing": [
-     "passion"
-    ]
-   },
-   {
-    "competency": "Builds Relationships",
-    "total": 4.23,
-    "band": "Promising Profound Strength",
-    "distance_to_90th": 0.21,
-    "weighted_importance": 0.13,
-    "total_votes": 1,
+    "manager_votes": 0,
     "is_passion": false,
     "circles_met": 2,
     "missing": [
@@ -3571,8 +3530,27 @@
     "total": 4.31,
     "band": "Promising Profound Strength",
     "distance_to_90th": 0.04,
-    "weighted_importance": 0.09,
+    "distance_to_75th": -0.21,
+    "at_or_above_75th": true,
+    "weighted_importance": 0.13,
     "total_votes": 1,
+    "manager_votes": 0,
+    "is_passion": false,
+    "circles_met": 2,
+    "missing": [
+     "passion"
+    ]
+   },
+   {
+    "competency": "Collaboration and Teamwork",
+    "total": 4.22,
+    "band": "Promising Profound Strength",
+    "distance_to_90th": 0.13,
+    "distance_to_75th": -0.11,
+    "at_or_above_75th": true,
+    "weighted_importance": 0.13,
+    "total_votes": 1,
+    "manager_votes": 0,
     "is_passion": false,
     "circles_met": 2,
     "missing": [
@@ -3584,8 +3562,43 @@
     "total": 4.3,
     "band": "Promising Profound Strength",
     "distance_to_90th": 0.15,
-    "weighted_importance": 0.09,
+    "distance_to_75th": -0.06,
+    "at_or_above_75th": true,
+    "weighted_importance": 0.13,
     "total_votes": 1,
+    "manager_votes": 0,
+    "is_passion": false,
+    "circles_met": 2,
+    "missing": [
+     "passion"
+    ]
+   },
+   {
+    "competency": "Champions Change",
+    "total": 4.22,
+    "band": "Promising Profound Strength",
+    "distance_to_90th": 0.17,
+    "distance_to_75th": -0.03,
+    "at_or_above_75th": true,
+    "weighted_importance": 0.13,
+    "total_votes": 1,
+    "manager_votes": 1,
+    "is_passion": false,
+    "circles_met": 2,
+    "missing": [
+     "passion"
+    ]
+   },
+   {
+    "competency": "Builds Relationships",
+    "total": 4.23,
+    "band": "Promising Profound Strength",
+    "distance_to_90th": 0.21,
+    "distance_to_75th": -0.01,
+    "at_or_above_75th": true,
+    "weighted_importance": 0.13,
+    "total_votes": 1,
+    "manager_votes": 0,
     "is_passion": false,
     "circles_met": 2,
     "missing": [
@@ -3597,8 +3610,43 @@
     "total": 4.16,
     "band": "Promising Profound Strength",
     "distance_to_90th": 0.26,
-    "weighted_importance": 0.09,
+    "distance_to_75th": 0.02,
+    "at_or_above_75th": true,
+    "weighted_importance": 0.13,
     "total_votes": 1,
+    "manager_votes": 0,
+    "is_passion": false,
+    "circles_met": 2,
+    "missing": [
+     "passion"
+    ]
+   },
+   {
+    "competency": "Technical and Professional Acumen",
+    "total": 4.29,
+    "band": "Above Average",
+    "distance_to_90th": 0.29,
+    "distance_to_75th": 0.09,
+    "at_or_above_75th": false,
+    "weighted_importance": 1,
+    "total_votes": 8,
+    "manager_votes": 1,
+    "is_passion": false,
+    "circles_met": 2,
+    "missing": [
+     "passion"
+    ]
+   },
+   {
+    "competency": "Inspires and Motivates Others to High Performance",
+    "total": 4.07,
+    "band": "Above Average",
+    "distance_to_90th": 0.32,
+    "distance_to_75th": 0.04,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.38,
+    "total_votes": 3,
+    "manager_votes": 1,
     "is_passion": false,
     "circles_met": 2,
     "missing": [

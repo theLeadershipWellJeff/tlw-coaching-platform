@@ -1299,12 +1299,19 @@ the reference report to ~±0.01. No OCR, no vision model.
   column, the `|` glyph at x<50 = passion. Rater names (the "Your Raters"
   table) are returned separately for the absence assertion and never stored;
   `extractedText` starts at the first results page and drops that table.
-- **`targets.ts`** — the three-circle development model. Weights
-  (`DEFAULT_TARGET_WEIGHTS`: manager 3, peers 2, others/direct 1.5, self 0.5)
-  are config, never in output copy; competencies at/above their 90th are
-  excluded from the proximity circle; ranked circles → weighted need →
-  distance. Reference report yields Strategic Perspective, Learning Agility,
-  Technical Acumen on top (Jeff's confirmed acceptance test).
+- **`targets.ts`** — the three-circle development model. Votes are counted
+  **equally across rater groups** since 2026-09-23 (`DEFAULT_TARGET_WEIGHTS`
+  all 1 — Jeff: no objectively different rating for the manager; the manager's
+  vote is carried as `manager_votes` so a target chosen without one is called
+  out, never vetoed). Competencies at/above their 90th are excluded from the
+  proximity circle; proximity = distance to the competency's OWN 90th, never
+  the total. Ranked circles → **Promising band first** (`at_or_above_75th`;
+  the 75th is NOT a floor — below it candidates stay and carry
+  `distance_to_75th` so the nearest to the 75th can be named) → votes →
+  distance. Reference report still yields Strategic Perspective, Learning
+  Agility, Technical Acumen on top (Jeff's confirmed acceptance test).
+  Changing the ranking changes stored `development_candidates` — documents
+  uploaded earlier keep the old order until retried/re-extracted.
 - **`compare.ts`** — longitudinal block on the newer document: band movement +
   distance-to-90th delta are the headline, raw delta secondary, comparability
   caveats (rater sets / norm vintage) carried. Deliberately no totals, no

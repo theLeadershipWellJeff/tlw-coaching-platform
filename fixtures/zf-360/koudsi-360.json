@@ -373,7 +373,7 @@
     "self": 1,
     "direct_reports": 0,
     "is_passion": true,
-    "weighted_score": 13.5,
+    "weighted_score": 7,
     "weighted_importance": 1
    },
    {
@@ -385,8 +385,8 @@
     "self": 1,
     "direct_reports": 1,
     "is_passion": true,
-    "weighted_score": 8,
-    "weighted_importance": 0.59
+    "weighted_score": 5,
+    "weighted_importance": 0.71
    },
    {
     "competency": "Displays High Integrity and Honesty",
@@ -397,8 +397,8 @@
     "self": 0,
     "direct_reports": 1,
     "is_passion": false,
-    "weighted_score": 7.5,
-    "weighted_importance": 0.56
+    "weighted_score": 4,
+    "weighted_importance": 0.57
    },
    {
     "competency": "Solves Problems and Analyzes Issues",
@@ -409,8 +409,8 @@
     "self": 0,
     "direct_reports": 1,
     "is_passion": true,
-    "weighted_score": 6.5,
-    "weighted_importance": 0.48
+    "weighted_score": 3,
+    "weighted_importance": 0.43
    },
    {
     "competency": "Makes Decisions",
@@ -421,8 +421,8 @@
     "self": 0,
     "direct_reports": 0,
     "is_passion": false,
-    "weighted_score": 6,
-    "weighted_importance": 0.44
+    "weighted_score": 3,
+    "weighted_importance": 0.43
    },
    {
     "competency": "Collaboration and Teamwork",
@@ -433,8 +433,8 @@
     "self": 0,
     "direct_reports": 2,
     "is_passion": false,
-    "weighted_score": 5,
-    "weighted_importance": 0.37
+    "weighted_score": 3,
+    "weighted_importance": 0.43
    },
    {
     "competency": "Learning Agility",
@@ -445,8 +445,8 @@
     "self": 0,
     "direct_reports": 0,
     "is_passion": false,
-    "weighted_score": 5,
-    "weighted_importance": 0.37
+    "weighted_score": 2,
+    "weighted_importance": 0.29
    },
    {
     "competency": "Communicates Powerfully and Prolifically",
@@ -458,7 +458,7 @@
     "direct_reports": 1,
     "is_passion": false,
     "weighted_score": 2,
-    "weighted_importance": 0.15
+    "weighted_importance": 0.29
    },
    {
     "competency": "Builds Relationships",
@@ -469,8 +469,8 @@
     "self": 0,
     "direct_reports": 0,
     "is_passion": false,
-    "weighted_score": 4,
-    "weighted_importance": 0.3
+    "weighted_score": 2,
+    "weighted_importance": 0.29
    },
    {
     "competency": "Develops Strategic Perspective",
@@ -482,7 +482,7 @@
     "direct_reports": 1,
     "is_passion": true,
     "weighted_score": 2,
-    "weighted_importance": 0.15
+    "weighted_importance": 0.29
    },
    {
     "competency": "Customer and External Focus",
@@ -493,8 +493,8 @@
     "self": 0,
     "direct_reports": 0,
     "is_passion": true,
-    "weighted_score": 4,
-    "weighted_importance": 0.3
+    "weighted_score": 2,
+    "weighted_importance": 0.29
    },
    {
     "competency": "Technical and Professional Acumen",
@@ -505,8 +505,8 @@
     "self": 0,
     "direct_reports": 0,
     "is_passion": true,
-    "weighted_score": 3,
-    "weighted_importance": 0.22
+    "weighted_score": 1,
+    "weighted_importance": 0.14
    },
    {
     "competency": "Establishes Stretch Goals",
@@ -517,8 +517,8 @@
     "self": 0,
     "direct_reports": 0,
     "is_passion": false,
-    "weighted_score": 2,
-    "weighted_importance": 0.15
+    "weighted_score": 1,
+    "weighted_importance": 0.14
    },
    {
     "competency": "Takes Initiative",
@@ -529,8 +529,8 @@
     "self": 0,
     "direct_reports": 0,
     "is_passion": false,
-    "weighted_score": 2,
-    "weighted_importance": 0.15
+    "weighted_score": 1,
+    "weighted_importance": 0.14
    },
    {
     "competency": "Develops Others",
@@ -541,8 +541,8 @@
     "self": 0,
     "direct_reports": 0,
     "is_passion": false,
-    "weighted_score": 2,
-    "weighted_importance": 0.15
+    "weighted_score": 1,
+    "weighted_importance": 0.14
    },
    {
     "competency": "Values Diversity",
@@ -553,8 +553,8 @@
     "self": 0,
     "direct_reports": 1,
     "is_passion": false,
-    "weighted_score": 1.5,
-    "weighted_importance": 0.11
+    "weighted_score": 1,
+    "weighted_importance": 0.14
    },
    {
     "competency": "Takes Risks",
@@ -3372,8 +3372,11 @@
     "total": 3.5,
     "band": "Below Average",
     "distance_to_90th": 0.88,
+    "distance_to_75th": 0.66,
+    "at_or_above_75th": false,
     "weighted_importance": 1,
     "total_votes": 7,
+    "manager_votes": 1,
     "is_passion": true,
     "circles_met": 3,
     "missing": []
@@ -3383,8 +3386,11 @@
     "total": 2.6,
     "band": "Potential Fatal Flaw",
     "distance_to_90th": 1.91,
-    "weighted_importance": 0.59,
+    "distance_to_75th": 1.71,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.71,
     "total_votes": 5,
+    "manager_votes": 0,
     "is_passion": true,
     "circles_met": 3,
     "missing": []
@@ -3394,8 +3400,11 @@
     "total": 3.17,
     "band": "Potential Fatal Flaw",
     "distance_to_90th": 1.27,
-    "weighted_importance": 0.48,
+    "distance_to_75th": 1.07,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.43,
     "total_votes": 3,
+    "manager_votes": 1,
     "is_passion": true,
     "circles_met": 3,
     "missing": []
@@ -3405,19 +3414,11 @@
     "total": 3.18,
     "band": "Potential Fatal Flaw",
     "distance_to_90th": 1.27,
-    "weighted_importance": 0.3,
+    "distance_to_75th": 1.06,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.29,
     "total_votes": 2,
-    "is_passion": true,
-    "circles_met": 3,
-    "missing": []
-   },
-   {
-    "competency": "Technical and Professional Acumen",
-    "total": 3.14,
-    "band": "Potential Fatal Flaw",
-    "distance_to_90th": 1.44,
-    "weighted_importance": 0.22,
-    "total_votes": 1,
+    "manager_votes": 0,
     "is_passion": true,
     "circles_met": 3,
     "missing": []
@@ -3427,8 +3428,25 @@
     "total": 3.08,
     "band": "Potential Fatal Flaw",
     "distance_to_90th": 1.28,
-    "weighted_importance": 0.15,
+    "distance_to_75th": 1.08,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.29,
     "total_votes": 2,
+    "manager_votes": 0,
+    "is_passion": true,
+    "circles_met": 3,
+    "missing": []
+   },
+   {
+    "competency": "Technical and Professional Acumen",
+    "total": 3.14,
+    "band": "Potential Fatal Flaw",
+    "distance_to_90th": 1.44,
+    "distance_to_75th": 1.24,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.14,
+    "total_votes": 1,
+    "manager_votes": 1,
     "is_passion": true,
     "circles_met": 3,
     "missing": []
@@ -3438,21 +3456,11 @@
     "total": 3.03,
     "band": "Potential Fatal Flaw",
     "distance_to_90th": 1.56,
-    "weighted_importance": 0.56,
+    "distance_to_75th": 1.36,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.57,
     "total_votes": 4,
-    "is_passion": false,
-    "circles_met": 2,
-    "missing": [
-     "passion"
-    ]
-   },
-   {
-    "competency": "Makes Decisions",
-    "total": 3,
-    "band": "Potential Fatal Flaw",
-    "distance_to_90th": 1.48,
-    "weighted_importance": 0.44,
-    "total_votes": 3,
+    "manager_votes": 0,
     "is_passion": false,
     "circles_met": 2,
     "missing": [
@@ -3464,8 +3472,11 @@
     "total": 2.93,
     "band": "Potential Fatal Flaw",
     "distance_to_90th": 1.42,
-    "weighted_importance": 0.37,
+    "distance_to_75th": 1.18,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.43,
     "total_votes": 3,
+    "manager_votes": 0,
     "is_passion": false,
     "circles_met": 2,
     "missing": [
@@ -3473,64 +3484,15 @@
     ]
    },
    {
-    "competency": "Learning Agility",
-    "total": 2.66,
-    "band": "Potential Fatal Flaw",
-    "distance_to_90th": 1.69,
-    "weighted_importance": 0.37,
-    "total_votes": 2,
-    "is_passion": false,
-    "circles_met": 2,
-    "missing": [
-     "passion"
-    ]
-   },
-   {
-    "competency": "Builds Relationships",
-    "total": 2.63,
-    "band": "Potential Fatal Flaw",
-    "distance_to_90th": 1.81,
-    "weighted_importance": 0.3,
-    "total_votes": 2,
-    "is_passion": false,
-    "circles_met": 2,
-    "missing": [
-     "passion"
-    ]
-   },
-   {
-    "competency": "Establishes Stretch Goals",
-    "total": 2.93,
-    "band": "Potential Fatal Flaw",
-    "distance_to_90th": 1.47,
-    "weighted_importance": 0.15,
-    "total_votes": 1,
-    "is_passion": false,
-    "circles_met": 2,
-    "missing": [
-     "passion"
-    ]
-   },
-   {
-    "competency": "Takes Initiative",
+    "competency": "Makes Decisions",
     "total": 3,
     "band": "Potential Fatal Flaw",
-    "distance_to_90th": 1.57,
-    "weighted_importance": 0.15,
-    "total_votes": 1,
-    "is_passion": false,
-    "circles_met": 2,
-    "missing": [
-     "passion"
-    ]
-   },
-   {
-    "competency": "Develops Others",
-    "total": 2.85,
-    "band": "Potential Fatal Flaw",
-    "distance_to_90th": 1.57,
-    "weighted_importance": 0.15,
-    "total_votes": 1,
+    "distance_to_90th": 1.48,
+    "distance_to_75th": 1.29,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.43,
+    "total_votes": 3,
+    "manager_votes": 0,
     "is_passion": false,
     "circles_met": 2,
     "missing": [
@@ -3542,8 +3504,43 @@
     "total": 2.67,
     "band": "Potential Fatal Flaw",
     "distance_to_90th": 1.68,
-    "weighted_importance": 0.15,
+    "distance_to_75th": 1.46,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.29,
     "total_votes": 2,
+    "manager_votes": 0,
+    "is_passion": false,
+    "circles_met": 2,
+    "missing": [
+     "passion"
+    ]
+   },
+   {
+    "competency": "Learning Agility",
+    "total": 2.66,
+    "band": "Potential Fatal Flaw",
+    "distance_to_90th": 1.69,
+    "distance_to_75th": 1.44,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.29,
+    "total_votes": 2,
+    "manager_votes": 1,
+    "is_passion": false,
+    "circles_met": 2,
+    "missing": [
+     "passion"
+    ]
+   },
+   {
+    "competency": "Builds Relationships",
+    "total": 2.63,
+    "band": "Potential Fatal Flaw",
+    "distance_to_90th": 1.81,
+    "distance_to_75th": 1.59,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.29,
+    "total_votes": 2,
+    "manager_votes": 0,
     "is_passion": false,
     "circles_met": 2,
     "missing": [
@@ -3555,8 +3552,59 @@
     "total": 3.46,
     "band": "Below Average",
     "distance_to_90th": 0.98,
-    "weighted_importance": 0.11,
+    "distance_to_75th": 0.78,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.14,
     "total_votes": 1,
+    "manager_votes": 0,
+    "is_passion": false,
+    "circles_met": 2,
+    "missing": [
+     "passion"
+    ]
+   },
+   {
+    "competency": "Establishes Stretch Goals",
+    "total": 2.93,
+    "band": "Potential Fatal Flaw",
+    "distance_to_90th": 1.47,
+    "distance_to_75th": 1.25,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.14,
+    "total_votes": 1,
+    "manager_votes": 0,
+    "is_passion": false,
+    "circles_met": 2,
+    "missing": [
+     "passion"
+    ]
+   },
+   {
+    "competency": "Takes Initiative",
+    "total": 3,
+    "band": "Potential Fatal Flaw",
+    "distance_to_90th": 1.57,
+    "distance_to_75th": 1.37,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.14,
+    "total_votes": 1,
+    "manager_votes": 0,
+    "is_passion": false,
+    "circles_met": 2,
+    "missing": [
+     "passion"
+    ]
+   },
+   {
+    "competency": "Develops Others",
+    "total": 2.85,
+    "band": "Potential Fatal Flaw",
+    "distance_to_90th": 1.57,
+    "distance_to_75th": 1.33,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.14,
+    "total_votes": 1,
+    "manager_votes": 0,
     "is_passion": false,
     "circles_met": 2,
     "missing": [

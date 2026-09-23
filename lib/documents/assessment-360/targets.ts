@@ -20,13 +20,19 @@ export type TargetWeights = {
   self: number
 }
 
-/** Manager heaviest, self lowest. Tunable without touching the ranking logic. */
+/**
+ * Equal weights (Jeff, report-5 calibration, 2026-09-23: "we don't want an
+ * objectively different rating for the manager"). The manager's vote is
+ * surfaced as `manager_votes` on each candidate instead, so a target chosen
+ * without one can be called out as something to be aware of. Tunable without
+ * touching the ranking logic.
+ */
 export const DEFAULT_TARGET_WEIGHTS: TargetWeights = {
-  manager: 3,
-  peers: 2,
-  others: 1.5,
-  direct_reports: 1.5,
-  self: 0.5,
+  manager: 1,
+  peers: 1,
+  others: 1,
+  direct_reports: 1,
+  self: 1,
 }
 
 const r2 = (v: number) => Math.round(v * 100) / 100
@@ -42,10 +48,14 @@ export function weightImportance(rows: ImportanceRow[], w: TargetWeights = DEFAU
 }
 
 /**
- * Rank candidates: most circles first, then business need (weighted), then the
- * shortest climb to the 90th. Competencies already at/above the 90th are
- * excluded from the proximity circle — those are Profound Strengths to build
- * from, not gaps to close.
+ * Rank candidates: most circles first; then the Promising band (at or above
+ * the 75th) ahead of the rest — the 75th is NOT a floor, a client may arrive
+ * with nothing above it, so competencies below it stay candidates and carry
+ * their distance to the 75th; then business need (votes); then the shortest
+ * climb to the 90th. Competencies already at/above the 90th are excluded from
+ * the proximity circle — those are Profound Strengths to build from, not gaps
+ * to close. Proximity is always distance to the competency's OWN 90th mark,
+ * never the total score (Jeff, report 5).
  */
 export function computeDevelopmentCandidates(
   rankings: CompetencyRanking[],
@@ -65,13 +75,17 @@ export function computeDevelopmentCandidates(
     if (!proximity) missing.push('proximity')
     if (!need) missing.push('need')
     if (!passion) missing.push('passion')
+    const distance75 = c.norm_75th === null ? null : r2(c.norm_75th - c.total)
     out.push({
       competency: c.competency,
       total: c.total,
       band: c.band,
       distance_to_90th: c.distance_to_90th,
+      distance_to_75th: distance75,
+      at_or_above_75th: c.band === 'Promising Profound Strength' || c.band === 'Profound Strength' || (distance75 !== null && distance75 <= 0),
       weighted_importance: imp?.weighted_importance ?? 0,
       total_votes: imp?.total_votes ?? 0,
+      manager_votes: imp?.manager ?? 0,
       is_passion: passion,
       circles_met: 3 - missing.length,
       missing,
@@ -82,6 +96,7 @@ export function computeDevelopmentCandidates(
     .sort(
       (a, b) =>
         b.circles_met - a.circles_met ||
+        Number(b.at_or_above_75th) - Number(a.at_or_above_75th) ||
         b.weighted_importance - a.weighted_importance ||
         a.distance_to_90th - b.distance_to_90th
     )
