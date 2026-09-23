@@ -83,7 +83,7 @@ Reports 1–2: not re-run here. Their spikes (62 + 40 checks) pass as of
 
 ### A2. Stratified human verification
 
-**M.H. — verified by Jeff 2026-09-23** (async, Obsidian): identity, overall, engagement, tent, all 19 rankings, reassessment, gaps ticked OK; discrepancies table empty. Highest / lowest behaviors and importance tables not ticked (observations written against them — confirmation pending).
+**M.H. — verified by Jeff 2026-09-23** (async, Obsidian): identity, overall, engagement, tent, all 19 rankings, reassessment, gaps ticked OK; discrepancies table empty. Highest / lowest behaviors and importance tables confirmed verified by Jeff the same day. **A2 for M.H.: 0 discrepancies, complete.**
 
 
 Sheets: `node .spike-build/scripts/validation/generate-verification-sheet.js`

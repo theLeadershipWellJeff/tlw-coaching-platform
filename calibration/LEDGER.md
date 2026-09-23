@@ -21,7 +21,7 @@ compares live against the sheet and logs confirmations and discrepancies.
 | 2 | D.A. (first follow-up, Oct 2025) | follow-up | pass (spike; PDF not in this container) | — | — | — | — | — |
 | 3 | J.J. (Mar 2025) | initial 2025 print | **pass 14/14 (2026-09-23)** | — | — | — | — | — |
 | 4 | T.K. (Oct 2025) | follow-up | **pass 14/14 (2026-09-23)** | — | — | — | — | — |
-| 5 | M.H. (Oct 2025) | follow-up | **pass 14/14 (2026-09-23)** | **2026-09-23 (async, Obsidian)** | 16 | 4 | 3 | 8 (rules file §Questions) |
+| 5 | M.H. (Oct 2025) | follow-up | **pass 14/14 (2026-09-23)** | **2026-09-23 (async, Obsidian)** | 16 | 4 | 3 | 1 open (change order); 7 ruled — see rules file §Rulings |
 
 Suggested order: 3 (initial layout, fatal-flaw band, both gap directions) →
 1 (Jeff's own, the existing anchor) → 5 (a rise, folded Others) → 4 (the hard
@@ -56,7 +56,9 @@ with its transcript reference.
 
 ## Open questions carried between sessions
 
-- Report 5 → 8 questions in `report-5-rules.md` §Questions (change order; why Collaboration; is the proximity circle Promising-only; how the manager's vote enters; asserting meaningful improvement vs floor 9; naming a target vs floor 6; never-quote scope; A2 ticks on three tables).
+- Report 5 → 1 open: is opening change from the rater groups the default order for every follow-up? (7 of 8 ruled 2026-09-23 — `report-5-rules.md` §Rulings.)
+- **Code decision pending:** the 75th-percentile proximity rule narrows `targets.ts`; on the reference report it leaves only Strategic Perspective in Jeff's overlap. Jeff to confirm before the code changes and the reference spike's acceptance test is rewritten.
+- Brief v2.2 candidate drafted (rubrics/04 §8c), unpublished pending the golden set + battery.
 - Extractor gap: engagement items (61–66) with per-item scores and previous — Jeff reads them; the parser stores only the total.
 
 ## Files per session

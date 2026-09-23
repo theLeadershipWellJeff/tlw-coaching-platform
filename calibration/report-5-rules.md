@@ -40,3 +40,14 @@ New: 16 · Confirms existing: 4 (rules 4, 15, 16, plus the manager weight inside
 6. **Naming targets (L155).** You name "the first obvious target". Does the assistant get to name it the way you do, or only describe the overlap and ask, as the floor says today?
 7. **Quoting comments (L160).** Never-quote applies to the potential-fatal-flaw section. Does it also apply to the strengths and organisational-needs comments, or may those be quoted sparingly?
 8. **A2.** The highest / lowest behaviors and importance tables were not ticked. Treat them as verified because the observations used their numbers, or would you tick them?
+
+## Rulings (Jeff, 2026-09-23)
+
+1. Change order — (not yet answered; carried).
+2. Collaboration — Jeff: "The gap we are measuring is the distance to the 90th percentile and not the overall score… the closest to 90th is Drives for Results. 2nd is Learning Agility. 3rd is collaboration or communicates. I missed communicates in my first read." Rule 2/12 corrected: proximity = distance to the 90th. Scribe data note: by that measure the order is Drives 0.03, Learning Agility 0.04, Communicates 0.11, **Integrity 0.12**, Collaboration 0.13, Customer Focus 0.15.
+3. Innovates — Jeff: "Innovates isn't named because it is not even above the 75th percentile. Our key measures the 75th and 90th percentiles (the square and the triangle). They can have a lower total score but the proximity to the 90th is what we want. The ultimate goal is to have 3–5 competencies that are above the 90th." → the proximity circle = Promising band (at/above the 75th, below the 90th). Code change to `targets.ts` **held** — applied to the reference report it drops Learning Agility, Technical Acumen and Drives for Results from Jeff's own overlap (see rubrics/04 §8c open item).
+4. Manager vote — Jeff: "important but not critical. We don't want an objectively different rating for the manager but the coaching assistant should call it out as something to be aware of when a goal is chosen without the manager vote." → equal weights in the ranking; a `manager_voted` flag surfaced; floor rule 6 updated.
+5. Improvement — Jeff: "'it looks like' is a better way to say that rather than the pure assertion." → floor rule 9 updated (code + rubric §1).
+6. Naming targets — Jeff: "Yes, the assistant can name the potential target. The voicing here does matter so pointing out potential is what we are doing and not definitively naming." → floor rule 6 updated (code + rubric §1).
+7. Quoting — Jeff: "'never quote' is only for fatal flaws." Rule 18 scoped to the potential-fatal-flaw section.
+8. A2 — Jeff: log the three unticked tables as verified. Done.
