@@ -19,7 +19,7 @@ compares live against the sheet and logs confirmations and discrepancies.
 |---|---|---|---|---|---|---|---|---|
 | 1 | J.H. (reference, Aug 2024) | initial 2024 | pass (62-check spike; not re-run here — PDF not in this container) | — | — | — | — | — |
 | 2 | D.A. (first follow-up, Oct 2025) | follow-up | pass (spike; PDF not in this container) | — | — | — | — | — |
-| 3 | J.J. (Mar 2025) | initial 2025 print | **pass 14/14 (2026-09-23)** | — | — | — | — | — |
+| 3 | J.J. (Mar 2025) | initial 2025 print | **pass 14/14 (2026-09-23)** | **2026-09-23 (async, Obsidian)** | 6 | 4 | 0 | 6 (rules file §Questions) |
 | 4 | T.K. (Oct 2025) | follow-up | **pass 14/14 (2026-09-23)** | — | — | — | — | — |
 | 5 | M.H. (Oct 2025) | follow-up | **pass 14/14 (2026-09-23)** | **2026-09-23 (async, Obsidian)** | 16 | 4 | 3 | 0 open — 10 rulings in the rules file |
 
@@ -32,6 +32,7 @@ one: almost everything in the fatal-flaw band, 18 meaningful declines) → 2.
 | session | report | new rules | cumulative | notes |
 |---|---|---|---|---|
 | 1 | 5 (M.H.) | 16 | 16 | first report walked; 2 tensions with the code floor (asserting meaningful improvement; naming a target), 1 conflict with the brief (never quote fatal-flaw comments), 1 extractor gap (engagement items) |
+| 2 | 3 (J.J.) | 6 | 22 | fatal-flaw band and gap-direction cases; the rater-group opening recurred; new vocabulary "CPO"; 4 report-5 rules confirmed on a very different report |
 
 Report 1 should generate many; by reports 4 and 5 most of what Jeff says
 should already be covered. If report 5 still produces substantial new rules,
@@ -56,9 +57,10 @@ with its transcript reference.
 
 ## Open questions carried between sessions
 
+- Report 3: 6 questions in `report-3-rules.md` §Questions (rater-group opening as the general first move; the fatal-flaw definition the assistant gives; fatal flaws at the CPO; target choice below the 75th; "blind spot" / "reality check" wording; "CPO" with the client).
 - Report 5: none open. `targets.ts` changed 2026-09-23 (Promising first, no 75th floor, equal weights + manager flag); golden fixtures re-frozen.
 - Brief v2.2 candidate drafted (rubrics/04 §8c), unpublished pending Jeff's read, the golden set and the battery.
-- Next walkthrough: report 3 (J.J.) — the initial layout, engagement in the fatal-flaw band, marked gaps both ways.
+- Next walkthrough: report 4 (T.K.) — the fatal-flaw-dominated follow-up, 18 meaningful declines; then 1 (Jeff's own) and 2 (D.A.).
 - Extractor gap: engagement items (61–66) with per-item scores and previous — Jeff reads them; the parser stores only the total.
 
 ## Files per session

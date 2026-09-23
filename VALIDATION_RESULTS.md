@@ -85,6 +85,8 @@ Reports 1–2: not re-run here. Their spikes (62 + 40 checks) pass as of
 
 **M.H. — verified by Jeff 2026-09-23** (async, Obsidian): identity, overall, engagement, tent, all 19 rankings, reassessment, gaps ticked OK; discrepancies table empty. Highest / lowest behaviors and importance tables confirmed verified by Jeff the same day. **A2 for M.H.: 0 discrepancies, complete.**
 
+**J.J. — verified by Jeff 2026-09-23** (async, Obsidian): every table ticked OK, discrepancies table empty. **A2 for J.J.: 0 discrepancies, complete.**
+
 
 Sheets: `node .spike-build/scripts/validation/generate-verification-sheet.js`
 → `validation/sheets/<report>.md` (58 values each, PDF page order, blank
@@ -164,7 +166,7 @@ failures across all five · mean alignment ≥ 1.6 with no criterion < 1.0.
 4. Every interpretation criterion, on every report: the battery has never run.
 5. The B5 adversarial pass.
 6. The judge's agreement with Jeff (no calibration of the judge itself).
-7. The verification sheets have not been filled in by Jeff.
+7. The verification sheets for reports 1, 2 and 4 have not been filled in by Jeff (3 and 5 are complete).
 8. Behaviour on a report with a Profound Strength AND a fatal-flaw band in the same report (none exists in the corpus).
 9. **Engagement items are not extracted.** Jeff's walkthrough reads items 61–66 individually (nearest extraordinary, the one lower item, its change from last year); the parser stores only the engagement total and band. A brief rule depending on them cannot be honoured until the parser carries them.
 10. Concurrent extraction (bulk upload) — the calibration diagnostics use a per-parse collector; sequential in the pipeline today.

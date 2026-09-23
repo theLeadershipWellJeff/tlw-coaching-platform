@@ -62,6 +62,11 @@ export function pageOf(pages: PageData[], re: RegExp): number | null {
     const head = rows.slice(0, 3).map((r) => r.text).join(' ')
     if (re.test(head)) return p.pageNumber
   }
+  // A section can start mid-page (Employee Engagement shares the Overall page
+  // on the initial layout): accept a row that is exactly the section title.
+  for (const p of pages) {
+    if (rowsOf(p.text).some((r) => re.test(r.text) && r.text.trim().length < 60)) return p.pageNumber
+  }
   return null
 }
 
