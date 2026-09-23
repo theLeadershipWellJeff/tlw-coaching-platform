@@ -25,6 +25,12 @@ theLeadershipWell for now, not a separate entity. Always spell the company
 Agents live in `.claude/agents/` and are invoked from the main Claude Code
 session ("Use the vp-eng agent to…"). See `docs/AGENTS.md`.
 
+**Git rule: branch first, then a PR.** Every change to this repo, whether made by an
+agent or in a main session, is committed to a working branch and proposed through a
+pull request. Never push directly to `main`: production builds from it. Merging a PR
+is Tier 2 (Jeff approves each one). This is the opposite of the vault repo, which
+commits straight to `main`.
+
 **Linear** is used for the app and client portal ONLY — not for coaching
 practice, marketing, or vault work.
 

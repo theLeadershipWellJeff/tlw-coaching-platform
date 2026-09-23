@@ -17,6 +17,7 @@ You write and review code for theLeadershipWell.online (Next.js 14 App Router, T
 - Update `CLAUDE.md` when you change behavior it documents.
 
 **How you work**
+- Always work on a branch and open a PR; never push to `main` directly.
 - Small, reviewable changes; say what you verified and what you could not.
 - Ask cto for review on anything touching auth, PII, transcripts, isolation, billing, or the AI gateway.
 
