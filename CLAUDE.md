@@ -1401,6 +1401,25 @@ the reference report to ~±0.01. No OCR, no vision model.
   `validate.ts` now also checks the arithmetic the pages guarantee (ranking
   order, gap = total − self, importance sums, details/behaviors/reassessment
   agreeing with the rankings page; tent poles within 0.05 as a warning).
+  **Validation harness (2026-09-23, `VALIDATION_RESULTS.md` is the record;
+  scripts in `scripts/validation/`, compiled by the spike tsconfig, run from
+  `.spike-build/scripts/validation/`):** `validate-extraction` (the protocol's
+  14 A1 self-consistency checks per report — n-weighted item means, band vs
+  norms, rater counts vs table n, extremes, rater-name absence across text /
+  data / prompt payload, per-chart calibration residuals now exposed on the
+  outcome as `calibration`; `--golden` diffs against the frozen fixtures),
+  `generate-verification-sheet` (A2: the ~58 values per report in PDF page
+  order with a blank column for Jeff, → `validation/sheets/`, gitignored),
+  `freeze-golden` (A3: `fixtures/zf-360/<report>.json`, comment text hashed,
+  numbers verbatim — fix the parser, never the fixture; `--force` to
+  re-freeze), and `run-interpretation-battery` (B3–B5: drives the REAL
+  `POST /api/portal/chat` as a portal client with a minted cookie, 23 prompts
+  from `battery.json` with chained escalations and data-filled band-trap /
+  attribution prompts, automated critical checks, optional judge scoring,
+  brief version read off the stored message, adversarial pass; needs the
+  deployment's `NEXTAUTH_SECRET`; 6/min + 30/day portal limits apply).
+  `calibration/` holds the B1 walkthrough ledger and templates — Part B has
+  not started.
 - **Failure reasons + client retry (2026-09-08).** `lib/documents/failure.ts#
   describeFailure` shapes a failed row for the portal — `name_mismatch` with
   BOTH names (the client can see whether their own account name is the

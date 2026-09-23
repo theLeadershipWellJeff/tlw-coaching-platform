@@ -37,6 +37,8 @@
     "../../lib/ai/models.ts",
     "../../lib/ai/pricing.ts",
     "../../lib/ai/context-budget.ts",
-    "../../lib/ai/costs-math.ts"
+    "../../lib/ai/costs-math.ts",
+    "../../scripts/validation/**/*.ts",
+    "../../lib/portal/session.ts"
   ]
 }
