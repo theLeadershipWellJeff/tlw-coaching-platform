@@ -116,5 +116,21 @@
    "Your lowest scored behaviors point to the same competency (Section 14).",
    "Your raters have emphasized the competency as a Potential Fatal Flaw in their written comments (Section 15)."
   ]
+ },
+ "development_target": {
+  "title": "Select your Development Target",
+  "sweet_spot": [
+   "Zenger Folkman has found that three factors are universally present. When leaders are utilizing their unique skills and abilities (Competence), doing work that they genuinely care about (Passion), and making a positive impact on the business (Organizational Needs), extraordinary experiences happen.",
+   "We call the convergence of these three factors the Leadership Sweet Spot. As you consider where you might focus your development efforts, select a competency that falls within your Leadership Sweet Spot."
+  ],
+  "novice_option": "Another good option is to select a competency that engages you (Passion) and that is high in Organizational Need. This is a competency that currently may be at a novice level, but with effort could be built into a Profound Strength.",
+  "matrix_note": "Complete ‘Your Personal CPO Matrix’ (on the following page) to narrow your Development Target selection.",
+  "balance_tent": {
+   "title": "If you have five or more Profound Strengths, select a competency that will balance your tent",
+   "text": [
+    "When you are perceived as being an extraordinary leader, your goal is to maintain that level of effectiveness and to continue to develop. Consider targeting tent poles where building Profound Strengths in those competencies would increase the volume of your overall tent.",
+    "Use ‘Your Personal CPO Matrix’ to select a Sweet Spot or Novice competency that would help you balance your leadership tent and help you increase your overall leadership effectiveness."
+   ]
+  }
  }
 }

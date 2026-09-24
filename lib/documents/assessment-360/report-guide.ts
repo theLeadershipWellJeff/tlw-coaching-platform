@@ -24,6 +24,8 @@ export type ReportGuide = {
   explore: { intro: string; complete: boolean; steps: ReportGuideStep[] }
   /** The report's own four-condition test — a Fatal Flaw is more than the band. */
   fatal_flaw_test: { title: string; question: string; conditions: string[] }
+  /** The report's own target-selection steps: the Leadership Sweet Spot (Competence + Passion + Organizational Need), the Novice option, and balancing the tent. */
+  development_target: { title: string; sweet_spot: string[]; novice_option: string; matrix_note: string; balance_tent: { title: string; text: string[] } }
 }
 
 export const REPORT_GUIDE: ReportGuide = guide as ReportGuide
@@ -41,5 +43,7 @@ export function reportGuideText(): string {
     lines.push(`- ${s.title}${s.section ? ` (report section${s.section.includes(',') ? 's' : ''} ${s.section})` : ''}: ${s.questions.join(' ')}`)
   }
   lines.push(`${g.fatal_flaw_test.title} (the report's own test — a competency is a Fatal Flaw only when ALL FOUR hold; the yellow band alone is condition 1): ${g.fatal_flaw_test.question} ${g.fatal_flaw_test.conditions.map((c, n) => `${n + 1}) ${c}`).join(' ')} The FATAL FLAW TEST block in the participant's data pre-checks conditions 1–3; condition 4 is read from their comments with them.`)
+  const dt = g.development_target
+  lines.push(`${dt.title} (the report's own steps 2 and 3, after the fatal-flaw test): ${dt.sweet_spot.join(' ')} ${dt.novice_option} ${dt.matrix_note} — the report calls this page the CPO Matrix (Competence, Passion, Organizational Need); if the term comes up, explain it once through those three ideas. ${dt.balance_tent.title}: ${dt.balance_tent.text.join(' ')} In the participant's data, each three-circle candidate is labelled by the route it fits — Sweet Spot (already a strength: at or above the 75th mark) or Novice (passion and need, competence still to build) — and a TENT BALANCE line counts their Profound Strengths per pole.`)
   return lines.join('\n')
 }

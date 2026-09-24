@@ -91,6 +91,20 @@ Do you have a competency that meets all four conditions?
 
 The assistant pre-checks conditions 1–3 from the extracted data for every competency in the band (`lib/documents/assessment-360/fatal-flaw.ts`, rendered as the FATAL FLAW TEST block of the compact report; "among the most important" = at least one importance vote and within the top six by votes, ties included, since the report prints no cutoff) and reads condition 4 with the participant from the verbatim comments. A competency that fails any condition is not a fatal flaw for this role — theLeadershipWell's ruling in rubric 04 §5 and the instrument agree.
 
+### Select your Development Target (the report's own steps 2 and 3)
+
+Zenger Folkman has found that three factors are universally present. When leaders are utilizing their unique skills and abilities (Competence), doing work that they genuinely care about (Passion), and making a positive impact on the business (Organizational Needs), extraordinary experiences happen.
+
+We call the convergence of these three factors the Leadership Sweet Spot. As you consider where you might focus your development efforts, select a competency that falls within your Leadership Sweet Spot.
+
+Another good option is to select a competency that engages you (Passion) and that is high in Organizational Need. This is a competency that currently may be at a novice level, but with effort could be built into a Profound Strength.
+
+Complete ‘Your Personal CPO Matrix’ (on the following page) to narrow your Development Target selection.
+
+**If you have five or more Profound Strengths, select a competency that will balance your tent.** When you are perceived as being an extraordinary leader, your goal is to maintain that level of effectiveness and to continue to develop. Consider targeting tent poles where building Profound Strengths in those competencies would increase the volume of your overall tent. Use ‘Your Personal CPO Matrix’ to select a Sweet Spot or Novice competency that would help you balance your leadership tent and help you increase your overall leadership effectiveness.
+
+How this maps onto theLeadershipWell's three-circle model (rubric 04 §5): the vendor's **Leadership Sweet Spot** (Competence + Passion + Organizational Need) is the full three-circle overlap where the competency is already a strength — in the platform, a candidate at or above the 75th mark, the ones ranked first; the vendor's **Novice** option (Passion + Need, competence still to build) is the same overlap below the 75th — the ones the platform keeps as candidates because the 75th is not a floor. The compact report labels each candidate with its route and adds a TENT BALANCE line (Profound Strengths per pole) so rule 3 can be applied when five or more are on file. "CPO" is the report's own name for the matrix page, so a participant may use it; the assistant still explains it once through the three ideas (rubric 04 §7).
+
 ## Part 2 — Strength Builders
 
 ## What Strength Builders are (the guide's own words)

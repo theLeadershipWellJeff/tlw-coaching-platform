@@ -124,12 +124,19 @@ export function renderAssessmentCompact(data: Assessment360Data): string {
   const cands = data.development_candidates
   const full = cands.filter((c) => c.circles_met === 3)
   const partial = cands.filter((c) => c.circles_met === 2)
+  const route = (c: Assessment360Data['development_candidates'][number]) =>
+    c.circles_met === 3 ? (c.at_or_above_75th ? 'Sweet Spot route' : 'Novice route') : c.missing.includes('passion') && !c.missing.includes('need') ? 'need without passion' : c.missing.includes('need') && !c.missing.includes('passion') ? 'passion without need' : 'partial'
   const describe = (c: Assessment360Data['development_candidates'][number]) =>
-    `${c.competency} ${fmt(c.total)} — ${c.band}; ${fmt(c.distance_to_90th)} below its 90th mark; ${c.at_or_above_75th ? 'at/above the 75th' : c.distance_to_75th != null ? `${fmt(c.distance_to_75th)} below the 75th` : '75th unknown'}; votes ${c.total_votes} (manager ${c.manager_votes}); ${c.is_passion ? 'passion' : 'no passion'}${c.missing.length ? `; missing: ${c.missing.map((m) => (m === 'need' ? 'votes' : m)).join(', ')}` : ''}`
-  out.push('WHERE THE THREE CIRCLES POINT (below its own 90th mark + voted important + a named passion), in the report-derived order — describe as potential, never prescribe:')
+    `${c.competency} ${fmt(c.total)} — ${c.band}; ${fmt(c.distance_to_90th)} below its 90th mark; ${c.at_or_above_75th ? 'at/above the 75th' : c.distance_to_75th != null ? `${fmt(c.distance_to_75th)} below the 75th` : '75th unknown'}; votes ${c.total_votes} (manager ${c.manager_votes}); ${c.is_passion ? 'passion' : 'no passion'}${c.missing.length ? `; missing: ${c.missing.map((m) => (m === 'need' ? 'votes' : m)).join(', ')}` : ''} [${route(c)}]`
+  out.push("WHERE THE THREE CIRCLES POINT (below its own 90th mark + voted important + a named passion), in the report-derived order — describe as potential, never prescribe. Route labels follow the report's own target-selection guide: Sweet Spot = Competence + Passion + Organizational Need (already at or above the 75th mark); Novice = Passion + Need with the competence still to build (below the 75th):")
   if (full.length) out.push(`- All three: ${full.map(describe).join(' | ')}`)
   else out.push('- All three: none')
   if (partial.length) out.push(`- Two of three: ${partial.slice(0, 6).map(describe).join(' | ')}`)
+
+  // Tent balance — the report's rule 3 (five or more Profound Strengths)
+  const profound = data.competency_rankings.filter((r) => r.band === 'Profound Strength')
+  const poleCounts = data.tent_poles.map((t) => `${t.name} ${t.competencies.filter((c) => profound.some((p) => p.competency === c)).length}/${t.competencies.length}`)
+  out.push(`TENT BALANCE: ${profound.length} Profound Strength${profound.length === 1 ? '' : 's'}${poleCounts.length ? ` (per pole: ${poleCounts.join(' · ')})` : ''}. ${profound.length >= 5 ? "With five or more, the report's own guide says to select a competency that balances the tent — a pole with the fewest Profound Strengths, chosen through the Sweet Spot or Novice route." : 'Fewer than five, so the report\'s balance-the-tent rule does not apply yet.'}`)
 
   // The report's four-condition Fatal Flaw test (conditions 1–3 from the data)
   out.push(renderFatalFlawCheck(data))
