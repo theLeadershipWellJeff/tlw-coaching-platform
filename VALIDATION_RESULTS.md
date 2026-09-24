@@ -87,7 +87,7 @@ Reports 1–2: not re-run here. Their spikes (62 + 40 checks) pass as of
 
 **J.J. — verified by Jeff 2026-09-23** (async, Obsidian): every table ticked OK, discrepancies table empty. **A2 for J.J.: 0 discrepancies, complete.**
 
-**T.K. — verified by Jeff 2026-09-24** (async, Obsidian): identity (incl. previous raters + windows), overall (current + previous), engagement (+ previous), tent, all 19 rankings, highest / lowest behaviors, importance ticked OK; the reassessment (p9) and gap (p16) tables were left with blank OK columns but the sheet is signed off at the foot; discrepancies table empty. **A2 for T.K.: 0 discrepancies, complete pending Jeff's word on the two unticked tables** (`calibration/report-4-rules.md` question 5).
+**T.K. — verified by Jeff 2026-09-24** (async, Obsidian): identity (incl. previous raters + windows), overall (current + previous), engagement (+ previous), tent, all 19 rankings, highest / lowest behaviors, importance ticked OK; the reassessment (p9) and gap (p16) tables were left with blank OK columns but the sheet is signed off at the foot; discrepancies table empty. **A2 for T.K.: 0 discrepancies, complete** (the two unticked tables signed off by Jeff, 2026-09-24).
 
 
 Sheets: `node .spike-build/scripts/validation/generate-verification-sheet.js`
@@ -123,7 +123,7 @@ No fixture was ever edited by hand.
 
 ## Part B — interpretation alignment
 
-**B1 in progress; B3–B5 not started.** B1 walkthroughs complete for report 5 (M.H., 16 new rules, 10 rulings), report 3 (J.J., 6 new rules + 1 from the rulings, all six questions ruled 2026-09-24) and report 4 (T.K., 7 new rules, 6 questions open); saturation curve in `calibration/LEDGER.md` (16 → 7 → 7 — not converged; the T.K. shape taught five of its seven). Reports 1 and 2 remain (PDFs to re-share). Brief v2.2 candidate in rubrics/04 §8c carries both; unpublished. What is in place:
+**B1 in progress; B3–B5 not started.** B1 walkthroughs complete for report 5 (M.H., 16 new rules, 10 rulings), report 3 (J.J., 6 new rules + 1 from the rulings, all six questions ruled 2026-09-24) and report 4 (T.K., 7 new rules, all six questions ruled 2026-09-24); saturation curve in `calibration/LEDGER.md` (16 → 7 → 7 — not converged; the T.K. shape taught five of its seven). Reports 1 and 2 remain (PDFs to re-share). Brief v2.2 candidate in rubrics/04 §8c carries both; unpublished. What is in place:
 
 - **B3 runner:** `scripts/validation/run-interpretation-battery.ts` —
   drives `POST /api/portal/chat` on a deployment as a portal client

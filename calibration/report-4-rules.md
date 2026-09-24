@@ -37,3 +37,15 @@ its-ideas rule and the "it looks like" voicing all held without change.
 4. **The reassessment page.** Eighteen meaningful declines and no question on that page. Deliberate — the shift was asked about on the overall page and the page itself is not where a goal comes from — or an omission?
 5. **Two tables unticked.** The reassessment rows (p9) and the gap rows (p16) have blank OK columns. Your sign-off at the foot of the sheet covers them unless you say otherwise — confirm?
 6. **A small engagement rise.** The report does not colour engagement change; you called +0.12 "higher this year than last year." Fine to state any engagement movement plainly as a number comparison (the .30 rule is for competencies), or should a small one be softened?
+
+## Rulings (Jeff, 2026-09-24) — all six questions closed
+
+1. **Six focus areas.** "Ideally 5 but six is possible." → §5 / §10: five is the ideal, six when those are all the overlaps there are.
+2. **Naming the lowest.** "Yes you can name the lowest but it should always follow talk about the higher scoring areas and should be held out for potential fatal flaws only." → §4 step 4 / §10: the lowest is named only when it sits in the fatal-flaw band, after the strengths, with the style + good-leaders questions.
+3. **Naming the band on the tent.** "Keep the band naming off the tent model." → the T.K. tent question was an exception, not a rule; the band stays later, never first, and never on the tent (§4 step 3, §10 Never list).
+4. **The reassessment page.** "Yes my silence is approval here." → §6 / §10: once the shift has been asked about on the overall page, the reassessment table needs no question of its own.
+5. **Unticked tables.** "I sign off." → A2 for T.K. complete (VALIDATION_RESULTS).
+6. **Small engagement rises.** "Soften the small ones but naming is ok." → §10: a movement may be named as a comparison; a small uncoloured one is softened ("a little higher this year").
+
+Open questions: none. All seven new rules folded into the v2.2 body (rubrics/04 §10, drafted 2026-09-24).
+

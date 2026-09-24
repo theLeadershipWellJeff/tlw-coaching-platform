@@ -20,7 +20,7 @@ compares live against the sheet and logs confirmations and discrepancies.
 | 1 | J.H. (reference, Aug 2024) | initial 2024 | pass (62-check spike; not re-run here — PDF not in this container) | — | — | — | — | — |
 | 2 | D.A. (first follow-up, Oct 2025) | follow-up | pass (spike; PDF not in this container) | — | — | — | — | — |
 | 3 | J.J. (Mar 2025) | initial 2025 print | **pass 14/14 (2026-09-23)** | **2026-09-23 (async, Obsidian)** | 6 (+1 from the rulings) | 4 | 2 | 0 — six rulings 2026-09-24 in the rules file |
-| 4 | T.K. (Oct 2025) | follow-up | **pass 14/14 (2026-09-23)** | **2026-09-24 (async, Obsidian)** | 7 | 7 | 0 | 6 (rules file §Questions) |
+| 4 | T.K. (Oct 2025) | follow-up | **pass 14/14 (2026-09-23)** | **2026-09-24 (async, Obsidian)** | 7 | 7 | 0 | 0 — six rulings 2026-09-24 in the rules file |
 | 5 | M.H. (Oct 2025) | follow-up | **pass 14/14 (2026-09-23)** | **2026-09-23 (async, Obsidian)** | 16 | 4 | 3 | 0 open — 10 rulings in the rules file |
 
 Suggested order: 3 (initial layout, fatal-flaw band, both gap directions) →
@@ -62,9 +62,9 @@ with its transcript reference.
 ## Open questions carried between sessions
 
 - Report 3: none open — all six questions ruled 2026-09-24 (`report-3-rules.md` §Rulings) and folded into rubrics/04 §5, §7, §8c.
-- Report 4: 6 questions in `report-4-rules.md` §Questions (six focus areas vs five; naming the lowest competency; naming the band at the tent on a wide-band report; the reassessment page's silence; two unticked tables; small engagement rises stated plainly). §8c waits on them.
+- Report 4: none open — all six ruled 2026-09-24 (`report-4-rules.md` §Rulings).
+- **Brief v2.2 is drafted into rubrics/04 §10** (2026-09-24) from reports 5, 3 and 4 — awaiting Jeff's read, then `publish-brief.js assessment_360 --sql` → migration 072, then the golden set + battery.
 - Report 5: none open. `targets.ts` changed 2026-09-23 (Promising first, no 75th floor, equal weights + manager flag); golden fixtures re-frozen.
-- Brief v2.2 candidate drafted (rubrics/04 §8c), unpublished pending Jeff's read, the golden set and the battery.
 - Next walkthrough: report 1 (Jeff's own, the anchor) then 2 (D.A.) — both PDFs must be re-shared in a session first (sheets not yet generated).
 - Extractor gap: engagement items (61–66) with per-item scores and previous — Jeff reads them; the parser stores only the total.
 
