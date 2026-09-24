@@ -3136,7 +3136,8 @@ nothing can double-send in a gap). Verified up → down → re-up on Postgres 16
 CAS semantics (two claims → one winner; stale claim re-claimable; sent note
 never claimable). Reversible via `068_note_send_claim_down.sql`.
 
-**`073_company_logo.sql` — PENDING (not yet applied).** Adds
+**`073_company_logo.sql` — APPLIED (production, confirmed by Jeff
+2026-09-24).** Adds
 `companies.logo_path` / `logo_content_type` / `logo_updated_at` (all
 nullable) for enterprise co-branding. Additive; reads are defensive (no logo
 shows until it is in), and the upload route answers "Apply migration 073"
