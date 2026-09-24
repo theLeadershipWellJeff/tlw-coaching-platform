@@ -2091,7 +2091,7 @@ against the Console invoice (`scripts/reconcile-ai-costs.js`, ±5 %).
   WITHOUT the client's name + `PORTAL_CHAT_VOICE_STANDARDS` + the active
   `portal_chat` brief + grounding rules + the 360 brief + company context;
   the brief's 3k target covered the preamble alone — the practice's briefs
-  live here, hence 12k), **snapshot ≤ 14k** (raised from 6k on 2026-09-24 —
+  live here, hence 12k), **snapshot ≤ 16k** (raised from 6k on 2026-09-24 —
   this client: "WHO YOU ARE TALKING WITH" + human route + 360 status, the
   compact 360 + verbatims, goals, their documents, My notes, sent notes, then
   the Strength Builder entries last), **memory ≤ 2k** (reserved, always

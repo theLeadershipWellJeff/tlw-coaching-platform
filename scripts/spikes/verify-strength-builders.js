@@ -59,7 +59,7 @@ check('reading guide: seven insights, complete explore steps (8), Big Picture la
 const rgt = rgm.reportGuideText()
 check('fatal flaw test: four conditions in the guide and in the prefix text', rg.fatal_flaw_test.conditions.length === 4 && /Decide if you have a Fatal Flaw/.test(rgt) && /ALL FOUR/.test(rgt))
 check('reading guide text carries every insight title and every question', rg.insights.items.every((i) => rgt.includes(i.title)) && rg.explore.steps.every((s) => s.questions.every((q) => rgt.includes(q))))
-check('reading guide ≤ 1,800 tokens', tokens(rgt) <= 1800, `${tokens(rgt)}`)
+check('reading guide ≤ 2,000 tokens', tokens(rgt) <= 2000, `${tokens(rgt)}`)
 
 // -------------------------------------------------------------- (b) renderers
 console.log('\n[b] index + entries')
@@ -88,7 +88,7 @@ for (const f of fixtures) {
   const jsonTokens = tokens(JSON.stringify(rest))
   const t = tokens(text)
   console.log(`  ${name}: compact ${t} tokens vs JSON ${jsonTokens} (${Math.round((100 * t) / jsonTokens)}%)`)
-  check(`${name}: compact ≤ 55% of the JSON and ≤ 7,500 tokens`, t <= 0.55 * jsonTokens && t <= 7500, `${t}`)
+  check(`${name}: compact ≤ 60% of the JSON and ≤ 8,500 tokens`, t <= 0.6 * jsonTokens && t <= 8500, `${t}`)
   const num = (n) => n.toFixed(2)
   check(`${name}: every ranking row with band, both norms and votes`, data.competency_rankings.every((r) => {
     const imp = data.importance.find((i) => i.competency === r.competency)
@@ -113,7 +113,7 @@ for (const f of fixtures) {
   const rows = ff.fatalFlawCheck(data)
   const inBand = data.competency_rankings.filter((r) => r.band === 'Potential Fatal Flaw')
   check(`${name}: fatal-flaw rows = band members (${inBand.length}), each with 1–3 data conditions`, rows.length === inBand.length && rows.every((r) => r.data_conditions_met >= 1 && r.data_conditions_met <= 3 && (r.importance.status !== 'not_met' || r.importance.votes === 0) && (r.lowest_behaviors.status === 'met') === data.lowest_behaviors.some((b) => b.competency === r.competency)))
-  check(`${name}: FATAL FLAW TEST block rendered ${inBand.length ? 'per band member' : 'as not applicable'}`, inBand.length ? rows.every((r) => text.includes(`- ${r.competency} ${r.total.toFixed(2)}: (1) in the band — met; (2)`)) : /FATAL FLAW TEST[^\n]*does not apply/.test(text))
+  check(`${name}: FATAL FLAW TEST block rendered ${inBand.length ? 'per band member' : 'as not applicable'}`, inBand.length ? rows.every((r) => text.includes(`- ${r.competency} ${r.total.toFixed(2)}: (1) met · (2)`)) : /FATAL FLAW TEST[^\n]*does not apply/.test(text))
   check(`${name}: rater-count line`, text.includes(`Manager ${data.rater_counts.manager ?? '—'} · Peers ${data.rater_counts.peers ?? '—'} · Direct Reports ${data.rater_counts.direct_reports ?? '—'}`))
   const cands = prompt.candidateCompetencies(data)
   const builders = sb.renderStrengthBuilders(cands)

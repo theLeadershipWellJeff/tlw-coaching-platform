@@ -77,12 +77,13 @@ export function renderFatalFlawCheck(data: Assessment360Data): string {
     return "FATAL FLAW TEST (the report's own four conditions — see the reading guide): no competency sits in the Potential Fatal Flaw band, so condition 1 fails for every competency and the test does not apply. A Potential Fatal Flaw comment on its own is a theme to hold, never a fatal flaw."
   }
   const lines: string[] = []
+  const comments = rows[0].comments.count
   lines.push(
-    "FATAL FLAW TEST (the report's own four conditions — a competency is a Fatal Flaw only when ALL FOUR hold; the band alone is condition 1). Conditions 1–3 read from the data below; condition 4 — whether the raters emphasized it in their Potential Fatal Flaw comments (Section 15) — is a reading of the verbatim comments in this prompt, which the participant makes with you, never a verdict you hand down:",
+    `FATAL FLAW TEST (the report's own four conditions — a competency is a Fatal Flaw only when ALL FOUR hold; the band alone is condition 1). Per row: (1) in the band · (2) among the organisation's most important (importance votes, rank of ${rows[0].importance.of} by votes) · (3) the lowest-scored behaviors point to it · then "data: n of 3". Condition 4 — whether the raters emphasized it in their Potential Fatal Flaw comments (Section 15; ${comments} comment${comments === 1 ? '' : 's'} there, in this prompt) — is a reading the participant makes with you, never a verdict you hand down:`,
   )
   for (const r of rows) {
     lines.push(
-      `- ${r.competency} ${r.total.toFixed(2)}: (1) in the band — met; (2) among the organisation's most important — ${STATUS_WORD[r.importance.status]} (${r.importance.votes} importance vote${r.importance.votes === 1 ? '' : 's'}, rank ${r.importance.rank_by_votes} of ${r.importance.of} by votes); (3) lowest-scored behaviors point to it — ${STATUS_WORD[r.lowest_behaviors.status]}${r.lowest_behaviors.items.length ? ` (items ${r.lowest_behaviors.items.map((n) => `#${n}`).join(', ')})` : ''}; (4) emphasized in the Potential Fatal Flaw comments — read them (${r.comments.count} comment${r.comments.count === 1 ? '' : 's'} in that section). Data conditions met: ${r.data_conditions_met} of 3.`,
+      `- ${r.competency} ${r.total.toFixed(2)}: (1) met · (2) ${STATUS_WORD[r.importance.status]} (${r.importance.votes} vote${r.importance.votes === 1 ? '' : 's'}, rank ${r.importance.rank_by_votes}) · (3) ${STATUS_WORD[r.lowest_behaviors.status]}${r.lowest_behaviors.items.length ? ` (${r.lowest_behaviors.items.map((n) => `#${n}`).join(', ')})` : ''} · data: ${r.data_conditions_met} of 3`,
     )
   }
   return lines.join('\n')

@@ -36,12 +36,13 @@ export const CONTEXT_BUDGET = {
    * documents and notes. Raised from 6k on 2026-09-24: the raw-JSON 360 alone
    * measured ~14.5k tokens by this estimator, so the clip silently dropped
    * the report's second half (candidates, comments, goals, notes). The
-   * compact rendering is 6–7k, the three builder entries ~5k; 14k holds both
-   * with the client's own material, which the snapshot orders FIRST (vendor
-   * text is last, so an overflow clips it before anything the client wrote).
+   * compact rendering is 6–8k (a follow-up with a wide fatal-flaw band is the
+   * top of that range), the three builder entries ~5k; 16k holds both with
+   * the client's own material, which the snapshot orders FIRST (vendor text
+   * is last, so an overflow clips it before anything the client wrote).
    * Cached 5m, so a live debrief pays for it once per five minutes.
    */
-  SNAPSHOT: 14_000,
+  SNAPSHOT: 16_000,
   MEMORY: 2_000,
   EXCERPTS: 10_000,
   HISTORY: 6_000,
