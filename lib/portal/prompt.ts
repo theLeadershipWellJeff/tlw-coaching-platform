@@ -230,7 +230,7 @@ ${p.coachingBrief.body.trim()}`)
   //    report points at — LAST, so a snapshot overflow clips vendor text before
   //    anything the client wrote or was sent.
   if (p.assessment) {
-    const builders = renderStrengthBuilders(candidateCompetencies(p.assessment.data))
+    const builders = renderStrengthBuilders(candidateCompetencies(p.assessment.data, builderEntryLimit(p.assessment.data)))
     if (builders) {
       snapshot.push(
         `STRENGTH BUILDERS FOR THE COMPETENCIES ${clientName.toUpperCase()}'S REPORT POINTS AT (Zenger Folkman's guide entries, in full, for the three-circle candidates in their report above — offer a builder only once they lean toward that competency; ask which builder they have interest and passion for; the development ideas are raw material for a goal they write, never an assignment):\n${builders}`,
@@ -397,6 +397,11 @@ export function summariseAssessmentForPlanning(data: Assessment360Data): string 
  * prefix covers every other competency by name.
  */
 export const STRENGTH_BUILDER_SNAPSHOT_LIMIT = 3
+/** A long compact rendering (a follow-up with a wide fatal-flaw band, ~22k+ chars) takes two entries so the client's own material keeps its room. */
+export const LONG_RENDER_CHARS = 22_000
+export function builderEntryLimit(data: Assessment360Data): number {
+  return renderAssessmentCompact(data).length > LONG_RENDER_CHARS ? 2 : STRENGTH_BUILDER_SNAPSHOT_LIMIT
+}
 export function candidateCompetencies(data: Assessment360Data, limit = STRENGTH_BUILDER_SNAPSHOT_LIMIT): string[] {
   const full = data.development_candidates.filter((c) => c.circles_met === 3)
   const partial = data.development_candidates.filter((c) => c.circles_met === 2)

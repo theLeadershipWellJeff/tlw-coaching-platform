@@ -37,12 +37,16 @@ export const CONTEXT_BUDGET = {
    * measured ~14.5k tokens by this estimator, so the clip silently dropped
    * the report's second half (candidates, comments, goals, notes). The
    * compact rendering is 6–8k (a follow-up with a wide fatal-flaw band is the
-   * top of that range), the three builder entries ~5k; 16k holds both with
-   * the client's own material, which the snapshot orders FIRST (vendor text
-   * is last, so an overflow clips it before anything the client wrote).
-   * Cached 5m, so a live debrief pays for it once per five minutes.
+   * top of that range) and the builder entries ~5k for three, ~3.3k for the
+   * two a long rendering falls back to (prompt.ts#candidateCompetencies), so
+   * 14k holds both with the client's own material, which the snapshot orders
+   * FIRST (vendor text is last, so an overflow clips it before anything the
+   * client wrote). The slices still sum to the 40k ceiling with excerpts
+   * (12 + 14 + 8 + 6) — a full history + a full upload can still shed
+   * excerpts partially, never the snapshot. Cached 5m, so a live debrief
+   * pays for it once per five minutes.
    */
-  SNAPSHOT: 16_000,
+  SNAPSHOT: 14_000,
   MEMORY: 2_000,
   EXCERPTS: 10_000,
   HISTORY: 6_000,
