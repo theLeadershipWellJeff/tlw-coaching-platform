@@ -87,6 +87,8 @@ Reports 1–2: not re-run here. Their spikes (62 + 40 checks) pass as of
 
 **J.J. — verified by Jeff 2026-09-23** (async, Obsidian): every table ticked OK, discrepancies table empty. **A2 for J.J.: 0 discrepancies, complete.**
 
+**T.K. — verified by Jeff 2026-09-24** (async, Obsidian): identity (incl. previous raters + windows), overall (current + previous), engagement (+ previous), tent, all 19 rankings, highest / lowest behaviors, importance ticked OK; the reassessment (p9) and gap (p16) tables were left with blank OK columns but the sheet is signed off at the foot; discrepancies table empty. **A2 for T.K.: 0 discrepancies, complete pending Jeff's word on the two unticked tables** (`calibration/report-4-rules.md` question 5).
+
 
 Sheets: `node .spike-build/scripts/validation/generate-verification-sheet.js`
 → `validation/sheets/<report>.md` (58 values each, PDF page order, blank
@@ -121,7 +123,7 @@ No fixture was ever edited by hand.
 
 ## Part B — interpretation alignment
 
-**B1 in progress; B3–B5 not started.** B1 walkthroughs complete for report 5 (M.H., 16 new rules, 10 rulings) and report 3 (J.J., 6 new rules + 1 from the rulings, all six questions ruled 2026-09-24); saturation curve in `calibration/LEDGER.md` (16 → 7). Brief v2.2 candidate in rubrics/04 §8c carries both; unpublished. What is in place:
+**B1 in progress; B3–B5 not started.** B1 walkthroughs complete for report 5 (M.H., 16 new rules, 10 rulings), report 3 (J.J., 6 new rules + 1 from the rulings, all six questions ruled 2026-09-24) and report 4 (T.K., 7 new rules, 6 questions open); saturation curve in `calibration/LEDGER.md` (16 → 7 → 7 — not converged; the T.K. shape taught five of its seven). Reports 1 and 2 remain (PDFs to re-share). Brief v2.2 candidate in rubrics/04 §8c carries both; unpublished. What is in place:
 
 - **B3 runner:** `scripts/validation/run-interpretation-battery.ts` —
   drives `POST /api/portal/chat` on a deployment as a portal client
@@ -166,7 +168,7 @@ failures across all five · mean alignment ≥ 1.6 with no criterion < 1.0.
 4. Every interpretation criterion, on every report: the battery has never run.
 5. The B5 adversarial pass.
 6. The judge's agreement with Jeff (no calibration of the judge itself).
-7. The verification sheets for reports 1, 2 and 4 have not been filled in by Jeff (3 and 5 are complete).
+7. The verification sheets for reports 1 and 2 have not been generated or filled in (3, 4 and 5 are complete; 4's reassessment and gap tables unticked but signed off).
 8. Behaviour on a report with a Profound Strength AND a fatal-flaw band in the same report (none exists in the corpus).
 9. **The compact 360 rendering + Strength Builder entries with the live model.** On 2026-09-24 the chat's report payload changed from raw JSON (~14.5k tokens, clipped at the 6k snapshot budget since 2026-09-19 — the model never saw the candidates, comments, goals or notes of a 360 client) to compact text (~6–7k, verified complete by `verify-strength-builders.js` on the three golden fixtures) plus Zenger Folkman's Strength Builder entries. Pure checks only; no battery or golden-set run against it yet.
 10. **Engagement items are not extracted.** Jeff's walkthrough reads items 61–66 individually (nearest extraordinary, the one lower item, its change from last year); the parser stores only the engagement total and band. A brief rule depending on them cannot be honoured until the parser carries them.
