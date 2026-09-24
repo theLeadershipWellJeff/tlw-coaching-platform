@@ -3,6 +3,70 @@
 Working notes for Claude (and Jeff) on this codebase. Keep this current as the
 app evolves.
 
+## Company context, roles, and agents (read first)
+
+**The product.** theLeadershipWell is a boutique executive coaching firm. This
+repo is its software product line ("Software": the app, the client portal, and
+Coachbot) — theLeadershipWell.online, a coaching platform built on Next.js 14,
+Supabase, Vercel, and the Anthropic SDK. It is a product line inside
+theLeadershipWell for now, not a separate entity. Always spell the company
+"theLeadershipWell" (lowercase t).
+
+**Roles**
+
+| Who | Seat | Owns |
+|---|---|---|
+| Dr. Jeff K. Holmes | CEO of theLeadershipWell · CTO · VP Product | Final say; the only human in the firm; approves every Tier 2 action |
+| Caleb | CEO of the software line | Everything about the app except coding: pricing, go-to-market, customer feedback, beta coaches |
+| `cto` agent | Staff to Jeff (CTO seat) | Architecture, security, client confidentiality, tech debt; ADRs in `docs/decisions/`; read-only review |
+| `vp-product` agent | Staff to Jeff (VP Product seat) | Roadmap, specs, Linear hygiene, copy; drafts notes for Jeff to send Caleb |
+| `vp-eng` agent | Staff to Jeff (engineering) | Writes and reviews code, migrations, releases — the only agent that edits app code |
+
+Agents live in `.claude/agents/` and are invoked from the main Claude Code
+session ("Use the vp-eng agent to…"). See `docs/AGENTS.md`.
+
+**Git rule: branch first, then a PR.** Every change to this repo, whether made by an
+agent or in a main session, is committed to a working branch and proposed through a
+pull request. Never push directly to `main`: production builds from it. Merging a PR
+is Tier 2 (Jeff approves each one). This is the opposite of the vault repo, which
+commits straight to `main`.
+
+**Linear** is used for the app and client portal ONLY — not for coaching
+practice, marketing, or vault work.
+
+**User-facing copy and design** follow the canonical files in the vault repo
+(`theLeadershipWellJeff/TheLeadershipWell-Vault`):
+`70_Brand/TLW Writing Standards.md` (v1.0.4; product & app copy §5.11, product
+pre-publish checklist §8) and `70_Brand/TLW Brand Guidelines.md` (v2.3; app
+design system §11, type system DM Sans + Cormorant Garamond §5.3). The in-repo
+`spec/theLeadershipWell_Writing_Standards_v1.0.md` and `lib/writing-standards.ts`
+(see "Writing standards" below) are downstream copies — when they disagree
+with the vault, the vault wins; flag the drift to Jeff.
+
+**Vault dependency.** The app reads the vault's `06-Wissensgarten-Knowledge-Base/`
+folder by path (`lib/vault/*`) and treats any `maps/` folder as coaching maps.
+The vault was restructured 2026-09 into numbered department folders; the
+Wissensgarten path was deliberately left unchanged — do not "fix" it. Client
+folders in the vault moved to `50_Fuselage/clients/`; the app must **never**
+read those.
+
+**Authority tiers** (apply to every agent and session)
+- **Tier 0** — read and analyze: freely.
+- **Tier 1** — draft into repo docs / code on a working branch: do, then report.
+- **Tier 2** — only with Jeff's explicit approval, each time: merge to `main`
+  (production builds from `main`), deploy, any production migration,
+  contacting anyone (Caleb, coaches, vendors).
+- **Tier 3** — never: move money, change Stripe live settings or charge
+  customers, delete data, expose client data, send messages to clients.
+
+**Proposal — keep this file lean (not yet done).** This CLAUDE.md is ~243 KB
+(~3,500 lines) and is loaded into every session. Proposed: keep this section,
+stack/commands, migration rules, architecture, data model, and the mandatory
+rules (rubrics, writing standards, isolation) here; move dated build notes
+(phase write-ups, dry-run feedback rounds, "Migrations applied" history,
+shipped roadmap items) into `docs/` (e.g. `docs/history/`) with a one-line
+pointer each. Needs Jeff's approval before anyone executes it.
+
 ## What this is
 
 A coaching platform for Dr. Jeff Holmes (theLeadershipWell). Two pillars:
