@@ -78,6 +78,17 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
       .order('created_at', { ascending: false })
       .limit(10)
 
+    // Recently completed actions — so the brief knows what IS done, and treats
+    // everything in the open list as not done yet (QA TLW-020).
+    const { data: doneRows } = await supabase
+      .from('actions')
+      .select('description, completed_at')
+      .eq('client_id', params.id)
+      .eq('status', 'done')
+      .order('completed_at', { ascending: false, nullsFirst: false })
+      .limit(5)
+    const completedActions = dedupePreserveOrder((doneRows || []).map((a) => a.description || ''), 5)
+
     // Walk notes newest-first, collecting next-session flags and insights.
     const nextTimeRaw: string[] = []
     const insightsRaw: string[] = []
@@ -132,7 +143,9 @@ ${fmt('Flagged for next time (from prior notes — the coach explicitly wanted t
 
 ${goalsText}
 
-${fmt('Open action items (commitments still outstanding)', openActions)}
+${fmt('Open action items (NOT done — the client has not reported these complete)', openActions)}
+
+${fmt('Recently completed action items (confirmed done)', completedActions)}
 
 ${fmt('Recent insights captured', recentInsights)}
 
@@ -142,7 +155,9 @@ Return ONLY valid JSON — no markdown fences, no preamble:
   "questions": ["Q1", "Q2", "Q3"]
 }
 
-The three questions are the ones Jeff could actually open the session with — warm, specific to this client's situation, and forward-moving (not generic check-ins). Prioritize anything flagged for next time and any outstanding commitments.`
+The three questions are the ones ${coach.name || 'the coach'} could actually open the session with — warm, specific to this client's situation, and forward-moving (not generic check-ins). Prioritize anything flagged for next time and any outstanding commitments.
+
+Completion status is a hard rule: an OPEN action item has not been done as far as anyone knows. Never phrase a question or the summary as if it happened ("now that X is off your plate…", "since you handed off…"). Ask what happened with it instead ("How did the hand-off of X go — did it happen?"). Only items under "Recently completed" may be treated as done.`
 
     try {
       const message = await aiCreate(
