@@ -123,7 +123,7 @@ No fixture was ever edited by hand.
 
 ## Part B — interpretation alignment
 
-**B1 in progress; B3–B5 not started.** B1 walkthroughs complete for report 5 (M.H., 16 new rules, 10 rulings), report 3 (J.J., 6 new rules + 1 from the rulings, all six questions ruled 2026-09-24) and report 4 (T.K., 7 new rules, all six questions ruled 2026-09-24); saturation curve in `calibration/LEDGER.md` (16 → 7 → 7 — not converged; the T.K. shape taught five of its seven). Reports 1 and 2 remain (PDFs to re-share). Brief v2.2 candidate in rubrics/04 §8c carries both; unpublished. What is in place:
+**B1 in progress; B3–B5 not started.** B1 walkthroughs complete for report 5 (M.H., 16 new rules, 10 rulings), report 3 (J.J., 6 new rules + 1 from the rulings, all six questions ruled 2026-09-24) and report 4 (T.K., 7 new rules, all six questions ruled 2026-09-24); saturation curve in `calibration/LEDGER.md` (16 → 7 → 7 — not converged; the T.K. shape taught five of its seven). Reports 1 and 2 remain (PDFs to re-share). Brief v2.2 (rubrics/04 §10) approved by Jeff 2026-09-24 and generated as migration 072; live once pasted. What is in place:
 
 - **B3 runner:** `scripts/validation/run-interpretation-battery.ts` —
   drives `POST /api/portal/chat` on a deployment as a portal client

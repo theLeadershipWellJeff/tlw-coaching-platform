@@ -63,7 +63,7 @@ with its transcript reference.
 
 - Report 3: none open — all six questions ruled 2026-09-24 (`report-3-rules.md` §Rulings) and folded into rubrics/04 §5, §7, §8c.
 - Report 4: none open — all six ruled 2026-09-24 (`report-4-rules.md` §Rulings).
-- **Brief v2.2 is drafted into rubrics/04 §10** (2026-09-24) from reports 5, 3 and 4 — awaiting Jeff's read, then `publish-brief.js assessment_360 --sql` → migration 072, then the golden set + battery.
+- **Brief v2.2 approved by Jeff 2026-09-24** → migration `072_publish_360_brief_v2_2.sql` (paste to publish); then the golden set + battery against the deployment.
 - Report 5: none open. `targets.ts` changed 2026-09-23 (Promising first, no 75th floor, equal weights + manager flag); golden fixtures re-frozen.
 - Next walkthrough: report 1 (Jeff's own, the anchor) then 2 (D.A.) — both PDFs must be re-shared in a session first (sheets not yet generated).
 - Extractor gap: engagement items (61–66) with per-item scores and previous — Jeff reads them; the parser stores only the total.
