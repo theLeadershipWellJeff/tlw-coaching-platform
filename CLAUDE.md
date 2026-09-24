@@ -3055,8 +3055,8 @@ nothing can double-send in a gap). Verified up → down → re-up on Postgres 16
 CAS semantics (two claims → one winner; stale claim re-claimable; sent note
 never claimable). Reversible via `068_note_send_claim_down.sql`.
 
-**`072_publish_360_brief_v2_2.sql` — PENDING (generated 2026-09-24; Jeff said
-"publish"; paste into the Supabase SQL editor, then mark applied here).** Data
+**`072_publish_360_brief_v2_2.sql` — APPLIED (production, confirmed by Jeff
+2026-09-24).** Data
 only, no schema: publishes `assessment_360` **v2.2** (rubrics/04 §10 — the
 body calibrated on the B1 walkthroughs of reports 5, 3 and 4: page-order
 reading, strengths-first with the fatal-flaw exception, Sweet Spot / Novice

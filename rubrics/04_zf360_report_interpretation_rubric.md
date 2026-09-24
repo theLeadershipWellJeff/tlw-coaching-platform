@@ -1,6 +1,6 @@
 # theLeadershipWell · ZF 360 Report Interpretation Rubric
 
-**Current version: v2.2** (brief body in §10; migration 072 generated 2026-09-24 on Jeff's "publish" — v2.1 stays live until 072 is pasted; v2.1 = `assessment_360` v3, migration 066) · September 2026 · Owner: Dr. Jeff Holmes · **Calibration anchor: Jeff's own report, August 12 2024**
+**Current version: v2.2** (brief body in §10 = the active `assessment_360` row, migration 072 applied 2026-09-24; v2.1 = migration 066) · September 2026 · Owner: Dr. Jeff Holmes · **Calibration anchor: Jeff's own report, August 12 2024**
 
 Governs how the portal assistant reads a **Zenger Folkman Extraordinary Leader 360** with a participant after their human debrief. It is instrument-specific by design; the code beneath it is instrument-agnostic (the `assessment_360` slug and `client_documents.kind` never name the vendor).
 
