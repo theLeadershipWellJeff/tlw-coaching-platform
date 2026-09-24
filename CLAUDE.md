@@ -1363,12 +1363,19 @@ the reference report to ~±0.01. No OCR, no vision model.
   column, the `|` glyph at x<50 = passion. Rater names (the "Your Raters"
   table) are returned separately for the absence assertion and never stored;
   `extractedText` starts at the first results page and drops that table.
-- **`targets.ts`** — the three-circle development model. Weights
-  (`DEFAULT_TARGET_WEIGHTS`: manager 3, peers 2, others/direct 1.5, self 0.5)
-  are config, never in output copy; competencies at/above their 90th are
-  excluded from the proximity circle; ranked circles → weighted need →
-  distance. Reference report yields Strategic Perspective, Learning Agility,
-  Technical Acumen on top (Jeff's confirmed acceptance test).
+- **`targets.ts`** — the three-circle development model. Votes are counted
+  **equally across rater groups** since 2026-09-23 (`DEFAULT_TARGET_WEIGHTS`
+  all 1 — Jeff: no objectively different rating for the manager; the manager's
+  vote is carried as `manager_votes` so a target chosen without one is called
+  out, never vetoed). Competencies at/above their 90th are excluded from the
+  proximity circle; proximity = distance to the competency's OWN 90th, never
+  the total. Ranked circles → **Promising band first** (`at_or_above_75th`;
+  the 75th is NOT a floor — below it candidates stay and carry
+  `distance_to_75th` so the nearest to the 75th can be named) → votes →
+  distance. Reference report still yields Strategic Perspective, Learning
+  Agility, Technical Acumen on top (Jeff's confirmed acceptance test).
+  Changing the ranking changes stored `development_candidates` — documents
+  uploaded earlier keep the old order until retried/re-extracted.
 - **`compare.ts`** — longitudinal block on the newer document: band movement +
   distance-to-90th delta are the headline, raw delta secondary, comparability
   caveats (rater sets / norm vintage) carried. Deliberately no totals, no
@@ -1453,7 +1460,37 @@ the reference report to ~±0.01. No OCR, no vision model.
   4.48 kept apart), the Direct Reports column, 22 rater names across two
   pages, and the reassessment block (windows 2025-05-28→10-05 vs
   2023-10-18→12-15; Inspires −0.30 coloured irrelevant while Communicates
-  −0.32 is negative — colour, not score, decides).
+  −0.32 is negative — colour, not score, decides). **Round 2 (2026-09-22):**
+  `node scripts/spikes/verify-cohort-360.js` (87 checks, fixtures
+  `johnson-360.pdf` / `koudsi-360.pdf` / `hindawi-360.pdf`, each skipped when
+  absent) pins three more real reports — the Potential Fatal Flaw band (a
+  report almost entirely in it, engagement in it), Others folded into Peers on
+  both administrations, a counts line with no Others group (now reads **0**,
+  null only when the line is unreadable), self-gaps in both directions, and
+  reassessment gaps at exactly ±0.30. Extraction is calibrated on **five**
+  reports; the facts and the reading-model rulings are in rubrics/04 §8b.
+  `validate.ts` now also checks the arithmetic the pages guarantee (ranking
+  order, gap = total − self, importance sums, details/behaviors/reassessment
+  agreeing with the rankings page; tent poles within 0.05 as a warning).
+  **Validation harness (2026-09-23, `VALIDATION_RESULTS.md` is the record;
+  scripts in `scripts/validation/`, compiled by the spike tsconfig, run from
+  `.spike-build/scripts/validation/`):** `validate-extraction` (the protocol's
+  14 A1 self-consistency checks per report — n-weighted item means, band vs
+  norms, rater counts vs table n, extremes, rater-name absence across text /
+  data / prompt payload, per-chart calibration residuals now exposed on the
+  outcome as `calibration`; `--golden` diffs against the frozen fixtures),
+  `generate-verification-sheet` (A2: the ~58 values per report in PDF page
+  order with a blank column for Jeff, → `validation/sheets/`, gitignored),
+  `freeze-golden` (A3: `fixtures/zf-360/<report>.json`, comment text hashed,
+  numbers verbatim — fix the parser, never the fixture; `--force` to
+  re-freeze), and `run-interpretation-battery` (B3–B5: drives the REAL
+  `POST /api/portal/chat` as a portal client with a minted cookie, 23 prompts
+  from `battery.json` with chained escalations and data-filled band-trap /
+  attribution prompts, automated critical checks, optional judge scoring,
+  brief version read off the stored message, adversarial pass; needs the
+  deployment's `NEXTAUTH_SECRET`; 6/min + 30/day portal limits apply).
+  `calibration/` holds the B1 walkthrough ledger and templates — Part B has
+  not started.
 - **Failure reasons + client retry (2026-09-08).** `lib/documents/failure.ts#
   describeFailure` shapes a failed row for the portal — `name_mismatch` with
   BOTH names (the client can see whether their own account name is the
@@ -1515,8 +1552,27 @@ mounted; the goals card stays the read-only server-rendered one).
   vision/values** (`lib/portal/company.ts`, strictly via `clients.company_id`;
   OMITTED entirely when null) → the most recent report's **structured data**
   (+ its `comparison` block; never every historical report) → **verbatims** →
-  goals / sent notes / sessions, each omitted when empty. ~12k tokens with a
-  full 360. `buildChatContext` returns `meta` (brief slug/version, document id,
+  goals / sent notes / sessions, each omitted when empty. **Since 2026-09-24
+  the report goes in as compact text tables**
+  (`lib/portal/assessment-render.ts#renderAssessmentCompact`, every printed
+  number in ~6–7k tokens) — the raw JSON was ~14.5k tokens and the 6k snapshot
+  slice had been clipping it mid-way since the budgeter shipped (candidates,
+  comments, goals and notes never reached the model). **Zenger Folkman's
+  Strength Builder guide** (`lib/documents/assessment-360/strength-builders.json`,
+  transcribed from the report's pages 41–112; human copy
+  `rubrics/05_zf360_strength_builders_reference.md`, rendered by
+  `scripts/rubrics/render-strength-builders.js`, `--check` to verify) rides
+  with it, as does **the report's own reading guide** (`report-guide.json` —
+  the seven Extraordinary Insights + the Explore-Your-Report questions,
+  `report-guide.ts#reportGuideText`, in the prefix for "how should I read my
+  report?"): the index (19 competencies → builder names) in the cached prefix of
+  every 360 conversation; the full entries (rationale + development ideas +
+  linear suggestions) for the report's three-circle candidates
+  (`prompt.ts#candidateCompetencies`, up to 3) as the LAST snapshot block, so
+  an overflow clips vendor text before the client's own material; the
+  weekly-plan summary names the builders around each candidate. Verify:
+  `node scripts/spikes/verify-strength-builders.js` (73 checks).
+  `buildChatContext` returns `meta` (brief slug/version, document id,
   has_comparison); the chat route stamps it into
   **`portal_messages.metadata`** on the assistant turn and logs `chat_started`
   / `chat_message` / `comparison_viewed` (heuristic on the question) to
@@ -2099,9 +2155,10 @@ against the Console invoice (`scripts/reconcile-ai-costs.js`, ±5 %).
   WITHOUT the client's name + `PORTAL_CHAT_VOICE_STANDARDS` + the active
   `portal_chat` brief + grounding rules + the 360 brief + company context;
   the brief's 3k target covered the preamble alone — the practice's briefs
-  live here, hence 12k), **snapshot ≤ 6k** (this client: "WHO YOU ARE TALKING
-  WITH" + human route + 360 status, structured 360 + verbatims, goals, their
-  documents, My notes, sent notes), **memory ≤ 2k** (reserved, always
+  live here, hence 12k), **snapshot ≤ 14k** (raised from 6k on 2026-09-24 —
+  this client: "WHO YOU ARE TALKING WITH" + human route + 360 status, the
+  compact 360 + verbatims, goals, their documents, My notes, sent notes, then
+  the Strength Builder entries last), **memory ≤ 2k** (reserved, always
   empty), **excerpts ≤ 10k** (the newest 2 sessions' openings, 2.5k chars
   each, + up to 12 `portal_chat_context` passages ranked against the
   question — **never a full transcript**; whole items, most relevant first),
@@ -3061,6 +3118,18 @@ with a clear "apply migration 068" error if the columns are ever absent, so
 nothing can double-send in a gap). Verified up → down → re-up on Postgres 16, plus the
 CAS semantics (two claims → one winner; stale claim re-claimable; sent note
 never claimable). Reversible via `068_note_send_claim_down.sql`.
+
+**`072_publish_360_brief_v2_2.sql` — APPLIED (production, confirmed by Jeff
+2026-09-24).** Data
+only, no schema: publishes `assessment_360` **v2.2** (rubrics/04 §10 — the
+body calibrated on the B1 walkthroughs of reports 5, 3 and 4: page-order
+reading, strengths-first with the fatal-flaw exception, Sweet Spot / Novice
+targets with five-ideal-six-possible, the four-condition fatal-flaw test,
+Strength Builders, gap and change voicing) as the next version and activates
+it; idempotent (re-activates an existing row with the same body). Generated by
+`publish-brief.js assessment_360 --sql`. Reversible via
+`072_publish_360_brief_v2_2_down.sql` (re-activates v2.1). Run the golden set
+and the battery against the deployment after it lands (VALIDATION_RESULTS).
 
 **`071_portal_history_summary.sql` — APPLIED (production, confirmed by Jeff
 2026-09-19).** Adds `portal_conversations.history_summary` (text),

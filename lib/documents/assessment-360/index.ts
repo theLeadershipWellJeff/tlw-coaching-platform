@@ -12,7 +12,7 @@
  */
 import { readPage, type PageData } from '../geometry'
 import { fingerprintAssessment360 } from './fingerprint'
-import { ParseError, parseAssessment360 } from './parse'
+import { ParseError, parseAssessment360, type CalibrationRecord } from './parse'
 import { computeDevelopmentCandidates, type TargetWeights } from './targets'
 import type { Assessment360Data } from './types'
 import { validateAssessment360 } from './validate'
@@ -24,6 +24,8 @@ export type ExtractionOutcome =
       extractedText: string
       formatVersion: string
       warnings: string[]
+      /** Per-chart text-vs-geometry residuals (validation harness). */
+      calibration: CalibrationRecord[]
       /** Present for the caller's own assertions only — MUST NOT be persisted. */
       raterNames: string[]
     }
@@ -92,6 +94,7 @@ export async function extractAssessment360(
       formatVersion: fp.version,
       warnings: [...v.warnings, ...parsed.notes],
       raterNames: parsed.raterNames,
+      calibration: parsed.calibration,
     }
   } catch (e) {
     if (e instanceof ParseError) return { status: 'failed', formatVersion: fp.version, error: e.message, section: e.section }

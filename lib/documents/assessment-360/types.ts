@@ -114,8 +114,14 @@ export type DevelopmentCandidate = {
   total: number
   band: Band
   distance_to_90th: number
+  /** norm_75th − total: positive = still below the 75th mark (a target all the same — the 75th is not a floor). */
+  distance_to_75th: number | null
+  /** At or above the 75th (the Promising band). Ranked first among candidates; below it, the nearest to the 75th is named too. */
+  at_or_above_75th: boolean
   weighted_importance: number
   total_votes: number
+  /** The manager's importance votes for this competency. Not weighted differently; surfaced so a target chosen without one is called out. */
+  manager_votes: number
   is_passion: boolean
   /** How many of the three circles (proximity, business need, passion) it satisfies. */
   circles_met: number

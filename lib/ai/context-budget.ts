@@ -30,7 +30,23 @@ export const CONTEXT_BUDGET = {
    * cross-client cached prefix — read at 0.1× after the first turn.
    */
   SYSTEM: 12_000,
-  SNAPSHOT: 6_000,
+  /**
+   * This client: the 360 as compact text (~3.5k), its verbatim comments, the
+   * full Strength Builder entries for its candidates (~3–4k), goals, their
+   * documents and notes. Raised from 6k on 2026-09-24: the raw-JSON 360 alone
+   * measured ~14.5k tokens by this estimator, so the clip silently dropped
+   * the report's second half (candidates, comments, goals, notes). The
+   * compact rendering is 6–8k (a follow-up with a wide fatal-flaw band is the
+   * top of that range) and the builder entries ~5k for three, ~3.3k for the
+   * two a long rendering falls back to (prompt.ts#candidateCompetencies), so
+   * 14k holds both with the client's own material, which the snapshot orders
+   * FIRST (vendor text is last, so an overflow clips it before anything the
+   * client wrote). The slices still sum to the 40k ceiling with excerpts
+   * (12 + 14 + 8 + 6) — a full history + a full upload can still shed
+   * excerpts partially, never the snapshot. Cached 5m, so a live debrief
+   * pays for it once per five minutes.
+   */
+  SNAPSHOT: 14_000,
   MEMORY: 2_000,
   EXCERPTS: 10_000,
   HISTORY: 6_000,

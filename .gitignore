@@ -30,3 +30,7 @@ package-lock.json
 # Real assessment reports used as parser fixtures — contain rater PII, never commit
 fixtures/private/
 .spike-build/
+
+# Validation harness output — carries the reports' numbers; summaries live in VALIDATION_RESULTS.md
+validation/results/
+validation/sheets/

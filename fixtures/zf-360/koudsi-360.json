@@ -1,0 +1,3616 @@
+{
+ "_frozen": {
+  "on": "2026-09-23",
+  "source_pdf_sha256": "e0f0447552c781feee937f46da37c0dd7b6ccae56d4433aa7a4c76e49453f994",
+  "participant": "T.K.",
+  "format_version": "extraordinary-leader/2024-followup",
+  "warnings": [
+   "Band order follows score order exactly — plausible, but check that the colour lookup did not silently fail."
+  ],
+  "calibration": [
+   {
+    "section": "rankings",
+    "rows": 19,
+    "max_residual": 0
+   },
+   {
+    "section": "overall",
+    "rows": 5,
+    "max_residual": 0
+   },
+   {
+    "section": "tent_poles",
+    "rows": 5,
+    "max_residual": 0
+   }
+  ],
+  "rater_names_invited": 18,
+  "note": "verbatims are sha256 prefixes of each comment; all numbers, bands, norms and votes are verbatim. Fix the parser, never this file."
+ },
+ "data": {
+  "participant_name": "Tarek Koudsi",
+  "report_date": "October 05, 2025",
+  "assessment_date": "2025-10-05",
+  "instrument": "Zenger Folkman Extraordinary Leader",
+  "format_version": "extraordinary-leader/2024-followup",
+  "rater_counts": {
+   "manager": 1,
+   "peers": 6,
+   "direct_reports": 3,
+   "others": 0,
+   "self": 1,
+   "collapsed_note": null
+  },
+  "overall_effectiveness": {
+   "total": 3.02,
+   "band": "Potential Fatal Flaw",
+   "norm_75th": 4.15,
+   "norm_90th": 4.36,
+   "by_rater_group": [
+    {
+     "group": "Manager",
+     "score": 2.65,
+     "vs_75th": "below",
+     "vs_90th": "below",
+     "norm_75th": 4.17,
+     "norm_90th": 4.49
+    },
+    {
+     "group": "Peers",
+     "score": 2.79,
+     "vs_75th": "below",
+     "vs_90th": "below",
+     "norm_75th": 4.11,
+     "norm_90th": 4.37
+    },
+    {
+     "group": "Direct Reports",
+     "score": 3.62,
+     "vs_75th": "below",
+     "vs_90th": "below",
+     "norm_75th": 4.36,
+     "norm_90th": 4.63
+    },
+    {
+     "group": "Self",
+     "score": 4,
+     "vs_75th": "below",
+     "vs_90th": "below",
+     "norm_75th": 4.08,
+     "norm_90th": 4.4
+    }
+   ]
+  },
+  "engagement": {
+   "available": true,
+   "total": 3.89,
+   "band": "Below Average"
+  },
+  "tent_poles": [
+   {
+    "name": "Personal Capability",
+    "score": 3.08,
+    "band": "Potential Fatal Flaw",
+    "norm_75th": 4.16,
+    "norm_90th": 4.38,
+    "competencies": [
+     "Technical and Professional Acumen",
+     "Solves Problems and Analyzes Issues",
+     "Innovates",
+     "Learning Agility"
+    ]
+   },
+   {
+    "name": "Focus on Results",
+    "score": 2.99,
+    "band": "Potential Fatal Flaw",
+    "norm_75th": 4.23,
+    "norm_90th": 4.46,
+    "competencies": [
+     "Drives for Results",
+     "Establishes Stretch Goals",
+     "Takes Initiative",
+     "Makes Decisions",
+     "Takes Risks"
+    ]
+   },
+   {
+    "name": "Character",
+    "score": 3.03,
+    "band": "Potential Fatal Flaw",
+    "norm_75th": 4.37,
+    "norm_90th": 4.6,
+    "competencies": [
+     "Displays High Integrity and Honesty"
+    ]
+   },
+   {
+    "name": "Interpersonal Skills",
+    "score": 2.87,
+    "band": "Potential Fatal Flaw",
+    "norm_75th": 4.08,
+    "norm_90th": 4.34,
+    "competencies": [
+     "Communicates Powerfully and Prolifically",
+     "Inspires and Motivates Others to High Performance",
+     "Builds Relationships",
+     "Develops Others",
+     "Collaboration and Teamwork",
+     "Values Diversity"
+    ]
+   },
+   {
+    "name": "Leading Change",
+    "score": 3.17,
+    "band": "Potential Fatal Flaw",
+    "norm_75th": 4.14,
+    "norm_90th": 4.37,
+    "competencies": [
+     "Develops Strategic Perspective",
+     "Champions Change",
+     "Customer and External Focus"
+    ]
+   }
+  ],
+  "competency_rankings": [
+   {
+    "rank": 1,
+    "competency": "Innovates",
+    "total": 3.5,
+    "band": "Below Average",
+    "norm_75th": 4.16,
+    "norm_90th": 4.38,
+    "distance_to_90th": 0.88,
+    "vs_75th": "below",
+    "vs_90th": "below"
+   },
+   {
+    "rank": 2,
+    "competency": "Values Diversity",
+    "total": 3.46,
+    "band": "Below Average",
+    "norm_75th": 4.24,
+    "norm_90th": 4.44,
+    "distance_to_90th": 0.98,
+    "vs_75th": "below",
+    "vs_90th": "below"
+   },
+   {
+    "rank": 3,
+    "competency": "Takes Risks",
+    "total": 3.46,
+    "band": "Potential Fatal Flaw",
+    "norm_75th": 4.22,
+    "norm_90th": 4.41,
+    "distance_to_90th": 0.95,
+    "vs_75th": "below",
+    "vs_90th": "below"
+   },
+   {
+    "rank": 4,
+    "competency": "Champions Change",
+    "total": 3.23,
+    "band": "Potential Fatal Flaw",
+    "norm_75th": 4.19,
+    "norm_90th": 4.39,
+    "distance_to_90th": 1.16,
+    "vs_75th": "below",
+    "vs_90th": "below"
+   },
+   {
+    "rank": 5,
+    "competency": "Customer and External Focus",
+    "total": 3.18,
+    "band": "Potential Fatal Flaw",
+    "norm_75th": 4.24,
+    "norm_90th": 4.45,
+    "distance_to_90th": 1.27,
+    "vs_75th": "below",
+    "vs_90th": "below"
+   },
+   {
+    "rank": 6,
+    "competency": "Solves Problems and Analyzes Issues",
+    "total": 3.17,
+    "band": "Potential Fatal Flaw",
+    "norm_75th": 4.24,
+    "norm_90th": 4.44,
+    "distance_to_90th": 1.27,
+    "vs_75th": "below",
+    "vs_90th": "below"
+   },
+   {
+    "rank": 7,
+    "competency": "Technical and Professional Acumen",
+    "total": 3.14,
+    "band": "Potential Fatal Flaw",
+    "norm_75th": 4.38,
+    "norm_90th": 4.58,
+    "distance_to_90th": 1.44,
+    "vs_75th": "below",
+    "vs_90th": "below"
+   },
+   {
+    "rank": 8,
+    "competency": "Develops Strategic Perspective",
+    "total": 3.08,
+    "band": "Potential Fatal Flaw",
+    "norm_75th": 4.16,
+    "norm_90th": 4.36,
+    "distance_to_90th": 1.28,
+    "vs_75th": "below",
+    "vs_90th": "below"
+   },
+   {
+    "rank": 9,
+    "competency": "Displays High Integrity and Honesty",
+    "total": 3.03,
+    "band": "Potential Fatal Flaw",
+    "norm_75th": 4.39,
+    "norm_90th": 4.59,
+    "distance_to_90th": 1.56,
+    "vs_75th": "below",
+    "vs_90th": "below"
+   },
+   {
+    "rank": 10,
+    "competency": "Takes Initiative",
+    "total": 3,
+    "band": "Potential Fatal Flaw",
+    "norm_75th": 4.37,
+    "norm_90th": 4.57,
+    "distance_to_90th": 1.57,
+    "vs_75th": "below",
+    "vs_90th": "below"
+   },
+   {
+    "rank": 11,
+    "competency": "Makes Decisions",
+    "total": 3,
+    "band": "Potential Fatal Flaw",
+    "norm_75th": 4.29,
+    "norm_90th": 4.48,
+    "distance_to_90th": 1.48,
+    "vs_75th": "below",
+    "vs_90th": "below"
+   },
+   {
+    "rank": 12,
+    "competency": "Establishes Stretch Goals",
+    "total": 2.93,
+    "band": "Potential Fatal Flaw",
+    "norm_75th": 4.18,
+    "norm_90th": 4.4,
+    "distance_to_90th": 1.47,
+    "vs_75th": "below",
+    "vs_90th": "below"
+   },
+   {
+    "rank": 13,
+    "competency": "Collaboration and Teamwork",
+    "total": 2.93,
+    "band": "Potential Fatal Flaw",
+    "norm_75th": 4.11,
+    "norm_90th": 4.35,
+    "distance_to_90th": 1.42,
+    "vs_75th": "below",
+    "vs_90th": "below"
+   },
+   {
+    "rank": 14,
+    "competency": "Develops Others",
+    "total": 2.85,
+    "band": "Potential Fatal Flaw",
+    "norm_75th": 4.18,
+    "norm_90th": 4.42,
+    "distance_to_90th": 1.57,
+    "vs_75th": "below",
+    "vs_90th": "below"
+   },
+   {
+    "rank": 15,
+    "competency": "Communicates Powerfully and Prolifically",
+    "total": 2.67,
+    "band": "Potential Fatal Flaw",
+    "norm_75th": 4.13,
+    "norm_90th": 4.35,
+    "distance_to_90th": 1.68,
+    "vs_75th": "below",
+    "vs_90th": "below"
+   },
+   {
+    "rank": 16,
+    "competency": "Learning Agility",
+    "total": 2.66,
+    "band": "Potential Fatal Flaw",
+    "norm_75th": 4.1,
+    "norm_90th": 4.35,
+    "distance_to_90th": 1.69,
+    "vs_75th": "below",
+    "vs_90th": "below"
+   },
+   {
+    "rank": 17,
+    "competency": "Inspires and Motivates Others to High Performance",
+    "total": 2.65,
+    "band": "Potential Fatal Flaw",
+    "norm_75th": 4.11,
+    "norm_90th": 4.39,
+    "distance_to_90th": 1.74,
+    "vs_75th": "below",
+    "vs_90th": "below"
+   },
+   {
+    "rank": 18,
+    "competency": "Builds Relationships",
+    "total": 2.63,
+    "band": "Potential Fatal Flaw",
+    "norm_75th": 4.22,
+    "norm_90th": 4.44,
+    "distance_to_90th": 1.81,
+    "vs_75th": "below",
+    "vs_90th": "below"
+   },
+   {
+    "rank": 19,
+    "competency": "Drives for Results",
+    "total": 2.6,
+    "band": "Potential Fatal Flaw",
+    "norm_75th": 4.31,
+    "norm_90th": 4.51,
+    "distance_to_90th": 1.91,
+    "vs_75th": "below",
+    "vs_90th": "below"
+   }
+  ],
+  "importance": [
+   {
+    "competency": "Innovates",
+    "total_votes": 7,
+    "manager": 1,
+    "peers": 5,
+    "others": 0,
+    "self": 1,
+    "direct_reports": 0,
+    "is_passion": true,
+    "weighted_score": 7,
+    "weighted_importance": 1
+   },
+   {
+    "competency": "Drives for Results",
+    "total_votes": 5,
+    "manager": 0,
+    "peers": 3,
+    "others": 0,
+    "self": 1,
+    "direct_reports": 1,
+    "is_passion": true,
+    "weighted_score": 5,
+    "weighted_importance": 0.71
+   },
+   {
+    "competency": "Displays High Integrity and Honesty",
+    "total_votes": 4,
+    "manager": 0,
+    "peers": 3,
+    "others": 0,
+    "self": 0,
+    "direct_reports": 1,
+    "is_passion": false,
+    "weighted_score": 4,
+    "weighted_importance": 0.57
+   },
+   {
+    "competency": "Solves Problems and Analyzes Issues",
+    "total_votes": 3,
+    "manager": 1,
+    "peers": 1,
+    "others": 0,
+    "self": 0,
+    "direct_reports": 1,
+    "is_passion": true,
+    "weighted_score": 3,
+    "weighted_importance": 0.43
+   },
+   {
+    "competency": "Makes Decisions",
+    "total_votes": 3,
+    "manager": 0,
+    "peers": 3,
+    "others": 0,
+    "self": 0,
+    "direct_reports": 0,
+    "is_passion": false,
+    "weighted_score": 3,
+    "weighted_importance": 0.43
+   },
+   {
+    "competency": "Collaboration and Teamwork",
+    "total_votes": 3,
+    "manager": 0,
+    "peers": 1,
+    "others": 0,
+    "self": 0,
+    "direct_reports": 2,
+    "is_passion": false,
+    "weighted_score": 3,
+    "weighted_importance": 0.43
+   },
+   {
+    "competency": "Learning Agility",
+    "total_votes": 2,
+    "manager": 1,
+    "peers": 1,
+    "others": 0,
+    "self": 0,
+    "direct_reports": 0,
+    "is_passion": false,
+    "weighted_score": 2,
+    "weighted_importance": 0.29
+   },
+   {
+    "competency": "Communicates Powerfully and Prolifically",
+    "total_votes": 2,
+    "manager": 0,
+    "peers": 0,
+    "others": 0,
+    "self": 1,
+    "direct_reports": 1,
+    "is_passion": false,
+    "weighted_score": 2,
+    "weighted_importance": 0.29
+   },
+   {
+    "competency": "Builds Relationships",
+    "total_votes": 2,
+    "manager": 0,
+    "peers": 2,
+    "others": 0,
+    "self": 0,
+    "direct_reports": 0,
+    "is_passion": false,
+    "weighted_score": 2,
+    "weighted_importance": 0.29
+   },
+   {
+    "competency": "Develops Strategic Perspective",
+    "total_votes": 2,
+    "manager": 0,
+    "peers": 0,
+    "others": 0,
+    "self": 1,
+    "direct_reports": 1,
+    "is_passion": true,
+    "weighted_score": 2,
+    "weighted_importance": 0.29
+   },
+   {
+    "competency": "Customer and External Focus",
+    "total_votes": 2,
+    "manager": 0,
+    "peers": 2,
+    "others": 0,
+    "self": 0,
+    "direct_reports": 0,
+    "is_passion": true,
+    "weighted_score": 2,
+    "weighted_importance": 0.29
+   },
+   {
+    "competency": "Technical and Professional Acumen",
+    "total_votes": 1,
+    "manager": 1,
+    "peers": 0,
+    "others": 0,
+    "self": 0,
+    "direct_reports": 0,
+    "is_passion": true,
+    "weighted_score": 1,
+    "weighted_importance": 0.14
+   },
+   {
+    "competency": "Establishes Stretch Goals",
+    "total_votes": 1,
+    "manager": 0,
+    "peers": 1,
+    "others": 0,
+    "self": 0,
+    "direct_reports": 0,
+    "is_passion": false,
+    "weighted_score": 1,
+    "weighted_importance": 0.14
+   },
+   {
+    "competency": "Takes Initiative",
+    "total_votes": 1,
+    "manager": 0,
+    "peers": 1,
+    "others": 0,
+    "self": 0,
+    "direct_reports": 0,
+    "is_passion": false,
+    "weighted_score": 1,
+    "weighted_importance": 0.14
+   },
+   {
+    "competency": "Develops Others",
+    "total_votes": 1,
+    "manager": 0,
+    "peers": 1,
+    "others": 0,
+    "self": 0,
+    "direct_reports": 0,
+    "is_passion": false,
+    "weighted_score": 1,
+    "weighted_importance": 0.14
+   },
+   {
+    "competency": "Values Diversity",
+    "total_votes": 1,
+    "manager": 0,
+    "peers": 0,
+    "others": 0,
+    "self": 0,
+    "direct_reports": 1,
+    "is_passion": false,
+    "weighted_score": 1,
+    "weighted_importance": 0.14
+   },
+   {
+    "competency": "Takes Risks",
+    "total_votes": 0,
+    "manager": 0,
+    "peers": 0,
+    "others": 0,
+    "self": 0,
+    "direct_reports": 0,
+    "is_passion": false,
+    "weighted_score": 0,
+    "weighted_importance": 0
+   },
+   {
+    "competency": "Inspires and Motivates Others to High Performance",
+    "total_votes": 0,
+    "manager": 0,
+    "peers": 0,
+    "others": 0,
+    "self": 0,
+    "direct_reports": 0,
+    "is_passion": false,
+    "weighted_score": 0,
+    "weighted_importance": 0
+   },
+   {
+    "competency": "Champions Change",
+    "total_votes": 0,
+    "manager": 0,
+    "peers": 0,
+    "others": 0,
+    "self": 0,
+    "direct_reports": 0,
+    "is_passion": false,
+    "weighted_score": 0,
+    "weighted_importance": 0
+   }
+  ],
+  "highest_behaviors": [
+   {
+    "item_number": 47,
+    "item": "Encourages open discussion of problems and differences of opinion.",
+    "competency": "Values Diversity",
+    "total": 3.75,
+    "manager": 3,
+    "peers": 3.5,
+    "others": null,
+    "self": 4,
+    "direct_reports": 4.33
+   },
+   {
+    "item_number": 10,
+    "item": "Frequently encourages others to consider new approaches and ideas (e.g., avoids getting stuck in one approach).",
+    "competency": "Innovates",
+    "total": 3.67,
+    "manager": 3,
+    "peers": 3.8,
+    "others": null,
+    "self": 4,
+    "direct_reports": 3.67
+   },
+   {
+    "item_number": 29,
+    "item": "Is not afraid to take the risks necessary to achieve goals and objectives.",
+    "competency": "Takes Risks",
+    "total": 3.6,
+    "manager": 3,
+    "peers": 3.67,
+    "others": null,
+    "self": 5,
+    "direct_reports": 3.67
+   },
+   {
+    "item_number": 58,
+    "item": "Has demonstrated the ability to represent the organization to key groups.",
+    "competency": "Customer and External Focus",
+    "total": 3.6,
+    "manager": 3,
+    "peers": 3.33,
+    "others": null,
+    "self": 4,
+    "direct_reports": 4.33
+   },
+   {
+    "item_number": 12,
+    "item": "Constructively challenges the standard approaches and finds improved processes to get work done.",
+    "competency": "Innovates",
+    "total": 3.56,
+    "manager": 4,
+    "peers": 3.4,
+    "others": null,
+    "self": 5,
+    "direct_reports": 3.67
+   },
+   {
+    "item_number": 48,
+    "item": "Builds an inclusive climate of trust and appreciation for those who think differently and come with different backgrounds.",
+    "competency": "Values Diversity",
+    "total": 3.5,
+    "manager": 3,
+    "peers": 3,
+    "others": null,
+    "self": 5,
+    "direct_reports": 4.33
+   },
+   {
+    "item_number": 56,
+    "item": "Has the courage to make the changes that will improve the organization.",
+    "competency": "Champions Change",
+    "total": 3.5,
+    "manager": 3,
+    "peers": 3.33,
+    "others": null,
+    "self": 5,
+    "direct_reports": 4
+   },
+   {
+    "item_number": 30,
+    "item": "Acts quickly on low-risk, high-potential opportunities.",
+    "competency": "Takes Risks",
+    "total": 3.44,
+    "manager": 3,
+    "peers": 3.4,
+    "others": null,
+    "self": 3,
+    "direct_reports": 3.67
+   },
+   {
+    "item_number": 9,
+    "item": "Spots new trends, potential problems, and opportunities early.",
+    "competency": "Solves Problems and Analyzes Issues",
+    "total": 3.4,
+    "manager": 3,
+    "peers": 3.17,
+    "others": null,
+    "self": 5,
+    "direct_reports": 4
+   },
+   {
+    "item_number": 54,
+    "item": "Is willing to become a champion for new projects or programs, presenting them so that others support them.",
+    "competency": "Champions Change",
+    "total": 3.4,
+    "manager": 3,
+    "peers": 3.17,
+    "others": null,
+    "self": 5,
+    "direct_reports": 4
+   }
+  ],
+  "lowest_behaviors": [
+   {
+    "item_number": 39,
+    "item": "Is trusted by all members of the work group.",
+    "competency": "Builds Relationships",
+    "total": 2.25,
+    "manager": 2,
+    "peers": 2,
+    "others": null,
+    "self": 3,
+    "direct_reports": 3
+   },
+   {
+    "item_number": 13,
+    "item": "Makes a real effort to improve based on feedback from others.",
+    "competency": "Learning Agility",
+    "total": 2.33,
+    "manager": 3,
+    "peers": 2.17,
+    "others": null,
+    "self": 3,
+    "direct_reports": 2.5
+   },
+   {
+    "item_number": 32,
+    "item": "Provides others with a definite sense of direction and purpose.",
+    "competency": "Communicates Powerfully and Prolifically",
+    "total": 2.33,
+    "manager": 1,
+    "peers": 2,
+    "others": null,
+    "self": 4,
+    "direct_reports": 3.33
+   },
+   {
+    "item_number": 16,
+    "item": "Quickly adapts their approach in response to people's needs or the situation.",
+    "competency": "Learning Agility",
+    "total": 2.38,
+    "manager": 3,
+    "peers": 2,
+    "others": null,
+    "self": 3,
+    "direct_reports": 3
+   },
+   {
+    "item_number": 19,
+    "item": "Follows through on objectives to ensure successful completion (e.g., does not get distracted before a project is completed).",
+    "competency": "Drives for Results",
+    "total": 2.5,
+    "manager": 2,
+    "peers": 2,
+    "others": null,
+    "self": 2,
+    "direct_reports": 3.67
+   },
+   {
+    "item_number": 37,
+    "item": "Brings to the group a high level of energy and enthusiasm.",
+    "competency": "Inspires and Motivates Others to High Performance",
+    "total": 2.5,
+    "manager": 2,
+    "peers": 2,
+    "others": null,
+    "self": 4,
+    "direct_reports": 3.5
+   },
+   {
+    "item_number": 41,
+    "item": "Provides coaching and acts as a mentor to others.",
+    "competency": "Develops Others",
+    "total": 2.5,
+    "manager": 3,
+    "peers": 2.33,
+    "others": null,
+    "self": 5,
+    "direct_reports": 2.5
+   },
+   {
+    "item_number": 18,
+    "item": "Achieves agreed upon goals within the time allotted.",
+    "competency": "Drives for Results",
+    "total": 2.6,
+    "manager": 1,
+    "peers": 2.33,
+    "others": null,
+    "self": 2,
+    "direct_reports": 3.67
+   },
+   {
+    "item_number": 38,
+    "item": "Balances getting results with a concern for others' needs.",
+    "competency": "Builds Relationships",
+    "total": 2.67,
+    "manager": 2,
+    "peers": 2.67,
+    "others": null,
+    "self": 5,
+    "direct_reports": 3
+   },
+   {
+    "item_number": 17,
+    "item": "Does everything possible to achieve goals.",
+    "competency": "Drives for Results",
+    "total": 2.7,
+    "manager": 2,
+    "peers": 2.5,
+    "others": null,
+    "self": 4,
+    "direct_reports": 3.33
+   }
+  ],
+  "gap_analysis": [
+   {
+    "competency": "Drives for Results",
+    "total": 2.6,
+    "self": 2.67,
+    "gap": -0.07,
+    "direction": "irrelevant"
+   },
+   {
+    "competency": "Makes Decisions",
+    "total": 3,
+    "self": 3.33,
+    "gap": -0.33,
+    "direction": "irrelevant"
+   },
+   {
+    "competency": "Takes Risks",
+    "total": 3.46,
+    "self": 4,
+    "gap": -0.54,
+    "direction": "negative"
+   },
+   {
+    "competency": "Learning Agility",
+    "total": 2.66,
+    "self": 3.25,
+    "gap": -0.59,
+    "direction": "negative"
+   },
+   {
+    "competency": "Collaboration and Teamwork",
+    "total": 2.93,
+    "self": 3.67,
+    "gap": -0.74,
+    "direction": "negative"
+   },
+   {
+    "competency": "Champions Change",
+    "total": 3.23,
+    "self": 4,
+    "gap": -0.77,
+    "direction": "negative"
+   },
+   {
+    "competency": "Customer and External Focus",
+    "total": 3.18,
+    "self": 4,
+    "gap": -0.82,
+    "direction": "negative"
+   },
+   {
+    "competency": "Solves Problems and Analyzes Issues",
+    "total": 3.17,
+    "self": 4,
+    "gap": -0.83,
+    "direction": "negative"
+   },
+   {
+    "competency": "Innovates",
+    "total": 3.5,
+    "self": 4.33,
+    "gap": -0.83,
+    "direction": "negative"
+   },
+   {
+    "competency": "Displays High Integrity and Honesty",
+    "total": 3.03,
+    "self": 4,
+    "gap": -0.97,
+    "direction": "negative"
+   },
+   {
+    "competency": "Establishes Stretch Goals",
+    "total": 2.93,
+    "self": 4,
+    "gap": -1.07,
+    "direction": "negative"
+   },
+   {
+    "competency": "Technical and Professional Acumen",
+    "total": 3.14,
+    "self": 4.33,
+    "gap": -1.19,
+    "direction": "negative"
+   },
+   {
+    "competency": "Values Diversity",
+    "total": 3.46,
+    "self": 4.67,
+    "gap": -1.21,
+    "direction": "negative"
+   },
+   {
+    "competency": "Develops Strategic Perspective",
+    "total": 3.08,
+    "self": 4.33,
+    "gap": -1.25,
+    "direction": "negative"
+   },
+   {
+    "competency": "Takes Initiative",
+    "total": 3,
+    "self": 4.33,
+    "gap": -1.33,
+    "direction": "negative"
+   },
+   {
+    "competency": "Inspires and Motivates Others to High Performance",
+    "total": 2.65,
+    "self": 4,
+    "gap": -1.35,
+    "direction": "negative"
+   },
+   {
+    "competency": "Communicates Powerfully and Prolifically",
+    "total": 2.67,
+    "self": 4.33,
+    "gap": -1.66,
+    "direction": "negative"
+   },
+   {
+    "competency": "Builds Relationships",
+    "total": 2.63,
+    "self": 4.33,
+    "gap": -1.7,
+    "direction": "negative"
+   },
+   {
+    "competency": "Develops Others",
+    "total": 2.85,
+    "self": 4.67,
+    "gap": -1.82,
+    "direction": "negative"
+   }
+  ],
+  "verbatims": {
+   "strengths": {
+    "peers": [
+     "2df6bc754088d6fa",
+     "a2a55c39c98c3112",
+     "e6f4178778aa7b81",
+     "fcb91b925ce7dfe7"
+    ],
+    "direct_reports": [
+     "55f0d1809db02569",
+     "cdb4ee2aea69cc6a",
+     "9784d7ad52b6830e"
+    ],
+    "self": [
+     "96d1120884d572f4"
+    ]
+   },
+   "organizational_needs": {
+    "peers": [
+     "8e58932fedb4267e",
+     "50b7e6788cc8180c",
+     "a0fc159fd39ee299",
+     "d2209c25ec3843d5"
+    ],
+    "direct_reports": [
+     "cdb4ee2aea69cc6a",
+     "bba1902822392c7c",
+     "3973e022e93220f9"
+    ],
+    "self": [
+     "ab68e33d7d5627f3"
+    ]
+   },
+   "potential_fatal_flaws": {
+    "peers": [
+     "f45b5169ad801939",
+     "780433c889ba78d0",
+     "3b9e5fafec4f85f4",
+     "c85e1cc3612fd654"
+    ],
+    "direct_reports": [
+     "cdb4ee2aea69cc6a",
+     "3973e022e93220f9",
+     "389ca83cb825a8f9"
+    ],
+    "self": [
+     "c36568a1d50478a5",
+     "13e0804b2ef3868c",
+     "eea36654a8b9c37b"
+    ]
+   }
+  },
+  "competency_details": [
+   {
+    "competency": "Displays High Integrity and Honesty",
+    "tent_pole": "Character",
+    "total": 3.03,
+    "by_rater_group": [
+     {
+      "group": "Manager",
+      "score": 3
+     },
+     {
+      "group": "Peers",
+      "score": 2.72
+     },
+     {
+      "group": "Direct Reports",
+      "score": 3.67
+     },
+     {
+      "group": "Self",
+      "score": 4
+     }
+    ],
+    "items": [
+     {
+      "item_number": 1,
+      "item": "Is a role model and sets a good example for their work group.",
+      "total": 3,
+      "n": 10,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 3,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 2.67,
+        "n": 6
+       },
+       {
+        "group": "Direct Reports",
+        "score": 3.67,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 4,
+        "n": 1
+       }
+      ]
+     },
+     {
+      "item_number": 2,
+      "item": "Works hard to \"walk the talk\" and avoids saying one thing and doing another.",
+      "total": 3.3,
+      "n": 10,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 3,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 3,
+        "n": 6
+       },
+       {
+        "group": "Direct Reports",
+        "score": 4,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 4,
+        "n": 1
+       }
+      ]
+     },
+     {
+      "item_number": 3,
+      "item": "Is careful to honor commitments and keep promises.",
+      "total": 2.8,
+      "n": 10,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 3,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 2.5,
+        "n": 6
+       },
+       {
+        "group": "Direct Reports",
+        "score": 3.33,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 4,
+        "n": 1
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "competency": "Technical and Professional Acumen",
+    "tent_pole": "Personal Capability",
+    "total": 3.14,
+    "by_rater_group": [
+     {
+      "group": "Manager",
+      "score": 3
+     },
+     {
+      "group": "Peers",
+      "score": 2.94
+     },
+     {
+      "group": "Direct Reports",
+      "score": 3.56
+     },
+     {
+      "group": "Self",
+      "score": 4.33
+     }
+    ],
+    "items": [
+     {
+      "item_number": 4,
+      "item": "Many people seek after this person's opinions.",
+      "total": 3.33,
+      "n": 9,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 3,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 3.2,
+        "n": 5
+       },
+       {
+        "group": "Direct Reports",
+        "score": 3.67,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 4,
+        "n": 1
+       }
+      ]
+     },
+     {
+      "item_number": 5,
+      "item": "This person’s skills and knowledge make an important contribution to achieving team",
+      "total": 3.2,
+      "n": 10,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 3,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 2.83,
+        "n": 6
+       },
+       {
+        "group": "Direct Reports",
+        "score": 4,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 4,
+        "n": 1
+       }
+      ]
+     },
+     {
+      "item_number": 6,
+      "item": "Teammates trust this person’s ideas and opinions because of in-depth knowledge and",
+      "total": 2.89,
+      "n": 9,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 3,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 2.8,
+        "n": 5
+       },
+       {
+        "group": "Direct Reports",
+        "score": 3,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 5,
+        "n": 1
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "competency": "Solves Problems and Analyzes Issues",
+    "tent_pole": "Personal Capability",
+    "total": 3.17,
+    "by_rater_group": [
+     {
+      "group": "Manager",
+      "score": 2.33
+     },
+     {
+      "group": "Peers",
+      "score": 3.06
+     },
+     {
+      "group": "Direct Reports",
+      "score": 3.67
+     },
+     {
+      "group": "Self",
+      "score": 4
+     }
+    ],
+    "items": [
+     {
+      "item_number": 7,
+      "item": "Has the ability to anticipate and respond quickly to problems.",
+      "total": 3,
+      "n": 10,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 2,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 3,
+        "n": 6
+       },
+       {
+        "group": "Direct Reports",
+        "score": 3.33,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 3,
+        "n": 1
+       }
+      ]
+     },
+     {
+      "item_number": 8,
+      "item": "Is trusted by others to use good judgment when making decisions.",
+      "total": 3.1,
+      "n": 10,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 2,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 3,
+        "n": 6
+       },
+       {
+        "group": "Direct Reports",
+        "score": 3.67,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 4,
+        "n": 1
+       }
+      ]
+     },
+     {
+      "item_number": 9,
+      "item": "Spots new trends, potential problems, and opportunities early.",
+      "total": 3.4,
+      "n": 10,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 3,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 3.17,
+        "n": 6
+       },
+       {
+        "group": "Direct Reports",
+        "score": 4,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 5,
+        "n": 1
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "competency": "Innovates",
+    "tent_pole": "Personal Capability",
+    "total": 3.5,
+    "by_rater_group": [
+     {
+      "group": "Manager",
+      "score": 3.33
+     },
+     {
+      "group": "Peers",
+      "score": 3.36
+     },
+     {
+      "group": "Direct Reports",
+      "score": 3.5
+     },
+     {
+      "group": "Self",
+      "score": 4.33
+     }
+    ],
+    "items": [
+     {
+      "item_number": 10,
+      "item": "Frequently encourages others to consider new approaches and ideas (e.g., avoids",
+      "total": 3.67,
+      "n": 9,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 3,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 3.8,
+        "n": 5
+       },
+       {
+        "group": "Direct Reports",
+        "score": 3.67,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 4,
+        "n": 1
+       }
+      ]
+     },
+     {
+      "item_number": 11,
+      "item": "Finds ways to improve new ideas rather than discourage them.",
+      "total": 3.25,
+      "n": 8,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 3,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 3.2,
+        "n": 5
+       },
+       {
+        "group": "Direct Reports",
+        "score": 3.5,
+        "n": 2
+       },
+       {
+        "group": "Self",
+        "score": 4,
+        "n": 1
+       }
+      ]
+     },
+     {
+      "item_number": 12,
+      "item": "Constructively challenges the standard approaches and finds improved processes to",
+      "total": 3.56,
+      "n": 9,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 4,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 3.4,
+        "n": 5
+       },
+       {
+        "group": "Direct Reports",
+        "score": 3.67,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 5,
+        "n": 1
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "competency": "Learning Agility",
+    "tent_pole": "Personal Capability",
+    "total": 2.66,
+    "by_rater_group": [
+     {
+      "group": "Manager",
+      "score": 3
+     },
+     {
+      "group": "Peers",
+      "score": 2.38
+     },
+     {
+      "group": "Direct Reports",
+      "score": 3.5
+     },
+     {
+      "group": "Self",
+      "score": 3.25
+     }
+    ],
+    "items": [
+     {
+      "item_number": 13,
+      "item": "Makes a real effort to improve based on feedback from others.",
+      "total": 2.33,
+      "n": 9,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 3,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 2.17,
+        "n": 6
+       },
+       {
+        "group": "Direct Reports",
+        "score": 2.5,
+        "n": 2
+       },
+       {
+        "group": "Self",
+        "score": 3,
+        "n": 1
+       }
+      ]
+     },
+     {
+      "item_number": 14,
+      "item": "Actively looks for opportunities to get feedback to improve themselves.",
+      "total": 2.89,
+      "n": 9,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 3,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 2.4,
+        "n": 5
+       },
+       {
+        "group": "Direct Reports",
+        "score": 3.67,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 2,
+        "n": 1
+       }
+      ]
+     },
+     {
+      "item_number": 15,
+      "item": "Creates an atmosphere of continual improvement in which self and others push to",
+      "total": 3,
+      "n": 9,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 3,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 2.6,
+        "n": 5
+       },
+       {
+        "group": "Direct Reports",
+        "score": 3.67,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 5,
+        "n": 1
+       }
+      ]
+     },
+     {
+      "item_number": 16,
+      "item": "Quickly adapts their approach in response to people's needs or the situation.",
+      "total": 2.38,
+      "n": 8,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 3,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 2,
+        "n": 5
+       },
+       {
+        "group": "Direct Reports",
+        "score": 3,
+        "n": 2
+       },
+       {
+        "group": "Self",
+        "score": 3,
+        "n": 1
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "competency": "Drives for Results",
+    "tent_pole": "Focus on Results",
+    "total": 2.6,
+    "by_rater_group": [
+     {
+      "group": "Manager",
+      "score": 1.67
+     },
+     {
+      "group": "Peers",
+      "score": 2.28
+     },
+     {
+      "group": "Direct Reports",
+      "score": 3.56
+     },
+     {
+      "group": "Self",
+      "score": 2.67
+     }
+    ],
+    "items": [
+     {
+      "item_number": 17,
+      "item": "Does everything possible to achieve goals.",
+      "total": 2.7,
+      "n": 10,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 2,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 2.5,
+        "n": 6
+       },
+       {
+        "group": "Direct Reports",
+        "score": 3.33,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 4,
+        "n": 1
+       }
+      ]
+     },
+     {
+      "item_number": 18,
+      "item": "Achieves agreed upon goals within the time allotted.",
+      "total": 2.6,
+      "n": 10,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 1,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 2.33,
+        "n": 6
+       },
+       {
+        "group": "Direct Reports",
+        "score": 3.67,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 2,
+        "n": 1
+       }
+      ]
+     },
+     {
+      "item_number": 19,
+      "item": "Follows through on objectives to ensure successful completion (e.g., does not get",
+      "total": 2.5,
+      "n": 10,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 2,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 2,
+        "n": 6
+       },
+       {
+        "group": "Direct Reports",
+        "score": 3.67,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 2,
+        "n": 1
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "competency": "Establishes Stretch Goals",
+    "tent_pole": "Focus on Results",
+    "total": 2.93,
+    "by_rater_group": [
+     {
+      "group": "Manager",
+      "score": 3
+     },
+     {
+      "group": "Peers",
+      "score": 2.53
+     },
+     {
+      "group": "Direct Reports",
+      "score": 3.83
+     },
+     {
+      "group": "Self",
+      "score": 4
+     }
+    ],
+    "items": [
+     {
+      "item_number": 20,
+      "item": "Establishes high standards of excellence for the work group.",
+      "total": 2.78,
+      "n": 9,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 3,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 2,
+        "n": 5
+       },
+       {
+        "group": "Direct Reports",
+        "score": 4,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 5,
+        "n": 1
+       }
+      ]
+     },
+     {
+      "item_number": 21,
+      "item": "Is skillful at getting people to stretch for goals that go beyond what they originally",
+      "total": 3,
+      "n": 9,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 3,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 2.6,
+        "n": 5
+       },
+       {
+        "group": "Direct Reports",
+        "score": 3.67,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 3,
+        "n": 1
+       }
+      ]
+     },
+     {
+      "item_number": 22,
+      "item": "Keeps people focused on the highest priority goals and objectives.",
+      "total": 3,
+      "n": 9,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 3,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 2.83,
+        "n": 6
+       },
+       {
+        "group": "Direct Reports",
+        "score": 3.5,
+        "n": 2
+       },
+       {
+        "group": "Self",
+        "score": 4,
+        "n": 1
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "competency": "Takes Initiative",
+    "tent_pole": "Focus on Results",
+    "total": 3,
+    "by_rater_group": [
+     {
+      "group": "Manager",
+      "score": 2
+     },
+     {
+      "group": "Peers",
+      "score": 2.64
+     },
+     {
+      "group": "Direct Reports",
+      "score": 3.78
+     },
+     {
+      "group": "Self",
+      "score": 4.33
+     }
+    ],
+    "items": [
+     {
+      "item_number": 23,
+      "item": "Can always be counted on to follow through on commitments.",
+      "total": 2.7,
+      "n": 10,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 2,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 2.5,
+        "n": 6
+       },
+       {
+        "group": "Direct Reports",
+        "score": 3.33,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 3,
+        "n": 1
+       }
+      ]
+     },
+     {
+      "item_number": 24,
+      "item": "Willingly goes above and beyond what needs to be done.",
+      "total": 3,
+      "n": 7,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 2,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 2.75,
+        "n": 4
+       },
+       {
+        "group": "Direct Reports",
+        "score": 4,
+        "n": 2
+       },
+       {
+        "group": "Self",
+        "score": 5,
+        "n": 1
+       }
+      ]
+     },
+     {
+      "item_number": 25,
+      "item": "Is energized and excited to take on challenging goals for which they are held personally",
+      "total": 3.33,
+      "n": 9,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 2,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 3,
+        "n": 5
+       },
+       {
+        "group": "Direct Reports",
+        "score": 4.33,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 5,
+        "n": 1
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "competency": "Makes Decisions",
+    "tent_pole": "Focus on Results",
+    "total": 3,
+    "by_rater_group": [
+     {
+      "group": "Manager",
+      "score": 2
+     },
+     {
+      "group": "Peers",
+      "score": 2.89
+     },
+     {
+      "group": "Direct Reports",
+      "score": 3.56
+     },
+     {
+      "group": "Self",
+      "score": 3.33
+     }
+    ],
+    "items": [
+     {
+      "item_number": 26,
+      "item": "Makes decisions and continually moves forward in the face of constant change.",
+      "total": 3.3,
+      "n": 10,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 2,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 3.33,
+        "n": 6
+       },
+       {
+        "group": "Direct Reports",
+        "score": 3.67,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 4,
+        "n": 1
+       }
+      ]
+     },
+     {
+      "item_number": 27,
+      "item": "Makes and acts on decisions in a timely manner.",
+      "total": 2.7,
+      "n": 10,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 2,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 2.5,
+        "n": 6
+       },
+       {
+        "group": "Direct Reports",
+        "score": 3.33,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 2,
+        "n": 1
+       }
+      ]
+     },
+     {
+      "item_number": 28,
+      "item": "Makes effective decisions despite short timelines and pressure.",
+      "total": 3,
+      "n": 10,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 2,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 2.83,
+        "n": 6
+       },
+       {
+        "group": "Direct Reports",
+        "score": 3.67,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 4,
+        "n": 1
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "competency": "Takes Risks",
+    "tent_pole": "Focus on Results",
+    "total": 3.46,
+    "by_rater_group": [
+     {
+      "group": "Manager",
+      "score": 3
+     },
+     {
+      "group": "Peers",
+      "score": 3.44
+     },
+     {
+      "group": "Direct Reports",
+      "score": 3.67
+     },
+     {
+      "group": "Self",
+      "score": 4
+     }
+    ],
+    "items": [
+     {
+      "item_number": 29,
+      "item": "Is not afraid to take the risks necessary to achieve goals and objectives.",
+      "total": 3.6,
+      "n": 10,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 3,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 3.67,
+        "n": 6
+       },
+       {
+        "group": "Direct Reports",
+        "score": 3.67,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 5,
+        "n": 1
+       }
+      ]
+     },
+     {
+      "item_number": 30,
+      "item": "Acts quickly on low-risk, high-potential opportunities.",
+      "total": 3.44,
+      "n": 9,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 3,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 3.4,
+        "n": 5
+       },
+       {
+        "group": "Direct Reports",
+        "score": 3.67,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 3,
+        "n": 1
+       }
+      ]
+     },
+     {
+      "item_number": 31,
+      "item": "Balances risk and rewards that maximize returns while also protecting the organization.",
+      "total": 3.33,
+      "n": 9,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 3,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 3.33,
+        "n": 6
+       },
+       {
+        "group": "Direct Reports",
+        "score": 3.5,
+        "n": 2
+       },
+       {
+        "group": "Self",
+        "score": 4,
+        "n": 1
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "competency": "Communicates Powerfully and Prolifically",
+    "tent_pole": "Interpersonal Skills",
+    "total": 2.67,
+    "by_rater_group": [
+     {
+      "group": "Manager",
+      "score": 1.67
+     },
+     {
+      "group": "Peers",
+      "score": 2.39
+     },
+     {
+      "group": "Direct Reports",
+      "score": 3.56
+     },
+     {
+      "group": "Self",
+      "score": 4.33
+     }
+    ],
+    "items": [
+     {
+      "item_number": 32,
+      "item": "Provides others with a definite sense of direction and purpose.",
+      "total": 2.33,
+      "n": 9,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 1,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 2,
+        "n": 5
+       },
+       {
+        "group": "Direct Reports",
+        "score": 3.33,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 4,
+        "n": 1
+       }
+      ]
+     },
+     {
+      "item_number": 33,
+      "item": "Skilled at communicating insights and understanding of issues or problems.",
+      "total": 2.9,
+      "n": 10,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 2,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 2.67,
+        "n": 6
+       },
+       {
+        "group": "Direct Reports",
+        "score": 3.67,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 5,
+        "n": 1
+       }
+      ]
+     },
+     {
+      "item_number": 34,
+      "item": "Helps people understand how their work contributes to broader business objectives.",
+      "total": 2.75,
+      "n": 8,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 2,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 2.25,
+        "n": 4
+       },
+       {
+        "group": "Direct Reports",
+        "score": 3.67,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 4,
+        "n": 1
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "competency": "Inspires and Motivates Others to High Performance",
+    "tent_pole": "Interpersonal Skills",
+    "total": 2.65,
+    "by_rater_group": [
+     {
+      "group": "Manager",
+      "score": 2
+     },
+     {
+      "group": "Peers",
+      "score": 2.25
+     },
+     {
+      "group": "Direct Reports",
+      "score": 3.33
+     },
+     {
+      "group": "Self",
+      "score": 4
+     }
+    ],
+    "items": [
+     {
+      "item_number": 35,
+      "item": "Energizes people to achieve exceptional results.",
+      "total": 2.71,
+      "n": 7,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 2,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 2.25,
+        "n": 4
+       },
+       {
+        "group": "Direct Reports",
+        "score": 4,
+        "n": 2
+       },
+       {
+        "group": "Self",
+        "score": 4,
+        "n": 1
+       }
+      ]
+     },
+     {
+      "item_number": 36,
+      "item": "Inspires others to high levels of effort and performance.",
+      "total": 2.71,
+      "n": 7,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 2,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 2,
+        "n": 3
+       },
+       {
+        "group": "Direct Reports",
+        "score": 3.67,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 4,
+        "n": 1
+       }
+      ]
+     },
+     {
+      "item_number": 37,
+      "item": "Brings to the group a high level of energy and enthusiasm.",
+      "total": 2.5,
+      "n": 6,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 2,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 2,
+        "n": 3
+       },
+       {
+        "group": "Direct Reports",
+        "score": 3.5,
+        "n": 2
+       },
+       {
+        "group": "Self",
+        "score": 4,
+        "n": 1
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "competency": "Builds Relationships",
+    "tent_pole": "Interpersonal Skills",
+    "total": 2.63,
+    "by_rater_group": [
+     {
+      "group": "Manager",
+      "score": 2.33
+     },
+     {
+      "group": "Peers",
+      "score": 2.39
+     },
+     {
+      "group": "Direct Reports",
+      "score": 3.44
+     },
+     {
+      "group": "Self",
+      "score": 4.33
+     }
+    ],
+    "items": [
+     {
+      "item_number": 38,
+      "item": "Balances getting results with a concern for others' needs.",
+      "total": 2.67,
+      "n": 9,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 2,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 2.67,
+        "n": 6
+       },
+       {
+        "group": "Direct Reports",
+        "score": 3,
+        "n": 2
+       },
+       {
+        "group": "Self",
+        "score": 5,
+        "n": 1
+       }
+      ]
+     },
+     {
+      "item_number": 39,
+      "item": "Is trusted by all members of the work group.",
+      "total": 2.25,
+      "n": 8,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 2,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 2,
+        "n": 5
+       },
+       {
+        "group": "Direct Reports",
+        "score": 3,
+        "n": 2
+       },
+       {
+        "group": "Self",
+        "score": 3,
+        "n": 1
+       }
+      ]
+     },
+     {
+      "item_number": 40,
+      "item": "Stays in touch with issues and concerns of individuals in the work group.",
+      "total": 3,
+      "n": 7,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 3,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 2.25,
+        "n": 4
+       },
+       {
+        "group": "Direct Reports",
+        "score": 4.5,
+        "n": 2
+       },
+       {
+        "group": "Self",
+        "score": 5,
+        "n": 1
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "competency": "Develops Others",
+    "tent_pole": "Interpersonal Skills",
+    "total": 2.85,
+    "by_rater_group": [
+     {
+      "group": "Manager",
+      "score": 3
+     },
+     {
+      "group": "Peers",
+      "score": 2.42
+     },
+     {
+      "group": "Direct Reports",
+      "score": 3.39
+     },
+     {
+      "group": "Self",
+      "score": 4.67
+     }
+    ],
+    "items": [
+     {
+      "item_number": 41,
+      "item": "Provides coaching and acts as a mentor to others.",
+      "total": 2.5,
+      "n": 6,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 3,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 2.33,
+        "n": 3
+       },
+       {
+        "group": "Direct Reports",
+        "score": 2.5,
+        "n": 2
+       },
+       {
+        "group": "Self",
+        "score": 5,
+        "n": 1
+       }
+      ]
+     },
+     {
+      "item_number": 42,
+      "item": "Is truly concerned about developing others.",
+      "total": 2.71,
+      "n": 7,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 3,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 2,
+        "n": 4
+       },
+       {
+        "group": "Direct Reports",
+        "score": 4,
+        "n": 2
+       },
+       {
+        "group": "Self",
+        "score": 5,
+        "n": 1
+       }
+      ]
+     },
+     {
+      "item_number": 43,
+      "item": "Gives honest feedback in a helpful way.",
+      "total": 3.29,
+      "n": 7,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 3,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 2.75,
+        "n": 4
+       },
+       {
+        "group": "Direct Reports",
+        "score": 4.5,
+        "n": 2
+       },
+       {
+        "group": "Self",
+        "score": 4,
+        "n": 1
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "competency": "Collaboration and Teamwork",
+    "tent_pole": "Interpersonal Skills",
+    "total": 2.93,
+    "by_rater_group": [
+     {
+      "group": "Manager",
+      "score": 3
+     },
+     {
+      "group": "Peers",
+      "score": 2.67
+     },
+     {
+      "group": "Direct Reports",
+      "score": 3.61
+     },
+     {
+      "group": "Self",
+      "score": 3.67
+     }
+    ],
+    "items": [
+     {
+      "item_number": 44,
+      "item": "Promotes a high level of cooperation between all members of the work group.",
+      "total": 3,
+      "n": 9,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 3,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 2.6,
+        "n": 5
+       },
+       {
+        "group": "Direct Reports",
+        "score": 3.67,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 4,
+        "n": 1
+       }
+      ]
+     },
+     {
+      "item_number": 45,
+      "item": "Resolves conflict within the work group.",
+      "total": 2.88,
+      "n": 8,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 3,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 2.8,
+        "n": 5
+       },
+       {
+        "group": "Direct Reports",
+        "score": 3,
+        "n": 2
+       },
+       {
+        "group": "Self",
+        "score": 4,
+        "n": 1
+       }
+      ]
+     },
+     {
+      "item_number": 46,
+      "item": "Achieves objectives requiring a high level of cooperation from people in other parts of",
+      "total": 2.9,
+      "n": 10,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 3,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 2.5,
+        "n": 6
+       },
+       {
+        "group": "Direct Reports",
+        "score": 3.67,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 3,
+        "n": 1
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "competency": "Values Diversity",
+    "tent_pole": "Interpersonal Skills",
+    "total": 3.46,
+    "by_rater_group": [
+     {
+      "group": "Manager",
+      "score": 3
+     },
+     {
+      "group": "Peers",
+      "score": 3.06
+     },
+     {
+      "group": "Direct Reports",
+      "score": 4.33
+     },
+     {
+      "group": "Self",
+      "score": 4.67
+     }
+    ],
+    "items": [
+     {
+      "item_number": 47,
+      "item": "Encourages open discussion of problems and differences of opinion.",
+      "total": 3.75,
+      "n": 8,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 3,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 3.5,
+        "n": 4
+       },
+       {
+        "group": "Direct Reports",
+        "score": 4.33,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 4,
+        "n": 1
+       }
+      ]
+     },
+     {
+      "item_number": 48,
+      "item": "Builds an inclusive climate of trust and appreciation for those who think differently and",
+      "total": 3.5,
+      "n": 8,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 3,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 3,
+        "n": 4
+       },
+       {
+        "group": "Direct Reports",
+        "score": 4.33,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 5,
+        "n": 1
+       }
+      ]
+     },
+     {
+      "item_number": 49,
+      "item": "Capitalizes on diverse perspectives and talents of others in accomplishing objectives.",
+      "total": 3.13,
+      "n": 8,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 3,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 2.6,
+        "n": 5
+       },
+       {
+        "group": "Direct Reports",
+        "score": 4.5,
+        "n": 2
+       },
+       {
+        "group": "Self",
+        "score": 5,
+        "n": 1
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "competency": "Develops Strategic Perspective",
+    "tent_pole": "Leading Change",
+    "total": 3.08,
+    "by_rater_group": [
+     {
+      "group": "Manager",
+      "score": 2.67
+     },
+     {
+      "group": "Peers",
+      "score": 2.97
+     },
+     {
+      "group": "Direct Reports",
+      "score": 3.17
+     },
+     {
+      "group": "Self",
+      "score": 4.33
+     }
+    ],
+    "items": [
+     {
+      "item_number": 50,
+      "item": "Helps others understand the organization's vision and objectives so they can translate",
+      "total": 3,
+      "n": 7,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 2,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 2.75,
+        "n": 4
+       },
+       {
+        "group": "Direct Reports",
+        "score": 4,
+        "n": 2
+       },
+       {
+        "group": "Self",
+        "score": 4,
+        "n": 1
+       }
+      ]
+     },
+     {
+      "item_number": 51,
+      "item": "Maintains a clear perspective between the overall picture and the details.",
+      "total": 2.9,
+      "n": 10,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 2,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 3,
+        "n": 6
+       },
+       {
+        "group": "Direct Reports",
+        "score": 3,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 5,
+        "n": 1
+       }
+      ]
+     },
+     {
+      "item_number": 52,
+      "item": "Has a perspective beyond the day-to-day work to take a longer-term, broader view of",
+      "total": 3.38,
+      "n": 8,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 4,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 3.5,
+        "n": 4
+       },
+       {
+        "group": "Direct Reports",
+        "score": 3,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 4,
+        "n": 1
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "competency": "Champions Change",
+    "tent_pole": "Leading Change",
+    "total": 3.23,
+    "by_rater_group": [
+     {
+      "group": "Manager",
+      "score": 3
+     },
+     {
+      "group": "Peers",
+      "score": 3.08
+     },
+     {
+      "group": "Direct Reports",
+      "score": 3.69
+     },
+     {
+      "group": "Self",
+      "score": 4
+     }
+    ],
+    "items": [
+     {
+      "item_number": 53,
+      "item": "Quickly recognizes situations where change is needed.",
+      "total": 3,
+      "n": 10,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 3,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 2.83,
+        "n": 6
+       },
+       {
+        "group": "Direct Reports",
+        "score": 3.33,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 4,
+        "n": 1
+       }
+      ]
+     },
+     {
+      "item_number": 54,
+      "item": "Is willing to become a champion for new projects or programs, presenting them so that",
+      "total": 3.4,
+      "n": 10,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 3,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 3.17,
+        "n": 6
+       },
+       {
+        "group": "Direct Reports",
+        "score": 4,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 5,
+        "n": 1
+       }
+      ]
+     },
+     {
+      "item_number": 55,
+      "item": "Does an excellent job of marketing projects, programs, or products.",
+      "total": 3,
+      "n": 9,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 3,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 3,
+        "n": 6
+       },
+       {
+        "group": "Direct Reports",
+        "score": 3,
+        "n": 2
+       },
+       {
+        "group": "Self",
+        "score": 2,
+        "n": 1
+       }
+      ]
+     },
+     {
+      "item_number": 56,
+      "item": "Has the courage to make the changes that will improve the organization.",
+      "total": 3.5,
+      "n": 10,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 3,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 3.33,
+        "n": 6
+       },
+       {
+        "group": "Direct Reports",
+        "score": 4,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 5,
+        "n": 1
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "competency": "Customer and External Focus",
+    "tent_pole": "Leading Change",
+    "total": 3.18,
+    "by_rater_group": [
+     {
+      "group": "Manager",
+      "score": 3
+     },
+     {
+      "group": "Peers",
+      "score": 2.92
+     },
+     {
+      "group": "Direct Reports",
+      "score": 3.75
+     },
+     {
+      "group": "Self",
+      "score": 4
+     }
+    ],
+    "items": [
+     {
+      "item_number": 57,
+      "item": "Helps people understand how meeting customers' needs is central to the mission and",
+      "total": 3,
+      "n": 10,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 3,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 2.67,
+        "n": 6
+       },
+       {
+        "group": "Direct Reports",
+        "score": 3.67,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 4,
+        "n": 1
+       }
+      ]
+     },
+     {
+      "item_number": 58,
+      "item": "Has demonstrated the ability to represent the organization to key groups.",
+      "total": 3.6,
+      "n": 10,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 3,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 3.33,
+        "n": 6
+       },
+       {
+        "group": "Direct Reports",
+        "score": 4.33,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 4,
+        "n": 1
+       }
+      ]
+     },
+     {
+      "item_number": 59,
+      "item": "Is the antenna for the organization, bringing in relevant information that benefits the",
+      "total": 3,
+      "n": 9,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 3,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 2.8,
+        "n": 5
+       },
+       {
+        "group": "Direct Reports",
+        "score": 3.33,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 3,
+        "n": 1
+       }
+      ]
+     },
+     {
+      "item_number": 60,
+      "item": "Has a concrete understanding of customer needs, business goals, and what is",
+      "total": 3.1,
+      "n": 10,
+      "by_rater_group": [
+       {
+        "group": "Manager",
+        "score": 3,
+        "n": 1
+       },
+       {
+        "group": "Peers",
+        "score": 2.83,
+        "n": 6
+       },
+       {
+        "group": "Direct Reports",
+        "score": 3.67,
+        "n": 3
+       },
+       {
+        "group": "Self",
+        "score": 5,
+        "n": 1
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "reassessment": {
+   "current_window": {
+    "from": "2025-05-11",
+    "to": "2025-10-05"
+   },
+   "previous_window": {
+    "from": "2023-10-18",
+    "to": "2023-12-15"
+   },
+   "previous_rater_counts": {
+    "manager": 1,
+    "peers": 5,
+    "direct_reports": 6,
+    "others": 2,
+    "self": 1,
+    "reported_as": {
+     "manager": 1,
+     "peers": 5,
+     "direct_reports": 6,
+     "self": 1
+    },
+    "collapsed_note": "Rater groups were combined for reporting (small-N rule)."
+   },
+   "rater_sets_differ": true,
+   "overall_previous": {
+    "total": 3.52,
+    "by_rater_group": [
+     {
+      "group": "Manager",
+      "score": 3.42
+     },
+     {
+      "group": "Peers",
+      "score": 3.3
+     },
+     {
+      "group": "Direct Reports",
+      "score": 3.62
+     },
+     {
+      "group": "Self",
+      "score": 4.88
+     }
+    ]
+   },
+   "engagement_previous_total": 3.77,
+   "tent_poles_previous": [
+    {
+     "name": "Personal Capability",
+     "score": 3.61
+    },
+    {
+     "name": "Focus on Results",
+     "score": 3.39
+    },
+    {
+     "name": "Character",
+     "score": 3.48
+    },
+    {
+     "name": "Interpersonal Skills",
+     "score": 3.4
+    },
+    {
+     "name": "Leading Change",
+     "score": 3.82
+    }
+   ],
+   "by_competency": [
+    {
+     "competency": "Takes Risks",
+     "current_total": 3.46,
+     "previous_total": 3.59,
+     "gap": -0.13,
+     "direction": "irrelevant"
+    },
+    {
+     "competency": "Solves Problems and Analyzes Issues",
+     "current_total": 3.17,
+     "previous_total": 3.48,
+     "gap": -0.31,
+     "direction": "negative"
+    },
+    {
+     "competency": "Innovates",
+     "current_total": 3.5,
+     "previous_total": 3.83,
+     "gap": -0.33,
+     "direction": "negative"
+    },
+    {
+     "competency": "Drives for Results",
+     "current_total": 2.6,
+     "previous_total": 2.94,
+     "gap": -0.34,
+     "direction": "negative"
+    },
+    {
+     "competency": "Collaboration and Teamwork",
+     "current_total": 2.93,
+     "previous_total": 3.31,
+     "gap": -0.38,
+     "direction": "negative"
+    },
+    {
+     "competency": "Values Diversity",
+     "current_total": 3.46,
+     "previous_total": 3.88,
+     "gap": -0.42,
+     "direction": "negative"
+    },
+    {
+     "competency": "Displays High Integrity and Honesty",
+     "current_total": 3.03,
+     "previous_total": 3.48,
+     "gap": -0.45,
+     "direction": "negative"
+    },
+    {
+     "competency": "Establishes Stretch Goals",
+     "current_total": 2.93,
+     "previous_total": 3.42,
+     "gap": -0.49,
+     "direction": "negative"
+    },
+    {
+     "competency": "Takes Initiative",
+     "current_total": 3,
+     "previous_total": 3.5,
+     "gap": -0.5,
+     "direction": "negative"
+    },
+    {
+     "competency": "Makes Decisions",
+     "current_total": 3,
+     "previous_total": 3.5,
+     "gap": -0.5,
+     "direction": "negative"
+    },
+    {
+     "competency": "Builds Relationships",
+     "current_total": 2.63,
+     "previous_total": 3.15,
+     "gap": -0.52,
+     "direction": "negative"
+    },
+    {
+     "competency": "Champions Change",
+     "current_total": 3.23,
+     "previous_total": 3.77,
+     "gap": -0.54,
+     "direction": "negative"
+    },
+    {
+     "competency": "Technical and Professional Acumen",
+     "current_total": 3.14,
+     "previous_total": 3.68,
+     "gap": -0.54,
+     "direction": "negative"
+    },
+    {
+     "competency": "Develops Others",
+     "current_total": 2.85,
+     "previous_total": 3.41,
+     "gap": -0.56,
+     "direction": "negative"
+    },
+    {
+     "competency": "Communicates Powerfully and Prolifically",
+     "current_total": 2.67,
+     "previous_total": 3.26,
+     "gap": -0.59,
+     "direction": "negative"
+    },
+    {
+     "competency": "Develops Strategic Perspective",
+     "current_total": 3.08,
+     "previous_total": 3.74,
+     "gap": -0.66,
+     "direction": "negative"
+    },
+    {
+     "competency": "Inspires and Motivates Others to High Performance",
+     "current_total": 2.65,
+     "previous_total": 3.36,
+     "gap": -0.71,
+     "direction": "negative"
+    },
+    {
+     "competency": "Customer and External Focus",
+     "current_total": 3.18,
+     "previous_total": 3.93,
+     "gap": -0.75,
+     "direction": "negative"
+    },
+    {
+     "competency": "Learning Agility",
+     "current_total": 2.66,
+     "previous_total": 3.47,
+     "gap": -0.81,
+     "direction": "negative"
+    }
+   ]
+  },
+  "extraction_notes": [],
+  "development_candidates": [
+   {
+    "competency": "Innovates",
+    "total": 3.5,
+    "band": "Below Average",
+    "distance_to_90th": 0.88,
+    "distance_to_75th": 0.66,
+    "at_or_above_75th": false,
+    "weighted_importance": 1,
+    "total_votes": 7,
+    "manager_votes": 1,
+    "is_passion": true,
+    "circles_met": 3,
+    "missing": []
+   },
+   {
+    "competency": "Drives for Results",
+    "total": 2.6,
+    "band": "Potential Fatal Flaw",
+    "distance_to_90th": 1.91,
+    "distance_to_75th": 1.71,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.71,
+    "total_votes": 5,
+    "manager_votes": 0,
+    "is_passion": true,
+    "circles_met": 3,
+    "missing": []
+   },
+   {
+    "competency": "Solves Problems and Analyzes Issues",
+    "total": 3.17,
+    "band": "Potential Fatal Flaw",
+    "distance_to_90th": 1.27,
+    "distance_to_75th": 1.07,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.43,
+    "total_votes": 3,
+    "manager_votes": 1,
+    "is_passion": true,
+    "circles_met": 3,
+    "missing": []
+   },
+   {
+    "competency": "Customer and External Focus",
+    "total": 3.18,
+    "band": "Potential Fatal Flaw",
+    "distance_to_90th": 1.27,
+    "distance_to_75th": 1.06,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.29,
+    "total_votes": 2,
+    "manager_votes": 0,
+    "is_passion": true,
+    "circles_met": 3,
+    "missing": []
+   },
+   {
+    "competency": "Develops Strategic Perspective",
+    "total": 3.08,
+    "band": "Potential Fatal Flaw",
+    "distance_to_90th": 1.28,
+    "distance_to_75th": 1.08,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.29,
+    "total_votes": 2,
+    "manager_votes": 0,
+    "is_passion": true,
+    "circles_met": 3,
+    "missing": []
+   },
+   {
+    "competency": "Technical and Professional Acumen",
+    "total": 3.14,
+    "band": "Potential Fatal Flaw",
+    "distance_to_90th": 1.44,
+    "distance_to_75th": 1.24,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.14,
+    "total_votes": 1,
+    "manager_votes": 1,
+    "is_passion": true,
+    "circles_met": 3,
+    "missing": []
+   },
+   {
+    "competency": "Displays High Integrity and Honesty",
+    "total": 3.03,
+    "band": "Potential Fatal Flaw",
+    "distance_to_90th": 1.56,
+    "distance_to_75th": 1.36,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.57,
+    "total_votes": 4,
+    "manager_votes": 0,
+    "is_passion": false,
+    "circles_met": 2,
+    "missing": [
+     "passion"
+    ]
+   },
+   {
+    "competency": "Collaboration and Teamwork",
+    "total": 2.93,
+    "band": "Potential Fatal Flaw",
+    "distance_to_90th": 1.42,
+    "distance_to_75th": 1.18,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.43,
+    "total_votes": 3,
+    "manager_votes": 0,
+    "is_passion": false,
+    "circles_met": 2,
+    "missing": [
+     "passion"
+    ]
+   },
+   {
+    "competency": "Makes Decisions",
+    "total": 3,
+    "band": "Potential Fatal Flaw",
+    "distance_to_90th": 1.48,
+    "distance_to_75th": 1.29,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.43,
+    "total_votes": 3,
+    "manager_votes": 0,
+    "is_passion": false,
+    "circles_met": 2,
+    "missing": [
+     "passion"
+    ]
+   },
+   {
+    "competency": "Communicates Powerfully and Prolifically",
+    "total": 2.67,
+    "band": "Potential Fatal Flaw",
+    "distance_to_90th": 1.68,
+    "distance_to_75th": 1.46,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.29,
+    "total_votes": 2,
+    "manager_votes": 0,
+    "is_passion": false,
+    "circles_met": 2,
+    "missing": [
+     "passion"
+    ]
+   },
+   {
+    "competency": "Learning Agility",
+    "total": 2.66,
+    "band": "Potential Fatal Flaw",
+    "distance_to_90th": 1.69,
+    "distance_to_75th": 1.44,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.29,
+    "total_votes": 2,
+    "manager_votes": 1,
+    "is_passion": false,
+    "circles_met": 2,
+    "missing": [
+     "passion"
+    ]
+   },
+   {
+    "competency": "Builds Relationships",
+    "total": 2.63,
+    "band": "Potential Fatal Flaw",
+    "distance_to_90th": 1.81,
+    "distance_to_75th": 1.59,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.29,
+    "total_votes": 2,
+    "manager_votes": 0,
+    "is_passion": false,
+    "circles_met": 2,
+    "missing": [
+     "passion"
+    ]
+   },
+   {
+    "competency": "Values Diversity",
+    "total": 3.46,
+    "band": "Below Average",
+    "distance_to_90th": 0.98,
+    "distance_to_75th": 0.78,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.14,
+    "total_votes": 1,
+    "manager_votes": 0,
+    "is_passion": false,
+    "circles_met": 2,
+    "missing": [
+     "passion"
+    ]
+   },
+   {
+    "competency": "Establishes Stretch Goals",
+    "total": 2.93,
+    "band": "Potential Fatal Flaw",
+    "distance_to_90th": 1.47,
+    "distance_to_75th": 1.25,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.14,
+    "total_votes": 1,
+    "manager_votes": 0,
+    "is_passion": false,
+    "circles_met": 2,
+    "missing": [
+     "passion"
+    ]
+   },
+   {
+    "competency": "Takes Initiative",
+    "total": 3,
+    "band": "Potential Fatal Flaw",
+    "distance_to_90th": 1.57,
+    "distance_to_75th": 1.37,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.14,
+    "total_votes": 1,
+    "manager_votes": 0,
+    "is_passion": false,
+    "circles_met": 2,
+    "missing": [
+     "passion"
+    ]
+   },
+   {
+    "competency": "Develops Others",
+    "total": 2.85,
+    "band": "Potential Fatal Flaw",
+    "distance_to_90th": 1.57,
+    "distance_to_75th": 1.33,
+    "at_or_above_75th": false,
+    "weighted_importance": 0.14,
+    "total_votes": 1,
+    "manager_votes": 0,
+    "is_passion": false,
+    "circles_met": 2,
+    "missing": [
+     "passion"
+    ]
+   }
+  ]
+ }
+}

@@ -31,6 +31,9 @@
  * omissions, and that nothing coach-private is ever mentioned.
  */
 import type { Assessment360Data } from '../documents/assessment-360/types'
+import { renderStrengthBuilders, strengthBuilderIndexText, strengthBuilderNames } from '../documents/assessment-360/strength-builders'
+import { reportGuideText } from '../documents/assessment-360/report-guide'
+import { renderAssessmentCompact } from './assessment-render'
 import type { CoachingGoal } from '../supabase/types'
 import { PORTAL_CHAT_VOICE_STANDARDS } from '../writing-standards'
 
@@ -82,10 +85,10 @@ export const ASSESSMENT_GROUNDING_RULES = `ASSESSMENT GROUNDING RULES (non-negot
 - Bands come from the report, not from the score. A higher score can sit in a lower band. Never rank competencies by raw score; rank by band, then by score within band, exactly as the report does.
 - Lead from strengths. Low scores are context, never the agenda. The participant has already had a human debrief — you are a thinking partner for what comes next, not a first-contact interpreter breaking news.
 - NEVER speculate about which individual rater, or which member of a rater group, said or scored anything — not as a guess, not hypothetically, not "just between us", not if asked which group a comment came from beyond the group label the report itself prints. Decline warmly and explain the confidentiality principle in one sentence.
-- NEVER tell the participant what their goals should be, rank "their top three", or prescribe. You may describe where the data points — in particular where proximity to the 90th-percentile norm, importance votes, and their own stated passions overlap (development_candidates) — and then ask what they make of it and what they believe would help. Never mention weights, ranking logic, or the phrase "closest to green".
+- NEVER tell the participant what their goals should be, rank "their top three", or prescribe. You MAY point out potential development targets — where proximity to the 90th-percentile norm, importance votes, and their own stated passions overlap (development_candidates) — voiced as potential ("this one looks like a potential target"), never as a decision or a definitive list, and then ask what they make of it and what they believe would help. When a target they lean toward carries no manager importance vote, say so as something to be aware of, not as a veto. Never mention weights, ranking logic, or the phrase "closest to green".
 - Treat absent or collapsed sections (e.g. Engagement not reported because of too few direct reports) as absent, never as a score of zero.
 - Actively raise context — a new role, new manager, new team, a reorganisation, an unusually hard year — as a legitimate reading of a number before any personal attribution.
-- If a COMPARISON block is present: change is offered gently, for reflection, never as a verdict on progress. State what moved (band movement and distance to the 90th first; raw deltas second). The first time change comes up, name the comparability caveats (different raters, different norms, different context). Ask about context before treating movement as personal change. Never assert improvement or decline as fact, never attribute either to coaching, never total or rank the deltas, never produce a "most improved" list. An apparent decline needs particular care: do not explain it away, do not minimise it, and offer the route to a human.
+- If a COMPARISON block is present: change is offered gently, for reflection, never as a verdict on progress. State what moved (band movement and distance to the 90th first; raw deltas second). The first time change comes up, name the comparability caveats (different raters, different norms, different context). Ask about context before treating movement as personal change. Where the report itself marks a movement as meaningful, say it with "it looks like" ("it looks like you made real progress on these three"), never as a flat assertion; where it does not, do not call it movement. Never attribute change to coaching, never total or rank the deltas, never produce a "most improved" list. An apparent decline needs particular care: do not explain it away, do not minimise it, and offer the route to a human.
 - A REASSESSMENT block is the report's OWN comparison with the previous administration (a follow-up report prints both). Every rule above applies to it unchanged. Its "direction" is the report's classification (meaningful only at a gap of about .30 or more) — never call a smaller movement meaningful. Its rating windows and previous rater counts are the comparability caveats to name. Only the totals it prints are known for the previous administration: no previous bands, norms, behaviors, or comments exist unless a COMPARISON block also supplies them.`
 
 function humanRouteLine(hasCoach: boolean): string {
@@ -94,10 +97,15 @@ function humanRouteLine(hasCoach: boolean): string {
     : 'You are a companion for reflection, not a coach. For anything urgent, sensitive, clinical, or crisis-related, gently encourage them to use "Talk to a coach" in their portal or to contact support (or an appropriate professional) directly.'
 }
 
-/** Structured data for the prompt: verbatims are rendered separately; parser notes are internal. */
+/**
+ * Structured data for the prompt — the compact text rendering
+ * (`lib/portal/assessment-render.ts`, every number, ~3.5k tokens), never the
+ * raw JSON (~12.8k tokens, which the snapshot budget clipped mid-way).
+ * Verbatims are rendered separately; parser notes are internal.
+ */
 export function formatAssessmentForPrompt(data: Assessment360Data): { structured: string; verbatims: string } {
-  const { verbatims, extraction_notes: _notes, ...rest } = data
-  const structured = JSON.stringify(rest)
+  const { verbatims } = data
+  const structured = renderAssessmentCompact(data)
   const label: Record<string, string> = { manager: 'Manager', peers: 'Peers', others: 'Others', self: 'Self', direct_reports: 'Direct Reports' }
   const section = (title: string, groups: Record<string, string[] | undefined>) => {
     const lines: string[] = []
@@ -161,6 +169,11 @@ ${p.coachingBrief.body.trim()}`)
   if (p.assessment) {
     prefix.push(ASSESSMENT_GROUNDING_RULES)
     if (p.brief) prefix.push(`INTERPRETATION BRIEF (${p.brief.slug} v${p.brief.version}):\n${p.brief.body.trim()}`)
+    // 3b. The vendor's own reading guide (seven insights + the section-by-
+    //     section questions) and its Strength Builder index — cross-client;
+    //     the full builder entries for THIS client's candidates go in the snapshot.
+    prefix.push(reportGuideText())
+    prefix.push(strengthBuilderIndexText())
   }
 
   // 4. Company context — omitted entirely when absent
@@ -212,6 +225,18 @@ ${p.coachingBrief.body.trim()}`)
   }
   if (p.myNotes) snapshot.push(`NOTES ${clientName.toUpperCase()} WROTE FOR THEMSELVES IN THEIR PORTAL (their private journal — treat as their own current thinking; refer to a note by its title when you draw on it):\n${p.myNotes}`)
   if (p.noteParts.length) snapshot.push(`SESSION NOTES ${clientName.toUpperCase()} RECEIVED FROM THEIR COACH:\n${p.noteParts.join('\n\n')}`)
+
+  // 8. The vendor's full Strength Builder entries for the competencies this
+  //    report points at — LAST, so a snapshot overflow clips vendor text before
+  //    anything the client wrote or was sent.
+  if (p.assessment) {
+    const builders = renderStrengthBuilders(candidateCompetencies(p.assessment.data, builderEntryLimit(p.assessment.data)))
+    if (builders) {
+      snapshot.push(
+        `STRENGTH BUILDERS FOR THE COMPETENCIES ${clientName.toUpperCase()}'S REPORT POINTS AT (Zenger Folkman's guide entries, in full, for the three-circle candidates in their report above — offer a builder only once they lean toward that competency; ask which builder they have interest and passion for; the development ideas are raw material for a goal they write, never an assignment):\n${builders}`,
+      )
+    }
+  }
 
   // ── TAIL ──────────────────────────────────────────────────────────────
   if (p.recentParts.length) tail.push(`MOST RECENT SESSIONS:\n${p.recentParts.join('\n\n')}`)
@@ -343,7 +368,8 @@ export function summariseAssessmentForPlanning(data: Assessment360Data): string 
   }
   const describe = (c: Assessment360Data['development_candidates'][number]) => {
     const behaviors = lowestItems(c.competency)
-    return `${c.competency} — ${fmt(c.total)}, ${fmt(c.distance_to_90th)} below its 90th-percentile mark${behaviors.length ? `; lowest-scored behaviors under it: ${behaviors.join(', ')}` : ''}`
+    const builders = strengthBuilderNames(c.competency)
+    return `${c.competency} — ${fmt(c.total)}, ${fmt(c.distance_to_90th)} below its 90th-percentile mark${behaviors.length ? `; lowest-scored behaviors under it: ${behaviors.join(', ')}` : ''}${builders.length ? `; Zenger Folkman's Strength Builders around it (companion behaviors to build through): ${builders.join(', ')}` : ''}`
   }
   const full = data.development_candidates.filter((c) => c.circles_met === 3)
   const partial = data.development_candidates.filter((c) => c.circles_met === 2)
@@ -363,3 +389,22 @@ export function summariseAssessmentForPlanning(data: Assessment360Data): string 
   if (gaps.length) lines.push(`Largest self-vs-others gaps the report marks: ${gaps.map((g) => `${g.competency} (${g.direction === 'positive' ? 'others saw more than they did' : 'they rated themselves higher than others did'})`).join('; ')}.`)
   return lines.join('\n')
 }
+
+/**
+ * The competencies whose full Strength Builder entries ride in the snapshot:
+ * the three-circle candidates in the report-derived order (all three circles
+ * first, then two), capped so the block stays ~3–4k tokens. The index in the
+ * prefix covers every other competency by name.
+ */
+export const STRENGTH_BUILDER_SNAPSHOT_LIMIT = 3
+/** A long compact rendering (a follow-up with a wide fatal-flaw band, ~22k+ chars) takes two entries so the client's own material keeps its room. */
+export const LONG_RENDER_CHARS = 22_000
+export function builderEntryLimit(data: Assessment360Data): number {
+  return renderAssessmentCompact(data).length > LONG_RENDER_CHARS ? 2 : STRENGTH_BUILDER_SNAPSHOT_LIMIT
+}
+export function candidateCompetencies(data: Assessment360Data, limit = STRENGTH_BUILDER_SNAPSHOT_LIMIT): string[] {
+  const full = data.development_candidates.filter((c) => c.circles_met === 3)
+  const partial = data.development_candidates.filter((c) => c.circles_met === 2)
+  return [...full, ...partial].slice(0, limit).map((c) => c.competency)
+}
+

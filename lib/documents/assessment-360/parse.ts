@@ -55,7 +55,18 @@ export type ParseOutput = {
   /** Report text from the first results page onward; the rater table is never included. */
   extractedText: string
   notes: string[]
+  /** Per-chart text-vs-geometry agreement (validation harness A1 #1 / #12). */
+  calibration: CalibrationRecord[]
 }
+
+/** One chart's linear fit of bar geometry against the printed scores. */
+export type CalibrationRecord = { section: string; rows: number; max_residual: number }
+
+// Collected while a parse runs; reset at the start of parseAssessment360. A
+// module-level collector keeps the calibration helpers' signatures simple;
+// extraction is sequential per call, and the worst an interleaved call could
+// do is mix diagnostics, never data.
+let calibrationLog: CalibrationRecord[] = []
 
 /** Max allowed disagreement between a bar-derived score and the printed one. */
 export const CROSS_CHECK_TOLERANCE = 0.03
@@ -226,12 +237,18 @@ function readCountsBlock(rows: Row[], i: number): RaterCounts {
         ? `Fewer than three Direct Report submissions (${dr} received) — combined into Others; Employee Engagement is not reported.`
         : 'Rater groups were combined for reporting (small-N rule).'
   }
+  // A group the counts line does not name had no raters (Koudsi 2025: "1
+  // Manager, 6 Peers, 3 Direct Reports, 1 Self" — no Others). Once the line
+  // has parsed at all, an omitted group is 0, not unknown; null is reserved for
+  // a line that could not be read.
+  const parsedAny = Object.keys(received).length > 0
+  const count = (v: number | undefined) => v ?? (parsedAny ? 0 : null)
   return {
-    manager: received.manager ?? null,
-    peers: received.peers ?? null,
-    direct_reports: received.direct_reports ?? null,
-    others: received.others ?? null,
-    self: received.self ?? null,
+    manager: count(received.manager),
+    peers: count(received.peers),
+    direct_reports: count(received.direct_reports),
+    others: count(received.others),
+    self: count(received.self),
     ...(differs ? { reported_as: reported } : {}),
     collapsed_note: note,
   }
@@ -325,6 +342,7 @@ function calibrateHorizontal(
   const fit = linearFit(points.map((p) => [p.score, p.x1] as [number, number]))
   if (!fit) throw new ParseError(`Not enough rows to calibrate the ${section} chart.`, section)
   const toScore = (x: number) => (x - fit.a) / fit.b
+  calibrationLog.push({ section, rows: points.length, max_residual: r2(Math.max(...points.map((p) => Math.abs(toScore(p.x1) - p.score)))) })
   for (const p of points) {
     const geo = toScore(p.x1)
     if (Math.abs(geo - p.score) > CROSS_CHECK_TOLERANCE) {
@@ -484,6 +502,8 @@ function parseTentPoles(
   const fit = linearFit(poles.filter((p) => p.bar).map((p) => [p.score, p.bar!.top] as [number, number]))
   const toScore = fit ? (y: number) => (y - fit.a) / fit.b : null
   if (fit) {
+    const withBar = poles.filter((p) => p.bar)
+    calibrationLog.push({ section: 'tent_poles', rows: withBar.length, max_residual: r2(Math.max(...withBar.map((p) => Math.abs(toScore!(p.bar!.top) - p.score)))) })
     for (const p of poles) {
       if (!p.bar) continue
       const geo = toScore!(p.bar.top)
@@ -864,6 +884,7 @@ function parseDetails(pages: PageData[], startIdx: number, canon: (s: string) =>
 
 export function parseAssessment360(pages: PageData[], opts: { formatVersion: string; followUp?: boolean }): ParseOutput {
   const notes: string[] = []
+  calibrationLog = []
   const followUp = opts.followUp === true
   if (!pages.length) throw new ParseError('No pages.', 'document')
 
@@ -953,5 +974,5 @@ export function parseAssessment360(pages: PageData[], opts: { formatVersion: str
     ...(reassessment ? { reassessment } : {}),
     extraction_notes: notes,
   }
-  return { data, raterNames: raters.names, extractedText, notes }
+  return { data, raterNames: raters.names, extractedText, notes, calibration: calibrationLog }
 }
