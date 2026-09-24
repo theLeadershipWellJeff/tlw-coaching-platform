@@ -5,10 +5,10 @@ Alignment" (Jeff, 2026-09-23). This file is the running record. Participants
 appear as initials only; the reports themselves live in `fixtures/private`
 (gitignored) and never enter git.
 
-**Status at 2026-09-23:** Part A is built and passes on the three reports in
+**Status at 2026-09-24:** Part A is built and passes on the three reports in
 hand; the two earlier reports pass their own spikes but were not re-run under
-the new harness (PDFs not in this container). **Part B has not started** — the
-battery runner is built and unrun; no calibration walkthrough has happened.
+the new harness (PDFs not in this container). **Part B: B1 walkthroughs done
+for reports 5 and 3 (rulings filed); the battery runner is built and unrun.**
 The portal is **not** signed off for live use.
 
 ## 0. Corpus survey
@@ -121,7 +121,7 @@ No fixture was ever edited by hand.
 
 ## Part B — interpretation alignment
 
-**Not started.** What is in place:
+**B1 in progress; B3–B5 not started.** B1 walkthroughs complete for report 5 (M.H., 16 new rules, 10 rulings) and report 3 (J.J., 6 new rules + 1 from the rulings, all six questions ruled 2026-09-24); saturation curve in `calibration/LEDGER.md` (16 → 7). Brief v2.2 candidate in rubrics/04 §8c carries both; unpublished. What is in place:
 
 - **B3 runner:** `scripts/validation/run-interpretation-battery.ts` —
   drives `POST /api/portal/chat` on a deployment as a portal client
