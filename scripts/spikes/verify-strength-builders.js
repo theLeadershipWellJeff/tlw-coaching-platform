@@ -24,6 +24,7 @@ const render = require(path.join(B, 'lib/portal/assessment-render.js'))
 const prompt = require(path.join(B, 'lib/portal/prompt.js'))
 const budget = require(path.join(B, 'lib/ai/context-budget.js'))
 const models = require(path.join(B, 'lib/ai/models.js'))
+const rgm = require(path.join(B, 'lib/documents/assessment-360/report-guide.js'))
 
 let pass = 0
 let fail = 0
@@ -52,6 +53,11 @@ check('every competency has a definition and linear suggestions', g.competencies
 check('five tent poles, in report order', [...new Set(g.competencies.map((c) => c.tent_pole))].join('|') === 'Character|Personal Capability|Focus on Results|Interpersonal Skills|Leading Change')
 check('no PDF glyph artefacts left', !JSON.stringify(g).includes('\uf0a7') && !/\bkathy\b|C\.k\.|TAkES|MAkES/.test(JSON.stringify(g)))
 check('intro (3 paragraphs) + how-to-use (5 steps)', g.intro.length === 3 && g.how_to_use.length === 5)
+const rg = rgm.REPORT_GUIDE
+check('reading guide: seven insights, complete explore steps (8), Big Picture last', rg.insights.items.length === 7 && rg.explore.complete && rg.explore.steps.length === 8 && rg.explore.steps[7].title === 'Big Picture')
+const rgt = rgm.reportGuideText()
+check('reading guide text carries every insight title and every question', rg.insights.items.every((i) => rgt.includes(i.title)) && rg.explore.steps.every((s) => s.questions.every((q) => rgt.includes(q))))
+check('reading guide ≤ 1,800 tokens', tokens(rgt) <= 1800, `${tokens(rgt)}`)
 
 // -------------------------------------------------------------- (b) renderers
 console.log('\n[b] index + entries')
@@ -119,6 +125,7 @@ if (fixtures.length) {
     assessment: { data, assessmentCount: 1 }, goals: [], noteParts: [], recentParts: [], retrievedParts: [],
   })
   check('index in the prefix, after the brief', parts.prefix.indexOf('STRENGTH BUILDERS (Zenger Folkman') > parts.prefix.indexOf('BRIEF MARKER'))
+  check('reading guide in the prefix, between the brief and the index', parts.prefix.indexOf('HOW THE REPORT ASKS TO BE READ') > parts.prefix.indexOf('BRIEF MARKER') && parts.prefix.indexOf('HOW THE REPORT ASKS TO BE READ') < parts.prefix.indexOf('STRENGTH BUILDERS (Zenger Folkman'))
   check('no per-client entries in the prefix', !parts.prefix.includes('STRENGTH BUILDERS FOR THE COMPETENCIES'))
   check('compact 360 then verbatims, builder entries LAST in the snapshot', parts.snapshot.indexOf('STRUCTURED DATA') < parts.snapshot.indexOf('VERBATIM RATER COMMENTS') && parts.snapshot.endsWith(parts.snapshot.slice(parts.snapshot.indexOf('STRENGTH BUILDERS FOR THE COMPETENCIES'))) && parts.snapshot.indexOf('STRENGTH BUILDERS FOR THE COMPETENCIES') > parts.snapshot.indexOf('VERBATIM RATER COMMENTS'))
   check('snapshot is not raw JSON', !parts.snapshot.includes('"competency_rankings"') && !parts.snapshot.includes('"norm_90th"'))
@@ -128,7 +135,7 @@ if (fixtures.length) {
   const plan = prompt.summariseAssessmentForPlanning(data)
   check('weekly-plan summary names the builders around a full-overlap candidate', data.development_candidates.some((c) => c.circles_met === 3) ? /Strength Builders around it/.test(plan) : true)
   const noReport = prompt.composeChatSystemParts({ clientName: 'Plain Client', hasCoach: true, brief: null, company: null, assessment: null, goals: [], noteParts: [], recentParts: [], retrievedParts: [] })
-  check('no 360 → no strength-builder material anywhere', !/STRENGTH BUILDERS/.test(noReport.prefix + noReport.snapshot))
+  check('no 360 → no strength-builder material anywhere', !/STRENGTH BUILDERS|HOW THE REPORT ASKS TO BE READ/.test(noReport.prefix + noReport.snapshot))
 }
 
 console.log(`\n${pass} passed, ${fail} failed`)

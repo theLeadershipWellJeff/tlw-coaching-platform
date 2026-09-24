@@ -1,12 +1,86 @@
-# 05 · ZF 360 Strength Builders — reference (vendor material, rendered from data)
+# 05 · ZF 360 vendor reference — reading guide + Strength Builders (rendered from data)
 
-**Status:** reference, not a rubric. Rendered from `lib/documents/assessment-360/strength-builders.json` by `scripts/rubrics/render-strength-builders.js` — edit the JSON, never this file (`--check` verifies they agree).
+**Status:** reference, not a rubric. Rendered from `lib/documents/assessment-360/report-guide.json` + `strength-builders.json` by `scripts/rubrics/render-strength-builders.js` — edit the JSON, never this file (`--check` verifies they agree).
 
 **Source:** Zenger Folkman — The Extraordinary Leader 360, Strength Builder Development Guide (EL60.1D.4, © 2024 Zenger Folkman), pages 41–112 of the participant report. Vendor material licensed to theLeadershipWell for its participants; cite as Zenger Folkman.
 
 **Transcription note:** Transcribed 2026-09-24 from the report text. PDF-extraction glyph artefacts corrected (a lower-case k glyph, doubled periods); wording otherwise verbatim. The final linear suggestion for Customer and External Focus was cut off in the source paste.
 
 **How the assistant carries it:** the index (competency → builder names) rides in the cached system prefix of every 360 conversation (`strengthBuilderIndexText`); the full entries below ride in the per-client snapshot only for the competencies that participant's report points at (the three-circle candidates, `renderStrengthBuilders`); the weekly-plan summary names the builders around each candidate. Rubric 04 §5 says when to offer them: once the participant leans toward a target — ask which builder they have interest and passion for; the development ideas are raw material for a goal they write, never an assignment. Cite as Zenger Folkman's.
+
+## Part 1 — How the report asks to be read (Extraordinary Insights + Explore Your Report)
+
+**Source:** Zenger Folkman — The Extraordinary Leader 360 participant report, 'Extraordinary Insights' and 'Explore Your Report' (EL60.1D.4, © 2024 Zenger Folkman), pages 7–9. Vendor material licensed to theLeadershipWell for its participants; cite as Zenger Folkman.
+
+**Transcription note:** Transcribed 2026-09-24 from the report text (a lower-case k glyph corrected). One sentence is missing: under Top Strengths (Section 9) the source read “What competencies are your Profound Strengths? These” and the rest of that sentence was cut off in the paste.
+
+**How the assistant carries it:** as prompt text in the cached prefix of every 360 conversation (`reportGuideText`), for "how should I read my report?" — answered in the instrument's own words, cited as Zenger Folkman's. It does not replace rubric 04's reading protocol (§4), which is theLeadershipWell's order for a coached walk-through; the vendor's steps are what the participant holds in their hands.
+
+### Seven insights
+
+Extraordinary leaders are the foundation of any successful organization. Their impact on the organization is more profound than any other factor. We believe that every leader has the potential to be extraordinary.
+
+Years of research and practical application have revealed seven insights on what enables leaders to become extraordinary.
+
+1. **Good does not equal extraordinary.** Our research tells us that extraordinary leaders, who we define as those leaders whose leadership effectiveness is within the top 10% of all global leaders, make a significantly better impact on organizational results than average leaders. When compared to their average counterparts, extraordinary leaders have 25% less annual team turnover, 40% higher customer satisfaction ratings, and have two times more employees who are willing to go the extra mile.
+
+2. **You do not have to be perfect—focus on your strengths.** Extraordinary leaders have weaknesses. They are not perfect or even “good” at everything. So, what sets them apart? Extraordinary leaders possess a few Profound Strengths in behaviors that matter. Focusing on weaknesses is not the path to extraordinary leadership. The key is to focus on your strengths. While extraordinary leaders have weaknesses, they do not have “Fatal Flaws.” A Fatal Flaw is a weakness that is so pronounced that it cripples one’s effectiveness by obscuring their strengths. Such flaws, if not addressed, can, and often do, lead to career derailment.
+
+3. **Perceptions are reality.** Your effectiveness as a leader is highly impacted by the interactions that you have with others in your organization. The way others interact with you is greatly influenced by their perceptions of you. Those perceptions are based on the characteristics and behaviors they see you demonstrate.
+
+4. **Know where you are.** To get where you want to go, you need to know where you are. It is impossible for us to see ourselves with complete accuracy. Multi-rater feedback provides a mirror for you to see yourself as others see you and gives you the most accurate evaluation of your current leadership performance.
+
+5. **Play to your passions.** In order to sustain your leadership development, you need to consider the attributes you value. Playing to your passions and interests will drive you forward and keep you engaged.
+
+6. **Build around your strengths.** Athletes know the value of building around strengths, which is known as cross-training. Zenger Folkman has discovered a similar approach to leadership development. Statistically correlated Strength Builders provide a unique approach to building a Profound Strength.
+
+7. **Enlist the support of others.** To improve as a leader, you need the support of your manager, your colleagues, and even your direct reports. Tell them what you’re trying to accomplish, involve them in your process, and invite them to give you feedback.
+
+### Explore your report
+
+Now that you have your personal Feedback Report, you are ready to analyze the feedback you have received. Follow this simple process to understand the feedback most critical to your personal leadership development process.
+
+**Overall Impressions**
+
+- Look quickly through your report. What are your overall impressions of your feedback?
+
+**Overall Leadership Effectiveness** (section 6)
+
+- Is your overall score surprising?
+- Do your rater types show large gaps in scoring? If so, what factors might be contributing to this?
+
+**Employee Engagement Index** (section 7)
+
+- Does your response frequency show a wide “scattering” in rater scoring? If so, what do you think are some contributing factors?
+- Do you see any connection between these scores and your effectiveness as a leader?
+
+**Top Strengths (Competence)** (sections 9, then 10 and 11)
+
+- What competencies are your Profound Strengths? [one sentence not transcribed]
+- Sections 10 and 11: Do the strengths identified by your raters in these sections align with your competency rankings in section 9? If not, note the differences that you see.
+
+**Potential Fatal Flaws** (sections 9, then 14 and 15)
+
+- Return to section 9. Do you have any competencies that have been flagged as a Potential Fatal Flaw? These would be represented by a yellow score bar.
+- Sections 14 and 15: Do the weaknesses identified by your raters in these sections align with your competency rankings in section 9? If not, note the differences that you see.
+
+**Leadership Passions** (section 12)
+
+- Your Leadership Passions have been noted in this section. How aligned are your Passions with the organization’s needs and your top competencies?
+- Is this data accurate from your point of view? If not, why?
+
+**Organizational Needs** (sections 12, then 13)
+
+- The competencies at the top of the Importance Ratings section are the competencies that are most important for your success in your current role. What would you change? Why?
+- Are you and your manager aligned on the competencies most important for your success? If not, what might be contributing to this discrepancy?
+- Section 13: Do the organizational needs identified by you and your raters in this section align with the Importance Ratings data (Section 12)? If not, note the differences that you see.
+
+**Big Picture**
+
+- What important insights did you gain?
+- What are the strongest messages or themes in your report?
+
+## Part 2 — Strength Builders
 
 ## What Strength Builders are (the guide's own words)
 

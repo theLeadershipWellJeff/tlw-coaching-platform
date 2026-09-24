@@ -32,6 +32,7 @@
  */
 import type { Assessment360Data } from '../documents/assessment-360/types'
 import { renderStrengthBuilders, strengthBuilderIndexText, strengthBuilderNames } from '../documents/assessment-360/strength-builders'
+import { reportGuideText } from '../documents/assessment-360/report-guide'
 import { renderAssessmentCompact } from './assessment-render'
 import type { CoachingGoal } from '../supabase/types'
 import { PORTAL_CHAT_VOICE_STANDARDS } from '../writing-standards'
@@ -168,8 +169,10 @@ ${p.coachingBrief.body.trim()}`)
   if (p.assessment) {
     prefix.push(ASSESSMENT_GROUNDING_RULES)
     if (p.brief) prefix.push(`INTERPRETATION BRIEF (${p.brief.slug} v${p.brief.version}):\n${p.brief.body.trim()}`)
-    // 3b. The vendor's Strength Builder guide, as an index (cross-client; the
-    //     full entries for THIS client's candidates go in the snapshot).
+    // 3b. The vendor's own reading guide (seven insights + the section-by-
+    //     section questions) and its Strength Builder index — cross-client;
+    //     the full builder entries for THIS client's candidates go in the snapshot.
+    prefix.push(reportGuideText())
     prefix.push(strengthBuilderIndexText())
   }
 

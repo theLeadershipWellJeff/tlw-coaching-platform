@@ -1498,7 +1498,10 @@ mounted; the goals card stays the read-only server-rendered one).
   transcribed from the report's pages 41–112; human copy
   `rubrics/05_zf360_strength_builders_reference.md`, rendered by
   `scripts/rubrics/render-strength-builders.js`, `--check` to verify) rides
-  with it: the index (19 competencies → builder names) in the cached prefix of
+  with it, as does **the report's own reading guide** (`report-guide.json` —
+  the seven Extraordinary Insights + the Explore-Your-Report questions,
+  `report-guide.ts#reportGuideText`, in the prefix for "how should I read my
+  report?"): the index (19 competencies → builder names) in the cached prefix of
   every 360 conversation; the full entries (rationale + development ideas +
   linear suggestions) for the report's three-circle candidates
   (`prompt.ts#candidateCompetencies`, up to 3) as the LAST snapshot block, so
