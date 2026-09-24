@@ -525,7 +525,7 @@ client-facing.
 
 ### Session-notes panel (`clients/[id]/NotesPanel.tsx`)
 The right-hand rail carries the live ACTION/INSIGHT capture (`CaptureGroup` —
-newest-first, 5 visible with a "Show all" expander; the notes list does the same)
+document order (QA TLW-005), 5 visible with a "Show all" expander; the notes list does the same)
 **plus** persistent, per-client context loaded from the client record: **Key info**
 (`clients.key_info`,
 freeform reference — boss/spouse/kids), **Coaching map** (`clients.coaching_map`,

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { LOGGED_SESSION_CONTENT } from '@/lib/notes/session-count'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { requireCoach, toErrorResponse } from '@/lib/api-handler'
 import { accessibleClientIds } from '@/lib/client-access'
@@ -46,7 +47,8 @@ export async function POST(req: NextRequest) {
         session_date,
         duration_minutes: Number.isFinite(duration_minutes) ? Math.round(duration_minutes) : 60,
         title: title || null,
-        content: '',
+        // Marks a hand-logged session so it counts in the hours log (TLW-002).
+        content: LOGGED_SESSION_CONTENT,
       })
       .select('id, session_date, duration_minutes, title, client_id')
       .single()

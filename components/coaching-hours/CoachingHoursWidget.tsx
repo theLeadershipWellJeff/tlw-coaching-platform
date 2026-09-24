@@ -890,7 +890,7 @@ export function CoachingHoursWidget({ compact = false }: Props) {
     load(period)
   }, [load, period])
 
-  const periodLabel: Record<Period, string> = { week: 'Past week', month: 'Past month', year: 'Past year', all: 'All time' }
+  const periodLabel: Record<Period, string> = { week: 'This week', month: 'This month', year: 'This year', all: 'All time' }
 
   return (
     <>

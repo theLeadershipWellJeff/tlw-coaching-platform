@@ -26,6 +26,9 @@ interface GardenEdge {
  */
 export function VaultSettings() {
   const [folder, setFolder] = useState('')
+  // The path the server has — sync reads the SAVED path, so an unsaved edit is
+  // saved first rather than silently syncing the old one (QA TLW-014).
+  const [savedFolder, setSavedFolder] = useState('')
   const [loaded, setLoaded] = useState(false)
   const [saving, setSaving] = useState(false)
   const [syncing, setSyncing] = useState(false)
@@ -48,14 +51,17 @@ export function VaultSettings() {
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         const ns = d?.coach?.nudge_settings
-        if (ns) setFolder(ns.vault_folder_path || '')
+        if (ns) {
+          setFolder(ns.vault_folder_path || '')
+          setSavedFolder(ns.vault_folder_path || '')
+        }
       })
       .catch(() => {})
       .finally(() => setLoaded(true))
     loadGarden()
   }, [])
 
-  async function save() {
+  async function save(): Promise<boolean> {
     setSaving(true)
     setMsg(null)
     try {
@@ -65,16 +71,26 @@ export function VaultSettings() {
         body: JSON.stringify({ vaultFolderPath: folder }),
       })
       const data = await res.json().catch(() => ({}))
-      if (res.ok) setMsg({ ok: true, text: 'Saved.' })
-      else setMsg({ ok: false, text: data.error || 'Could not save.' })
+      if (res.ok) {
+        setSavedFolder(folder)
+        setMsg({ ok: true, text: 'Saved.' })
+        return true
+      }
+      setMsg({ ok: false, text: data.error || 'Could not save.' })
     } catch {
       setMsg({ ok: false, text: 'Network error while saving.' })
     } finally {
       setSaving(false)
     }
+    return false
   }
 
   async function sync() {
+    if (!folder.trim()) {
+      setMsg({ ok: false, text: 'Set a folder path first, then sync.' })
+      return
+    }
+    if (folder.trim() !== savedFolder.trim() && !(await save())) return
     setSyncing(true)
     setMsg(null)
     try {
@@ -129,11 +145,15 @@ export function VaultSettings() {
         </button>
         <button
           onClick={sync}
-          disabled={syncing || !loaded || !folder.trim()}
+          disabled={syncing || saving || !loaded || !folder.trim()}
+          title={!folder.trim() ? 'Set a folder path first' : undefined}
           className="rounded-tlw-md bg-tlw-navy-rich px-4 py-2 text-[13px] font-medium text-tlw-cream transition-opacity hover:opacity-90 disabled:opacity-40"
         >
           {syncing ? 'syncing…' : 'Sync vault'}
         </button>
+        {loaded && !folder.trim() && (
+          <span className="text-[12px] text-tlw-warm-gray">Set a folder path first — sync indexes that folder.</span>
+        )}
       </div>
 
       {msg && (

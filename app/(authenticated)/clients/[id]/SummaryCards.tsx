@@ -34,9 +34,20 @@ export function TranscriptsCard({
           (d.transcripts || []).map((t: any) => ({
             id: t.id,
             label: t.title || t.filename || 'Transcript',
-            sub: [fmtDate(t.session_date), t.match_status === 'needs_review' ? 'needs review' : '']
+            // Date + status so two rows are distinguishable at a glance (TLW-012).
+            sub: [
+              t.session_date ? fmtDate(t.session_date) : t.created_at ? `filed ${fmtDate(t.created_at.slice(0, 10))}` : '',
+              t.match_status === 'needs_review'
+                ? 'needs review'
+                : t.reportId
+                  ? typeof t.overallScore === 'number'
+                    ? `scored ${t.overallScore.toFixed(1)}`
+                    : 'scored'
+                  : 'not scored',
+            ]
               .filter(Boolean)
               .join(' · '),
+            href: t.reportId ? `/practice/${t.reportId}` : `/clients/${clientId}/transcripts`,
           }))
         )
       })
@@ -91,6 +102,8 @@ export function NotesCard({ clientId }: { clientId: string }) {
             id: n.id,
             label: n.title?.trim() || 'Untitled note',
             sub: fmtDate(n.session_date),
+            // Every note is addressable — open THIS note, never "the latest".
+            href: `/clients/${clientId}/notes?note=${n.id}`,
           }))
         )
       })

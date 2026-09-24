@@ -40,6 +40,9 @@
     "../../lib/ai/context-budget.ts",
     "../../lib/ai/costs-math.ts",
     "../../scripts/validation/**/*.ts",
-    "../../lib/portal/session.ts"
+    "../../lib/portal/session.ts",
+    "../../lib/notes/session-count.ts",
+    "../../lib/notes/extract.ts",
+    "../../lib/vault/maps.ts"
   ]
 }

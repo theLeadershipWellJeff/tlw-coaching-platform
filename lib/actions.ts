@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
 import { getBaseUrl } from '@/lib/url'
+import { normalizeCaptureText } from '@/lib/notes/extract'
 
 export type ActionLink = { description: string; url: string }
 
@@ -20,13 +21,19 @@ export async function persistActionLinks(
   noteId: string | null,
   descriptions: string[]
 ): Promise<ActionLink[]> {
-  const clean = descriptions.map((d) => String(d || '').trim()).filter(Boolean)
+  const clean = Array.from(new Set(descriptions.map((d) => normalizeCaptureText(d)).filter(Boolean)))
   if (clean.length === 0) return []
 
   let query = supabase.from('actions').select('id, description, complete_token').eq('client_id', clientId)
   query = noteId ? query.eq('note_id', noteId) : query.is('note_id', null)
-  const { data: existing } = await query
-  const byDesc = new Map((existing || []).map((a) => [a.description, a]))
+  const { data: existing } = await query.order('created_at', { ascending: true })
+  // Canonical-text match, first row wins — reuse the row (and token) the
+  // note's sync already created instead of minting a parallel one (TLW-004).
+  const byDesc = new Map<string, NonNullable<typeof existing>[number]>()
+  for (const a of existing || []) {
+    const key = normalizeCaptureText(a.description)
+    if (!byDesc.has(key)) byDesc.set(key, a)
+  }
 
   const base = getBaseUrl()
   const links: ActionLink[] = []

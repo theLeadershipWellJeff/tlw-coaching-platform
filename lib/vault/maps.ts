@@ -78,6 +78,40 @@ function componentName(heading: string): string {
  * Parse a vault note's markdown into a map structure. Returns null when the body
  * has no `###` component sections — the caller then falls back to built-ins.
  */
+function isTableRow(line: string): boolean {
+  return /^\s*\|.*\|\s*$/.test(line)
+}
+
+function tableCells(line: string): string[] {
+  return line
+    .trim()
+    .replace(/^\|/, '')
+    .replace(/\|$/, '')
+    .split('|')
+    .map((c) => stripInlineMarkdown(c.trim()))
+}
+
+/**
+ * A markdown table → one sentence per body row: "Start-Up — What It Is: Build
+ * from scratch; Winning Strategy: …". The first column names the row; the
+ * header row supplies the labels; the |---| separator row is dropped.
+ */
+export function tableToSentences(rows: string[]): string[] {
+  const parsed = rows.filter((r) => !/^[\s|:\-]+$/.test(r)).map(tableCells)
+  if (parsed.length === 0) return []
+  const [header, ...body] = parsed
+  if (body.length === 0) return [header.filter(Boolean).join(' · ')]
+  return body.map((cells) => {
+    const [first, ...rest] = cells
+    const parts = rest
+      .map((c, i) => (c ? (header[i + 1] ? `${header[i + 1]}: ${c}` : c) : ''))
+      .filter(Boolean)
+    const lead = first || ''
+    const sentence = parts.length ? `${lead}${lead ? ' — ' : ''}${parts.join('; ')}` : lead
+    return /[.!?]$/.test(sentence) ? sentence : `${sentence}.`
+  })
+}
+
 export function parseMapMarkdown(raw: string, fallbackName: string): VaultMap | null {
   let data: Record<string, any> = {}
   let body = raw
@@ -98,10 +132,20 @@ export function parseMapMarkdown(raw: string, fallbackName: string): VaultMap | 
   let blurbOpen = true
   let inFence = false
   const components: VaultMapComponent[] = []
-  let current: { name: string; desc: string[]; question: string[]; inQuestion: boolean } | null = null
+  let current: {
+    name: string
+    desc: string[]
+    question: string[]
+    inQuestion: boolean
+    table?: string[]
+  } | null = null
 
   const flush = () => {
     if (!current) return
+    if (current.table) {
+      current.desc.push(...tableToSentences(current.table))
+      current.table = undefined
+    }
     const description = stripInlineMarkdown(current.desc.join(' '))
     const question = stripInlineMarkdown(current.question.join(' '))
     if (current.name) {
@@ -160,6 +204,17 @@ export function parseMapMarkdown(raw: string, fallbackName: string): VaultMap | 
     }
 
     current.inQuestion = false
+    // GFM table rows: collected and rendered as readable sentences below — the
+    // pop-up is plain text, so raw pipes leaked through (QA TLW-007).
+    if (isTableRow(line)) {
+      if (!current.table) current.table = []
+      current.table.push(line)
+      continue
+    }
+    if (current.table) {
+      current.desc.push(...tableToSentences(current.table))
+      current.table = undefined
+    }
     if (line.trim()) current.desc.push(line.trim())
   }
   flush()

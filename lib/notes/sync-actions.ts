@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database, Action } from '@/lib/supabase/types'
-import { extractCaptures } from '@/lib/notes/extract'
+import { extractCaptures, normalizeCaptureText } from '@/lib/notes/extract'
 
 // Strip a note's rich-text HTML down to plain text (block tags → newlines) so
 // the ACTION: capture sees the same lines the editor does. Mirrors the helper
@@ -10,10 +10,13 @@ function htmlToText(html: string): string {
   return (html || '')
     .replace(/<\/(p|div|li|h[1-6]|ul|ol)>/gi, '\n')
     .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/&nbsp;|&#160;/g, ' ')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
 }
 
 type ActionRow = Pick<
@@ -40,7 +43,7 @@ export async function syncNoteActions(
 ): Promise<ActionRow[]> {
   const text = htmlToText(content)
   const wanted = Array.from(
-    new Set(extractCaptures(text).actions.map((a) => a.text.trim()).filter(Boolean))
+    new Set(extractCaptures(text).actions.map((a) => a.text).filter(Boolean))
   )
 
   const { data: existing } = await supabase
@@ -49,7 +52,9 @@ export async function syncNoteActions(
     .eq('client_id', clientId)
     .eq('note_id', noteId)
 
-  const haveDesc = new Set((existing || []).map((a) => a.description))
+  // Match on the canonical text so whitespace/entity differences between the
+  // editor and this server-side strip never read as an edit (QA TLW-004).
+  const haveDesc = new Set((existing || []).map((a) => normalizeCaptureText(a.description)))
 
   // Insert the action lines we don't have a row for yet.
   const toInsert = wanted
@@ -64,9 +69,19 @@ export async function syncNoteActions(
   if (toInsert.length) await supabase.from('actions').insert(toInsert)
 
   // Drop open rows whose line is gone (edited/removed); keep completed history.
-  const stale = (existing || []).filter(
-    (a) => a.status === 'open' && !wanted.includes(a.description)
-  )
+  // Once the note has been SENT, never drop a row: its token is live in the
+  // client's inbox, and deleting it would break the checkbox they click.
+  const { data: noteRow } = await supabase
+    .from('notes')
+    .select('sent_to_client_at')
+    .eq('id', noteId)
+    .maybeSingle()
+  const sent = !!(noteRow as { sent_to_client_at?: string | null } | null)?.sent_to_client_at
+  const stale = sent
+    ? []
+    : (existing || []).filter(
+        (a) => a.status === 'open' && !wanted.includes(normalizeCaptureText(a.description))
+      )
   if (stale.length) {
     await supabase
       .from('actions')

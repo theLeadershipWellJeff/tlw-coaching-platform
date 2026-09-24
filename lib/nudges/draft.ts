@@ -32,8 +32,9 @@ Voice rules:
   - "win": invite them to name one recent win — however small — connected to the goal(s), and celebrate the progress that's already happening. The point is noticing movement, not measuring it.
   With several goals, weave them together briefly — never a numbered recitation of the whole list.
   Do NOT paste the goal list into your message: a verbatim, bulleted reference list of the goal(s)
-  (with their metrics) is appended below your message automatically. Write the message so it flows
-  naturally into that list (e.g. end near "…here they are for quick reference:").
+  (with their metrics) is appended below your message automatically, under its own "For quick
+  reference:" label. Do NOT write a lead-in to that list yourself (no "here's the goal for quick
+  reference:") — just finish your message; the list follows it.
 - End encouraging.
 - Plain, natural language. No corporate stiffness. No bullet lists unless it truly helps.
 - Do NOT include a signature, sign-off block, or "[Your name]" — a signature is added automatically. A short closing line like "Talk soon!" is fine.
@@ -127,6 +128,18 @@ export async function draftNudge(opts: {
   if (!body) return null
   // Goals nudge: the reference list is appended in code, never left to the
   // model, so the goal titles + metrics in the email are always verbatim.
-  if (goalsContext) body = `${body}\n\n${formatGoalListForEmail(goalsContext.goals)}`
+  // The block carries its own "For quick reference:" label, so drop a lead-in
+  // line the model wrote anyway — one intro, never two (QA TLW-008).
+  if (goalsContext) body = `${stripListLeadIn(body)}\n\n${formatGoalListForEmail(goalsContext.goals)}`
   return { subject: subject || 'A quick note', body }
+}
+
+/** Remove a trailing "…for quick reference:"-style lead-in line (the goal block has its own). */
+export function stripListLeadIn(body: string): string {
+  const lines = body.replace(/\s+$/, '').split('\n')
+  const last = lines[lines.length - 1] || ''
+  if (lines.length > 1 && /:\s*$/.test(last) && /(quick reference|for reference|here (it is|they are|'s|is)|below)/i.test(last)) {
+    lines.pop()
+  }
+  return lines.join('\n').replace(/\s+$/, '')
 }
