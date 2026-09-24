@@ -31,6 +31,8 @@
  * omissions, and that nothing coach-private is ever mentioned.
  */
 import type { Assessment360Data } from '../documents/assessment-360/types'
+import { renderStrengthBuilders, strengthBuilderIndexText, strengthBuilderNames } from '../documents/assessment-360/strength-builders'
+import { renderAssessmentCompact } from './assessment-render'
 import type { CoachingGoal } from '../supabase/types'
 import { PORTAL_CHAT_VOICE_STANDARDS } from '../writing-standards'
 
@@ -94,10 +96,15 @@ function humanRouteLine(hasCoach: boolean): string {
     : 'You are a companion for reflection, not a coach. For anything urgent, sensitive, clinical, or crisis-related, gently encourage them to use "Talk to a coach" in their portal or to contact support (or an appropriate professional) directly.'
 }
 
-/** Structured data for the prompt: verbatims are rendered separately; parser notes are internal. */
+/**
+ * Structured data for the prompt — the compact text rendering
+ * (`lib/portal/assessment-render.ts`, every number, ~3.5k tokens), never the
+ * raw JSON (~12.8k tokens, which the snapshot budget clipped mid-way).
+ * Verbatims are rendered separately; parser notes are internal.
+ */
 export function formatAssessmentForPrompt(data: Assessment360Data): { structured: string; verbatims: string } {
-  const { verbatims, extraction_notes: _notes, ...rest } = data
-  const structured = JSON.stringify(rest)
+  const { verbatims } = data
+  const structured = renderAssessmentCompact(data)
   const label: Record<string, string> = { manager: 'Manager', peers: 'Peers', others: 'Others', self: 'Self', direct_reports: 'Direct Reports' }
   const section = (title: string, groups: Record<string, string[] | undefined>) => {
     const lines: string[] = []
@@ -161,6 +168,9 @@ ${p.coachingBrief.body.trim()}`)
   if (p.assessment) {
     prefix.push(ASSESSMENT_GROUNDING_RULES)
     if (p.brief) prefix.push(`INTERPRETATION BRIEF (${p.brief.slug} v${p.brief.version}):\n${p.brief.body.trim()}`)
+    // 3b. The vendor's Strength Builder guide, as an index (cross-client; the
+    //     full entries for THIS client's candidates go in the snapshot).
+    prefix.push(strengthBuilderIndexText())
   }
 
   // 4. Company context — omitted entirely when absent
@@ -212,6 +222,18 @@ ${p.coachingBrief.body.trim()}`)
   }
   if (p.myNotes) snapshot.push(`NOTES ${clientName.toUpperCase()} WROTE FOR THEMSELVES IN THEIR PORTAL (their private journal — treat as their own current thinking; refer to a note by its title when you draw on it):\n${p.myNotes}`)
   if (p.noteParts.length) snapshot.push(`SESSION NOTES ${clientName.toUpperCase()} RECEIVED FROM THEIR COACH:\n${p.noteParts.join('\n\n')}`)
+
+  // 8. The vendor's full Strength Builder entries for the competencies this
+  //    report points at — LAST, so a snapshot overflow clips vendor text before
+  //    anything the client wrote or was sent.
+  if (p.assessment) {
+    const builders = renderStrengthBuilders(candidateCompetencies(p.assessment.data))
+    if (builders) {
+      snapshot.push(
+        `STRENGTH BUILDERS FOR THE COMPETENCIES ${clientName.toUpperCase()}'S REPORT POINTS AT (Zenger Folkman's guide entries, in full, for the three-circle candidates in their report above — offer a builder only once they lean toward that competency; ask which builder they have interest and passion for; the development ideas are raw material for a goal they write, never an assignment):\n${builders}`,
+      )
+    }
+  }
 
   // ── TAIL ──────────────────────────────────────────────────────────────
   if (p.recentParts.length) tail.push(`MOST RECENT SESSIONS:\n${p.recentParts.join('\n\n')}`)
@@ -343,7 +365,8 @@ export function summariseAssessmentForPlanning(data: Assessment360Data): string 
   }
   const describe = (c: Assessment360Data['development_candidates'][number]) => {
     const behaviors = lowestItems(c.competency)
-    return `${c.competency} — ${fmt(c.total)}, ${fmt(c.distance_to_90th)} below its 90th-percentile mark${behaviors.length ? `; lowest-scored behaviors under it: ${behaviors.join(', ')}` : ''}`
+    const builders = strengthBuilderNames(c.competency)
+    return `${c.competency} — ${fmt(c.total)}, ${fmt(c.distance_to_90th)} below its 90th-percentile mark${behaviors.length ? `; lowest-scored behaviors under it: ${behaviors.join(', ')}` : ''}${builders.length ? `; Zenger Folkman's Strength Builders around it (companion behaviors to build through): ${builders.join(', ')}` : ''}`
   }
   const full = data.development_candidates.filter((c) => c.circles_met === 3)
   const partial = data.development_candidates.filter((c) => c.circles_met === 2)
@@ -363,3 +386,17 @@ export function summariseAssessmentForPlanning(data: Assessment360Data): string 
   if (gaps.length) lines.push(`Largest self-vs-others gaps the report marks: ${gaps.map((g) => `${g.competency} (${g.direction === 'positive' ? 'others saw more than they did' : 'they rated themselves higher than others did'})`).join('; ')}.`)
   return lines.join('\n')
 }
+
+/**
+ * The competencies whose full Strength Builder entries ride in the snapshot:
+ * the three-circle candidates in the report-derived order (all three circles
+ * first, then two), capped so the block stays ~3–4k tokens. The index in the
+ * prefix covers every other competency by name.
+ */
+export const STRENGTH_BUILDER_SNAPSHOT_LIMIT = 3
+export function candidateCompetencies(data: Assessment360Data, limit = STRENGTH_BUILDER_SNAPSHOT_LIMIT): string[] {
+  const full = data.development_candidates.filter((c) => c.circles_met === 3)
+  const partial = data.development_candidates.filter((c) => c.circles_met === 2)
+  return [...full, ...partial].slice(0, limit).map((c) => c.competency)
+}
+

@@ -1488,8 +1488,24 @@ mounted; the goals card stays the read-only server-rendered one).
   vision/values** (`lib/portal/company.ts`, strictly via `clients.company_id`;
   OMITTED entirely when null) → the most recent report's **structured data**
   (+ its `comparison` block; never every historical report) → **verbatims** →
-  goals / sent notes / sessions, each omitted when empty. ~12k tokens with a
-  full 360. `buildChatContext` returns `meta` (brief slug/version, document id,
+  goals / sent notes / sessions, each omitted when empty. **Since 2026-09-24
+  the report goes in as compact text tables**
+  (`lib/portal/assessment-render.ts#renderAssessmentCompact`, every printed
+  number in ~6–7k tokens) — the raw JSON was ~14.5k tokens and the 6k snapshot
+  slice had been clipping it mid-way since the budgeter shipped (candidates,
+  comments, goals and notes never reached the model). **Zenger Folkman's
+  Strength Builder guide** (`lib/documents/assessment-360/strength-builders.json`,
+  transcribed from the report's pages 41–112; human copy
+  `rubrics/05_zf360_strength_builders_reference.md`, rendered by
+  `scripts/rubrics/render-strength-builders.js`, `--check` to verify) rides
+  with it: the index (19 competencies → builder names) in the cached prefix of
+  every 360 conversation; the full entries (rationale + development ideas +
+  linear suggestions) for the report's three-circle candidates
+  (`prompt.ts#candidateCompetencies`, up to 3) as the LAST snapshot block, so
+  an overflow clips vendor text before the client's own material; the
+  weekly-plan summary names the builders around each candidate. Verify:
+  `node scripts/spikes/verify-strength-builders.js` (73 checks).
+  `buildChatContext` returns `meta` (brief slug/version, document id,
   has_comparison); the chat route stamps it into
   **`portal_messages.metadata`** on the assistant turn and logs `chat_started`
   / `chat_message` / `comparison_viewed` (heuristic on the question) to
@@ -2072,9 +2088,10 @@ against the Console invoice (`scripts/reconcile-ai-costs.js`, ±5 %).
   WITHOUT the client's name + `PORTAL_CHAT_VOICE_STANDARDS` + the active
   `portal_chat` brief + grounding rules + the 360 brief + company context;
   the brief's 3k target covered the preamble alone — the practice's briefs
-  live here, hence 12k), **snapshot ≤ 6k** (this client: "WHO YOU ARE TALKING
-  WITH" + human route + 360 status, structured 360 + verbatims, goals, their
-  documents, My notes, sent notes), **memory ≤ 2k** (reserved, always
+  live here, hence 12k), **snapshot ≤ 14k** (raised from 6k on 2026-09-24 —
+  this client: "WHO YOU ARE TALKING WITH" + human route + 360 status, the
+  compact 360 + verbatims, goals, their documents, My notes, sent notes, then
+  the Strength Builder entries last), **memory ≤ 2k** (reserved, always
   empty), **excerpts ≤ 10k** (the newest 2 sessions' openings, 2.5k chars
   each, + up to 12 `portal_chat_context` passages ranked against the
   question — **never a full transcript**; whole items, most relevant first),

@@ -53,7 +53,7 @@ console.log('[3] assembleContext — per-slice budgets')
   const out = assembleContext({
     model,
     system: text(20000, 's'),
-    snapshot: text(9000, 'n'),
+    snapshot: text(CONTEXT_BUDGET.SNAPSHOT + 3000, 'n'),
     excerpts,
     historySummary: text(5000, 'sum'),
     history,

@@ -168,5 +168,6 @@ failures across all five · mean alignment ≥ 1.6 with no criterion < 1.0.
 6. The judge's agreement with Jeff (no calibration of the judge itself).
 7. The verification sheets for reports 1, 2 and 4 have not been filled in by Jeff (3 and 5 are complete).
 8. Behaviour on a report with a Profound Strength AND a fatal-flaw band in the same report (none exists in the corpus).
-9. **Engagement items are not extracted.** Jeff's walkthrough reads items 61–66 individually (nearest extraordinary, the one lower item, its change from last year); the parser stores only the engagement total and band. A brief rule depending on them cannot be honoured until the parser carries them.
-10. Concurrent extraction (bulk upload) — the calibration diagnostics use a per-parse collector; sequential in the pipeline today.
+9. **The compact 360 rendering + Strength Builder entries with the live model.** On 2026-09-24 the chat's report payload changed from raw JSON (~14.5k tokens, clipped at the 6k snapshot budget since 2026-09-19 — the model never saw the candidates, comments, goals or notes of a 360 client) to compact text (~6–7k, verified complete by `verify-strength-builders.js` on the three golden fixtures) plus Zenger Folkman's Strength Builder entries. Pure checks only; no battery or golden-set run against it yet.
+10. **Engagement items are not extracted.** Jeff's walkthrough reads items 61–66 individually (nearest extraordinary, the one lower item, its change from last year); the parser stores only the engagement total and band. A brief rule depending on them cannot be honoured until the parser carries them.
+11. Concurrent extraction (bulk upload) — the calibration diagnostics use a per-parse collector; sequential in the pipeline today.
