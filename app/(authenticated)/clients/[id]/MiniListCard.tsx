@@ -5,6 +5,8 @@ export interface MiniItem {
   id: string
   label: string
   sub?: string
+  /** Opens this specific item (e.g. one note) instead of the card's list page. */
+  href?: string
 }
 
 /**
@@ -52,7 +54,16 @@ export function MiniListCard({
         <ul className="space-y-2">
           {items.slice(0, 3).map((it) => (
             <li key={it.id} className="flex items-baseline justify-between gap-3 border-b border-tlw-warm-gray/10 pb-2 last:border-b-0 last:pb-0">
-              <span className="min-w-0 truncate text-[13px] text-tlw-espresso">{it.label}</span>
+              {it.href ? (
+                <Link
+                  href={it.href}
+                  className="relative z-10 min-w-0 truncate text-[13px] text-tlw-espresso hover:underline"
+                >
+                  {it.label}
+                </Link>
+              ) : (
+                <span className="min-w-0 truncate text-[13px] text-tlw-espresso">{it.label}</span>
+              )}
               {it.sub && <span className="shrink-0 text-[11px] text-tlw-warm-gray">{it.sub}</span>}
             </li>
           ))}

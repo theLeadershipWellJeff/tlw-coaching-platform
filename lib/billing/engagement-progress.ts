@@ -18,6 +18,7 @@
  * (label falls back) instead of breaking the query.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { dedupeByCalendarEvent, noteCountsAsSession } from '@/lib/notes/session-count'
 import type { Database } from '@/lib/supabase/types'
 import type { Engagement } from '@/lib/billing/types'
 
@@ -73,11 +74,13 @@ export async function getEngagementProgress(
   const yearStart = `${new Date().getFullYear()}-01-01`
   const { data: noteRows } = await supabase
     .from('notes')
-    .select('client_id, session_date')
+    .select('client_id, session_date, content, calendar_event_id')
     .in('client_id', Array.from(byClient.keys()))
+    .order('created_at', { ascending: true })
   const allTime = new Map<string, number>()
   const thisYear = new Map<string, number>()
-  for (const n of noteRows || []) {
+  // Same session rule as hours/revenue/billing (QA TLW-002).
+  for (const n of dedupeByCalendarEvent((noteRows || []).filter(noteCountsAsSession))) {
     allTime.set(n.client_id, (allTime.get(n.client_id) || 0) + 1)
     if (n.session_date && n.session_date >= yearStart) {
       thisYear.set(n.client_id, (thisYear.get(n.client_id) || 0) + 1)

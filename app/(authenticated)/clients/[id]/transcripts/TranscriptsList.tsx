@@ -11,7 +11,9 @@ interface Row {
   title: string | null
   source: string
   match_status: string
+  created_at?: string | null
   reportId: string | null
+  overallScore?: number | null
 }
 
 function fmtDate(d: string | null): string {
@@ -91,7 +93,10 @@ export function TranscriptsList({ clientId }: { clientId: string }) {
             <div className="min-w-0">
               <p className="truncate text-[14px] font-medium text-tlw-navy-deep">{t.title || t.filename || 'Transcript'}</p>
               <p className="mt-0.5 text-[12px] text-tlw-warm-gray">
-                {fmtDate(t.session_date)} · {t.source}
+                {/* Session date, else the day it was filed — never a bare dash (TLW-012). */}
+                {t.session_date ? fmtDate(t.session_date) : t.created_at ? `filed ${fmtDate(t.created_at.slice(0, 10))}` : 'no date'}
+                {t.filename && t.title && t.filename !== t.title ? ` · ${t.filename}` : ''}
+                {typeof t.overallScore === 'number' ? ` · scored ${t.overallScore.toFixed(1)}` : ''}
               </p>
               {job?.status === 'error' && (
                 <p className="mt-0.5 text-[12px]" style={{ color: 'var(--color-danger)' }}>

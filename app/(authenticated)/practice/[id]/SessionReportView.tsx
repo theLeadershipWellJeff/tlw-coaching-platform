@@ -566,6 +566,7 @@ export function SessionReportView({ id }: { id: string }) {
   const [rescoring, setRescoring] = useState(false)
   const [rescoreElapsed, setRescoreElapsed] = useState(0)
   const [rescoreMsg, setRescoreMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [confirmRescore, setConfirmRescore] = useState(false)
   const [emailElapsed, setEmailElapsed] = useState(0)
 
   useEffect(() => {
@@ -609,13 +610,11 @@ export function SessionReportView({ id }: { id: string }) {
     }
   }
 
+  // Inline confirm, not window.confirm(): embedded browsers (e.g. the Claude
+  // desktop pane) can suppress native dialogs and return "cancel" silently, so
+  // the click looked like it did nothing (QA TLW-009).
   async function rescore() {
-    if (
-      !window.confirm(
-        'Re-score this session against the current rubric? This replaces the engine’s scores, metrics, and suggested moves. Your own self-scores are kept.'
-      )
-    )
-      return
+    setConfirmRescore(false)
     setRescoring(true)
     setRescoreMsg(null)
     try {
@@ -626,7 +625,8 @@ export function SessionReportView({ id }: { id: string }) {
         setMoves({})
         setOpenComp(null)
         await load()
-        setRescoreMsg({ ok: true, text: 'Re-scored against the current rubric.' })
+        const at = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+        setRescoreMsg({ ok: true, text: `Rescored just now (${at}) against the current rubric.` })
       } else {
         setRescoreMsg({ ok: false, text: data.error || 'Could not re-score.' })
       }
@@ -748,14 +748,40 @@ export function SessionReportView({ id }: { id: string }) {
         </div>
         <div className="flex flex-col items-end gap-2">
           <BandPill band={report.band} />
-          <button
-            onClick={rescore}
-            disabled={rescoring}
-            title="Re-run the engine against the current rubric"
-            className="rounded-tlw-md border border-tlw-warm-gray/30 px-3 py-1.5 text-[12px] font-medium text-tlw-espresso transition-opacity duration-tlw-base hover:opacity-80 disabled:opacity-40"
-          >
-            {rescoring ? `Analyzing… ${rescoreElapsed}s` : 'rescore'}
-          </button>
+          {confirmRescore && !rescoring ? (
+            <div className="max-w-[240px] rounded-tlw-md border border-tlw-warm-gray/30 p-2 text-right">
+              <p className="text-[11px] leading-snug text-tlw-espresso">
+                Re-score against the current rubric? This replaces the engine’s scores, metrics and suggested moves.
+                Your own self-scores are kept.
+              </p>
+              <div className="mt-2 flex justify-end gap-2">
+                <button
+                  onClick={() => setConfirmRescore(false)}
+                  className="rounded-tlw-md px-2 py-1 text-[12px] text-tlw-warm-gray hover:text-tlw-espresso"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={rescore}
+                  className="rounded-tlw-md bg-tlw-navy-rich px-3 py-1 text-[12px] font-medium text-tlw-cream hover:opacity-90"
+                >
+                  Rescore
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => {
+                setRescoreMsg(null)
+                setConfirmRescore(true)
+              }}
+              disabled={rescoring}
+              title="Re-run the engine against the current rubric"
+              className="rounded-tlw-md border border-tlw-warm-gray/30 px-3 py-1.5 text-[12px] font-medium text-tlw-espresso transition-opacity duration-tlw-base hover:opacity-80 disabled:opacity-40"
+            >
+              {rescoring ? `Analyzing… ${rescoreElapsed}s (about 2 min)` : 'rescore'}
+            </button>
+          )}
           {rescoreMsg && (
             <p
               className="max-w-[200px] text-right text-[11px]"

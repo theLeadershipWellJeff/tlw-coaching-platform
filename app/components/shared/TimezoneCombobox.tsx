@@ -76,16 +76,38 @@ export function TimezoneCombobox({
 
   useEffect(() => setActive(0), [query])
 
-  // Close on outside click.
+  // Close on outside click. A typed city that the coach never clicked used to be
+  // dropped silently on Save (QA TLW-006): now, leaving the field commits the
+  // typed text when it clearly names one option (a single match, or an exact
+  // city-name match); otherwise it says so instead of discarding it quietly.
+  const latest = useRef({ query, open, onChange })
+  latest.current = { query, open, onChange }
+  const [unpicked, setUnpicked] = useState('')
   useEffect(() => {
     function onDoc(e: MouseEvent) {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false)
+      if (!rootRef.current || rootRef.current.contains(e.target as Node)) return
+      const { query: q, open: isOpen, onChange: commit } = latest.current
+      const typed = q.trim()
+      if (isOpen && typed) {
+        const matches = searchTimezoneOptions(typed)
+        const exact = matches.filter((o) => o.label.toLowerCase() === typed.toLowerCase())
+        const pick = matches.length === 1 ? matches[0] : exact.length === 1 ? exact[0] : null
+        if (pick) {
+          commit(pick.zone, pick.label)
+          setUnpicked('')
+        } else {
+          setUnpicked(typed)
+        }
+        setQuery('')
+      }
+      setOpen(false)
     }
     document.addEventListener('mousedown', onDoc)
     return () => document.removeEventListener('mousedown', onDoc)
   }, [])
 
   function choose(opt: TzOption | null) {
+    setUnpicked('')
     onChange(opt?.zone ?? '', opt?.label)
     setOpen(false)
     setQuery('')
@@ -149,6 +171,12 @@ export function TimezoneCombobox({
         )}
       </div>
 
+      {!open && unpicked && (
+        <p className="mt-1 text-[12px]" style={{ color: 'var(--color-warning)' }}>
+          “{unpicked}” wasn’t saved — pick a city from the list.
+        </p>
+      )}
+
       {open && (
         <div className="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-tlw-md border border-tlw-warm-gray/25 bg-white shadow-lg">
           {flat.length === 0 ? (
@@ -177,6 +205,7 @@ export function TimezoneCombobox({
                     >
                       <span className="min-w-0 truncate">
                         {opt.label}
+                        {opt.sublabel && ' '}
                         {opt.sublabel && (
                           <span className="ml-1.5 text-[11px] text-tlw-warm-gray">{opt.sublabel}</span>
                         )}

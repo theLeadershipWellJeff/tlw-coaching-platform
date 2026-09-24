@@ -65,7 +65,13 @@ function fmtTime(iso: string, tz: string): string {
 }
 
 function monthName(year: number, month: number): string {
-  return new Date(Date.UTC(year, month - 1, 1)).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  // Format in UTC: midnight-UTC on the 1st is still the previous month in any
+  // US zone, which labelled September's grid "August" (QA TLW-010).
+  return new Date(Date.UTC(year, month - 1, 1)).toLocaleDateString('en-US', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  })
 }
 
 function Legend() {
@@ -183,6 +189,7 @@ function Strip({ cal }: { cal: CalendarPayload }) {
 function DayDetail({ cal, ymd }: { cal: CalendarPayload; ymd: string }) {
   const load = cal.days[ymd]
   const heading = new Date(ymd + 'T00:00:00Z').toLocaleDateString('en-US', {
+    timeZone: 'UTC',
     weekday: 'short',
     month: 'short',
     day: 'numeric',

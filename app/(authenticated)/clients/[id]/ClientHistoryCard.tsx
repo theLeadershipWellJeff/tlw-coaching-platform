@@ -32,7 +32,7 @@ function HistoryRow({ item, clientId }: RowProps) {
         <span className="mt-[1px] text-[14px] leading-none text-tlw-warm-gray" aria-hidden>📝</span>
         <div className="min-w-0 flex-1">
           <Link
-            href={`/clients/${clientId}/notes`}
+            href={`/clients/${clientId}/notes?note=${item.id}`}
             className="truncate text-[13px] text-tlw-espresso hover:underline"
           >
             {item.title || 'Session note'}

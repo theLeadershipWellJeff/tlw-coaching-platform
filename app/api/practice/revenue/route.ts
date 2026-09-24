@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { dedupeByCalendarEvent, noteCountsAsSession } from '@/lib/notes/session-count'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
@@ -113,12 +114,14 @@ export async function GET() {
   const notesRes = clientIds.length
     ? await supabase
         .from('notes')
-        .select('id, client_id, session_date, duration_minutes')
+        .select('id, client_id, session_date, duration_minutes, content, calendar_event_id')
         .gte('session_date', notesStart)
         .lt('session_date', ymdStr(thisMonday))
         .in('client_id', clientIds)
     : null
-  const notes = notesRes?.data ?? []
+  // Same session rule as the coaching-hours log, so the two tiles agree:
+  // empty notes aren't sessions; one calendar event is one session (TLW-002).
+  const notes = dedupeByCalendarEvent((notesRes?.data ?? []).filter(noteCountsAsSession))
 
   // Per-client roll-ups for the breakdown pies (client · sessions · amount),
   // one map per period. Same amounts the totals are built from — no new math.

@@ -13,7 +13,7 @@ import { isNoteActive, isNoteSent } from '@/lib/notes/status'
 import { ScheduleSessionModal } from './ScheduleSessionModal'
 import { PrepSheetCard } from './PrepSheetCard'
 import { PlanSessionCard } from './PlanSessionCard'
-import { extractCaptures } from '@/lib/notes/extract'
+import { extractCaptures, normalizeCaptureText } from '@/lib/notes/extract'
 import { splitNarrative } from '@/lib/notes/narrative-format'
 import { billedHours } from '@/lib/billing'
 
@@ -74,7 +74,26 @@ export function NotesPanel({
   const [clientLoaded, setClientLoaded] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [activeId, setActiveId] = useState<string | null>(null)
+  const [activeId, setActiveIdState] = useState<string | null>(null)
+  const initialNoteRef = useRef(initialNoteId)
+  // Keep the open note in the URL (?note=<id>) so refresh, back and shared links
+  // reopen THIS note — never "whichever is newest", and never ?new=1 again
+  // (which would create another empty note on every back/refresh). A plain
+  // history write: no server round-trip, so the editor is never remounted
+  // mid-typing.
+  const setActiveId = useCallback(
+    (id: string | null) => {
+      setActiveIdState(id)
+      initialNoteRef.current = id || undefined
+      const url = id ? `/clients/${clientId}/notes?note=${id}` : `/clients/${clientId}/notes`
+      try {
+        window.history.replaceState(window.history.state, '', url)
+      } catch {
+        // URL sync is a convenience; the open note is already set.
+      }
+    },
+    [clientId]
+  )
   // Past notes open in floating windows (ordered back → front; last = on top).
   const [floatingIds, setFloatingIds] = useState<string[]>([])
   const autoNewDone = useRef(false)
@@ -111,10 +130,14 @@ export function NotesPanel({
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to load notes')
       setNotes(data.notes || [])
-      setActiveId(
+      // An explicit ?note=<id> always wins. Without one, fall back to the newest
+      // working note — but only on first load, never over the coach's pick.
+      const wanted = initialNoteRef.current
+      const requested = wanted && data.notes?.some((n: Note) => n.id === wanted) ? wanted : null
+      setActiveIdState(
         (prev) =>
+          requested ||
           prev ||
-          (initialNoteId && data.notes?.some((n: Note) => n.id === initialNoteId) ? initialNoteId : null) ||
           (data.notes || []).find((n: Note) => isNoteActive(n))?.id ||
           data.notes?.[0]?.id ||
           null
@@ -123,7 +146,7 @@ export function NotesPanel({
       setError(e.message)
     }
     setLoading(false)
-  }, [clientId, initialNoteId])
+  }, [clientId])
 
   useEffect(() => {
     load()
@@ -163,7 +186,7 @@ export function NotesPanel({
 
   async function onDeleted(id: string) {
     setNotes((prev) => prev.filter((n) => n.id !== id))
-    setActiveId((prev) => (prev === id ? null : prev))
+    if (activeId === id) setActiveId(null)
     closeFloating(id)
   }
 
@@ -571,7 +594,9 @@ function NoteEditor({
   }
 
   async function remove() {
-    if (!confirm('Delete this note? This cannot be undone.')) return
+    // Name the note so the coach knows exactly which one goes.
+    const label = `"${title.trim() || 'Untitled note'}" (${formatDate(date)})`
+    if (!confirm(`Delete ${label}? This cannot be undone.`)) return
     const res = await fetch(`/api/clients/${clientId}/notes/${note.id}`, { method: 'DELETE' })
     if (res.ok) onDeleted(note.id)
   }
@@ -794,9 +819,9 @@ function CapturePanel({
   // Match each captured ACTION: line to its persisted row (by text) so the
   // checkbox reflects/saves its done state. A freshly typed line has no row yet
   // (it persists on autosave) — it shows as a plain, not-yet-checkable box.
-  const rowByDesc = new Map(noteActions.map((a) => [a.description, a]))
+  const rowByDesc = new Map(noteActions.map((a) => [normalizeCaptureText(a.description), a]))
   const actionItems: CaptureItem[] = actions.map((a) => {
-    const row = rowByDesc.get(a.text)
+    const row = rowByDesc.get(normalizeCaptureText(a.text))
     return {
       text: a.text,
       done: row?.status === 'done',
@@ -861,9 +886,9 @@ function CaptureGroup({
   accent: string
 }) {
   const [showAll, setShowAll] = useState(false)
-  // Newest first — the latest captured line sits at the top of the list.
-  const ordered = [...items].reverse()
-  const visible = showAll ? ordered : ordered.slice(0, CAPTURE_LIMIT)
+  // Document order — the list reads in the order the coach wrote the lines,
+  // matching the workspace Action Items card (QA TLW-005).
+  const visible = showAll ? items : items.slice(0, CAPTURE_LIMIT)
   const total = items.length + priorItems.length
 
   function renderItem(item: CaptureItem, i: number) {
@@ -900,7 +925,7 @@ function CaptureGroup({
         <p className="text-[12px] text-tlw-warm-gray/70">{emptyHint}</p>
       ) : (
         <>
-          {/* Current note's captures — newest at the top */}
+          {/* Current note's captures — in the order written */}
           {items.length > 0 && (
             <ul className="space-y-1.5">
               {visible.map((item, i) => renderItem(item, i))}

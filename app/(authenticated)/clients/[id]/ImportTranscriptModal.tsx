@@ -50,8 +50,9 @@ export function ImportTranscriptModal({
     setBusy(true)
     setFailures([])
     const errors: string[] = []
+    // A duplicate is "already on file", never "imported" (QA TLW-011).
     let imported = 0
-    let duplicates = 0
+    const duplicates: string[] = []
 
     for (let i = 0; i < files.length; i++) {
       const f = files[i]
@@ -62,8 +63,11 @@ export function ImportTranscriptModal({
         const res = await fetch(`/api/clients/${clientId}/import-file`, { method: 'POST', body: form })
         const data = await res.json().catch(() => ({}))
         if (!res.ok) throw new Error(data.error || 'Import failed.')
+        if (data.duplicate) {
+          duplicates.push(f.name)
+          continue // nothing new filed — and never re-score an existing transcript here
+        }
         imported++
-        if (data.duplicate) duplicates++
         if (score && data.transcriptId) {
           // Fire-and-forget — the score runs server-side (~2 min); progress
           // shows on the transcripts list and the Practice queue meanwhile.
@@ -83,11 +87,19 @@ export function ImportTranscriptModal({
     setFailures(errors)
     if (imported > 0) onImported()
     if (errors.length === 0) {
-      setDone(
-        `Imported ${imported} transcript${imported === 1 ? '' : 's'}` +
-          (duplicates ? ` (${duplicates} already on file)` : '') +
-          (score ? '. Scoring runs in the background (~2 min) — progress shows on the transcripts list.' : '.')
-      )
+      if (imported === 0) {
+        setDone(
+          duplicates.length === 1
+            ? `Nothing imported — ${duplicates[0]} is already on file.`
+            : `Nothing imported — all ${duplicates.length} files are already on file.`
+        )
+      } else {
+        setDone(
+          `Imported ${imported} transcript${imported === 1 ? '' : 's'}` +
+            (duplicates.length ? ` · skipped ${duplicates.length} already on file` : '') +
+            (score ? '. Scoring runs in the background (~2 min) — progress shows on the transcripts list.' : '.')
+        )
+      }
     } else if (imported > 0) {
       setDone(null)
       setFiles((prev) => prev.filter((f) => errors.some((e) => e.startsWith(f.name + ':'))))

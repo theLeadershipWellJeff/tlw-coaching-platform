@@ -29,7 +29,8 @@ export function buildAppointmentEmailHTML(opts: {
   const heading = kind === 'confirmation' ? 'Your next session is booked' : 'A reminder about our session'
   const lead =
     kind === 'confirmation'
-      ? `Thanks for our time today. I've scheduled our next session — you'll find it on your calendar, and the details are below.`
+      ? // Neutral: a booking isn't always made on the day of a session (QA TLW-013).
+        `Our next session is booked — you'll find it on your calendar, and the details are below.`
       : `Looking forward to our session coming up. Here are the details so it's easy to find.`
 
   // One-tap join button + the plain link (some clients strip buttons). Only

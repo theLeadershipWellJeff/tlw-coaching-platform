@@ -22,13 +22,15 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     // generated, so we join in code rather than via an embedded select).
     const { data: reports } = await supabase
       .from('session_reports')
-      .select('id, transcript_id')
+      .select('id, transcript_id, overall_score')
       .eq('client_id', params.id)
-    const reportByTranscript = new Map((reports || []).map((r) => [r.transcript_id, r.id]))
+    const reportByTranscript = new Map((reports || []).map((r) => [r.transcript_id, r]))
 
     const rows = (transcripts || []).map((t) => ({
       ...t,
-      reportId: reportByTranscript.get(t.id) || null,
+      reportId: reportByTranscript.get(t.id)?.id || null,
+      // Shown on the workspace card + list so two rows are told apart at a glance.
+      overallScore: reportByTranscript.get(t.id)?.overall_score ?? null,
     }))
 
     return NextResponse.json({ transcripts: rows })

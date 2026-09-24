@@ -17,6 +17,8 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Coach, Database } from '@/lib/supabase/types'
 import { accessibleClientIds } from '@/lib/client-access'
 import { billedHours } from '@/lib/billing'
+import { todayInTimeZone } from '@/lib/datetime'
+import { dedupeByCalendarEvent, noteCountsAsSession } from '@/lib/notes/session-count'
 
 export type HoursPeriod = 'week' | 'month' | 'year' | 'all'
 
@@ -43,21 +45,26 @@ export interface HoursLog {
   imports_available: boolean
 }
 
-export function periodStart(period: string): string {
-  const now = new Date()
+/**
+ * First day (YYYY-MM-DD) of the period, in the coach's timezone — "this week"
+ * starts on the coach's Monday, not the server's (UTC) one.
+ */
+export function periodStart(period: string, timeZone?: string | null): string {
   if (period === 'all') return '0001-01-01'
-  if (period === 'year') {
-    return new Date(now.getFullYear(), 0, 1).toISOString().slice(0, 10)
+  let today: string
+  try {
+    today = todayInTimeZone(timeZone || process.env.DEFAULT_TIMEZONE || 'America/Los_Angeles')
+  } catch {
+    today = new Date().toISOString().slice(0, 10)
   }
-  if (period === 'month') {
-    return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
-  }
-  // week: Monday of the current week
-  const day = now.getDay() // 0=Sun
-  const diff = day === 0 ? -6 : 1 - day
-  const mon = new Date(now)
-  mon.setDate(now.getDate() + diff)
-  return mon.toISOString().slice(0, 10)
+  const [y, m, d] = today.split('-').map(Number)
+  if (period === 'year') return `${y}-01-01`
+  if (period === 'month') return `${y}-${String(m).padStart(2, '0')}-01`
+  // week: Monday of the current week (calendar arithmetic on the local date)
+  const date = new Date(Date.UTC(y, m - 1, d))
+  const day = date.getUTCDay() // 0=Sun
+  date.setUTCDate(date.getUTCDate() + (day === 0 ? -6 : 1 - day))
+  return date.toISOString().slice(0, 10)
 }
 
 export function roundHours(minutes: number): number {
@@ -69,7 +76,7 @@ export async function loadCoachingHours(
   coach: Coach,
   period: HoursPeriod
 ): Promise<HoursLog> {
-  const start = periodStart(period)
+  const start = periodStart(period, coach.timezone)
   const sessions: HoursSession[] = []
 
   // 1) Note-derived sessions (in-app record). Client sessions are paid work.
@@ -77,20 +84,24 @@ export async function loadCoachingHours(
   if (ids.length > 0) {
     const { data: notes, error } = await supabase
       .from('notes')
-      .select('id, session_date, duration_minutes, title, client_id')
+      .select('id, session_date, duration_minutes, title, client_id, content, calendar_event_id')
       .in('client_id', ids)
       .gte('session_date', start)
       .order('session_date', { ascending: false })
+      .order('created_at', { ascending: true })
     if (error) throw new Error(error.message)
+    // Only notes that record a session: an empty note is not an hour, and two
+    // notes on one calendar event are one session (QA TLW-002).
+    const counted = dedupeByCalendarEvent((notes || []).filter(noteCountsAsSession))
 
-    const clientIds = Array.from(new Set((notes || []).map((n) => n.client_id)))
+    const clientIds = Array.from(new Set(counted.map((n) => n.client_id)))
     const { data: clients } = clientIds.length
       ? await supabase.from('clients').select('id, name').in('id', clientIds)
       : { data: [] }
     const nameMap: Record<string, string> = {}
     for (const c of clients || []) nameMap[c.id] = c.name
 
-    for (const n of notes || []) {
+    for (const n of counted) {
       const minutes = n.duration_minutes ?? 60
       sessions.push({
         id: n.id,

@@ -15,6 +15,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { billedHours } from '@/lib/billing'
 import type { BillableSession, Engagement, Coachee } from './types'
+import { dedupeByCalendarEvent, noteCountsAsSession } from '@/lib/notes/session-count'
 
 type MinEngagement = Pick<
   Engagement,
@@ -38,16 +39,20 @@ export async function deriveBillableSessions(
   if (!engagement.rate_hourly || engagement.rate_hourly <= 0) return []
 
   // Fetch notes in the period for this client that have a non-zero duration.
-  const { data: notes, error: notesErr } = await supabase
+  const { data: rawNotes, error: notesErr } = await supabase
     .from('notes')
-    .select('id, session_date, duration_minutes')
+    .select('id, session_date, duration_minutes, content, calendar_event_id')
     .eq('client_id', clientId)
     .gte('session_date', periodStart)
     .lte('session_date', periodEnd)
     .gt('duration_minutes', 0)
+    .order('created_at', { ascending: true })
 
   if (notesErr) throw new Error(`deriveBillableSessions: notes query failed — ${notesErr.message}`)
-  if (!notes || notes.length === 0) return []
+  // Same session rule as the hours log + revenue tiles: an empty note is not a
+  // session, and two notes on one calendar event bill once (QA TLW-002).
+  const notes = dedupeByCalendarEvent((rawNotes || []).filter(noteCountsAsSession))
+  if (notes.length === 0) return []
 
   const rate = engagement.rate_hourly
 
