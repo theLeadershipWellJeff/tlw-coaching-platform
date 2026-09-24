@@ -50,6 +50,13 @@ for (const s of rg.explore.steps) {
   for (const q of s.questions) lines.push(`- ${q}`)
   lines.push('')
 }
+lines.push('### Decide if you have a Fatal Flaw (the report\'s own four conditions)')
+lines.push('')
+lines.push(rg.fatal_flaw_test.question, '')
+rg.fatal_flaw_test.conditions.forEach((c, n) => lines.push(`${n + 1}. ${c}`))
+lines.push('')
+lines.push('The assistant pre-checks conditions 1–3 from the extracted data for every competency in the band (`lib/documents/assessment-360/fatal-flaw.ts`, rendered as the FATAL FLAW TEST block of the compact report; "among the most important" = at least one importance vote and within the top six by votes, ties included, since the report prints no cutoff) and reads condition 4 with the participant from the verbatim comments. A competency that fails any condition is not a fatal flaw for this role — theLeadershipWell\'s ruling in rubric 04 §5 and the instrument agree.')
+lines.push('')
 lines.push('## Part 2 — Strength Builders')
 lines.push('')
 lines.push('## What Strength Builders are (the guide\'s own words)')

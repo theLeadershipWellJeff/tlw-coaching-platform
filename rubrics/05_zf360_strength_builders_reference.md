@@ -12,7 +12,7 @@
 
 **Source:** Zenger Folkman — The Extraordinary Leader 360 participant report, 'Extraordinary Insights' and 'Explore Your Report' (EL60.1D.4, © 2024 Zenger Folkman), pages 7–9. Vendor material licensed to theLeadershipWell for its participants; cite as Zenger Folkman.
 
-**Transcription note:** Transcribed 2026-09-24 from the report text (a lower-case k glyph corrected). One sentence is missing: under Top Strengths (Section 9) the source read “What competencies are your Profound Strengths? These” and the rest of that sentence was cut off in the paste.
+**Transcription note:** Transcribed 2026-09-24 from the report text (a lower-case k glyph corrected). Under Top Strengths (Section 9) one sentence after “What competencies are your Profound Strengths?” was cut off in the paste and is deliberately not carried.
 
 **How the assistant carries it:** as prompt text in the cached prefix of every 360 conversation (`reportGuideText`), for "how should I read my report?" — answered in the instrument's own words, cited as Zenger Folkman's. It does not replace rubric 04's reading protocol (§4), which is theLeadershipWell's order for a coached walk-through; the vendor's steps are what the participant holds in their hands.
 
@@ -56,7 +56,7 @@ Now that you have your personal Feedback Report, you are ready to analyze the fe
 
 **Top Strengths (Competence)** (sections 9, then 10 and 11)
 
-- What competencies are your Profound Strengths? [one sentence not transcribed]
+- What competencies are your Profound Strengths?
 - Sections 10 and 11: Do the strengths identified by your raters in these sections align with your competency rankings in section 9? If not, note the differences that you see.
 
 **Potential Fatal Flaws** (sections 9, then 14 and 15)
@@ -79,6 +79,17 @@ Now that you have your personal Feedback Report, you are ready to analyze the fe
 
 - What important insights did you gain?
 - What are the strongest messages or themes in your report?
+
+### Decide if you have a Fatal Flaw (the report's own four conditions)
+
+Do you have a competency that meets all four conditions?
+
+1. The competency has been identified as a Potential Fatal Flaw and shows in yellow (Section 9).
+2. The competency is included among the most important competencies for the organization (Section 12).
+3. Your lowest scored behaviors point to the same competency (Section 14).
+4. Your raters have emphasized the competency as a Potential Fatal Flaw in their written comments (Section 15).
+
+The assistant pre-checks conditions 1–3 from the extracted data for every competency in the band (`lib/documents/assessment-360/fatal-flaw.ts`, rendered as the FATAL FLAW TEST block of the compact report; "among the most important" = at least one importance vote and within the top six by votes, ties included, since the report prints no cutoff) and reads condition 4 with the participant from the verbatim comments. A competency that fails any condition is not a fatal flaw for this role — theLeadershipWell's ruling in rubric 04 §5 and the instrument agree.
 
 ## Part 2 — Strength Builders
 

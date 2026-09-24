@@ -22,6 +22,8 @@ export type ReportGuide = {
   transcription_note: string
   insights: { intro: string[]; items: ReportGuideInsight[] }
   explore: { intro: string; complete: boolean; steps: ReportGuideStep[] }
+  /** The report's own four-condition test — a Fatal Flaw is more than the band. */
+  fatal_flaw_test: { title: string; question: string; conditions: string[] }
 }
 
 export const REPORT_GUIDE: ReportGuide = guide as ReportGuide
@@ -38,5 +40,6 @@ export function reportGuideText(): string {
   for (const s of g.explore.steps) {
     lines.push(`- ${s.title}${s.section ? ` (report section${s.section.includes(',') ? 's' : ''} ${s.section})` : ''}: ${s.questions.join(' ')}`)
   }
+  lines.push(`${g.fatal_flaw_test.title} (the report's own test — a competency is a Fatal Flaw only when ALL FOUR hold; the yellow band alone is condition 1): ${g.fatal_flaw_test.question} ${g.fatal_flaw_test.conditions.map((c, n) => `${n + 1}) ${c}`).join(' ')} The FATAL FLAW TEST block in the participant's data pre-checks conditions 1–3; condition 4 is read from their comments with them.`)
   return lines.join('\n')
 }

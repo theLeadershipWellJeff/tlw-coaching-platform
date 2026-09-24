@@ -18,6 +18,7 @@
  * numbers and the comments keep their own sections.
  */
 import type { Assessment360Data, Band, RaterCounts, RaterGroup } from '@/lib/documents/assessment-360/types'
+import { renderFatalFlawCheck } from '../documents/assessment-360/fatal-flaw'
 
 const fmt = (n: number | null | undefined): string => (n == null ? '—' : n.toFixed(2))
 const signed = (n: number | null | undefined): string => (n == null ? '—' : `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(n).toFixed(2)}`)
@@ -129,6 +130,9 @@ export function renderAssessmentCompact(data: Assessment360Data): string {
   if (full.length) out.push(`- All three: ${full.map(describe).join(' | ')}`)
   else out.push('- All three: none')
   if (partial.length) out.push(`- Two of three: ${partial.slice(0, 6).map(describe).join(' | ')}`)
+
+  // The report's four-condition Fatal Flaw test (conditions 1–3 from the data)
+  out.push(renderFatalFlawCheck(data))
 
   // Item details by competency
   if (data.competency_details.length) {

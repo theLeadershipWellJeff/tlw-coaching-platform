@@ -1,6 +1,6 @@
 {
  "source": "Zenger Folkman — The Extraordinary Leader 360 participant report, 'Extraordinary Insights' and 'Explore Your Report' (EL60.1D.4, © 2024 Zenger Folkman), pages 7–9. Vendor material licensed to theLeadershipWell for its participants; cite as Zenger Folkman.",
- "transcription_note": "Transcribed 2026-09-24 from the report text (a lower-case k glyph corrected). One sentence is missing: under Top Strengths (Section 9) the source read “What competencies are your Profound Strengths? These” and the rest of that sentence was cut off in the paste.",
+ "transcription_note": "Transcribed 2026-09-24 from the report text (a lower-case k glyph corrected). Under Top Strengths (Section 9) one sentence after “What competencies are your Profound Strengths?” was cut off in the paste and is deliberately not carried.",
  "insights": {
   "intro": [
    "Extraordinary leaders are the foundation of any successful organization. Their impact on the organization is more profound than any other factor. We believe that every leader has the potential to be extraordinary.",
@@ -68,7 +68,7 @@
     "title": "Top Strengths (Competence)",
     "section": "9, then 10 and 11",
     "questions": [
-     "What competencies are your Profound Strengths? [one sentence not transcribed]",
+     "What competencies are your Profound Strengths?",
      "Sections 10 and 11: Do the strengths identified by your raters in these sections align with your competency rankings in section 9? If not, note the differences that you see."
     ]
    },
@@ -105,6 +105,16 @@
      "What are the strongest messages or themes in your report?"
     ]
    }
+  ]
+ },
+ "fatal_flaw_test": {
+  "title": "Decide if you have a Fatal Flaw",
+  "question": "Do you have a competency that meets all four conditions?",
+  "conditions": [
+   "The competency has been identified as a Potential Fatal Flaw and shows in yellow (Section 9).",
+   "The competency is included among the most important competencies for the organization (Section 12).",
+   "Your lowest scored behaviors point to the same competency (Section 14).",
+   "Your raters have emphasized the competency as a Potential Fatal Flaw in their written comments (Section 15)."
   ]
  }
 }

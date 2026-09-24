@@ -25,6 +25,7 @@ const prompt = require(path.join(B, 'lib/portal/prompt.js'))
 const budget = require(path.join(B, 'lib/ai/context-budget.js'))
 const models = require(path.join(B, 'lib/ai/models.js'))
 const rgm = require(path.join(B, 'lib/documents/assessment-360/report-guide.js'))
+const ff = require(path.join(B, 'lib/documents/assessment-360/fatal-flaw.js'))
 
 let pass = 0
 let fail = 0
@@ -56,6 +57,7 @@ check('intro (3 paragraphs) + how-to-use (5 steps)', g.intro.length === 3 && g.h
 const rg = rgm.REPORT_GUIDE
 check('reading guide: seven insights, complete explore steps (8), Big Picture last', rg.insights.items.length === 7 && rg.explore.complete && rg.explore.steps.length === 8 && rg.explore.steps[7].title === 'Big Picture')
 const rgt = rgm.reportGuideText()
+check('fatal flaw test: four conditions in the guide and in the prefix text', rg.fatal_flaw_test.conditions.length === 4 && /Decide if you have a Fatal Flaw/.test(rgt) && /ALL FOUR/.test(rgt))
 check('reading guide text carries every insight title and every question', rg.insights.items.every((i) => rgt.includes(i.title)) && rg.explore.steps.every((s) => s.questions.every((q) => rgt.includes(q))))
 check('reading guide ≤ 1,800 tokens', tokens(rgt) <= 1800, `${tokens(rgt)}`)
 
@@ -108,6 +110,10 @@ for (const f of fixtures) {
   } else {
     check(`${name}: no reassessment section on an initial report`, !text.includes('REASSESSMENT —'))
   }
+  const rows = ff.fatalFlawCheck(data)
+  const inBand = data.competency_rankings.filter((r) => r.band === 'Potential Fatal Flaw')
+  check(`${name}: fatal-flaw rows = band members (${inBand.length}), each with 1–3 data conditions`, rows.length === inBand.length && rows.every((r) => r.data_conditions_met >= 1 && r.data_conditions_met <= 3 && (r.importance.status !== 'not_met' || r.importance.votes === 0) && (r.lowest_behaviors.status === 'met') === data.lowest_behaviors.some((b) => b.competency === r.competency)))
+  check(`${name}: FATAL FLAW TEST block rendered ${inBand.length ? 'per band member' : 'as not applicable'}`, inBand.length ? rows.every((r) => text.includes(`- ${r.competency} ${r.total.toFixed(2)}: (1) in the band — met; (2)`)) : /FATAL FLAW TEST[^\n]*does not apply/.test(text))
   check(`${name}: rater-count line`, text.includes(`Manager ${data.rater_counts.manager ?? '—'} · Peers ${data.rater_counts.peers ?? '—'} · Direct Reports ${data.rater_counts.direct_reports ?? '—'}`))
   const cands = prompt.candidateCompetencies(data)
   const builders = sb.renderStrengthBuilders(cands)
