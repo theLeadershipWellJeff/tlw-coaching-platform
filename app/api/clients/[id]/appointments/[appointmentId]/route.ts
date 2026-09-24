@@ -3,11 +3,13 @@ import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { toErrorResponse } from '@/lib/api-handler'
 import { requireClientCoach } from '@/lib/client-access'
 import { deleteClientEvent } from '@/lib/calendar'
+import { sendAppointmentCancellation } from '@/lib/appointments'
 
 export const runtime = 'nodejs'
 
-// Cancel an upcoming session: remove the Google Calendar event (notifying the
-// guest) and mark the appointment cancelled — kept as a row for history, and
+// Cancel an upcoming session: remove the Google Calendar event (Google also
+// notifies the guest), mark the appointment cancelled, and send the client the
+// branded cancellation notice (QA TLW-015) — kept as a row for history, and
 // out of the future list. A pending 24h nudge never fires because the cron only
 // scans 'scheduled' rows.
 export async function DELETE(
@@ -20,7 +22,7 @@ export async function DELETE(
 
     const { data: appointment } = await supabase
       .from('appointments')
-      .select('id, google_event_id, status')
+      .select('id, google_event_id, status, scheduled_at')
       .eq('id', params.appointmentId)
       .eq('client_id', params.id)
       .maybeSingle()
@@ -37,7 +39,21 @@ export async function DELETE(
       .eq('client_id', params.id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-    return NextResponse.json({ ok: true })
+    // Branded notice for a session that was still ahead and still booked.
+    // Best-effort — the cancellation above already stands.
+    let emailed = false
+    if (appointment.status === 'scheduled' && new Date(appointment.scheduled_at).getTime() > Date.now()) {
+      const { data: client } = await supabase
+        .from('clients')
+        .select('id, name, email, timezone')
+        .eq('id', params.id)
+        .maybeSingle()
+      if (client?.email) {
+        emailed = await sendAppointmentCancellation(supabase, coach, appointment, client).catch(() => false)
+      }
+    }
+
+    return NextResponse.json({ ok: true, emailed })
   } catch (e) {
     return toErrorResponse(e)
   }

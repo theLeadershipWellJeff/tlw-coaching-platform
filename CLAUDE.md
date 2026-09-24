@@ -831,9 +831,16 @@ same sync on view so displayed times are fresh. Sync always uses the appointment
 **owning** coach's token (a different coach's token would 404 and wrongly cancel),
 and any non-404 read failure leaves the row untouched (no cancel/move on a blip).
 
-The Sessions card lists upcoming sessions with **cancel** (`DELETE
+The Sessions card lists upcoming sessions with **cancel & notify client** (`DELETE
 /api/clients/[id]/appointments/[appointmentId]` — removes the calendar event,
-marks the row `cancelled`; a pending nudge then never fires). `GET
+marks the row `cancelled`; a pending nudge then never fires; for a still-future
+session it also sends the **branded cancellation notice**
+(`lib/appointments.ts#sendAppointmentCancellation`, `kind: 'cancellation'` in
+`buildAppointmentEmailHTML`; claimed in `appointment_reminders` so it sends once,
+Cc the coach, logged to `communications` as `type='reminder'`) — QA TLW-015.
+Google's own "Canceled event" email still goes out too: turning Google's guest
+notices off (`sendUpdates: 'none'`) is a separate decision, because it would also
+stop the calendar invite that non-Google clients rely on). `GET
 /api/clients/[id]/appointments` returns future `scheduled` rows. `UpcomingSessions`
 renders them two ways: the full list in the Sessions card and a **compact** list
 on the `NameCard` (below name/email). Both refetch off a shared `apptReload` key

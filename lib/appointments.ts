@@ -12,6 +12,7 @@ import type { Appointment, Coach, Database } from './supabase/types'
 import { formatWhenInTimeZone } from './datetime'
 import { buildAppointmentEmailHTML } from './appointment-email'
 import { sendCoachHtmlEmail } from './gmail'
+import { logCommunication } from './communications'
 import { getClientEventState } from './calendar'
 import { normalizeReminderSettings, getMeetingLink } from './scheduling'
 
@@ -108,6 +109,59 @@ export async function sendAppointmentReminder(
       .delete()
       .eq('appointment_id', appointment.id)
       .eq('kind', kind)
+  }
+  return ok
+}
+
+/**
+ * The branded cancellation notice (QA TLW-015), sent when the coach cancels a
+ * session in the app. Claimed in `appointment_reminders` (kind 'cancellation')
+ * before sending, like every reminder, so a double-click can't send twice;
+ * logged to `communications` so it shows on Recent Communication.
+ * Best-effort: the cancellation itself never depends on this email.
+ */
+export async function sendAppointmentCancellation(
+  supabase: SupabaseClient<Database>,
+  coach: Coach,
+  appointment: Pick<Appointment, 'id' | 'scheduled_at'>,
+  client: ClientLite & { id: string }
+): Promise<boolean> {
+  if (!client.email) return false
+  const { error: claimErr } = await supabase
+    .from('appointment_reminders')
+    .insert({ appointment_id: appointment.id, kind: 'cancellation', sent_at: new Date().toISOString() })
+  if (claimErr) return false
+
+  const tz = client.timezone || coach.timezone
+  const whenLabel = formatWhenInTimeZone(new Date(appointment.scheduled_at), tz)
+  const html = buildAppointmentEmailHTML({
+    kind: 'cancellation',
+    clientName: client.name,
+    coachName: coach.name,
+    whenLabel,
+  })
+  const subject = `Cancelled: our session — ${whenLabel}`
+  const cc = coach.email || process.env.JEFF_CC_EMAIL || undefined
+
+  const ok = await sendCoachHtmlEmail(coach, { to: client.email, cc, subject, html }).catch(() => false)
+  await logCommunication(supabase, {
+    coach_id: coach.id,
+    client_id: client.id,
+    type: 'reminder',
+    direction: 'outbound',
+    subject,
+    preview: `Session cancelled — ${whenLabel}`,
+    body_html: html,
+    status: ok ? 'sent' : 'failed',
+    error_detail: ok ? null : 'Gmail send failed',
+    appointment_id: appointment.id,
+  })
+  if (!ok) {
+    await supabase
+      .from('appointment_reminders')
+      .delete()
+      .eq('appointment_id', appointment.id)
+      .eq('kind', 'cancellation')
   }
   return ok
 }

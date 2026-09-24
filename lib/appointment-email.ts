@@ -1,6 +1,6 @@
 /**
  * Branded HTML emails for scheduled sessions: the booking confirmation (sent at
- * schedule time) and the ~24h-before nudge. Same shell as the agreement email so
+ * schedule time), the ~24h-before nudge, and the cancellation notice. Same shell as the agreement email so
  * the client sees a consistent theLeadershipWell look. The "when" label is
  * pre-formatted by the caller in the client's (or coach's) timezone.
  */
@@ -15,7 +15,7 @@ function esc(s: string): string {
 }
 
 export function buildAppointmentEmailHTML(opts: {
-  kind: 'confirmation' | 'nudge'
+  kind: 'confirmation' | 'nudge' | 'cancellation'
   clientName: string
   coachName: string
   whenLabel: string
@@ -26,16 +26,25 @@ export function buildAppointmentEmailHTML(opts: {
   const { kind, clientName, coachName, whenLabel, meetingLink } = opts
   const first = clientName.split(' ')[0] || 'there'
 
-  const heading = kind === 'confirmation' ? 'Your next session is booked' : 'A reminder about our session'
+  const heading =
+    kind === 'confirmation'
+      ? 'Your next session is booked'
+      : kind === 'cancellation'
+        ? 'Our session is cancelled'
+        : 'A reminder about our session'
   const lead =
     kind === 'confirmation'
       ? // Neutral: a booking isn't always made on the day of a session (QA TLW-013).
         `Our next session is booked — you'll find it on your calendar, and the details are below.`
-      : `Looking forward to our session coming up. Here are the details so it's easy to find.`
+      : kind === 'cancellation'
+        ? // QA TLW-015: the app's own notice, so the client isn't left with
+          // only Google's plain "Canceled event" email.
+          `The session below has been cancelled and removed from your calendar. If you'd like a new time, just reply to this email and we'll find one.`
+        : `Looking forward to our session coming up. Here are the details so it's easy to find.`
 
   // One-tap join button + the plain link (some clients strip buttons). Only
   // rendered when we have a link.
-  const join = meetingLink
+  const join = meetingLink && kind !== 'cancellation'
     ? `
       <div style="text-align:center;margin:18px 0 6px;">
         <a href="${esc(meetingLink)}" style="display:inline-block;background:${ORANGE};color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;padding:14px 34px;border-radius:8px;letter-spacing:.3px;">Join the Zoom room</a>
@@ -68,13 +77,13 @@ export function buildAppointmentEmailHTML(opts: {
 
       <div style="border:1px solid #e5e0d8;border-radius:8px;padding:18px 20px;margin-bottom:8px;">
         <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:${WARM};font-weight:700;margin-bottom:6px;">Session</div>
-        <div style="font-size:17px;color:${NAVY};font-weight:600;line-height:1.5;">${esc(whenLabel)}</div>
+        <div style="font-size:17px;color:${NAVY};font-weight:600;line-height:1.5;${kind === 'cancellation' ? 'text-decoration:line-through;' : ''}">${esc(whenLabel)}</div>
       </div>
       ${join}
     </div>
 
     <div style="padding:8px 44px 22px;">
-      <p style="margin:14px 0 0;font-size:14px;color:#1f2937;line-height:1.7;">See you then,<br/>${esc(coachName)}</p>
+      <p style="margin:14px 0 0;font-size:14px;color:#1f2937;line-height:1.7;">${kind === 'cancellation' ? 'Warmly' : 'See you then'},<br/>${esc(coachName)}</p>
     </div>
 
     <div style="background:${NAVY_DEEP};padding:14px 44px;text-align:center;font-size:11px;color:${WARM};letter-spacing:1px;">

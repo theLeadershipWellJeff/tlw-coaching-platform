@@ -181,8 +181,13 @@ export function UpcomingSessions({
           <div className="flex shrink-0 items-center gap-2 text-[12px] font-medium">
             {cancelling === a.id ? (
               <>
-                <button onClick={() => cancel(a.id)} disabled={busy} className="text-red-600 hover:underline disabled:opacity-40">
-                  cancel session
+                <button
+                  onClick={() => cancel(a.id)}
+                  disabled={busy}
+                  title="Removes the calendar event and emails the client a cancellation notice"
+                  className="text-red-600 hover:underline disabled:opacity-40"
+                >
+                  cancel & notify client
                 </button>
                 <button onClick={() => setCancelling(null)} className="text-tlw-warm-gray hover:text-tlw-espresso">
                   keep
