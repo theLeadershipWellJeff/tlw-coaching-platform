@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { GoalEditorModal } from '../GoalEditorModal'
 import { SavePlanModal } from './SavePlanModal'
+import { CoBrandHeader } from '../CoBrandHeader'
+import type { PortalBranding } from '@/lib/portal/branding'
 
 type ChatMessage = { role: 'user' | 'assistant'; content: string }
 type ChatMode = 'general' | 'weekly_plan'
@@ -59,6 +61,7 @@ export default function PortalChat() {
   const [planSaved, setPlanSaved] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const endRef = useRef<HTMLDivElement>(null)
+  const [branding, setBranding] = useState<PortalBranding | null>(null)
 
   async function refreshConversations() {
     try {
@@ -100,6 +103,10 @@ export default function PortalChat() {
     } catch {
       /* ignore */
     }
+    fetch('/api/portal/branding')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d?.branding && setBranding(d.branding))
+      .catch(() => {})
     fetch('/api/portal/weekly-plan')
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => d?.weekStart && setWeekStart(d.weekStart))
@@ -356,6 +363,12 @@ export default function PortalChat() {
           + New chat
         </button>
       </div>
+
+      {branding && (
+        <div className="pb-3">
+          <CoBrandHeader branding={branding} compact />
+        </div>
+      )}
 
       <div className="flex min-h-0 flex-1 gap-4">
         {/* Conversation sidebar — inline on desktop, drawer on mobile */}

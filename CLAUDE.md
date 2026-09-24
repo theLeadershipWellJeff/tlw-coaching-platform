@@ -1822,6 +1822,23 @@ own section in the prompt) so the portal works as a general coaching tool.
   `node_modules/.bin/tsc -p scripts/spikes/tsconfig.spike.json && node
   scripts/spikes/verify-portal-reminders.js`.
 
+### Enterprise co-branding — company logos (2026-09-24; migration 073)
+
+A company (Command Center → Client Portal → Companies, each company card's
+**Portal logo** section) can carry a logo: PNG/JPEG/WebP only (**no SVG** — it
+is served on our origin), ≤ 1 MB, stored in the private `client-documents`
+bucket at `companies/<id>/logo.<ext>` (`lib/portal/branding.ts`;
+`GET/POST/DELETE /api/admin/companies/[id]/logo`, supervisor-only, audited as
+`company_updated`). That company's participants see **`CoBrandHeader`** — their
+company's logo and "Powered by theLeadershipWell" (`/logo-email.png`) at the
+**same height**, on a white band, stacked on a phone — at the top of the portal
+home and (compact) above the chat. The logo is served by
+`GET /api/portal/branding/logo`, which resolves the company **only through the
+session client's own `clients.company_id`** (no id in the URL), same isolation
+rule as `lib/portal/company.ts`; `GET /api/portal/branding` feeds the chat.
+No company / no logo / pre-073 → nothing renders, the portal is unchanged.
+Emails and the sign-in page are not co-branded (yet).
+
 ### Phase 5 — dry run kit (shipped 2026-09-06; the rehearsal itself is Jeff's)
 
 Phase 5 is a rehearsal, not code. What ships to support it:
@@ -3118,6 +3135,13 @@ with a clear "apply migration 068" error if the columns are ever absent, so
 nothing can double-send in a gap). Verified up → down → re-up on Postgres 16, plus the
 CAS semantics (two claims → one winner; stale claim re-claimable; sent note
 never claimable). Reversible via `068_note_send_claim_down.sql`.
+
+**`073_company_logo.sql` — PENDING (not yet applied).** Adds
+`companies.logo_path` / `logo_content_type` / `logo_updated_at` (all
+nullable) for enterprise co-branding. Additive; reads are defensive (no logo
+shows until it is in), and the upload route answers "Apply migration 073"
+before then. Reversible via `073_company_logo_down.sql` (leaves the stored
+files in Storage).
 
 **`072_publish_360_brief_v2_2.sql` — APPLIED (production, confirmed by Jeff
 2026-09-24).** Data
