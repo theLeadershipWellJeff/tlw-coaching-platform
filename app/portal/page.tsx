@@ -14,6 +14,8 @@ import { PortalGoalsCard } from './PortalGoalsCard'
 import { DocumentsCard } from './DocumentsCard'
 import { WeeklyPlanCard } from './WeeklyPlanCard'
 import { MyNotesCard } from './MyNotesCard'
+import { CoBrandHeader } from './CoBrandHeader'
+import { loadPortalBranding } from '@/lib/portal/branding'
 
 export const dynamic = 'force-dynamic'
 
@@ -67,7 +69,10 @@ export default async function PortalHome() {
   const clientId = await getPortalClientId()
   if (!clientId) redirect('/portal/login')
 
-  const data: PortalOverview | null = await loadPortalOverview(clientId)
+  const [data, branding]: [PortalOverview | null, Awaited<ReturnType<typeof loadPortalBranding>>] = await Promise.all([
+    loadPortalOverview(clientId),
+    loadPortalBranding(clientId),
+  ])
   if (!data) redirect('/portal/login')
 
   const firstName = data.displayName
@@ -85,7 +90,7 @@ export default async function PortalHome() {
     <div className="mx-auto max-w-4xl px-4 py-10">
       <div className="flex items-center justify-between">
         <p className="text-[11px] font-medium uppercase tracking-[2px] text-tlw-warm-gray">
-          theLeadershipWell
+          {branding ? branding.companyName : 'theLeadershipWell'}
         </p>
         <div className="flex items-center gap-4">
           <a
@@ -97,6 +102,11 @@ export default async function PortalHome() {
           <PortalLogoutButton />
         </div>
       </div>
+      {branding && (
+        <div className="mt-6">
+          <CoBrandHeader branding={branding} />
+        </div>
+      )}
       <PortalShell
         onboarded={data.onboarded}
         hasCoach={hasCoach}

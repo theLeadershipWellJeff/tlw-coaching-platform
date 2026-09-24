@@ -578,6 +578,10 @@ export type Company = {
   vision: string | null
   values: string | null
   notes: string | null
+  /** Migration 073 — co-branding logo in the client-documents bucket. */
+  logo_path?: string | null
+  logo_content_type?: string | null
+  logo_updated_at?: Timestamp | null
   created_at: Timestamp
   updated_at: Timestamp
 }

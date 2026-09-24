@@ -15,7 +15,7 @@ export type Cohort = {
   debrief_coach_name: string | null
   status: string
 }
-export type Company = { id: string; name: string; vision: string | null; values: string | null; notes: string | null; cohorts: Cohort[] }
+export type Company = { id: string; name: string; vision: string | null; values: string | null; notes: string | null; logo_path?: string | null; logo_updated_at?: string | null; cohorts: Cohort[] }
 
 /** Cohort lifecycle. The legacy 'closed' value reads as inactive. */
 export type CohortStatus = 'active' | 'inactive' | 'archived'
@@ -164,6 +164,78 @@ export function CohortRow({
 type CompanyDoc = { id: string; title: string; extraction_status: string; extraction_error: string | null; include_in_chat: boolean; text_chars: number; created_at: string }
 
 /** Sponsor material for one company — feeds the chat of this company's participants only. */
+/**
+ * Co-branding logo (migration 073). Shown to this company's participants at
+ * the top of the portal and the chat, beside "Powered by theLeadershipWell"
+ * at the same height.
+ */
+function CompanyLogo({ company, onChanged }: { company: Company; onChanged: (c: Company) => void }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const fileRef = useRef<HTMLInputElement>(null)
+  const hasLogo = Boolean(company.logo_path)
+  const v = company.logo_updated_at ? new Date(company.logo_updated_at).getTime() : 0
+
+  async function upload() {
+    const file = fileRef.current?.files?.[0]
+    if (!file) return
+    setBusy(true)
+    setError('')
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch(`/api/admin/companies/${company.id}/logo`, { method: 'POST', body: fd })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.error || 'Upload failed.')
+      onChanged({ ...company, logo_path: 'set', logo_updated_at: d.logo_updated_at })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Upload failed.')
+    } finally {
+      setBusy(false)
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
+  async function remove() {
+    setBusy(true)
+    setError('')
+    try {
+      await api(`/api/admin/companies/${company.id}/logo`, { method: 'DELETE' })
+      onChanged({ ...company, logo_path: null, logo_updated_at: new Date().toISOString() })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not remove the logo.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="mt-4">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-tlw-warm-gray">Portal logo</p>
+      {hasLogo ? (
+        <div className="mt-2 flex flex-col items-center justify-center gap-3 rounded-tlw-xl border border-tlw-warm-gray/15 bg-white px-4 py-3 sm:flex-row sm:gap-6">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={`/api/admin/companies/${company.id}/logo?v=${v}`} alt={company.name} className="h-10 w-auto max-w-full object-contain" />
+          <span aria-hidden className="hidden w-px self-stretch bg-tlw-warm-gray/30 sm:block" />
+          <div className="flex flex-col items-center">
+            <span className="text-[10px] font-medium uppercase tracking-[2px] text-tlw-warm-gray">Powered by</span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-email.png" alt="theLeadershipWell" className="mt-1 h-10 w-auto max-w-full object-contain" />
+          </div>
+        </div>
+      ) : (
+        <p className="mt-1 text-[12px] text-tlw-warm-gray">No logo — participants see plain theLeadershipWell branding.</p>
+      )}
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" className="text-[12px]" disabled={busy} />
+        <button className={btnSecondary} disabled={busy} onClick={upload}>{busy ? 'Saving…' : hasLogo ? 'Replace logo' : 'Upload logo'}</button>
+        {hasLogo && <button className={btnLink} disabled={busy} onClick={remove}>Remove</button>}
+      </div>
+      <p className="mt-1 text-[11px] text-tlw-warm-gray">PNG, JPEG or WebP, up to 1 MB. Crop to the logo — extra white space makes it look small.</p>
+      <ErrorLine error={error} />
+    </div>
+  )
+}
+
 function CompanyDocuments({ companyId }: { companyId: string }) {
   const [docs, setDocs] = useState<CompanyDoc[] | null>(null)
   const [title, setTitle] = useState('')
@@ -391,6 +463,8 @@ function CompanyCard({ company, users, onChanged, onUsersChanged }: { company: C
         </div>
       )}
       <ErrorLine error={error} />
+
+      <CompanyLogo company={company} onChanged={onChanged} />
 
       <CompanyDocuments companyId={company.id} />
 
