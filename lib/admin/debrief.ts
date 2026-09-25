@@ -62,6 +62,8 @@ export type PortalUserRow = {
   document_count: number
   engagement: { chat_messages: number; goals_created: number; downloads: number; last_event_at: string | null; talk_to_coach_clicks: number }
   has_coach_relationship: boolean
+  /** Portal access archived (portal_features.archived). */
+  archived: boolean
 }
 
 /**
@@ -137,6 +139,7 @@ export async function listPortalUsers(supabase: SupabaseClient<Database>, opts: 
       email: c.email,
       client_type: c.client_type,
       kind: kindOf(c),
+      archived: f.archived === true,
       status: c.status,
       company_id: c.company_id,
       company_name: c.company_id ? companyName.get(c.company_id) || null : null,

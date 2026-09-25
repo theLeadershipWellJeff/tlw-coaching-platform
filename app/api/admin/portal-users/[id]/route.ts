@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { DOCUMENTS_BUCKET } from '@/lib/documents/storage'
 import { adminContext, adminErrorResponse } from '@/lib/admin/route'
 import { AdminError, listPortalUsers } from '@/lib/admin/debrief'
 import { logAdminAction } from '@/lib/admin/audit'
@@ -45,7 +46,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
 /**
  * Edit a portal user. Body: any of name, email, companyId, cohortId,
- * accessExpiresAt, keyInfo, phone, assessments (boolean — the per-client
+ * accessExpiresAt, keyInfo, phone, archived (boolean — portal access off,
+ * data kept), assessments (boolean — the per-client
  * flag toggle), maxAssessments, maxDocuments. The flag is orthogonal to client_type: this is
  * how a coaching client gets the 360 switched on without re-onboarding.
  */
@@ -79,6 +81,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       features.chat = body.chat
       featuresChanged = true
     }
+    let archiveAction: 'portal_user_archived' | 'portal_user_restored' | null = null
+    if ('archived' in body) {
+      if (typeof body.archived !== 'boolean') throw new AdminError(400, 'archived must be true or false.')
+      if (body.archived) features.archived = true
+      else delete features.archived
+      archiveAction = body.archived ? 'portal_user_archived' : 'portal_user_restored'
+      featuresChanged = true
+    }
     if ('assessments' in body) {
       if (typeof body.assessments !== 'boolean') throw new AdminError(400, 'assessments must be true or false.')
       features.assessments = body.assessments
@@ -97,9 +107,59 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (!Object.keys(patch).length) throw new AdminError(400, 'Nothing to update.')
     const { error } = await supabase.from('clients').update(patch).eq('id', params.id)
     if (error) throw new AdminError(500, error.message)
-    await logAdminAction(supabase, { actorCoachId: actor.id, action: 'portal_user_updated', targetClientId: params.id, detail: { fields: Object.keys(patch), assessments: features.assessments ?? null } })
+    await logAdminAction(supabase, { actorCoachId: actor.id, action: archiveAction ?? 'portal_user_updated', targetClientId: params.id, detail: { fields: Object.keys(patch), assessments: features.assessments ?? null } })
     const users = await listPortalUsers(supabase)
     return NextResponse.json({ user: users.find((u) => u.id === params.id) || null })
+  } catch (e) {
+    return adminErrorResponse(e)
+  }
+}
+
+/**
+ * Permanently delete a portal-only participant (client_type 'portal') and
+ * everything they hold: documents (files included), chats, notes, plans,
+ * goals, sign-in tokens and the house-coach link. Coaching clients are never
+ * deleted here — archive their portal access instead; their record belongs
+ * to the coaching roster. Body: { confirmName } must match the stored name.
+ */
+export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const { supabase, actor } = await adminContext()
+    const body = await req.json().catch(() => ({}))
+    const { data: client } = await supabase.from('clients').select('id, name, email, client_type, company_id, cohort_id').eq('id', params.id).maybeSingle()
+    if (!client) throw new AdminError(404, 'Client not found.')
+    if (client.client_type !== 'portal') {
+      throw new AdminError(409, 'This is a coaching client. Archive their portal access instead; their coaching record stays in the roster.')
+    }
+    if (String(body.confirmName || '').trim() !== client.name.trim()) {
+      throw new AdminError(400, 'Type the participant\'s full name to confirm.')
+    }
+    const { count: billed } = await supabase.from('coachees').select('id', { count: 'exact', head: true }).eq('client_id', params.id)
+    if ((billed ?? 0) > 0) throw new AdminError(409, 'This participant is on a billing account. Remove them from it first.')
+
+    // Stored files first (the rows cascade with the client; the files would not).
+    let filesRemoved = 0
+    try {
+      const { data: files } = await supabase.storage.from(DOCUMENTS_BUCKET).list(params.id, { limit: 1000 })
+      const paths = (files || []).map((f) => `${params.id}/${f.name}`)
+      if (paths.length) {
+        const { error: rmError } = await supabase.storage.from(DOCUMENTS_BUCKET).remove(paths)
+        if (rmError) throw rmError
+        filesRemoved = paths.length
+      }
+    } catch (e) {
+      throw new AdminError(502, `Could not remove their stored files, so nothing was deleted. ${e instanceof Error ? e.message : ''}`.trim())
+    }
+
+    const { error } = await supabase.from('clients').delete().eq('id', params.id)
+    if (error) throw new AdminError(500, error.message)
+    await logAdminAction(supabase, {
+      actorCoachId: actor.id,
+      action: 'portal_user_deleted',
+      targetClientId: null,
+      detail: { client_id: client.id, name: client.name, email: client.email, company_id: client.company_id, cohort_id: client.cohort_id, files_removed: filesRemoved },
+    })
+    return NextResponse.json({ deleted: true })
   } catch (e) {
     return adminErrorResponse(e)
   }

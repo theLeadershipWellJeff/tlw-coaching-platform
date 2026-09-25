@@ -22,6 +22,7 @@ export type PortalUser = {
   document_count: number
   engagement: { chat_messages: number; goals_created: number; downloads: number; last_event_at: string | null; talk_to_coach_clicks: number }
   has_coach_relationship: boolean
+  archived: boolean
 }
 
 export function PortalUsersPanel({ companies, initialCohortId = '' }: { companies: Company[]; initialCohortId?: string }) {
@@ -34,10 +35,14 @@ export function PortalUsersPanel({ companies, initialCohortId = '' }: { companie
   const [creating, setCreating] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [editing, setEditing] = useState<PortalUser | null>(null)
-  const [editForm, setEditForm] = useState({ cohortId: '', companyId: '', accessExpiresAt: '', maxAssessments: '', maxDocuments: '' })
+  const [editForm, setEditForm] = useState({ name: '', email: '', cohortId: '', companyId: '', accessExpiresAt: '', maxAssessments: '', maxDocuments: '' })
+  const [view, setView] = useState<'active' | 'archived'>('active')
+  const [deleting, setDeleting] = useState<PortalUser | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState('')
   const reportRef = useRef<HTMLInputElement>(null)
   const othersRef = useRef<HTMLInputElement>(null)
 
+  const shown = useMemo(() => (users || []).filter((u) => u.archived === (view === 'archived')), [users, view])
   const cohorts = useMemo(() => companies.flatMap((c) => c.cohorts.map((k) => ({ ...k, company_name: c.name }))), [companies])
 
   async function load() {
@@ -121,16 +126,47 @@ export function PortalUsersPanel({ companies, initialCohortId = '' }: { companie
       setBusy(null)
     }
   }
+  async function setArchived(u: PortalUser, archived: boolean) {
+    setBusy(u.id)
+    setError('')
+    setNotice('')
+    try {
+      const d = await api<{ user: PortalUser | null }>(`/api/admin/portal-users/${u.id}`, { method: 'PATCH', body: JSON.stringify({ archived }) })
+      replace(d.user)
+      setNotice(archived ? `${u.name} archived — portal access is off. Their data is kept; restore them from the Archived list.` : `${u.name} restored — they can sign in again.`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not update.')
+    } finally {
+      setBusy(null)
+    }
+  }
+  async function confirmDelete() {
+    if (!deleting) return
+    setBusy(deleting.id)
+    setError('')
+    setNotice('')
+    try {
+      await api(`/api/admin/portal-users/${deleting.id}`, { method: 'DELETE', body: JSON.stringify({ confirmName: deleteConfirm }) })
+      setUsers((us) => (us || []).filter((x) => x.id !== deleting.id))
+      setNotice(`${deleting.name} and all their portal data were deleted.`)
+      setDeleting(null)
+      setDeleteConfirm('')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not delete.')
+    } finally {
+      setBusy(null)
+    }
+  }
   function openEdit(u: PortalUser) {
     setEditing(u)
-    setEditForm({ cohortId: u.cohort_id || '', companyId: u.company_id || '', accessExpiresAt: u.portal_access_expires_at?.slice(0, 10) || '', maxAssessments: '', maxDocuments: '' })
+    setEditForm({ name: u.name, email: u.email || '', cohortId: u.cohort_id || '', companyId: u.company_id || '', accessExpiresAt: u.portal_access_expires_at?.slice(0, 10) || '', maxAssessments: '', maxDocuments: '' })
   }
   async function saveEdit() {
     if (!editing) return
     setBusy(editing.id)
     setError('')
     try {
-      const body: Record<string, unknown> = { cohortId: editForm.cohortId || null, companyId: editForm.companyId || null, accessExpiresAt: editForm.accessExpiresAt || null }
+      const body: Record<string, unknown> = { name: editForm.name, email: editForm.email, cohortId: editForm.cohortId || null, companyId: editForm.companyId || null, accessExpiresAt: editForm.accessExpiresAt || null }
       if (editForm.maxAssessments) body.maxAssessments = Number(editForm.maxAssessments)
       if (editForm.maxDocuments) body.maxDocuments = Number(editForm.maxDocuments)
       const d = await api<{ user: PortalUser | null }>(`/api/admin/portal-users/${editing.id}`, { method: 'PATCH', body: JSON.stringify(body) })
@@ -170,6 +206,13 @@ export function PortalUsersPanel({ companies, initialCohortId = '' }: { companie
         sub="Everyone using the portal: coaching clients (general portal), coaching clients with the 360 on, standalone ZF participants, and enterprise cohort participants. The 360 flag is per client — switch it on here for any coaching client without re-onboarding."
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <div className="flex gap-1 rounded-tlw-lg border border-tlw-warm-gray/20 p-0.5 text-[12px]">
+              {(['active', 'archived'] as const).map((v) => (
+                <button key={v} className={`rounded-tlw-md px-2 py-1 ${view === v ? 'bg-tlw-navy-deep text-white' : 'text-tlw-espresso hover:bg-tlw-canvas'}`} onClick={() => setView(v)}>
+                  {v === 'active' ? 'Active' : 'Archived'} ({(users || []).filter((u) => u.archived === (v === 'archived')).length})
+                </button>
+              ))}
+            </div>
             <div className="flex gap-1 text-[12px]">
               {([['', 'All'], ['coaching', 'Coaching'], ['coaching_zf', 'Coaching + ZF'], ['standalone', 'Standalone ZF'], ['enterprise', 'Enterprise']] as const).map(([k, label]) => (
                 <button key={k} className={`rounded-tlw-lg px-2 py-1 ${filterKind === k ? 'bg-tlw-navy-deep text-white' : 'text-tlw-espresso hover:bg-tlw-canvas'}`} onClick={() => setFilterKind(k)}>{label}</button>
@@ -187,8 +230,8 @@ export function PortalUsersPanel({ companies, initialCohortId = '' }: { companie
         {notice && <p className="mb-2 text-[12px] text-emerald-700">{notice}</p>}
         {users === null ? (
           <p className="text-[13px] text-tlw-warm-gray">Loading…</p>
-        ) : users.length === 0 ? (
-          <p className="text-[13px] text-tlw-warm-gray">No portal users yet.</p>
+        ) : shown.length === 0 ? (
+          <p className="text-[13px] text-tlw-warm-gray">{view === 'archived' ? 'No archived portal users.' : 'No portal users yet.'}</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-[12px]">
@@ -206,7 +249,7 @@ export function PortalUsersPanel({ companies, initialCohortId = '' }: { companie
                 </tr>
               </thead>
               <tbody className="divide-y divide-tlw-warm-gray/10">
-                {users.map((u) => (
+                {shown.map((u) => (
                   <tr key={u.id} className="align-top">
                     <td className="py-2 pr-3">
                       <p className="font-medium text-tlw-navy-deep">
@@ -245,11 +288,19 @@ export function PortalUsersPanel({ companies, initialCohortId = '' }: { companie
                     </td>
                     <td className="py-2 pr-3 text-tlw-espresso">{fmtDate(u.portal_access_expires_at)}</td>
                     <td className="py-2 whitespace-nowrap">
-                      <button className={btnLink} disabled={busy === u.id || !u.email} onClick={() => invite(u)}>{u.portal.invitedAt ? 'Resend' : 'Invite'}</button>
+                      <button className={btnLink} disabled={busy === u.id || !u.email || u.archived} title={u.archived ? 'Restore this user before inviting them' : undefined} onClick={() => invite(u)}>{u.portal.invitedAt ? 'Resend' : 'Invite'}</button>
                       <span className="mx-1 text-tlw-warm-gray">·</span>
                       <button className={btnLink} onClick={() => openEdit(u)}>Edit</button>
                       <span className="mx-1 text-tlw-warm-gray">·</span>
                       <Link className={btnLink} href={`/command-center/portal/users/${u.id}`}>Open</Link>
+                      <span className="mx-1 text-tlw-warm-gray">·</span>
+                      <button className={btnLink} disabled={busy === u.id} onClick={() => setArchived(u, !u.archived)}>{u.archived ? 'Restore' : 'Archive'}</button>
+                      {u.client_type === 'portal' && (
+                        <>
+                          <span className="mx-1 text-tlw-warm-gray">·</span>
+                          <button className="text-[12px] font-medium text-red-600 hover:underline disabled:opacity-50" disabled={busy === u.id} onClick={() => { setDeleting(u); setDeleteConfirm('') }}>Delete</button>
+                        </>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -259,11 +310,38 @@ export function PortalUsersPanel({ companies, initialCohortId = '' }: { companie
         )}
       </Section>
 
+      {deleting && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-tlw-navy-deep/40 p-4" onClick={() => setDeleting(null)}>
+          <div className="w-full max-w-md rounded-tlw-2xl bg-tlw-surface p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-[14px] font-medium text-red-700">Delete {deleting.name}?</h3>
+            <p className="mt-2 text-[12px] leading-relaxed text-tlw-espresso">
+              This permanently removes their account and everything in it: reports and documents (files included), assistant chats, notes, weekly plans and goals. It cannot be undone. To keep the data and only switch access off, use <strong>Archive</strong> instead.
+            </p>
+            <label className="mt-3 block text-[11px] text-tlw-warm-gray">Type <strong>{deleting.name}</strong> to confirm
+              <input className={input} value={deleteConfirm} onChange={(e) => setDeleteConfirm(e.target.value)} autoFocus />
+            </label>
+            <ErrorLine error={error} />
+            <div className="mt-4 flex justify-end gap-2">
+              <button className={btnSecondary} onClick={() => setDeleting(null)}>Cancel</button>
+              <button className="rounded-tlw-lg bg-red-600 px-3 py-1.5 text-[12px] font-medium text-white disabled:opacity-50" disabled={busy === deleting.id || deleteConfirm.trim() !== deleting.name.trim()} onClick={confirmDelete}>
+                {busy === deleting.id ? 'Deleting…' : 'Delete permanently'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {editing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-tlw-navy-deep/40 p-4" onClick={() => setEditing(null)}>
           <div className="w-full max-w-md rounded-tlw-2xl bg-tlw-surface p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-[14px] font-medium text-tlw-navy-deep">{editing.name}</h3>
             <div className="mt-3 space-y-2">
+              <label className="block text-[11px] text-tlw-warm-gray">Name (as on their report)
+                <input className={input} value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
+              </label>
+              <label className="block text-[11px] text-tlw-warm-gray">Email (their sign-in)
+                <input className={input} type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
+              </label>
               <label className="block text-[11px] text-tlw-warm-gray">Cohort
                 <select className={input} value={editForm.cohortId} onChange={(e) => setEditForm({ ...editForm, cohortId: e.target.value })}>
                   <option value="">None</option>
@@ -288,9 +366,10 @@ export function PortalUsersPanel({ companies, initialCohortId = '' }: { companie
                 </label>
               </div>
             </div>
+            <ErrorLine error={error} />
             <div className="mt-4 flex justify-end gap-2">
               <button className={btnSecondary} onClick={() => setEditing(null)}>Cancel</button>
-              <button className={btnPrimary} disabled={busy === editing.id} onClick={saveEdit}>Save</button>
+              <button className={btnPrimary} disabled={busy === editing.id || !editForm.name.trim() || !editForm.email.trim()} onClick={saveEdit}>Save</button>
             </div>
           </div>
         </div>

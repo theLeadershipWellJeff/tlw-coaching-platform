@@ -191,9 +191,13 @@ export default function PortalUserPage({ params }: { params: { id: string } }) {
             title="Identity & access"
             actions={
               <div className="flex flex-wrap items-center gap-3">
-                <button className={btnLink} disabled={busy || !u.email} onClick={invite}>{u.portal.invitedAt ? 'Resend portal link' : 'Invite to portal'}</button>
+                <button className={btnLink} disabled={busy || !u.email || u.archived} onClick={invite}>{u.portal.invitedAt ? 'Resend portal link' : 'Invite to portal'}</button>
                 {u.has_coach_relationship && <Link className={btnLink} href={`/clients/${u.id}`}>Coach workspace →</Link>}
                 {!edit && <button className={btnLink} onClick={() => setEdit(true)}>Edit</button>}
+                <button className={btnLink} disabled={busy} onClick={() => patch({ archived: !u.archived }, u.archived ? 'Restored — they can sign in again.' : 'Archived — portal access is off. Their data is kept.')}>
+                  {u.archived ? 'Restore' : 'Archive'}
+                </button>
+                {u.archived && <Chip>archived</Chip>}
               </div>
             }
           >
