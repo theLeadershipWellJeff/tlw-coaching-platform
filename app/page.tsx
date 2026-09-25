@@ -11,7 +11,7 @@ export default async function Home() {
     <div className="min-h-screen flex flex-col items-center justify-center p-8">
       <TLWLogo size={56} light />
       <p className="text-tlw-warm-gray text-xs tracking-[5px] uppercase mt-4 mb-2">theLeadershipWell</p>
-      <h1 className="font-serif text-3xl font-light text-tlw-cream mb-2">Session Prep Engine</h1>
+      <h1 className="font-serif text-3xl font-light text-tlw-cream mb-2">TLW Coaching App</h1>
       <p className="text-tlw-warm-gray text-sm mb-10">Sign in to access your coaching dashboard</p>
       <a
         href="/api/auth/signin"

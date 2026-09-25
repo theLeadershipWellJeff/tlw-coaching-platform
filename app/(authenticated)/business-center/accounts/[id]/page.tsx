@@ -963,6 +963,138 @@ function PaymentMethodPanel({ account, onChange }: { account: Account; onChange:
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
+// ── Account details (view + edit) ─────────────────────────────────────────────
+
+const TYPE_LABEL: Record<string, string> = { solo: 'Solo', enterprise: 'Enterprise' }
+
+function AccountDetailsSection({ account, editing, onEdit, onCancel, onSaved }: {
+  account: Account
+  editing: boolean
+  onEdit: () => void
+  onCancel: () => void
+  onSaved: (updated: Partial<Account>) => void
+}) {
+  const [name, setName] = useState(account.name)
+  const [type, setType] = useState(account.type)
+  const [email, setEmail] = useState(account.billing_email)
+  const [cc, setCc] = useState(account.billing_cc ?? '')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+
+  useEffect(() => {
+    if (!editing) return
+    setName(account.name)
+    setType(account.type)
+    setEmail(account.billing_email)
+    setCc(account.billing_cc ?? '')
+    setError('')
+  }, [editing, account])
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault()
+    setSaving(true)
+    setError('')
+    setNotice('')
+    const res = await fetch(`/api/billing/accounts/${account.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, type, billing_email: email, billing_cc: cc.trim() || null }),
+    })
+    const d = await res.json().catch(() => ({}))
+    setSaving(false)
+    if (!res.ok) {
+      setError(d.error ?? 'Could not save the account.')
+      return
+    }
+    if (d.stripeWarning) setNotice(d.stripeWarning)
+    onSaved(d.account)
+  }
+
+  const label = 'w-24 shrink-0 text-[11px] font-medium uppercase tracking-wider text-tlw-warm-gray'
+  const input = 'flex-1 rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-canvas px-2 py-1 text-[13px] text-tlw-espresso outline-none focus:border-tlw-signal-orange'
+
+  if (!editing) {
+    return (
+      <section className="rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface px-5 py-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-[13px]">
+              <span className={label}>Account</span>
+              <span className="text-tlw-espresso">{account.name}</span>
+            </div>
+            <div className="flex items-center gap-2 text-[13px]">
+              <span className={label}>Type</span>
+              <span className="text-tlw-espresso">{TYPE_LABEL[account.type] ?? account.type}</span>
+            </div>
+            <div className="flex items-center gap-2 text-[13px]">
+              <span className={label}>Bill to</span>
+              <span className="text-tlw-espresso">{account.billing_email}</span>
+            </div>
+            <div className="flex items-center gap-2 text-[13px]">
+              <span className={label}>CC</span>
+              {account.billing_cc
+                ? <span className="text-tlw-espresso">{account.billing_cc}</span>
+                : <span className="italic text-tlw-warm-gray/60">None</span>}
+            </div>
+          </div>
+          <button
+            onClick={onEdit}
+            className="rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-1 text-[12px] font-medium text-tlw-espresso transition-colors hover:bg-tlw-canvas"
+          >
+            Edit details
+          </button>
+        </div>
+        {notice && <p className="mt-3 text-[12px] text-amber-700">{notice}</p>}
+      </section>
+    )
+  }
+
+  return (
+    <section className="rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface px-5 py-4">
+      <form onSubmit={save} className="space-y-3">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+          <label htmlFor="acct-name" className={label}>Account</label>
+          <input id="acct-name" value={name} onChange={(e) => setName(e.target.value)} required className={input} />
+        </div>
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+          <label htmlFor="acct-type" className={label}>Type</label>
+          <select id="acct-type" value={type} onChange={(e) => setType(e.target.value)} className={input}>
+            <option value="solo">Solo — one client, who pays</option>
+            <option value="enterprise">Enterprise — a company pays for one or more coachees</option>
+          </select>
+        </div>
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+          <label htmlFor="acct-email" className={label}>Bill to</label>
+          <input id="acct-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className={input} />
+        </div>
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+          <label htmlFor="acct-cc" className={label}>CC</label>
+          <input id="acct-cc" type="email" value={cc} onChange={(e) => setCc(e.target.value)} placeholder="Optional" className={input} />
+        </div>
+        {account.stripe_customer_id && (
+          <p className="text-[12px] text-tlw-warm-gray">
+            A new name or billing email is also updated in Stripe, so future invoices go to the new address. Invoices already sent are unchanged.
+          </p>
+        )}
+        {error && <p className="text-[12px] text-red-600">{error}</p>}
+        <div className="flex items-center gap-2">
+          <button
+            type="submit"
+            disabled={saving}
+            className="rounded-tlw-md bg-tlw-navy-deep px-3 py-1.5 text-[12px] font-medium text-white disabled:opacity-50"
+          >
+            {saving ? 'Saving…' : 'Save changes'}
+          </button>
+          <button type="button" onClick={onCancel} className="px-2 py-1 text-[12px] text-tlw-warm-gray hover:text-tlw-espresso">
+            Cancel
+          </button>
+        </div>
+      </form>
+    </section>
+  )
+}
+
 export default function AccountDetailPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
@@ -973,9 +1105,7 @@ export default function AccountDetailPage() {
   const [showAddEngagement, setShowAddEngagement] = useState(false)
   const [actioning, setActioning] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
-  const [editingCc, setEditingCc] = useState(false)
-  const [ccDraft, setCcDraft] = useState('')
-  const [savingCc, setSavingCc] = useState(false)
+  const [editingDetails, setEditingDetails] = useState(false)
 
   function reload() {
     if (!id) return
@@ -1022,21 +1152,6 @@ export default function AccountDetailPage() {
     await fetch(`/api/billing/accounts/${id}`, { method: 'DELETE' })
     setActioning(false)
     router.push('/business-center/accounts')
-  }
-
-  async function saveCc() {
-    setSavingCc(true)
-    const res = await fetch(`/api/billing/accounts/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ billing_cc: ccDraft.trim() || null }),
-    })
-    if (res.ok) {
-      const d = await res.json()
-      setAccount((cur) => cur ? { ...cur, billing_cc: d.account?.billing_cc ?? null } : cur)
-    }
-    setSavingCc(false)
-    setEditingCc(false)
   }
 
   function updateEngagement(updated: Engagement) {
@@ -1112,47 +1227,17 @@ export default function AccountDetailPage() {
             )}
           </div>
 
-          {/* Billing email + CC */}
-          <section className="rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface px-5 py-4">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-[13px]">
-                <span className="w-24 shrink-0 text-[11px] font-medium uppercase tracking-wider text-tlw-warm-gray">Bill to</span>
-                <span className="text-tlw-espresso">{account.billing_email}</span>
-              </div>
-              <div className="flex items-start gap-2">
-                <span className="w-24 shrink-0 pt-0.5 text-[11px] font-medium uppercase tracking-wider text-tlw-warm-gray">CC</span>
-                {editingCc ? (
-                  <div className="flex flex-1 items-center gap-2">
-                    <input
-                      type="email"
-                      value={ccDraft}
-                      onChange={(e) => setCcDraft(e.target.value)}
-                      placeholder="cc@example.com"
-                      className="flex-1 rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-canvas px-2 py-1 text-[13px] text-tlw-espresso outline-none focus:border-tlw-signal-orange"
-                      autoFocus
-                    />
-                    <button
-                      onClick={saveCc}
-                      disabled={savingCc}
-                      className="rounded-tlw-md bg-tlw-navy-deep px-3 py-1 text-[12px] font-medium text-white disabled:opacity-50"
-                    >
-                      {savingCc ? 'Saving…' : 'Save'}
-                    </button>
-                    <button onClick={() => setEditingCc(false)} className="px-2 py-1 text-[12px] text-tlw-warm-gray hover:text-tlw-espresso">
-                      Cancel
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => { setCcDraft(account.billing_cc ?? ''); setEditingCc(true) }}
-                    className="text-[13px] text-tlw-warm-gray hover:text-tlw-espresso"
-                  >
-                    {account.billing_cc ?? <span className="italic text-tlw-warm-gray/50">Add a CC email…</span>}
-                  </button>
-                )}
-              </div>
-            </div>
-          </section>
+          {/* Account details (name, type, billing email, CC) */}
+          <AccountDetailsSection
+            account={account}
+            editing={editingDetails}
+            onEdit={() => setEditingDetails(true)}
+            onCancel={() => setEditingDetails(false)}
+            onSaved={(updated) => {
+              setAccount((cur) => cur ? { ...cur, ...updated, coachees: cur.coachees, engagements: cur.engagements } : cur)
+              setEditingDetails(false)
+            }}
+          />
 
           {/* Payment method (Payment on File) */}
           <PaymentMethodPanel account={account} onChange={reload} />
