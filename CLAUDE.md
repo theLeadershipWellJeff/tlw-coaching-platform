@@ -1155,6 +1155,10 @@ is never accepted here, and vice-versa.
   keep the action-item links working) so email styling can't leak into the portal
   and nothing in the body can execute. The session list, notes card, and every
   search result link into these.
+- **Tab title.** The coach app's browser tab reads "TLW Coaching App"
+  (`app/layout.tsx`). The portal's reads "<first name>'s Portal" for a
+  signed-in client (preferred name, else first word of `clients.name`) and
+  "TLW Client Portal" otherwise (`app/portal/layout.tsx#generateMetadata`).
 - **Booking (migration 051).** `coaches.booking_url` (HubSpot/Calendly) renders as
   a **"Schedule your next session"** button at the top of the portal — the first
   thing a client sees. Set in Account → Scheduling ("Client booking link"; the
@@ -2693,6 +2697,13 @@ All Stripe interaction is in `lib/billing/stripe.ts` (singleton + helpers) and
   status unchanged. The `failed`-status "Re-send payment link" button routes
   here too (the old "Retry send" hit `/send`, which 409s on non-approved
   invoices).
+- **Edit an account (2026-09-25).** The account page's details card has
+  **Edit details** — name, type (solo/enterprise; solo refused while the
+  account holds more than one coachee), billing email, CC — saved via `PATCH
+  /api/billing/accounts/[id]` (validated server-side). A changed name or
+  billing email is pushed to the existing Stripe customer
+  (`lib/billing/stripe.ts#updateStripeCustomer`) so Stripe's invoice emails
+  follow it; a Stripe failure keeps our save and returns `stripeWarning`.
 - **Delete a draft (2026-09-10).** `DELETE /api/billing/invoices/[id]` hard-
   deletes a `draft` or `approved` invoice that has **no `stripe_invoice_id`**
   (lines/reminders/charge attempts/adjustments cascade; billed sessions and run

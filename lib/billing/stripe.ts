@@ -44,6 +44,19 @@ export async function getOrCreateStripeCustomer(opts: {
   return customer.id
 }
 
+/**
+ * Push an edited account name / billing email onto the existing Stripe
+ * customer, so Stripe's hosted-invoice emails go to the new address. Only the
+ * fields passed are changed.
+ */
+export async function updateStripeCustomer(
+  customerId: string,
+  fields: { name?: string; email?: string },
+): Promise<void> {
+  const stripe = getStripe()
+  await stripe.customers.update(customerId, fields)
+}
+
 // ── Invoice (hosted) ──────────────────────────────────────────────────────────
 
 export type StripeLineItem = {

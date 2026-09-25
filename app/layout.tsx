@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'theLeadershipWell · Session Prep',
-  description: 'Session preparation engine for theLeadershipWell coaching practice',
+  title: 'TLW Coaching App',
+  description: 'theLeadershipWell coaching platform',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
