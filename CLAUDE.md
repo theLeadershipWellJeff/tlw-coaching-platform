@@ -1655,6 +1655,22 @@ writes `admin_audit_log`). Five tabs, each a client component:
   (how a coaching client gets the 360 without re-onboarding), invite/resend,
   cohort/company/expiry/caps edit, portal state (`loadPortalStates`), latest
   report status, and an engagement summary from `portal_events`.
+- **Archive / delete a portal user (2026-09-25).** `portal_features.archived`
+  (no migration) switches portal access off without touching `clients.status`
+  — so archiving a coaching client's portal never archives their coaching
+  record. Enforced in `lib/portal/server.ts#getPortalClientId` (a live session
+  ends on the next request; a failed lookup fails open), the magic-link request
+  and password sign-in (same generic response), the admin invite (409), and the
+  reminder cron. `PATCH /api/admin/portal-users/[id] {archived}` (audit
+  `portal_user_archived` / `_restored`); the Portal users tab has an
+  Active / Archived switch and Archive/Restore per row and on the user page.
+  **Delete** (`DELETE /api/admin/portal-users/[id] {confirmName}`) is
+  **portal-only participants only** (`client_type='portal'`; a coaching client
+  gets a 409 — archive instead), typed-name confirm, refused while the person
+  is a billing coachee; stored files in `client-documents/<id>/` are removed
+  first (a Storage failure deletes nothing), then the client row cascades.
+  Audit `portal_user_deleted` keeps name/email in `detail`. The Edit dialog
+  now carries name + email.
 - **Documents** (`DocumentsPanel`). **Bulk upload** `POST /api/admin/documents`
   (multipart `cohortId` + `files[]`, ≤60): each PDF is extracted FIRST, its
   `participant_name` matched (`namesMatch`) against the cohort's members —
@@ -2704,6 +2720,9 @@ All Stripe interaction is in `lib/billing/stripe.ts` (singleton + helpers) and
   billing email is pushed to the existing Stripe customer
   (`lib/billing/stripe.ts#updateStripeCustomer`) so Stripe's invoice emails
   follow it; a Stripe failure keeps our save and returns `stripeWarning`.
+  **Archive** = the existing `status='closed'` (UI says Archive/Archived/
+  Restore everywhere; the list rows carry Edit + Archive, archived rows open
+  their account page).
 - **Delete a draft (2026-09-10).** `DELETE /api/billing/invoices/[id]` hard-
   deletes a `draft` or `approved` invoice that has **no `stripe_invoice_id`**
   (lines/reminders/charge attempts/adjustments cascade; billed sessions and run

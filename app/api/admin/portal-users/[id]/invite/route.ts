@@ -5,6 +5,7 @@ import { logAdminAction } from '@/lib/admin/audit'
 import { createLoginToken, recentLoginTokenCount, MAX_LINKS_PER_HOUR } from '@/lib/portal/tokens'
 import { sendPortalLoginEmail } from '@/lib/portal/send'
 import { getBaseUrl } from '@/lib/url'
+import { isPortalArchived } from '@/lib/portal/archive'
 
 export const runtime = 'nodejs'
 
@@ -12,8 +13,9 @@ export const runtime = 'nodejs'
 export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const { supabase, actor } = await adminContext()
-    const { data: client } = await supabase.from('clients').select('id, org_id, name, email').eq('id', params.id).maybeSingle()
+    const { data: client } = await supabase.from('clients').select('id, org_id, name, email, portal_features').eq('id', params.id).maybeSingle()
     if (!client) throw new AdminError(404, 'Client not found.')
+    if (isPortalArchived(client.portal_features)) throw new AdminError(409, 'This portal user is archived. Restore them before sending an invitation.')
     if (!client.email) throw new AdminError(400, 'This client has no email on file.')
     if ((await recentLoginTokenCount(client.id)) >= MAX_LINKS_PER_HOUR) {
       throw new AdminError(429, 'Too many sign-in links sent to this client in the last hour.')

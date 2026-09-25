@@ -278,17 +278,29 @@ function SetupAllModal({ onDone, onClose }: { onDone: () => void; onClose: () =>
 
 // ── Account row ───────────────────────────────────────────────────────────────
 
-function AccountRow({ acct }: { acct: AccountSummary }) {
+function AccountRow({ acct, onArchived }: { acct: AccountSummary; onArchived: () => void }) {
+  const [confirming, setConfirming] = useState(false)
+  const [archiving, setArchiving] = useState(false)
+
+  async function archive() {
+    setArchiving(true)
+    const res = await fetch(`/api/billing/accounts/${acct.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'closed', closed_at: new Date().toISOString() }),
+    })
+    setArchiving(false)
+    setConfirming(false)
+    if (res.ok) onArchived()
+  }
+
   return (
-    <Link
-      href={`/business-center/accounts/${acct.id}`}
-      className="flex items-center justify-between gap-4 px-5 py-4 transition-colors hover:bg-tlw-canvas"
-    >
-      <div>
+    <div className="group flex items-center justify-between gap-4 px-5 py-4 transition-colors hover:bg-tlw-canvas">
+      <Link href={`/business-center/accounts/${acct.id}`} className="min-w-0 flex-1">
         <p className="text-[14px] font-medium text-tlw-navy-deep">{acct.name}</p>
         <p className="text-[12px] text-tlw-warm-gray">{acct.billing_email}</p>
-      </div>
-      <div className="flex items-center gap-3">
+      </Link>
+      <div className="flex flex-wrap items-center justify-end gap-3">
         <span className="text-[12px] text-tlw-warm-gray">
           {acct.coacheeCount} coachee{acct.coacheeCount !== 1 ? 's' : ''}
         </span>
@@ -300,12 +312,26 @@ function AccountRow({ acct }: { acct: AccountSummary }) {
         <span className="shrink-0 rounded-full bg-tlw-canvas px-2 py-0.5 text-[11px] font-medium capitalize text-tlw-warm-gray">
           {acct.type}
         </span>
+        {confirming ? (
+          <span className="flex items-center gap-2 text-[12px]">
+            <span className="text-tlw-espresso">Archive?</span>
+            <button onClick={archive} disabled={archiving} className="font-medium text-tlw-navy-deep hover:underline disabled:opacity-50">
+              {archiving ? 'Archiving…' : 'Yes'}
+            </button>
+            <button onClick={() => setConfirming(false)} className="text-tlw-warm-gray hover:text-tlw-espresso">No</button>
+          </span>
+        ) : (
+          <span className="flex items-center gap-3 text-[12px]">
+            <Link href={`/business-center/accounts/${acct.id}?edit=1`} className="text-tlw-warm-gray hover:text-tlw-navy-deep hover:underline">Edit</Link>
+            <button onClick={() => setConfirming(true)} className="text-tlw-warm-gray hover:text-tlw-navy-deep hover:underline">Archive</button>
+          </span>
+        )}
       </div>
-    </Link>
+    </div>
   )
 }
 
-// ── Closed account row ────────────────────────────────────────────────────────
+// ── Archived (closed) account row ────────────────────────────────────────────────────────
 
 function ClosedAccountRow({ acct, onReopen }: { acct: AccountSummary; onReopen: () => void }) {
   const [reopening, setReopening] = useState(false)
@@ -323,16 +349,16 @@ function ClosedAccountRow({ acct, onReopen }: { acct: AccountSummary; onReopen: 
 
   return (
     <div className="flex items-center justify-between gap-4 px-5 py-3">
-      <div>
+      <Link href={`/business-center/accounts/${acct.id}`} className="min-w-0 flex-1 hover:underline">
         <p className="text-[13px] font-medium text-tlw-warm-gray">{acct.name}</p>
         <p className="text-[12px] text-tlw-warm-gray/70">{acct.billing_email}</p>
-      </div>
+      </Link>
       <button
         onClick={reopen}
         disabled={reopening}
         className="rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-1 text-[12px] font-medium text-tlw-espresso transition-colors hover:bg-tlw-canvas disabled:opacity-50"
       >
-        {reopening ? 'Reopening…' : 'Reopen'}
+        {reopening ? 'Restoring…' : 'Restore'}
       </button>
     </div>
   )
@@ -530,7 +556,7 @@ export default function AccountsPage() {
             <section>
               <h2 className="mb-3 text-[13px] font-semibold uppercase tracking-wider text-tlw-warm-gray">Enterprise</h2>
               <div className="divide-y divide-tlw-warm-gray/10 rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface">
-                {enterpriseAccounts.map((acct) => <AccountRow key={acct.id} acct={acct} />)}
+                {enterpriseAccounts.map((acct) => <AccountRow key={acct.id} acct={acct} onArchived={loadAccounts} />)}
               </div>
             </section>
           )}
@@ -540,7 +566,7 @@ export default function AccountsPage() {
             <section>
               <h2 className="mb-3 text-[13px] font-semibold uppercase tracking-wider text-tlw-warm-gray">Active Clients</h2>
               <div className="divide-y divide-tlw-warm-gray/10 rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface">
-                {soloAccounts.map((acct) => <AccountRow key={acct.id} acct={acct} />)}
+                {soloAccounts.map((acct) => <AccountRow key={acct.id} acct={acct} onArchived={loadAccounts} />)}
               </div>
             </section>
           )}
@@ -569,14 +595,14 @@ export default function AccountsPage() {
             </section>
           )}
 
-          {/* Closed section */}
+          {/* Archived section (status 'closed' in the database) */}
           {closedAccounts.length > 0 && (
             <section>
               <button
                 onClick={() => setClosedOpen((o) => !o)}
                 className="mb-3 flex items-center gap-2 text-[13px] font-semibold uppercase tracking-wider text-tlw-warm-gray hover:text-tlw-espresso"
               >
-                <span>Closed ({closedAccounts.length})</span>
+                <span>Archived ({closedAccounts.length})</span>
                 <span className="text-[11px] normal-case font-normal">{closedOpen ? '▲ hide' : '▼ show'}</span>
               </button>
               {closedOpen && (

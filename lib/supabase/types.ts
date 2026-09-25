@@ -549,6 +549,14 @@ export type PortalFeatures = {
    * toggles it). Independent of `assessments`.
    */
   chat?: boolean
+  /**
+   * Archived from the Command Center: portal access is off (sign-in refused,
+   * live sessions end, no reminders) and the row moves to the Archived list.
+   * All data is kept; restoring switches access back on. Independent of
+   * `clients.status`, so archiving a coaching client's portal never touches
+   * their coaching record.
+   */
+  archived?: boolean
   /** Per-client cap overrides (default 5 assessments / 10 documents). */
   max_assessments?: number
   max_documents?: number

@@ -132,6 +132,7 @@ export function decideReminder(c: ReminderCandidate, now: Date, sent: Set<string
   if (!c.email) return null
   if (c.status === 'archived' || c.status === 'inactive') return null
   if (!remindersEnabled(c.portalFeatures)) return null
+  if (c.portalFeatures?.archived === true) return null
   if (c.accessExpiresAt && Date.parse(c.accessExpiresAt) < now.getTime()) return null
   const has = (d: ReminderDecision) => sent.has(`${d.kind}:${d.periodKey}`)
   const today = localDate(now, c.timezone)

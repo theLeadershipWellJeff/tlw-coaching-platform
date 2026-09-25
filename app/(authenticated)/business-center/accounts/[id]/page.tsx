@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { PageHeader } from '@/app/components/layout/PageHeader'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -1105,7 +1105,8 @@ export default function AccountDetailPage() {
   const [showAddEngagement, setShowAddEngagement] = useState(false)
   const [actioning, setActioning] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
-  const [editingDetails, setEditingDetails] = useState(false)
+  const searchParams = useSearchParams()
+  const [editingDetails, setEditingDetails] = useState(searchParams.get('edit') === '1')
 
   function reload() {
     if (!id) return
@@ -1184,7 +1185,7 @@ export default function AccountDetailPage() {
                 disabled={actioning}
                 className="rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-1.5 text-[13px] font-medium text-tlw-espresso transition-colors hover:bg-tlw-canvas disabled:opacity-50"
               >
-                {actioning ? 'Reopening…' : 'Reopen account'}
+                {actioning ? 'Restoring…' : 'Restore account'}
               </button>
             ) : (
               <button
@@ -1192,7 +1193,7 @@ export default function AccountDetailPage() {
                 disabled={actioning}
                 className="rounded-tlw-lg border border-tlw-warm-gray/30 px-3 py-1.5 text-[13px] font-medium text-tlw-espresso transition-colors hover:bg-tlw-canvas disabled:opacity-50"
               >
-                {actioning ? 'Closing…' : 'Close account'}
+                {actioning ? 'Archiving…' : 'Archive account'}
               </button>
             )}
             {!deleteConfirm ? (
@@ -1222,7 +1223,7 @@ export default function AccountDetailPage() {
             )}
             {account.status === 'closed' && (
               <span className="rounded-full bg-tlw-warm-gray/15 px-2.5 py-0.5 text-[11px] font-medium text-tlw-warm-gray">
-                Closed
+                Archived
               </span>
             )}
           </div>

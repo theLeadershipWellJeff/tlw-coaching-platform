@@ -4,6 +4,7 @@ import { createLoginToken, recentLoginTokenCount, MAX_LINKS_PER_HOUR } from '@/l
 import { sendPortalLoginEmail } from '@/lib/portal/send'
 import { getBaseUrl } from '@/lib/url'
 import { logPortalAccess } from '@/lib/portal/access'
+import { isPortalArchived } from '@/lib/portal/archive'
 
 export const runtime = 'nodejs'
 
@@ -24,10 +25,10 @@ export async function POST(req: NextRequest) {
     const supabase = getSupabaseAdmin()
     const { data: client } = await supabase
       .from('clients')
-      .select('id, org_id, name, email')
+      .select('id, org_id, name, email, portal_features')
       .ilike('email', email)
       .maybeSingle()
-    if (!client || !client.email) return generic
+    if (!client || !client.email || isPortalArchived(client.portal_features)) return generic
 
     if ((await recentLoginTokenCount(client.id)) >= MAX_LINKS_PER_HOUR) return generic
 
