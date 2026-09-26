@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
-import { TLWLogo } from './components/TLWLogo'
+import Image from 'next/image'
 import { LegalFooter } from './components/legal/LegalPage'
 
 /**
@@ -18,9 +18,17 @@ export default async function Home() {
   return (
     <div className="min-h-screen bg-tlw-navy-deep text-tlw-cream flex flex-col items-center justify-center px-6 py-12">
       <div className="w-full max-w-xl flex flex-col items-center text-center">
-        <TLWLogo size={56} light />
-        <p className="text-tlw-warm-gray text-xs tracking-[5px] uppercase mt-4 mb-2">theLeadershipWell</p>
-        <h1 className="font-serif text-3xl font-light mb-4">TLW Coaching App</h1>
+        {/* The same square wordmark uploaded as the Google OAuth consent-screen
+            logo (public/logo-square-120.png) — Google checks that they match. */}
+        <Image
+          src="/logo-square.png"
+          alt="theLeadershipWell"
+          width={120}
+          height={120}
+          priority
+          className="rounded-lg"
+        />
+        <h1 className="font-serif text-3xl font-light mt-6 mb-4">TLW Coaching App</h1>
         <p className="text-[15px] leading-relaxed text-tlw-cream/85">
           The practice platform for professional coaches: session notes and prep, scheduling and reminders, session
           scorecards against the ICF competencies, a client portal, and billing, in one place.
