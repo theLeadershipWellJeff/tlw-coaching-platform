@@ -2850,6 +2850,13 @@ Stripe hosted Checkout (`setup` mode) — never on a TLW page (PCI SAQ-A).**
   The app is **unverified** (8 of the 100-user cap used as of 2026-09-26; the
   Data Access page had no scopes declared). Adding a scope back re-widens the
   verification — don't, without Jeff's call.
+- **Public legal pages (2026-09-26).** `/privacy` + `/terms` (static, shared
+  shell `app/components/legal/LegalPage.tsx` — entity MxV Coaching Inc., DBA
+  theLeadershipWell, Oceanside CA, `Admin@theleadershipwell.com`) and the
+  homepage `/` are the URLs on Google's OAuth **Branding** page. The privacy
+  policy's "Google user data" section + Limited Use disclosure must match the
+  scopes in `lib/authOptions.ts` — change a scope, change the page in the same
+  PR. Billing terms must match `COACH_PRICING` and the no-refund cancel flow.
 - **OAuth consent screen is PUBLISHED / "In production"** (as of 2026-08). Any
   Google account can complete Google's consent step — but since 2026-09-09
   sign-in is **get-only**: the app admits the account only if a `coaches` row

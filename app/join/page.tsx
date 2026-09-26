@@ -3,6 +3,7 @@ import { TLWLogo } from '@/app/components/TLWLogo'
 import { COACH_PRICING } from '@/lib/access'
 import { configuredCoachIntervals } from '@/lib/billing/stripe'
 import { JoinForm } from './JoinForm'
+import { LegalFooter } from '@/app/components/legal/LegalPage'
 
 export const dynamic = 'force-dynamic'
 
@@ -70,6 +71,7 @@ export default function JoinPage({ searchParams }: { searchParams?: { cancelled?
         <p className="mt-12 text-[12px] text-tlw-warm-gray">
           You will sign in with the Google account for the email you enter here — the platform sends and books from your own Gmail and Calendar, so that account is the one to use.
         </p>
+        <LegalFooter light />
       </div>
     </div>
   )
