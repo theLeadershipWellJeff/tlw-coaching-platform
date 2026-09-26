@@ -2842,9 +2842,14 @@ Stripe hosted Checkout (`setup` mode) — never on a TLW page (PCI SAQ-A).**
 
 ## Operational notes
 
-- **Google Cloud APIs** must be enabled in the OAuth project: Gmail, Calendar,
-  **Drive** (drive.readonly was added for Plaud import — enable the Drive API in
-  the Cloud console if you hit "Drive API has not been used").
+- **Google Cloud APIs** must be enabled in the OAuth project: Gmail and
+  Calendar. **OAuth scopes (2026-09-26): `gmail.send`, `calendar.readonly`,
+  `calendar.events` only.** `drive.readonly` (the removed Plaud Drive import)
+  and `gmail.compose` (never used — every send is `users.messages.send`) were
+  dropped to shrink Google's restricted-scope review to `gmail.send` alone.
+  The app is **unverified** (8 of the 100-user cap used as of 2026-09-26; the
+  Data Access page had no scopes declared). Adding a scope back re-widens the
+  verification — don't, without Jeff's call.
 - **OAuth consent screen is PUBLISHED / "In production"** (as of 2026-08). Any
   Google account can complete Google's consent step — but since 2026-09-09
   sign-in is **get-only**: the app admits the account only if a `coaches` row
