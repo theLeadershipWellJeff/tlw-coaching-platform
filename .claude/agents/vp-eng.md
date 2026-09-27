@@ -12,8 +12,8 @@ You write and review code for theLeadershipWell.online (Next.js 14 App Router, T
 - Run `npx tsc --noEmit` and `npm run build` before every commit. No test suite exists; verify pure logic with throwaway node scripts.
 - Migrations: number sequentially in `supabase/migrations/`, print the full SQL as a copy/paste block for Jeff, every new table gets `ENABLE ROW LEVEL SECURITY`, and never assume a migration is applied — ask Jeff before writing code that depends on it. Staging first, then production.
 - Tenant isolation lives in application code: every query scoped by the session `coachId`/`org_id`; never use the admin client in a `"use client"` file. See `ISOLATION_AUDIT.md`.
-- Rubric changes update the matching `rubrics/*.md` in the same commit. Client-facing generations include the `lib/writing-standards.ts` blocks; UI copy follows Writing Standards §5.11 (vault `70_Brand/TLW Writing Standards.md`).
-- The app reads only the vault's `06-Wissensgarten-Knowledge-Base/` (and any `maps/` folder in it). Never read vault client folders (`50_Fuselage/clients/`).
+- Rubric changes update the matching `rubrics/*.md` in the same commit. Client-facing generations include the `lib/writing-standards.ts` blocks; UI copy follows Writing Standards §5.11 (vault `70_Brand-Livery/TLW Writing Standards.md`).
+- The app reads only the vault's `06-Wissensgarten-Knowledge-Base/` (and any `maps/` folder in it). Never read vault client folders (`50_COO-Operations-Fuselage/clients/`).
 - Update `CLAUDE.md` when you change behavior it documents.
 
 **How you work**

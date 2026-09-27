@@ -36,8 +36,8 @@ practice, marketing, or vault work.
 
 **User-facing copy and design** follow the canonical files in the vault repo
 (`theLeadershipWellJeff/TheLeadershipWell-Vault`):
-`70_Brand/TLW Writing Standards.md` (v1.0.4; product & app copy §5.11, product
-pre-publish checklist §8) and `70_Brand/TLW Brand Guidelines.md` (v2.3; app
+`70_Brand-Livery/TLW Writing Standards.md` (v1.0.4; product & app copy §5.11, product
+pre-publish checklist §8) and `70_Brand-Livery/TLW Brand Guidelines.md` (v2.3; app
 design system §11, type system DM Sans + Cormorant Garamond §5.3). The in-repo
 `spec/theLeadershipWell_Writing_Standards_v1.0.md` and `lib/writing-standards.ts`
 (see "Writing standards" below) are downstream copies — when they disagree
@@ -47,7 +47,7 @@ with the vault, the vault wins; flag the drift to Jeff.
 folder by path (`lib/vault/*`) and treats any `maps/` folder as coaching maps.
 The vault was restructured 2026-09 into numbered department folders; the
 Wissensgarten path was deliberately left unchanged — do not "fix" it. Client
-folders in the vault moved to `50_Fuselage/clients/`; the app must **never**
+folders in the vault moved to `50_COO-Operations-Fuselage/clients/`; the app must **never**
 read those.
 
 **Authority tiers** (apply to every agent and session)
