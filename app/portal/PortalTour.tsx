@@ -57,7 +57,7 @@ export function buildTourSteps(ctx: TourContext): Step[] {
       when: ctx.hasBooking,
       icon: '📅',
       title: 'Book your next session',
-      body: 'The button at the top opens your coach’s calendar. Pick any open time and it lands on their schedule and shows up here under Upcoming sessions.',
+      body: 'The top of the page is how you book your coach: their calendar, or their assistant. Booked sessions show up under Upcoming sessions, where you can reschedule or cancel.',
       noCoach: {
         title: 'Book a conversation',
         body: 'The button at the top opens a theLeadershipWell coach’s calendar. Pick any open time if you want to work through your report with a person.',

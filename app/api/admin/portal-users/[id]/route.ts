@@ -3,6 +3,7 @@ import { DOCUMENTS_BUCKET } from '@/lib/documents/storage'
 import { adminContext, adminErrorResponse } from '@/lib/admin/route'
 import { AdminError, listPortalUsers } from '@/lib/admin/debrief'
 import { logAdminAction } from '@/lib/admin/audit'
+import { assignClientCoach } from '@/lib/admin/coach-assignment'
 import type { Database, PortalFeatures } from '@/lib/supabase/types'
 
 export const runtime = 'nodejs'
@@ -48,7 +49,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
  * Edit a portal user. Body: any of name, email, companyId, cohortId,
  * accessExpiresAt, keyInfo, phone, archived (boolean — portal access off,
  * data kept), assessments (boolean — the per-client
- * flag toggle), maxAssessments, maxDocuments. The flag is orthogonal to client_type: this is
+ * flag toggle), maxAssessments, maxDocuments, coachId (the assigned coach; null = none). The flag is orthogonal to client_type: this is
  * how a coaching client gets the 360 switched on without re-onboarding.
  */
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
@@ -104,7 +105,27 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       }
     }
     if (featuresChanged) patch.portal_features = features
-    if (!Object.keys(patch).length) throw new AdminError(400, 'Nothing to update.')
+    // Coach assignment (coachId: id, or null = no coach) goes through its own
+    // path — it moves the coach_clients primary link, not a clients column.
+    const assigningCoach = 'coachId' in body
+    if (!Object.keys(patch).length && !assigningCoach) throw new AdminError(400, 'Nothing to update.')
+    if (assigningCoach) {
+      const coachId = body.coachId ? String(body.coachId) : null
+      const r = await assignClientCoach(supabase, actor, params.id, coachId)
+      if (r.previousCoachId !== r.coachId) {
+        await logAdminAction(supabase, {
+          actorCoachId: actor.id,
+          action: 'client_coach_assigned',
+          targetClientId: params.id,
+          targetCoachId: r.coachId,
+          detail: { from: r.previousCoachId, to: r.coachId, client_type: r.clientType },
+        })
+      }
+    }
+    if (!Object.keys(patch).length) {
+      const users = await listPortalUsers(supabase)
+      return NextResponse.json({ user: users.find((u) => u.id === params.id) || null })
+    }
     const { error } = await supabase.from('clients').update(patch).eq('id', params.id)
     if (error) throw new AdminError(500, error.message)
     await logAdminAction(supabase, { actorCoachId: actor.id, action: archiveAction ?? 'portal_user_updated', targetClientId: params.id, detail: { fields: Object.keys(patch), assessments: features.assessments ?? null } })

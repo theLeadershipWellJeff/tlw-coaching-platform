@@ -5,6 +5,7 @@ import { isValidTimeZone } from '@/lib/datetime'
 import { normalizeAvailability, normalizeReminderSettings } from '@/lib/scheduling'
 import { normalizeNudgeSettings } from '@/lib/nudges/settings'
 import { normalizeBillingSettings } from '@/lib/billing/settings'
+import { schedulingUpdateFromBody } from '@/lib/coach-scheduling'
 
 export const runtime = 'nodejs'
 
@@ -47,6 +48,9 @@ export async function GET() {
       transcript_source: coach.transcript_source ?? null,
       // Migration 051. null = the Client Portal shows no booking button.
       booking_url: coach.booking_url ?? null,
+      // Migration 074. null = no scheduling assistant.
+      scheduling_assistant_name: coach.scheduling_assistant_name ?? null,
+      scheduling_assistant_email: coach.scheduling_assistant_email ?? null,
     },
   })
 }
@@ -109,30 +113,15 @@ export async function PATCH(req: NextRequest) {
     profile.phone = raw || null
   }
 
-  // Client-facing scheduler link shown in the Client Portal (migration 051).
-  // "" clears it. Only http(s) is accepted — this URL is rendered as a link on a
-  // client-facing page, so a javascript:/data: scheme must never reach it.
-  if ('bookingUrl' in body) {
-    const raw = String(body.bookingUrl ?? '').trim()
-    if (raw === '') {
-      update.booking_url = null
-    } else {
-      let ok = false
-      try {
-        const parsed = new URL(raw)
-        ok = parsed.protocol === 'https:' || parsed.protocol === 'http:'
-      } catch {
-        ok = false
-      }
-      if (!ok) {
-        return NextResponse.json(
-          { error: 'Enter a valid booking link starting with https://' },
-          { status: 400 }
-        )
-      }
-      update.booking_url = raw
-    }
-  }
+  // Client-facing scheduling contact (migrations 051 + 074): the booking link
+  // shown in the Client Portal and an optional scheduling assistant. "" clears.
+  // Only http(s) links are accepted — rendered on a client-facing page.
+  const scheduling = schedulingUpdateFromBody(body)
+  if (!scheduling.ok) return NextResponse.json({ error: scheduling.error }, { status: 400 })
+  if (scheduling.value.booking_url !== undefined) update.booking_url = scheduling.value.booking_url
+  const assistantUpdate: Record<string, string | null> = {}
+  if (scheduling.value.scheduling_assistant_name !== undefined) assistantUpdate.scheduling_assistant_name = scheduling.value.scheduling_assistant_name
+  if (scheduling.value.scheduling_assistant_email !== undefined) assistantUpdate.scheduling_assistant_email = scheduling.value.scheduling_assistant_email
 
   if ('supervisorEmail' in body) {
     const raw = String(body.supervisorEmail ?? '').trim()
@@ -220,7 +209,7 @@ export async function PATCH(req: NextRequest) {
     update.nudge_settings = normalizeNudgeSettings(next)
   }
 
-  if (Object.keys(update).length === 0 && Object.keys(profile).length === 0) {
+  if (Object.keys(update).length === 0 && Object.keys(profile).length === 0 && Object.keys(assistantUpdate).length === 0) {
     return NextResponse.json({ error: 'Nothing to update.' }, { status: 400 })
   }
 
@@ -262,5 +251,22 @@ export async function PATCH(req: NextRequest) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json({ ...update, ...profile })
+  // Scheduling assistant (migration 074), isolated for the same reason and
+  // applied last, so an unapplied 074 never costs the rest of the save.
+  if (Object.keys(assistantUpdate).length > 0) {
+    const { error: assistantError } = await supabase
+      .from('coaches')
+      .update(assistantUpdate as any)
+      .eq('id', coach.id)
+    if (assistantError) {
+      console.error('scheduling assistant update failed (migration 074 applied?):', assistantError.message)
+      return NextResponse.json(
+        { error: 'Could not save the scheduling assistant — apply migration 074.' },
+        { status: 500 }
+      )
+    }
+  }
+
+
+  return NextResponse.json({ ...update, ...profile, ...assistantUpdate })
 }

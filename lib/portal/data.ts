@@ -11,11 +11,30 @@
  */
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import type { CoachingGoal } from '@/lib/supabase/types'
+import { extractChangeLinks } from './appointment-links'
+import { coachFirstName } from '@/lib/coach-scheduling'
 
 /** How many upcoming sessions the home page lists. */
 const UPCOMING_LIMIT = 5
 
-export type PortalAppointment = { id: string; scheduled_at: string; duration_minutes: number }
+export type PortalAppointment = {
+  id: string
+  scheduled_at: string
+  duration_minutes: number
+  /** The client's own reschedule / cancel links from the scheduler's calendar
+   *  event (Calendly etc.), when present — lib/portal/appointment-links.ts. */
+  rescheduleUrl: string | null
+  cancelUrl: string | null
+}
+
+/** Who a client reaches to schedule: their assigned coach's booking link and/or assistant. */
+export type PortalCoachContact = {
+  name: string | null
+  firstName: string | null
+  bookingUrl: string | null
+  assistantName: string | null
+  assistantEmail: string | null
+}
 
 export type PortalOverview = {
   client: { id: string; name: string; timezone: string | null }
@@ -33,6 +52,9 @@ export type PortalOverview = {
   messages: { id: string; type: string; subject: string | null; preview: string | null; sent_at: string }[]
   /** The coach's client-facing scheduler link (migration 051), or null. */
   bookingUrl: string | null
+  /** The assigned coach and how to schedule with them (051 + 074). null when
+   *  nobody is coaching them (a portal participant's house link is structural). */
+  coach: PortalCoachContact | null
   /** A coach is actually coaching them: a coach_clients link AND not a
    *  client_type 'portal' participant (whose house-coach link is structural).
    *  Decides which cards make sense to show. */
@@ -91,7 +113,7 @@ export async function loadPortalOverview(clientId: string): Promise<PortalOvervi
   const [apptRes, txRes, notesRes, commRes, coachRes] = await Promise.all([
     supabase
       .from('appointments')
-      .select('id, scheduled_at, duration_minutes, status')
+      .select('id, scheduled_at, duration_minutes, status, raw_event')
       .eq('client_id', clientId)
       .eq('status', 'scheduled')
       .gte('scheduled_at', nowIso)
@@ -130,15 +152,37 @@ export async function loadPortalOverview(clientId: string): Promise<PortalOvervi
   // The booking link comes from this client's primary coach (any linked coach as
   // a fallback) — the same resolution the portal's outbound email uses.
   let bookingUrl: string | null = null
+  let coachContact: PortalCoachContact | null = null
   const links = coachRes.data ?? []
+  const hasCoach = links.length > 0 && client.client_type !== 'portal'
   if (links.length > 0) {
     const primary = links.find((l) => l.role === 'primary') || links[0]
     const { data: coach } = await supabase
       .from('coaches')
-      .select('booking_url')
+      .select('name, booking_url')
       .eq('id', primary.coach_id)
       .maybeSingle()
     bookingUrl = coach?.booking_url ?? null
+    if (hasCoach && coach) {
+      // Scheduling assistant (migration 074) — read on its own so a missing
+      // column costs only the assistant, never the portal.
+      const assistant = await supabase
+        .from('coaches')
+        .select('scheduling_assistant_name, scheduling_assistant_email')
+        .eq('id', primary.coach_id)
+        .maybeSingle()
+        .then(
+          (r) => (r.error ? null : (r.data as { scheduling_assistant_name: string | null; scheduling_assistant_email: string | null } | null)),
+          () => null
+        )
+      coachContact = {
+        name: coach.name || null,
+        firstName: coachFirstName(coach.name),
+        bookingUrl,
+        assistantName: assistant?.scheduling_assistant_name ?? null,
+        assistantEmail: assistant?.scheduling_assistant_email ?? null,
+      }
+    }
   }
 
   return {
@@ -150,15 +194,17 @@ export async function loadPortalOverview(clientId: string): Promise<PortalOvervi
       id: a.id,
       scheduled_at: a.scheduled_at,
       duration_minutes: a.duration_minutes,
+      ...extractChangeLinks((a as { raw_event?: unknown }).raw_event),
     })),
     transcripts: txRes.data ?? [],
     sessionNotes: notesRes.data ?? [],
     messages: commRes.data ?? [],
     bookingUrl,
+    coach: coachContact,
     // A standalone / enterprise participant (client_type 'portal') is linked to
     // the house coach so the tenant gates work, but nobody is coaching them —
     // the portal must not offer "your coach" they do not have.
-    hasCoach: links.length > 0 && client.client_type !== 'portal',
+    hasCoach,
     assessmentsEnabled,
   }
 }

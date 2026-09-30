@@ -33,6 +33,7 @@ export type PortalEventType =
   | 'goal_progress'
   | 'goal_completed'
   | 'reminder_sent'
+  | 'schedule_request'
 
 export async function logPortalEvent(
   clientId: string,

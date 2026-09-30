@@ -42,6 +42,9 @@ export type AdminAction =
   // AI cost controls (Phase 2)
   | 'ai_budget_extended'
   | 'brief_activated'
+  // Multi-coach portal rollout (migration 074)
+  | 'client_coach_assigned'
+  | 'coach_scheduling_updated'
 
 export async function logAdminAction(
   supabase: SupabaseClient<Database>,
