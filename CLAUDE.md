@@ -3234,11 +3234,10 @@ nothing can double-send in a gap). Verified up → down → re-up on Postgres 16
 CAS semantics (two claims → one winner; stale claim re-claimable; sent note
 never claimable). Reversible via `068_note_send_claim_down.sql`.
 
-**`074_coach_scheduling_assistant.sql` — PENDING (not yet applied).** Adds
+**`074_coach_scheduling_assistant.sql` — APPLIED (production, confirmed by Jeff
+2026-10-01).** Adds
 `coaches.scheduling_assistant_name` / `scheduling_assistant_email` (nullable)
-for the multi-coach portal scheduling. Additive; reads are defensive (no
-assistant shows until it is in) and Account/Command Center saves say "apply
-migration 074". Coach assignment and Reschedule/Cancel work without it.
+for the multi-coach portal scheduling. Additive; reads are defensive.
 Reversible via `074_coach_scheduling_assistant_down.sql`.
 
 **`073_company_logo.sql` — APPLIED (production, confirmed by Jeff
