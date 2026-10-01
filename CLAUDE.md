@@ -2846,10 +2846,22 @@ Stripe hosted Checkout (`setup` mode) — never on a TLW page (PCI SAQ-A).**
   Calendar. **OAuth scopes (2026-09-26): `gmail.send`, `calendar.readonly`,
   `calendar.events` only.** `drive.readonly` (the removed Plaud Drive import)
   and `gmail.compose` (never used — every send is `users.messages.send`) were
-  dropped to shrink Google's restricted-scope review to `gmail.send` alone.
-  The app is **unverified** (8 of the 100-user cap used as of 2026-09-26; the
-  Data Access page had no scopes declared). Adding a scope back re-widens the
-  verification — don't, without Jeff's call.
+  dropped. All three remaining scopes are Google **sensitive**, not
+  restricted — so no CASA security assessment.
+- **Google OAuth verification — APPROVED 2026-10-01** (project
+  `tlw-session-prep`, 875747478503): branding verified + all three scopes
+  approved. No unverified-app screen, no 100-user cap. **Any change to the
+  consent-screen config (Branding page: app name, logo, homepage/privacy/terms
+  URLs, authorized domain; or Data Access: adding a scope) needs a NEW
+  verification** — don't, without Jeff's call. Record of what passed: logo =
+  `public/logo-square-120.png` (the square wordmark — Google rejected the bare
+  square-and-plus icon as "does not uniquely identify your brand"); homepage
+  `/` must stay a **public product page** (Google rejected the earlier
+  sign-in-button page as "behind a login page"); demo video
+  https://youtu.be/lkVY3pMWO8c (unlisted — leave it up); domain verified in
+  Search Console via a TXT record in **Vercel DNS** (the domain's nameservers
+  are Vercel's, not Squarespace's). Website copy can change freely as long as
+  `/` stays public and links the privacy policy.
 - **Public legal pages (2026-09-26).** `/privacy` + `/terms` (static, shared
   shell `app/components/legal/LegalPage.tsx` — entity MxV Coaching Inc., DBA
   theLeadershipWell, Oceanside CA, `Admin@theleadershipwell.com`) and the
