@@ -38,6 +38,59 @@ export async function GET() {
   return NextResponse.json({ conversations: (data || []).map((c) => ({ ...c, mode: 'general' })) })
 }
 
+/** A client-generated id for one outgoing message (the retry/idempotency key). */
+function parseClientMessageId(v: unknown): string | null {
+  return typeof v === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(v) ? v : null
+}
+
+type PriorSend =
+  | { kind: 'reply'; conversationId: string; reply: string } // already answered → replay it
+  | { kind: 'unanswered'; conversationId: string } // stored, but the reply never landed → answer it
+  | { kind: 'superseded'; conversationId: string } // stored, and the thread has moved on
+
+/**
+ * Has this exact message (same client message id) already reached us? A resend
+ * after a dropped connection must never store a second copy. The id rides in
+ * `portal_messages.metadata` (migration 059), so no new column is needed.
+ * Searched only inside this client's own conversations: the given thread, or —
+ * when the first send of a new thread died before its id came back — the
+ * client's threads touched in the last day.
+ */
+async function findPriorSend(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  clientId: string,
+  conversationId: string | null,
+  clientMessageId: string
+): Promise<PriorSend | null> {
+  let convQuery = supabase.from('portal_conversations').select('id').eq('client_id', clientId)
+  convQuery = conversationId
+    ? convQuery.eq('id', conversationId)
+    : convQuery.gte('updated_at', new Date(Date.now() - 24 * 3600 * 1000).toISOString()).order('updated_at', { ascending: false }).limit(20)
+  const { data: convs } = await convQuery
+  const ids = (convs || []).map((c) => c.id as string)
+  if (!ids.length) return null
+  const { data: hit, error } = await supabase
+    .from('portal_messages')
+    .select('conversation_id, created_at')
+    .in('conversation_id', ids)
+    .eq('role', 'user')
+    .contains('metadata', { client_message_id: clientMessageId })
+    .limit(1)
+    .maybeSingle()
+  if (error || !hit) return null
+  const { data: next } = await supabase
+    .from('portal_messages')
+    .select('role, content')
+    .eq('conversation_id', hit.conversation_id)
+    .gt('created_at', hit.created_at)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  if (!next) return { kind: 'unanswered', conversationId: hit.conversation_id }
+  if (next.role === 'assistant') return { kind: 'reply', conversationId: hit.conversation_id, reply: next.content }
+  return { kind: 'superseded', conversationId: hit.conversation_id }
+}
+
 /**
  * Send a message. Creates a conversation if none is given, persists the user
  * message, then STREAMS the assistant reply back as plain text and persists it
@@ -45,6 +98,10 @@ export async function GET() {
  *
  * The conversation id rides on the `X-Conversation-Id` response header so a new
  * thread can be adopted by the client without waiting for the body to finish.
+ *
+ * `clientMessageId` makes a resend safe: a message already stored is never
+ * stored twice — its stored reply is replayed (`X-Replayed: 1`), or, when the
+ * reply never landed, the reply is generated without a second user row.
  */
 export async function POST(req: NextRequest) {
   const clientId = await getPortalClientId()
@@ -82,6 +139,26 @@ export async function POST(req: NextRequest) {
       : null
 
   const supabase = getSupabaseAdmin()
+
+  // Resend of a message we already have? Replay or finish it — never duplicate.
+  const clientMessageId = parseClientMessageId(body.clientMessageId)
+  let alreadyStored = false
+  if (clientMessageId) {
+    const prior = await findPriorSend(supabase, clientId, conversationId, clientMessageId).catch(() => null)
+    if (prior?.kind === 'reply') {
+      return new Response(prior.reply, {
+        headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', 'X-Conversation-Id': prior.conversationId, 'X-Replayed': '1' },
+      })
+    }
+    if (prior?.kind === 'superseded') {
+      return NextResponse.json({ duplicate: true, conversationId: prior.conversationId }, { status: 409 })
+    }
+    if (prior?.kind === 'unanswered') {
+      conversationId = prior.conversationId
+      alreadyStored = true
+    }
+  }
+
   const { data: client } = await supabase
     .from('clients')
     .select('id, org_id, timezone, portal_features')
@@ -154,9 +231,19 @@ export async function POST(req: NextRequest) {
   }
 
   const persistedContent = attachment ? `${content}\n\n📎 Attached: ${attachment.filename}` : content
-  await supabase
-    .from('portal_messages')
-    .insert({ conversation_id: conversationId, org_id: client.org_id, role: 'user', content: persistedContent })
+  if (!alreadyStored) {
+    const { error: insertError } = await supabase.from('portal_messages').insert({
+      conversation_id: conversationId,
+      org_id: client.org_id,
+      role: 'user',
+      content: persistedContent,
+      metadata: clientMessageId ? { client_message_id: clientMessageId } : null,
+    })
+    if (insertError) {
+      console.error('[portal/chat] user message insert failed', { code: insertError.code, message: insertError.message })
+      return NextResponse.json({ error: 'Your message did not send. Please try again.', conversationId }, { status: 500 })
+    }
+  }
 
   // The whole thread, oldest first, current message included. The request
   // builder keeps the last turns verbatim and summarises the rest (Phase 3),

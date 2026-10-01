@@ -1184,6 +1184,13 @@ is never accepted here, and vice-versa.
   streaming) + `GET /api/portal/chat/[id]` (a thread's messages, ownership-checked).
   Model `PORTAL_CHAT_MODEL` or `claude-sonnet-4-6`. Every route scoped to the
   authenticated portal `clientId`.
+  **Resend-safe sends (2026-10-01, Caleb's QA).** Every outgoing message carries
+  a client-generated `clientMessageId`, stored in `portal_messages.metadata`
+  (059 — no migration). A resend with the same id is never stored twice: the
+  stored reply is replayed (`X-Replayed: 1`), or, when the reply never landed,
+  generated without a second user row (409 `duplicate` if the thread moved on).
+  The page shows sending → sent, or a red "!" with Try again (same id) /
+  Delete. The composer auto-grows to ~8 lines, then scrolls.
 - **Quick search (Phase 4; rebuilt on FTS, migration 052).** `GET
   /api/portal/search?q=` (scoped to the portal clientId) calls the
   `portal_search(p_client_id, p_query, p_limit)` SQL function — one ranked query
