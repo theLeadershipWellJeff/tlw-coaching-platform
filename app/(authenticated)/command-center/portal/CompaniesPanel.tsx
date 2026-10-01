@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { api, btnLink, btnPrimary, btnSecondary, Chip, DocumentPickers, ErrorLine, fmtDate, input, Section, statusTone, uploadPickedDocuments } from './ui'
+import { api, btnLink, btnPrimary, btnSecondary, Chip, CoachSelect, coachIdFromChoice, DocumentPickers, ErrorLine, fmtDate, input, Section, statusTone, uploadPickedDocuments, useAdminCoaches } from './ui'
 import type { PortalUser } from './PortalUsersPanel'
 
 export type Cohort = {
@@ -360,7 +360,8 @@ function ParticipantList({ users }: { users: PortalUser[] }) {
 /** Add a participant directly under a company (cohort optional), with their documents. */
 function AddParticipant({ company, onAdded }: { company: Company; onAdded: (note: string) => void }) {
   const [open, setOpen] = useState(false)
-  const [form, setForm] = useState({ name: '', email: '', cohortId: '' })
+  const [form, setForm] = useState({ name: '', email: '', cohortId: '', coachId: '' })
+  const { coaches } = useAdminCoaches(open)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const reportRef = useRef<HTMLInputElement>(null)
@@ -369,9 +370,9 @@ function AddParticipant({ company, onAdded }: { company: Company; onAdded: (note
     setBusy(true)
     setError('')
     try {
-      const created = await api<{ id: string }>('/api/admin/portal-users', { method: 'POST', body: JSON.stringify({ name: form.name, email: form.email, companyId: company.id, cohortId: form.cohortId || null }) })
+      const created = await api<{ id: string }>('/api/admin/portal-users', { method: 'POST', body: JSON.stringify({ name: form.name, email: form.email, companyId: company.id, cohortId: form.cohortId || null, coachId: coachIdFromChoice(form.coachId) }) })
       const notes = await uploadPickedDocuments(created.id, reportRef.current?.files?.[0] || null, Array.from(othersRef.current?.files || []))
-      setForm({ name: '', email: '', cohortId: form.cohortId })
+      setForm({ name: '', email: '', cohortId: form.cohortId, coachId: '' })
       setOpen(false)
       onAdded(`${created.id ? form.name.trim() : 'Participant'} added.${notes.length ? ` ${notes.join(' · ')}` : ''}`)
     } catch (e) {
@@ -382,19 +383,20 @@ function AddParticipant({ company, onAdded }: { company: Company; onAdded: (note
   }
   if (!open) return <button className={btnLink} onClick={() => setOpen(true)}>+ Add participant</button>
   return (
-    <div className="mt-2 grid grid-cols-1 gap-2 rounded-tlw-xl border border-dashed border-tlw-warm-gray/30 p-3 sm:grid-cols-4">
+    <div className="mt-2 grid grid-cols-1 gap-2 rounded-tlw-xl border border-dashed border-tlw-warm-gray/30 p-3 sm:grid-cols-5">
       <input className={input} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Full name (as on their report)" />
       <input className={input} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="Email" />
       <select className={input} value={form.cohortId} onChange={(e) => setForm({ ...form, cohortId: e.target.value })}>
         <option value="">No cohort</option>
         {company.cohorts.filter((c) => cohortStatus(c.status) !== 'archived').map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
       </select>
+      <CoachSelect value={form.coachId} onChange={(v) => setForm({ ...form, coachId: v })} coaches={coaches} />
       <div className="flex gap-2">
-        <button className={btnPrimary} disabled={busy || !form.name.trim() || !form.email.trim()} onClick={create}>{busy ? 'Adding…' : 'Add'}</button>
+        <button className={btnPrimary} disabled={busy || !form.name.trim() || !form.email.trim() || !form.coachId} title={!form.coachId ? 'Choose a coach (or “No coach”) first' : undefined} onClick={create}>{busy ? 'Adding…' : 'Add'}</button>
         <button className={btnSecondary} onClick={() => setOpen(false)}>Cancel</button>
       </div>
-      <DocumentPickers reportRef={reportRef} othersRef={othersRef} className="sm:col-span-4" />
-      {error && <p className="text-[12px] text-tlw-signal-orange sm:col-span-4">{error}</p>}
+      <DocumentPickers reportRef={reportRef} othersRef={othersRef} className="sm:col-span-5" />
+      {error && <p className="text-[12px] text-tlw-signal-orange sm:col-span-5">{error}</p>}
     </div>
   )
 }

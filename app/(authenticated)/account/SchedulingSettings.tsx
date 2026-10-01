@@ -38,6 +38,10 @@ export function SchedulingSettings() {
   // Client-facing scheduler link (migration 051) — its own column, not part of
   // reminder_settings, since the portal reads it directly.
   const [bookingUrl, setBookingUrl] = useState('')
+  // Scheduling assistant (migration 074) — shown to portal clients as
+  // "Email <name> to schedule"; portal scheduling requests go there, Cc you.
+  const [assistant, setAssistant] = useState({ name: '', email: '' })
+  const [savedAssistant, setSavedAssistant] = useState({ name: '', email: '' })
   const [loaded, setLoaded] = useState(false)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
@@ -50,6 +54,9 @@ export function SchedulingSettings() {
           setAvailability(normalizeAvailability(d.coach.availability))
           setReminders(normalizeReminderSettings(d.coach.reminder_settings))
           setBookingUrl(d.coach.booking_url ?? '')
+          const a = { name: d.coach.scheduling_assistant_name ?? '', email: d.coach.scheduling_assistant_email ?? '' }
+          setAssistant(a)
+          setSavedAssistant(a)
         }
       })
       .catch(() => {})
@@ -86,9 +93,18 @@ export function SchedulingSettings() {
       const res = await fetch('/api/coach', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ availability, reminderSettings: reminders, bookingUrl }),
+        body: JSON.stringify({
+          availability,
+          reminderSettings: reminders,
+          bookingUrl,
+          // Only when changed, so the rest saves even before migration 074.
+          ...(assistant.name !== savedAssistant.name || assistant.email !== savedAssistant.email
+            ? { assistantName: assistant.name, assistantEmail: assistant.email }
+            : {}),
+        }),
       })
       const data = await res.json().catch(() => ({}))
+      if (res.ok) setSavedAssistant(assistant)
       if (res.ok) setMsg({ ok: true, text: 'Saved.' })
       else setMsg({ ok: false, text: data.error || 'Could not save.' })
     } catch {
@@ -163,7 +179,7 @@ export function SchedulingSettings() {
       {/* Client-facing booking link (migration 051) */}
       <p className="mb-1 mt-6 text-[12px] font-medium text-tlw-espresso">Client booking link</p>
       <p className="mb-2 text-[12px] text-tlw-warm-gray">
-        Your HubSpot or Calendly scheduler. Shown as “Schedule your next session” at the top of the
+        Your Calendly, Zoom Scheduler, or HubSpot link. Shown as “Schedule your next session” at the top of the
         client portal — bookings land on your calendar and appear as their next session.
       </p>
       <input
@@ -178,6 +194,30 @@ export function SchedulingSettings() {
       <p className="mt-1 text-[11px] text-tlw-warm-gray">
         Leave blank to hide the booking button from the portal.
       </p>
+
+      {/* Scheduling assistant (migration 074) */}
+      <p className="mb-1 mt-6 text-[12px] font-medium text-tlw-espresso">Scheduling assistant (optional)</p>
+      <p className="mb-2 text-[12px] text-tlw-warm-gray">
+        If someone books sessions for you, portal clients see “Email them to schedule”, and their requests to
+        book, reschedule, or cancel go to this address with you copied.
+      </p>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <input
+          value={assistant.name}
+          disabled={!loaded}
+          placeholder="Name"
+          onChange={(e) => setAssistant((a) => ({ ...a, name: e.target.value }))}
+          className="w-full rounded-tlw-md border border-tlw-warm-gray/25 bg-white px-3 py-2 text-[13px] text-tlw-espresso outline-none focus:border-tlw-signal-orange"
+        />
+        <input
+          type="email"
+          value={assistant.email}
+          disabled={!loaded}
+          placeholder="assistant@example.com"
+          onChange={(e) => setAssistant((a) => ({ ...a, email: e.target.value }))}
+          className="w-full rounded-tlw-md border border-tlw-warm-gray/25 bg-white px-3 py-2 text-[13px] text-tlw-espresso outline-none focus:border-tlw-signal-orange sm:col-span-2"
+        />
+      </div>
 
       {/* Reminders */}
       <p className="mb-3 mt-6 text-[12px] font-medium text-tlw-espresso">Session reminders</p>

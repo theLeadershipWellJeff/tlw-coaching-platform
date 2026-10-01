@@ -5,6 +5,8 @@
  * House-coach ownership (build prompt §7): every portal participant carries a
  * coach_clients link to the house coach (DEFAULT_COACH_EMAIL) so every existing
  * tenant gate keeps working; the roster filters them out by client_type.
+ * A participant assigned to a coach (lib/admin/coach-assignment.ts) is linked
+ * to THAT coach instead and becomes client_type 'client' — in their roster.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Coach, Database, PortalFeatures } from '@/lib/supabase/types'
@@ -13,6 +15,7 @@ import { loadPortalStates, type ClientPortalState } from '@/lib/admin/portal-sta
 import { createLoginToken, recentLoginTokenCount, MAX_LINKS_PER_HOUR } from '@/lib/portal/tokens'
 import { sendPortalLoginEmail } from '@/lib/portal/send'
 import { getBaseUrl } from '@/lib/url'
+import { loadAssignedCoaches } from './coach-assignment'
 
 export class AdminError extends Error {
   constructor(public status: number, message: string) {
@@ -62,6 +65,9 @@ export type PortalUserRow = {
   document_count: number
   engagement: { chat_messages: number; goals_created: number; downloads: number; last_event_at: string | null; talk_to_coach_clicks: number }
   has_coach_relationship: boolean
+  /** The assigned (primary) coach — null for a portal-only participant, whose house-coach link is structural. */
+  coach_id: string | null
+  coach_name: string | null
   /** Portal access archived (portal_features.archived). */
   archived: boolean
 }
@@ -75,7 +81,9 @@ export async function listPortalUsers(supabase: SupabaseClient<Database>, opts: 
   // Coaching clients count as portal users once a sign-in link has been minted.
   const { data: invited } = await supabase.from('client_tokens').select('client_id').eq('purpose', 'login')
   const invitedIds = Array.from(new Set((invited || []).map((t) => t.client_id)))
-  const filters = ['client_type.eq.portal', 'portal_features->>assessments.eq.true']
+  // Enterprise participants with an assigned coach are client_type 'client';
+  // their company/cohort keeps them in this view.
+  const filters = ['client_type.eq.portal', 'portal_features->>assessments.eq.true', 'company_id.not.is.null', 'cohort_id.not.is.null']
   if (invitedIds.length) filters.push(`id.in.(${invitedIds.join(',')})`)
   let q = supabase
     .from('clients')
@@ -91,14 +99,17 @@ export async function listPortalUsers(supabase: SupabaseClient<Database>, opts: 
   let clients = rows || []
   const kindOf = (c: { client_type: string; company_id: string | null; cohort_id: string | null; portal_features: unknown }): PortalUserKind => {
     const f = (c.portal_features || {}) as PortalFeatures
-    if (c.client_type === 'portal') return c.company_id || c.cohort_id ? 'enterprise' : 'standalone'
+    // A company/cohort participant is enterprise whether or not a coach is
+    // assigned (assigning one makes them client_type 'client').
+    if (c.company_id || c.cohort_id) return 'enterprise'
+    if (c.client_type === 'portal') return 'standalone'
     return f.assessments === true ? 'coaching_zf' : 'coaching'
   }
   if (opts.kind) clients = clients.filter((c) => kindOf(c) === opts.kind)
   if (!clients.length) return []
   const ids = clients.map((c) => c.id)
 
-  const [states, { data: docs }, { data: events }, { data: companies }, { data: cohorts }] = await Promise.all([
+  const [states, { data: docs }, { data: events }, { data: companies }, { data: cohorts }, assigned] = await Promise.all([
     loadPortalStates(supabase, ids),
     supabase
       .from('client_documents')
@@ -110,6 +121,7 @@ export async function listPortalUsers(supabase: SupabaseClient<Database>, opts: 
     supabase.from('portal_events').select('client_id, event_type, created_at').in('client_id', ids).order('created_at', { ascending: false }).limit(5000),
     supabase.from('companies').select('id, name'),
     supabase.from('cohorts').select('id, name'),
+    loadAssignedCoaches(supabase, clients),
   ])
   const companyName = new Map((companies || []).map((c) => [c.id, c.name]))
   const cohortName = new Map((cohorts || []).map((c) => [c.id, c.name]))
@@ -155,6 +167,8 @@ export async function listPortalUsers(supabase: SupabaseClient<Database>, opts: 
       document_count: docCount.get(c.id) || 0,
       engagement: eng.get(c.id) || { chat_messages: 0, goals_created: 0, downloads: 0, last_event_at: null, talk_to_coach_clicks: 0 },
       has_coach_relationship: c.client_type !== 'portal',
+      coach_id: assigned.get(c.id)?.id ?? null,
+      coach_name: assigned.get(c.id)?.name ?? null,
     }
   })
 }
@@ -163,7 +177,15 @@ export async function listPortalUsers(supabase: SupabaseClient<Database>, opts: 
 export async function createPortalParticipant(
   supabase: SupabaseClient<Database>,
   actor: Coach,
-  input: { name: string; email: string; companyId?: string | null; cohortId?: string | null; enableAssessments?: boolean }
+  input: {
+    name: string
+    email: string
+    companyId?: string | null
+    cohortId?: string | null
+    enableAssessments?: boolean
+    /** The coach who will coach them. Omitted/null = none (portal-only, linked to the house coach). */
+    coachId?: string | null
+  }
 ): Promise<{ id: string }> {
   const name = input.name.trim()
   const email = input.email.trim().toLowerCase()
@@ -181,13 +203,21 @@ export async function createPortalParticipant(
     companyId = companyId || cohort.company_id
   }
   const house = await resolveHouseCoach(supabase, actor)
+  // An assigned coach makes this a coaching client: in that coach's roster,
+  // "your coach" in the portal, their booking link / assistant.
+  let coach: { id: string; org_id?: string | null } | null = null
+  if (input.coachId) {
+    const { data } = await supabase.from('coaches').select('id, org_id').eq('id', input.coachId).maybeSingle()
+    if (!data) throw new AdminError(404, 'Coach not found.')
+    coach = data as { id: string; org_id?: string | null }
+  }
   const { data: created, error } = await supabase
     .from('clients')
     .insert({
       name,
       email,
       status: 'active',
-      client_type: 'portal',
+      client_type: coach ? 'client' : 'portal',
       company_id: companyId,
       cohort_id: input.cohortId || null,
       portal_features: { assessments: input.enableAssessments !== false },
@@ -197,7 +227,7 @@ export async function createPortalParticipant(
     .select('id')
     .single()
   if (error || !created) throw new AdminError(500, error?.message || 'Could not create the participant.')
-  await linkCoachToClient(supabase, house.id, created.id, 'primary')
+  await linkCoachToClient(supabase, coach ? coach.id : house.id, created.id, 'primary')
   return { id: created.id }
 }
 

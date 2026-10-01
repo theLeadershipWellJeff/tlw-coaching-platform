@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { api, btnLink, btnPrimary, btnSecondary, Chip, DocumentPickers, ErrorLine, fmtDate, input, Section, statusTone, uploadPickedDocuments } from './ui'
+import { api, btnLink, btnPrimary, btnSecondary, Chip, CoachSelect, coachIdFromChoice, DocumentPickers, ErrorLine, fmtDate, input, NO_COACH, Section, statusTone, uploadPickedDocuments, useAdminCoaches } from './ui'
 import { cohortStatus, type Company } from './CompaniesPanel'
 
 export type PortalUser = {
@@ -22,6 +22,9 @@ export type PortalUser = {
   document_count: number
   engagement: { chat_messages: number; goals_created: number; downloads: number; last_event_at: string | null; talk_to_coach_clicks: number }
   has_coach_relationship: boolean
+  /** The assigned coach (null = none; a portal-only participant's house link is structural). */
+  coach_id: string | null
+  coach_name: string | null
   archived: boolean
 }
 
@@ -31,11 +34,12 @@ export function PortalUsersPanel({ companies, initialCohortId = '' }: { companie
   const [notice, setNotice] = useState('')
   const [filterCohort, setFilterCohort] = useState(initialCohortId)
   const [filterKind, setFilterKind] = useState<'' | PortalUser['kind']>('')
-  const [form, setForm] = useState({ name: '', email: '', companyId: '', cohortId: '' })
+  const [form, setForm] = useState({ name: '', email: '', companyId: '', cohortId: '', coachId: '' })
+  const { coaches } = useAdminCoaches()
   const [creating, setCreating] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [editing, setEditing] = useState<PortalUser | null>(null)
-  const [editForm, setEditForm] = useState({ name: '', email: '', cohortId: '', companyId: '', accessExpiresAt: '', maxAssessments: '', maxDocuments: '' })
+  const [editForm, setEditForm] = useState({ name: '', email: '', cohortId: '', companyId: '', accessExpiresAt: '', maxAssessments: '', maxDocuments: '', coachId: '' })
   const [view, setView] = useState<'active' | 'archived'>('active')
   const [deleting, setDeleting] = useState<PortalUser | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState('')
@@ -72,13 +76,13 @@ export function PortalUsersPanel({ companies, initialCohortId = '' }: { companie
     setError('')
     setNotice('')
     try {
-      const created = await api<{ id: string }>('/api/admin/portal-users', { method: 'POST', body: JSON.stringify({ name: form.name, email: form.email, companyId: form.companyId || null, cohortId: form.cohortId || null }) })
+      const created = await api<{ id: string }>('/api/admin/portal-users', { method: 'POST', body: JSON.stringify({ name: form.name, email: form.email, companyId: form.companyId || null, cohortId: form.cohortId || null, coachId: coachIdFromChoice(form.coachId) }) })
       // Documents picked on the form go up right after the row exists.
       const report = reportRef.current?.files?.[0] || null
       const others = Array.from(othersRef.current?.files || [])
       const notes = await uploadPickedDocuments(created.id, report, others)
       setNotice(`${form.name.trim()} added.${notes.length ? ` ${notes.join(' · ')}` : ''} Invite them from the list below.`)
-      setForm({ name: '', email: '', companyId: form.companyId, cohortId: form.cohortId })
+      setForm({ name: '', email: '', companyId: form.companyId, cohortId: form.cohortId, coachId: '' })
       if (reportRef.current) reportRef.current.value = ''
       if (othersRef.current) othersRef.current.value = ''
       await load()
@@ -159,7 +163,7 @@ export function PortalUsersPanel({ companies, initialCohortId = '' }: { companie
   }
   function openEdit(u: PortalUser) {
     setEditing(u)
-    setEditForm({ name: u.name, email: u.email || '', cohortId: u.cohort_id || '', companyId: u.company_id || '', accessExpiresAt: u.portal_access_expires_at?.slice(0, 10) || '', maxAssessments: '', maxDocuments: '' })
+    setEditForm({ name: u.name, email: u.email || '', cohortId: u.cohort_id || '', companyId: u.company_id || '', accessExpiresAt: u.portal_access_expires_at?.slice(0, 10) || '', maxAssessments: '', maxDocuments: '', coachId: u.coach_id || NO_COACH })
   }
   async function saveEdit() {
     if (!editing) return
@@ -169,6 +173,8 @@ export function PortalUsersPanel({ companies, initialCohortId = '' }: { companie
       const body: Record<string, unknown> = { name: editForm.name, email: editForm.email, cohortId: editForm.cohortId || null, companyId: editForm.companyId || null, accessExpiresAt: editForm.accessExpiresAt || null }
       if (editForm.maxAssessments) body.maxAssessments = Number(editForm.maxAssessments)
       if (editForm.maxDocuments) body.maxDocuments = Number(editForm.maxDocuments)
+      // Only send a coach change — it moves the client between coaches' rosters.
+      if (editForm.coachId && editForm.coachId !== (editing.coach_id || NO_COACH)) body.coachId = coachIdFromChoice(editForm.coachId)
       const d = await api<{ user: PortalUser | null }>(`/api/admin/portal-users/${editing.id}`, { method: 'PATCH', body: JSON.stringify(body) })
       replace(d.user)
       setEditing(null)
@@ -181,8 +187,8 @@ export function PortalUsersPanel({ companies, initialCohortId = '' }: { companie
 
   return (
     <div className="space-y-4">
-      <Section title="Add a ZF participant" sub="Leave company and cohort empty for a standalone participant (bought their own report, no coach). Pick a company for an enterprise participant; a cohort is optional. Either way they are linked to the house coach automatically and never appear in the coaching roster. Existing coaching clients get the 360 by toggling the flag in the list below, not here.">
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-5">
+      <Section title="Add a portal participant" sub="Pick the coach who will coach them: they land in that coach's roster, and their portal shows that coach's booking link or assistant and their upcoming sessions. Choose “No coach” for a 360-only participant (linked to the house coach, kept out of every roster). Leave company and cohort empty for a standalone participant; pick a company for an enterprise participant (cohort optional). Existing coaching clients get the 360 by toggling the flag in the list below, not here.">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-6">
           <input className={input} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Full name (as on their report)" />
           <input className={input} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="Email" />
           <select className={input} value={form.companyId} onChange={(e) => setForm({ ...form, companyId: e.target.value, cohortId: '' })}>
@@ -195,7 +201,8 @@ export function PortalUsersPanel({ companies, initialCohortId = '' }: { companie
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
-          <button className={btnPrimary} disabled={creating || !form.name.trim() || !form.email.trim()} onClick={create}>{creating ? 'Adding…' : '+ Add participant'}</button>
+          <CoachSelect value={form.coachId} onChange={(v) => setForm({ ...form, coachId: v })} coaches={coaches} />
+          <button className={btnPrimary} disabled={creating || !form.name.trim() || !form.email.trim() || !form.coachId} title={!form.coachId ? 'Choose a coach (or “No coach”) first' : undefined} onClick={create}>{creating ? 'Adding…' : '+ Add participant'}</button>
         </div>
         <DocumentPickers reportRef={reportRef} othersRef={othersRef} className="mt-2" />
         <ErrorLine error={error} />
@@ -238,6 +245,7 @@ export function PortalUsersPanel({ companies, initialCohortId = '' }: { companie
               <thead className="text-[11px] uppercase tracking-wider text-tlw-warm-gray">
                 <tr>
                   <th className="py-2 pr-3">Participant</th>
+                  <th className="py-2 pr-3">Coach</th>
                   <th className="py-2 pr-3">Cohort</th>
                   <th className="py-2 pr-3">360</th>
                   <th className="py-2 pr-3">Assistant</th>
@@ -258,6 +266,7 @@ export function PortalUsersPanel({ companies, initialCohortId = '' }: { companie
                       </p>
                       <p className="text-tlw-warm-gray">{u.email || 'no email'}</p>
                     </td>
+                    <td className="py-2 pr-3 text-tlw-espresso">{u.coach_name || <span className="text-tlw-warm-gray">—</span>}</td>
                     <td className="py-2 pr-3 text-tlw-espresso">{u.cohort_name ? `${u.company_name || ''} · ${u.cohort_name}` : u.company_name || '—'}</td>
                     <td className="py-2 pr-3">
                       <button className={btnLink} disabled={busy === u.id} onClick={() => toggleFlag(u)}>
@@ -341,6 +350,14 @@ export function PortalUsersPanel({ companies, initialCohortId = '' }: { companie
               </label>
               <label className="block text-[11px] text-tlw-warm-gray">Email (their sign-in)
                 <input className={input} type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
+              </label>
+              <label className="block text-[11px] text-tlw-warm-gray">Coach (moves them to that coach&apos;s roster; the previous coach loses access)
+                <CoachSelect
+                  value={editForm.coachId}
+                  onChange={(v) => setEditForm({ ...editForm, coachId: v })}
+                  coaches={coaches}
+                  allowNone={editing.client_type === 'portal' || Boolean(editing.company_id || editing.cohort_id)}
+                />
               </label>
               <label className="block text-[11px] text-tlw-warm-gray">Cohort
                 <select className={input} value={editForm.cohortId} onChange={(e) => setEditForm({ ...editForm, cohortId: e.target.value })}>

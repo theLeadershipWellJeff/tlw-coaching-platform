@@ -3,6 +3,7 @@
  * Client Portal admin (supervisor-only). Two layers, mirroring the product:
  *   - Portal users — every client using the portal, across all four use cases
  *     (coaching, coaching + ZF, standalone ZF participant, enterprise cohort)
+ *   - Coaches — each coach's booking link / scheduling assistant for their portal clients
  *   - Cohorts — every cohort across companies, split active / inactive / archived
  *   - Companies — each company with its documents, cohorts, and the portal
  *     users under them; then Reports (bulk upload), Support, Brief
@@ -18,9 +19,11 @@ import { CohortsPanel } from './CohortsPanel'
 import { DocumentsPanel } from './DocumentsPanel'
 import { SupportPanel } from './SupportPanel'
 import { BriefPanel } from './BriefPanel'
+import { CoachesPanel } from './CoachesPanel'
 
 const TABS = [
   ['users', 'Portal users'],
+  ['coaches', 'Coaches'],
   ['cohorts', 'Cohorts'],
   ['zf', 'Companies'],
   ['documents', 'Reports'],
@@ -71,6 +74,7 @@ export default function ClientPortalAdmin() {
             ))}
           </div>
           {tab === 'users' && <PortalUsersPanel companies={companies || []} initialCohortId={usersCohort} />}
+          {tab === 'coaches' && <CoachesPanel />}
           {tab === 'cohorts' && (
             <CohortsPanel
               onViewParticipants={(cohortId) => {

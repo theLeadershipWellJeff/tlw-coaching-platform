@@ -1,6 +1,6 @@
 'use client'
 /** Small shared bits for the debrief command-center panels. */
-import type { ReactNode, RefObject } from 'react'
+import { useEffect, useState, type ReactNode, type RefObject } from 'react'
 
 export async function api<T = any>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, { ...init, headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) } })
@@ -124,5 +124,74 @@ export function DocumentPickers({
         <input ref={othersRef} type="file" multiple accept=".pdf,.docx,.txt,.md" className={input} />
       </label>
     </div>
+  )
+}
+
+/** A coach as the Command Center pulldowns + Coaches tab see them (GET /api/admin/coaches). */
+export type AdminCoach = {
+  id: string
+  name: string | null
+  email: string
+  role: string
+  connected: boolean
+  booking_url: string | null
+  scheduling_assistant_name: string | null
+  scheduling_assistant_email: string | null
+  primary_client_count: number
+}
+
+/** Load every coach once for a panel. `null` while loading. */
+export function useAdminCoaches(enabled = true): { coaches: AdminCoach[] | null; assistantAvailable: boolean; reload: () => void } {
+  const [coaches, setCoaches] = useState<AdminCoach[] | null>(null)
+  const [assistantAvailable, setAssistantAvailable] = useState(true)
+  const [n, setN] = useState(0)
+  useEffect(() => {
+    if (!enabled) return
+    api<{ coaches: AdminCoach[]; assistantAvailable: boolean }>('/api/admin/coaches')
+      .then((d) => {
+        setCoaches(d.coaches)
+        setAssistantAvailable(d.assistantAvailable)
+      })
+      .catch(() => setCoaches([]))
+  }, [n, enabled])
+  return { coaches, assistantAvailable, reload: () => setN((x) => x + 1) }
+}
+
+/**
+ * Coach pulldown value: '' = not chosen yet (the form requires a choice — no
+ * coach is ever the default), NO_COACH = deliberately none (360 / portal only),
+ * else a coach id. `coachIdFromChoice` turns it into the API's coachId.
+ */
+export const NO_COACH = 'none'
+export function coachIdFromChoice(choice: string): string | null {
+  return choice && choice !== NO_COACH ? choice : null
+}
+
+export function CoachSelect({
+  value,
+  onChange,
+  coaches,
+  allowNone = true,
+  className = input,
+}: {
+  value: string
+  onChange: (v: string) => void
+  coaches: AdminCoach[] | null
+  allowNone?: boolean
+  className?: string
+}) {
+  return (
+    <select className={className} value={value} onChange={(e) => onChange(e.target.value)}>
+      <option value="" disabled>
+        {coaches === null ? 'Loading coaches…' : 'Choose a coach…'}
+      </option>
+      {allowNone && <option value={NO_COACH}>No coach (portal / 360 only)</option>}
+      {(coaches || []).map((c) => (
+        <option key={c.id} value={c.id}>
+          {c.name || c.email}
+          {c.connected ? '' : ' (not signed in yet)'}
+        </option>
+      ))}
+    </select>
   )
 }

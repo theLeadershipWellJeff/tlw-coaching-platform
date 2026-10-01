@@ -15,6 +15,8 @@ import { DocumentsCard } from './DocumentsCard'
 import { WeeklyPlanCard } from './WeeklyPlanCard'
 import { MyNotesCard } from './MyNotesCard'
 import { CoBrandHeader } from './CoBrandHeader'
+import { ScheduleWithCoach } from './ScheduleWithCoach'
+import { UpcomingSessionsCard } from './UpcomingSessionsCard'
 import { loadPortalBranding } from '@/lib/portal/branding'
 
 export const dynamic = 'force-dynamic'
@@ -33,21 +35,6 @@ function Card({ title, info, children }: { title: string; info?: string; childre
 
 function Empty({ children }: { children: React.ReactNode }) {
   return <p className="text-[13px] text-tlw-warm-gray">{children}</p>
-}
-
-function fmtDateTime(iso: string, tz: string | null): string {
-  try {
-    return new Intl.DateTimeFormat('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      timeZone: tz || undefined,
-    }).format(new Date(iso))
-  } catch {
-    return new Date(iso).toLocaleString('en-US')
-  }
 }
 
 function fmtDate(ymd: string | null): string {
@@ -111,13 +98,16 @@ export default async function PortalHome() {
         onboarded={data.onboarded}
         hasCoach={hasCoach}
         assessmentsEnabled={assessmentsEnabled}
-        hasBooking={Boolean(data.bookingUrl)}
+        hasBooking={Boolean(data.coach ? data.coach.bookingUrl || data.coach.assistantEmail : data.bookingUrl)}
       />
 
       <h1 className="mt-8 text-[24px] font-medium text-tlw-navy-deep">Welcome, {firstName}.</h1>
 
-      {/* Booking sits at the top — for most clients this is why they came. */}
-      {data.bookingUrl && (
+      {/* Booking sits at the top — for most clients this is why they came.
+          A coached client sees their own coach's link and/or assistant; a
+          portal-only participant keeps the house scheduler button. */}
+      {data.coach && <ScheduleWithCoach coach={data.coach} />}
+      {!data.coach && data.bookingUrl && (
         <a
           href={data.bookingUrl}
           target="_blank"
@@ -185,28 +175,9 @@ export default async function PortalHome() {
         <WeeklyPlanCard />
         <MyNotesCard />
 
-        {/* Upcoming sessions */}
+        {/* Upcoming sessions — with reschedule / cancel */}
         {showSessions && (
-        <Card
-          title="Upcoming sessions"
-          info="Your booked coaching sessions. Use “Schedule your next session” up top to book another."
-        >
-          {data.appointments.length === 0 ? (
-            <Empty>No upcoming session scheduled yet.</Empty>
-          ) : (
-            <ul className="space-y-1.5">
-              {data.appointments.map((a, i) => (
-                <li
-                  key={a.id}
-                  className={i === 0 ? 'text-[15px] text-tlw-espresso' : 'text-[13px] text-tlw-espresso'}
-                >
-                  {fmtDateTime(a.scheduled_at, data.client.timezone)}
-                  <span className="text-tlw-warm-gray"> · {a.duration_minutes} min</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
+          <UpcomingSessionsCard appointments={data.appointments} timezone={data.client.timezone} coach={data.coach} />
         )}
 
         {/* Goals — every client gets the progress card (round 4); coach-written

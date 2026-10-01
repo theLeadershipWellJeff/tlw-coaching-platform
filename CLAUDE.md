@@ -1866,6 +1866,55 @@ rule as `lib/portal/company.ts`; `GET /api/portal/branding` feeds the chat.
 No company / no logo / pre-073 → nothing renders, the portal is unchanged.
 Emails and the sign-in page are not co-branded (yet).
 
+### Multi-coach portal scheduling (2026-09-30; migration 074) — BAE rollout
+
+Several coaches share one enterprise cohort; each client books, sees, and
+changes sessions with THEIR coach from the portal.
+
+- **Assignment = the `coach_clients` primary link** (`lib/admin/coach-assignment.ts`).
+  Both add-participant forms (Portal users tab, under a company) carry a
+  required **Coach** pulldown (`ui.tsx#CoachSelect` ← `GET /api/admin/coaches`)
+  — no coach is preselected; "No coach (portal / 360 only)" is an explicit
+  choice. The Edit dialog and the per-user page change it (`PATCH
+  /api/admin/portal-users/[id] {coachId}` → `assignClientCoach`, audit
+  `client_coach_assigned`). Assigning a coach makes a `portal` participant
+  `client_type='client'` → in that coach's roster, "your coach" in the portal
+  (`hasCoach`), their calendar-watch sync matches the client's bookings.
+  Reassigning **removes the previous coach's primary link** (they lose access;
+  shared links are kept). "No coach" is allowed only for company/cohort or
+  `portal` rows and restores the house-coach link + `client_type='portal'`.
+  `listPortalUsers` now also includes company/cohort rows (so coached
+  enterprise participants stay visible) and classifies any company/cohort row
+  as `enterprise`; rows carry `coach_id`/`coach_name`. A coached participant is
+  a coaching client, so Delete refuses it — archive instead.
+- **Coach scheduling contact** = `coaches.booking_url` (051) and/or a
+  **scheduling assistant** `coaches.scheduling_assistant_name/_email` (074).
+  Validation shared in `lib/coach-scheduling.ts`; set by the coach in Account →
+  Scheduling or by a supervisor in Command Center → Client Portal → **Coaches**
+  tab (`CoachesPanel`, `PATCH /api/admin/coaches/[id]`, audit
+  `coach_scheduling_updated`; shows Google connected / "no way to schedule").
+  Reads of the 074 columns are separate + defensive.
+- **Portal** (`lib/portal/data.ts` → `coach: PortalCoachContact`):
+  `ScheduleWithCoach` at the top ("Schedule your next session with <first
+  name>" + "<assistant> books <coach>'s sessions — email" + an "Ask … to find a
+  time" form); `UpcomingSessionsCard` lists sessions with **Reschedule /
+  Cancel** — the scheduler's own links pulled from `appointments.raw_event`
+  (`lib/portal/appointment-links.ts#extractChangeLinks`: https only, host
+  allowlist calendly/zoom/hubspot/savvycal/acuity), else "Request a new time" /
+  "Cancel" → `POST /api/portal/schedule-request` `{kind, appointmentId?,
+  message}` (scoped, `contact` rate limit; to the assistant Cc the coach, else
+  the coach; coach Gmail first, Resend with Reply-To the client as fallback;
+  logged inbound to `communications`, event `schedule_request`). A request does
+  NOT move the calendar — the assistant/coach does, and the sync brings it back.
+  Participants with no coach keep the house booking button unchanged.
+- **Prerequisite per coach:** a `coaches` row, one Google sign-in (refresh
+  token → calendar sync + Gmail), their scheduler writing to that Google
+  Calendar with the client's email as guest. Calendly event descriptions carry
+  reschedule/cancel links; Zoom Scheduler's are parsed if present but
+  **unverified** against a real booking. Verify the pure rules:
+  `node_modules/.bin/tsc -p scripts/spikes/tsconfig.spike.json && node
+  scripts/spikes/verify-portal-scheduling.js` (23 checks).
+
 ### Phase 5 — dry run kit (shipped 2026-09-06; the rehearsal itself is Jeff's)
 
 Phase 5 is a rehearsal, not code. What ships to support it:
@@ -3196,6 +3245,12 @@ with a clear "apply migration 068" error if the columns are ever absent, so
 nothing can double-send in a gap). Verified up → down → re-up on Postgres 16, plus the
 CAS semantics (two claims → one winner; stale claim re-claimable; sent note
 never claimable). Reversible via `068_note_send_claim_down.sql`.
+
+**`074_coach_scheduling_assistant.sql` — APPLIED (production, confirmed by Jeff
+2026-10-01).** Adds
+`coaches.scheduling_assistant_name` / `scheduling_assistant_email` (nullable)
+for the multi-coach portal scheduling. Additive; reads are defensive.
+Reversible via `074_coach_scheduling_assistant_down.sql`.
 
 **`073_company_logo.sql` — APPLIED (production, confirmed by Jeff
 2026-09-24).** Adds

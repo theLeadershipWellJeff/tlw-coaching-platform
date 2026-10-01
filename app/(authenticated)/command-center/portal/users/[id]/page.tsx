@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { PageHeader } from '@/app/components/layout/PageHeader'
-import { api, btnLink, btnPrimary, btnSecondary, Chip, ErrorLine, fmtDate, input, Section, statusTone, uploadUserDocument } from '../../ui'
+import { api, btnLink, btnPrimary, btnSecondary, Chip, ErrorLine, fmtDate, input, Section, statusTone, uploadUserDocument, CoachSelect, coachIdFromChoice, NO_COACH, useAdminCoaches } from '../../ui'
 import type { PortalUser } from '../../PortalUsersPanel'
 import type { Company } from '../../CompaniesPanel'
 
@@ -52,7 +52,8 @@ export default function PortalUserPage({ params }: { params: { id: string } }) {
   const [denied, setDenied] = useState(false)
 
   const [edit, setEdit] = useState(false)
-  const [form, setForm] = useState({ name: '', email: '', phone: '', companyId: '', cohortId: '', accessExpiresAt: '' })
+  const [form, setForm] = useState({ name: '', email: '', phone: '', companyId: '', cohortId: '', accessExpiresAt: '', coachId: '' })
+  const { coaches } = useAdminCoaches()
   const [keyInfo, setKeyInfo] = useState('')
   const [keyDirty, setKeyDirty] = useState(false)
 
@@ -73,6 +74,7 @@ export default function PortalUserPage({ params }: { params: { id: string } }) {
         companyId: d.user.company_id || '',
         cohortId: d.user.cohort_id || '',
         accessExpiresAt: d.user.portal_access_expires_at?.slice(0, 10) || '',
+        coachId: d.user.coach_id || NO_COACH,
       })
       if (!keyDirty) setKeyInfo(d.keyInfo || '')
     } catch (e) {
@@ -103,7 +105,10 @@ export default function PortalUserPage({ params }: { params: { id: string } }) {
     }
   }
   async function saveProfile() {
-    const ok = await patch({ name: form.name, email: form.email, phone: form.phone, companyId: form.companyId || null, cohortId: form.cohortId || null, accessExpiresAt: form.accessExpiresAt || null }, 'Saved.')
+    const body: Record<string, unknown> = { name: form.name, email: form.email, phone: form.phone, companyId: form.companyId || null, cohortId: form.cohortId || null, accessExpiresAt: form.accessExpiresAt || null }
+    // Only send a coach change — it moves the client between coaches' rosters.
+    if (detail && form.coachId && form.coachId !== (detail.user.coach_id || NO_COACH)) body.coachId = coachIdFromChoice(form.coachId)
+    const ok = await patch(body, 'Saved.')
     if (ok) setEdit(false)
   }
   async function saveKeyInfo() {
@@ -215,6 +220,15 @@ export default function PortalUserPage({ params }: { params: { id: string } }) {
                   {cohorts.filter((c) => c.company_id === form.companyId).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
                 <label className="text-[11px] text-tlw-warm-gray">
+                  Coach
+                  <CoachSelect
+                    value={form.coachId}
+                    onChange={(v) => setForm({ ...form, coachId: v })}
+                    coaches={coaches}
+                    allowNone={u.client_type === 'portal' || Boolean(u.company_id || u.cohort_id)}
+                  />
+                </label>
+                <label className="text-[11px] text-tlw-warm-gray">
                   Access ends
                   <input className={input} type="date" value={form.accessExpiresAt} onChange={(e) => setForm({ ...form, accessExpiresAt: e.target.value })} />
                 </label>
@@ -225,6 +239,7 @@ export default function PortalUserPage({ params }: { params: { id: string } }) {
               </div>
             ) : (
               <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-[13px] sm:grid-cols-2">
+                <div><dt className="text-[11px] uppercase tracking-wider text-tlw-warm-gray">Coach</dt><dd className="text-tlw-espresso">{u.coach_name || 'None (portal / 360 only)'}</dd></div>
                 <div><dt className="text-[11px] uppercase tracking-wider text-tlw-warm-gray">Email</dt><dd className="text-tlw-espresso">{u.email || '—'}</dd></div>
                 <div><dt className="text-[11px] uppercase tracking-wider text-tlw-warm-gray">Phone</dt><dd className="text-tlw-espresso">{detail.profile.phone || '—'}</dd></div>
                 <div><dt className="text-[11px] uppercase tracking-wider text-tlw-warm-gray">Goes by</dt><dd className="text-tlw-espresso">{detail.profile.preferred_name || u.name.split(' ')[0]}</dd></div>

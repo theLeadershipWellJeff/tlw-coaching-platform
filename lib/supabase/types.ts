@@ -337,6 +337,11 @@ export type Coach = {
   // null = no booking button. Bookings made through it land on the coach's
   // Google Calendar and are captured by the existing calendar-watch sync.
   booking_url: string | null
+  // Scheduling assistant (migration 074): someone who books for this coach.
+  // The portal shows "Email <name> to schedule" and routes portal scheduling
+  // requests there (Cc the coach). Optional — read defensively pre-074.
+  scheduling_assistant_name?: string | null
+  scheduling_assistant_email?: string | null
   // Command Center plan label (migration 057): 'beta' | 'free' | 'paying'.
   // Hand-set by the supervisor; the coach-subscription webhook auto-promotes to
   // 'paying' (active/trialing) and demotes to 'free' (canceled). Read

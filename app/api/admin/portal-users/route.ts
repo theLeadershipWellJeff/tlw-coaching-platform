@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-/** Create a standalone participant. Body: { name, email, companyId?, cohortId?, enableAssessments? }. */
+/** Create a participant. Body: { name, email, companyId?, cohortId?, enableAssessments?, coachId? } — coachId null = no coach (portal-only). */
 export async function POST(req: NextRequest) {
   try {
     const { supabase, actor } = await adminContext()
@@ -30,8 +30,9 @@ export async function POST(req: NextRequest) {
       companyId: body.companyId || null,
       cohortId: body.cohortId || null,
       enableAssessments: body.enableAssessments !== false,
+      coachId: body.coachId || null,
     })
-    await logAdminAction(supabase, { actorCoachId: actor.id, action: 'portal_user_created', targetClientId: id, detail: { cohort_id: body.cohortId || null } })
+    await logAdminAction(supabase, { actorCoachId: actor.id, action: 'portal_user_created', targetClientId: id, detail: { cohort_id: body.cohortId || null, coach_id: body.coachId || null } })
     const users = await listPortalUsers(supabase)
     return NextResponse.json({ id, user: users.find((u) => u.id === id) || null }, { status: 201 })
   } catch (e) {
