@@ -15,22 +15,37 @@ export const runtime = 'nodejs'
  * remove goals they authored; coach-authored goals are read-only here. No AI
  * writes anything: "save as goal" from the chat lands in this editor first.
  */
-async function loadGoals(clientId: string): Promise<CoachingGoal[]> {
+/**
+ * null on a read error — never [] — because every write below rewrites the
+ * whole array: treating a failed read as "no goals" would save a list holding
+ * only the new goal and silently drop the rest.
+ */
+async function loadGoals(clientId: string): Promise<CoachingGoal[] | null> {
   const supabase = getSupabaseAdmin()
-  const { data } = await supabase.from('clients').select('coaching_goals').eq('id', clientId).maybeSingle()
+  const { data, error } = await supabase.from('clients').select('coaching_goals').eq('id', clientId).maybeSingle()
+  if (error) {
+    console.error('[portal/goals] load failed', { clientId, code: error.code, message: error.message })
+    return null
+  }
   return Array.isArray(data?.coaching_goals) ? (data!.coaching_goals as CoachingGoal[]) : []
 }
 
 async function saveGoals(clientId: string, goals: CoachingGoal[]): Promise<boolean> {
   const supabase = getSupabaseAdmin()
   const { error } = await supabase.from('clients').update({ coaching_goals: goals }).eq('id', clientId)
+  // Logged so a "could not save" report can be traced in Vercel logs ([portal/goals]).
+  if (error) console.error('[portal/goals] save failed', { clientId, code: error.code, message: error.message, details: error.details })
   return !error
 }
+
+/** A server-side failure, said plainly: nothing was lost, and trying again is safe. */
+const SAVE_FAILED = 'We could not save that just now — the problem was on our side. Your goal is still here; please try again.'
 
 export async function GET() {
   const clientId = await getPortalClientId()
   if (!clientId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const goals = await loadGoals(clientId)
+  if (!goals) return NextResponse.json({ error: 'Could not load your goals.', code: 'server' }, { status: 500 })
   return NextResponse.json({ goals: goals.map((g, index) => ({ ...g, index, editable: isClientEditable(g) })) })
 }
 
@@ -42,11 +57,12 @@ export async function POST(req: NextRequest) {
   if (!limit.allowed) return NextResponse.json({ error: 'Please slow down a little and try again shortly.' }, { status: 429 })
   const body = await req.json().catch(() => ({}))
   const cleaned = cleanClientGoal(body)
-  if (!cleaned.ok) return NextResponse.json({ error: cleaned.error }, { status: 400 })
+  if (!cleaned.ok) return NextResponse.json({ error: cleaned.error, code: 'validation' }, { status: 400 })
   const goals = await loadGoals(clientId)
+  if (!goals) return NextResponse.json({ error: SAVE_FAILED, code: 'server' }, { status: 500 })
   if (goals.length >= MAX_GOALS) return NextResponse.json({ error: `You can keep up to ${MAX_GOALS} goals — retire one first.` }, { status: 409 })
   const next = [...goals, cleaned.goal]
-  if (!(await saveGoals(clientId, next))) return NextResponse.json({ error: 'Could not save the goal.' }, { status: 500 })
+  if (!(await saveGoals(clientId, next))) return NextResponse.json({ error: SAVE_FAILED, code: 'server' }, { status: 500 })
   await logPortalAccess(clientId, 'goal_write', { detail: 'create' })
   await logPortalEvent(clientId, 'goal_created', { title: cleaned.goal.title, source: body?.from === 'chat' ? 'chat' : 'editor' })
   await logPortalEvent(clientId, 'metric_defined', { title: cleaned.goal.title, count: cleaned.goal.metrics?.length ?? 0 })
@@ -66,6 +82,7 @@ export async function PATCH(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
   const index = Number(body?.index)
   const goals = await loadGoals(clientId)
+  if (!goals) return NextResponse.json({ error: SAVE_FAILED, code: 'server' }, { status: 500 })
   if ('progress' in body && !('title' in body)) {
     if (!Number.isInteger(index) || !goals[index]) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     const progress = clampProgress(body.progress)
@@ -84,10 +101,10 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
   const cleaned = cleanClientGoal(body)
-  if (!cleaned.ok) return NextResponse.json({ error: cleaned.error }, { status: 400 })
+  if (!cleaned.ok) return NextResponse.json({ error: cleaned.error, code: 'validation' }, { status: 400 })
   const prior = goals[index]
   const next = goals.map((g, i) => (i === index ? { ...cleaned.goal, progress: prior.progress, progress_updated_at: prior.progress_updated_at, completed_at: prior.completed_at } : g))
-  if (!(await saveGoals(clientId, next))) return NextResponse.json({ error: 'Could not save the goal.' }, { status: 500 })
+  if (!(await saveGoals(clientId, next))) return NextResponse.json({ error: SAVE_FAILED, code: 'server' }, { status: 500 })
   await logPortalAccess(clientId, 'goal_write', { detail: `edit:${index}` })
   return NextResponse.json({ goals: next.map((g, i) => ({ ...g, index: i, editable: isClientEditable(g) })) })
 }
@@ -99,6 +116,7 @@ export async function DELETE(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
   const index = Number(body?.index)
   const goals = await loadGoals(clientId)
+  if (!goals) return NextResponse.json({ error: 'Could not remove the goal just now. Please try again.', code: 'server' }, { status: 500 })
   if (!Number.isInteger(index) || !isClientEditable(goals[index])) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }

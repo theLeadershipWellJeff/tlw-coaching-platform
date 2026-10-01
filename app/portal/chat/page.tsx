@@ -6,7 +6,34 @@ import { SavePlanModal } from './SavePlanModal'
 import { CoBrandHeader } from '../CoBrandHeader'
 import type { PortalBranding } from '@/lib/portal/branding'
 
-type ChatMessage = { role: 'user' | 'assistant'; content: string }
+/**
+ * A message in view. Outgoing messages carry a client-generated `id` (the
+ * server de-dupes on it, so a resend never posts twice) and a send `status`,
+ * like a text thread: sending → sent, or failed with a red "!" and Try again.
+ */
+type SendStatus = 'sending' | 'sent' | 'failed'
+type ChatMessage = {
+  role: 'user' | 'assistant'
+  content: string
+  id?: string
+  status?: SendStatus
+  /** What to resend on retry (the typed text + attachment, before display markup). */
+  payload?: { content: string; attachment: { filename: string; text: string } | null }
+  /** Why it failed, shown under the bubble. */
+  failReason?: string
+}
+
+/** Roughly 8 lines of 14px text — the composer grows to this, then scrolls inside. */
+const COMPOSER_MAX_PX = 192
+
+function newMessageId(): string {
+  try {
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID()
+  } catch {
+    /* fall through */
+  }
+  return `m-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+}
 type ChatMode = 'general' | 'weekly_plan'
 type Conversation = { id: string; title: string; updated_at: string; mode?: ChatMode }
 
@@ -60,6 +87,8 @@ export default function PortalChat() {
   const [planBusy, setPlanBusy] = useState(false)
   const [planSaved, setPlanSaved] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  const composerRef = useRef<HTMLTextAreaElement>(null)
+  const [failMenuFor, setFailMenuFor] = useState<string | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const [branding, setBranding] = useState<PortalBranding | null>(null)
 
@@ -134,6 +163,17 @@ export default function PortalChat() {
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, sending])
+
+  // Auto-grow the composer with its content (up to the cap, then it scrolls),
+  // and back to one line when it empties after a send.
+  useEffect(() => {
+    const el = composerRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    const next = Math.min(el.scrollHeight, COMPOSER_MAX_PX)
+    el.style.height = `${next}px`
+    el.style.overflowY = el.scrollHeight > COMPOSER_MAX_PX ? 'auto' : 'hidden'
+  }, [input])
 
   function newChat(nextMode: ChatMode = 'general') {
     setActiveId(null)
@@ -217,29 +257,84 @@ export default function PortalChat() {
     }
   }
 
-  async function send(text: string) {
+  function patchMessage(id: string, patch: Partial<ChatMessage>) {
+    setMessages((ms) => ms.map((m) => (m.id === id ? { ...m, ...patch } : m)))
+  }
+
+  function send(text: string) {
     const content = text.trim()
     if (!content || sending) return
     const sentAttachment = attachment
     setInput('')
-    setError('')
-    setContextNote('')
     setAttachment(null)
+    const id = newMessageId()
     setMessages((m) => [
       ...m,
-      { role: 'user', content: sentAttachment ? `${content}\n\n📎 ${sentAttachment.filename}` : content },
+      {
+        role: 'user',
+        id,
+        status: 'sending',
+        content: sentAttachment ? `${content}\n\n📎 ${sentAttachment.filename}` : content,
+        payload: { content, attachment: sentAttachment },
+      },
     ])
+    void deliver(id, { content, attachment: sentAttachment })
+  }
+
+  /** Retry a failed message with the SAME id — the server never stores it twice. */
+  function retry(msg: ChatMessage) {
+    if (!msg.id || !msg.payload || sending) return
+    setFailMenuFor(null)
+    // Drop any placeholder reply left under it, then resend.
+    setMessages((ms) => {
+      const i = ms.findIndex((m) => m.id === msg.id)
+      if (i < 0) return ms
+      const next = ms.slice(0, i + 1)
+      next[i] = { ...next[i], status: 'sending', failReason: undefined }
+      return [...next, ...ms.slice(i + 1).filter((m) => !(m.role === 'assistant' && !m.content.trim()))]
+    })
+    void deliver(msg.id, msg.payload)
+  }
+
+  /** Delete a failed message from view (it never got an answer). Its text goes back in the box. */
+  function discard(msg: ChatMessage) {
+    setFailMenuFor(null)
+    setMessages((ms) => ms.filter((m) => m.id !== msg.id))
+    if (msg.payload && !input.trim()) setInput(msg.payload.content)
+  }
+
+  async function deliver(id: string, payload: { content: string; attachment: { filename: string; text: string } | null }) {
+    setError('')
+    setContextNote('')
     setSending(true)
+    let gotReply = false
     try {
       const res = await fetch('/api/portal/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conversationId: activeId, content, attachment: sentAttachment, mode: activeId ? undefined : mode }),
+        body: JSON.stringify({
+          conversationId: activeId,
+          content: payload.content,
+          attachment: payload.attachment,
+          clientMessageId: id,
+          mode: activeId ? undefined : mode,
+        }),
       })
+
+      // 409 duplicate: the server already has this message and the thread moved on.
+      if (res.status === 409) {
+        const d = await res.json().catch(() => ({}))
+        if (d.duplicate) {
+          if (d.conversationId && !activeId) setActiveId(d.conversationId)
+          patchMessage(id, { status: 'sent' })
+          return
+        }
+      }
 
       if (!res.ok || !res.body) {
         const d = await res.json().catch(() => ({}))
-        setError(d.error || 'Something went wrong. Please try again.')
+        if (d.conversationId && !activeId) setActiveId(d.conversationId)
+        patchMessage(id, { status: 'failed', failReason: d.error || 'Not sent.' })
         return
       }
 
@@ -256,6 +351,8 @@ export default function PortalChat() {
         }
       }
       if (newId && !activeId) setActiveId(newId)
+      // The server has the message now; whatever happens to the reply, it was sent.
+      patchMessage(id, { status: 'sent' })
 
       // Render the reply as it arrives rather than after the whole call.
       setStreaming(true)
@@ -266,6 +363,7 @@ export default function PortalChat() {
         const { done, value } = await reader.read()
         if (done) break
         const chunk = decoder.decode(value, { stream: true })
+        if (chunk) gotReply = true
         setMessages((m) => {
           const next = [...m]
           const last = next[next.length - 1]
@@ -275,7 +373,17 @@ export default function PortalChat() {
       }
       if (isNew) refreshConversations()
     } catch {
-      setError('Something went wrong. Please try again.')
+      // The connection dropped. With no reply in hand, mark the message failed so
+      // Try again can finish it (the server replays or completes, never duplicates).
+      // A reply that was already streaming stays as it arrived.
+      if (!gotReply) {
+        const offline = typeof navigator !== 'undefined' && navigator.onLine === false
+        setMessages((ms) =>
+          ms
+            .filter((m) => !(m.role === 'assistant' && !m.content.trim()))
+            .map((m) => (m.id === id ? { ...m, status: 'failed' as const, failReason: offline ? 'Not sent — you are offline.' : 'Not sent — connection problem.' } : m))
+        )
+      }
     } finally {
       setSending(false)
       setStreaming(false)
@@ -406,11 +514,23 @@ export default function PortalChat() {
               </div>
             ) : (
               messages.map((m, i) => (
-                <div key={i} className={m.role === 'user' ? 'flex justify-end' : 'flex flex-col items-start'}>
+                <div key={m.id || i} className={m.role === 'user' ? 'flex flex-col items-end' : 'flex flex-col items-start'}>
+                  <div className={m.role === 'user' ? 'flex max-w-[85%] items-center justify-end gap-2' : 'contents'}>
+                  {/* Failed send: a red "!" like a text message that didn't go through. */}
+                  {m.role === 'user' && m.status === 'failed' && (
+                    <button
+                      type="button"
+                      onClick={() => setFailMenuFor(failMenuFor === m.id ? null : m.id || null)}
+                      aria-label="Message not sent — options"
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-600 text-[13px] font-bold leading-none text-white"
+                    >
+                      !
+                    </button>
+                  )}
                   <div
                     className={`max-w-[80%] whitespace-pre-wrap rounded-tlw-2xl px-4 py-2.5 text-[14px] leading-relaxed ${
                       m.role === 'user'
-                        ? 'bg-tlw-navy-deep text-white'
+                        ? `bg-tlw-navy-deep text-white ${m.status === 'sending' ? 'opacity-60' : ''} ${m.status === 'failed' ? 'opacity-70' : ''}`
                         : 'bg-tlw-canvas text-tlw-espresso'
                     }`}
                   >
@@ -420,6 +540,23 @@ export default function PortalChat() {
                       <span className="ml-0.5 inline-block h-3.5 w-[2px] animate-pulse bg-tlw-warm-gray align-middle" />
                     )}
                   </div>
+                  </div>
+                  {m.role === 'user' && m.status === 'sending' && (
+                    <p className="mr-1 mt-1 text-[11px] text-tlw-warm-gray">Sending…</p>
+                  )}
+                  {m.role === 'user' && m.status === 'failed' && (
+                    <div className="mr-1 mt-1 flex items-center gap-3 text-[12px]" role="alert">
+                      <span className="text-red-600">{m.failReason || 'Not sent.'}</span>
+                      <button type="button" onClick={() => retry(m)} disabled={sending} className="font-medium text-tlw-signal-orange hover:underline disabled:opacity-50">
+                        Try again
+                      </button>
+                      {failMenuFor === m.id && (
+                        <button type="button" onClick={() => discard(m)} className="font-medium text-tlw-warm-gray hover:text-tlw-espresso hover:underline">
+                          Delete
+                        </button>
+                      )}
+                    </div>
+                  )}
                   {/* Explicit, human-driven: the assistant never writes a goal itself. */}
                   {m.role === 'assistant' && m.content.trim() && !(streaming && i === messages.length - 1) && (
                     <button
@@ -508,6 +645,7 @@ export default function PortalChat() {
                 {uploading ? '…' : '📎'}
               </button>
               <textarea
+                ref={composerRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
@@ -518,12 +656,13 @@ export default function PortalChat() {
                 }}
                 rows={1}
                 placeholder="Type a message…"
-                className="max-h-32 min-h-[40px] flex-1 resize-none rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-canvas px-3 py-2 text-[14px] text-tlw-espresso outline-none focus:border-tlw-signal-orange"
+                style={{ maxHeight: COMPOSER_MAX_PX }}
+                className="min-h-[40px] min-w-0 flex-1 resize-none overflow-hidden rounded-tlw-md border border-tlw-warm-gray/25 bg-tlw-canvas px-3 py-2 text-[14px] text-tlw-espresso outline-none focus:border-tlw-signal-orange"
               />
               <button
                 type="submit"
                 disabled={sending || !input.trim()}
-                className="rounded-tlw-lg bg-tlw-navy-deep px-4 py-2.5 text-[14px] font-medium text-white transition-colors hover:bg-tlw-navy-rich disabled:opacity-50"
+                className="shrink-0 rounded-tlw-lg bg-tlw-navy-deep px-4 py-2.5 text-[14px] font-medium text-white transition-colors hover:bg-tlw-navy-rich disabled:opacity-50"
               >
                 Send
               </button>

@@ -38,6 +38,9 @@ export function GoalEditorModal({ initial, from = 'editor', onSaved, onClose }: 
   ])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  // A failure the person can retry as-is (network / our server) vs. one they
+  // need to fix first (validation) — only the former offers "Try again".
+  const [retryable, setRetryable] = useState(false)
   const editing = typeof initial?.index === 'number'
 
   useEffect(() => {
@@ -46,9 +49,11 @@ export function GoalEditorModal({ initial, from = 'editor', onSaved, onClose }: 
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  async function save(e: React.FormEvent) {
-    e.preventDefault()
+  async function save(e?: React.FormEvent) {
+    e?.preventDefault()
+    if (saving) return
     setError('')
+    setRetryable(false)
     if (!title.trim()) return setError('Give the goal a short title.')
     if (!metrics.some((m) => m.trim())) return setError('Add at least one way you will know this goal is working.')
     setSaving(true)
@@ -60,13 +65,26 @@ export function GoalEditorModal({ initial, from = 'editor', onSaved, onClose }: 
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) {
-        setError(d.error || 'Could not save the goal.')
+        if (res.status === 401) {
+          setError('Your sign-in has expired. Copy anything you want to keep, then sign in again.')
+        } else if (res.status === 400 || res.status === 409) {
+          setError(d.error || 'Please check the goal and try again.')
+        } else {
+          setError(d.error || 'We could not save that just now — the problem was on our side. Your goal is still here; please try again.')
+          setRetryable(true)
+        }
         return
       }
       onSaved(d.goals || [])
       onClose()
     } catch {
-      setError('Could not save the goal.')
+      // fetch only throws when the request never completed — the connection.
+      setError(
+        typeof navigator !== 'undefined' && navigator.onLine === false
+          ? 'You appear to be offline. Your goal is still here — reconnect and try again.'
+          : 'We could not reach the server — check your connection. Your goal is still here; try again.'
+      )
+      setRetryable(true)
     } finally {
       setSaving(false)
     }
@@ -119,7 +137,21 @@ export function GoalEditorModal({ initial, from = 'editor', onSaved, onClose }: 
           ))}
         </div>
 
-        {error && <p className="mt-3 text-[12px] text-tlw-signal-orange">{error}</p>}
+        {error && (
+          <div className="mt-3 flex items-start justify-between gap-3" role="alert">
+            <p className="text-[12px] text-tlw-signal-orange">{error}</p>
+            {retryable && (
+              <button
+                type="button"
+                onClick={() => save()}
+                disabled={saving}
+                className="shrink-0 rounded-tlw-md border border-tlw-signal-orange/50 px-2.5 py-1 text-[12px] font-medium text-tlw-signal-orange hover:bg-tlw-signal-orange/5 disabled:opacity-50"
+              >
+                Try again
+              </button>
+            )}
+          </div>
+        )}
 
         <div className="mt-5 flex justify-end gap-2">
           <button type="button" onClick={onClose} className="rounded-tlw-lg px-4 py-2 text-[13px] font-medium text-tlw-warm-gray hover:text-tlw-espresso">
