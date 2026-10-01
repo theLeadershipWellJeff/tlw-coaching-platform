@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { toErrorResponse } from '@/lib/api-handler'
 import { requireClientCoach } from '@/lib/client-access'
 import type { CoachingGoal, Database } from '@/lib/supabase/types'
+import { CLIENT_VOICE_STANDARDS } from '@/lib/writing-standards'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -59,11 +60,18 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
     .map((n) => `[${n.session_date}] ${n.title || ''}\n${toText(n.content)}`)
     .join('\n\n---\n\n')
 
+  // Goals are the CLIENT's: they appear in the client portal, the session-prep
+  // email and goal nudges verbatim, so they are written TO the client ("you"),
+  // never about them in the third person (Caleb's portal QA, 2026-09-30).
   const prompt = `You are helping ${coach.name || 'the coach'}, executive coach at theLeadershipWell, articulate the CURRENT coaching goals for ${client.name}, drawn from their recent session notes.
+
+These goals are shared with ${client.name} — they read them in their client portal and in session-prep emails. Write every goal TO them, in the second person ("you", "your"), as goals they own. Never refer to them by name or as "he", "she", "they", or "the client". Name the work honestly but kindly, as an invitation forward rather than a judgment of where they are. Good: "You want to hand more of the day-to-day to your team so your time goes to strategy." Not: "Alpha is still doing too much hands-on work."
+
+${CLIENT_VOICE_STANDARDS}
 
 Return ONLY a valid JSON array — no markdown fences, no preamble. 3 to 4 goals, most important first:
 [
-  {"title": "Goal name (3-6 words)", "description": "1-2 sentences naming the specific developmental work, grounded in real details from the notes — not generic coaching language"}
+  {"title": "Goal name (3-6 words, no names or pronouns needed)", "description": "1-2 sentences, addressed to them as \"you\", naming the specific developmental work, grounded in real details from the notes — not generic coaching language"}
 ]
 
 SESSION NOTES (most recent first):

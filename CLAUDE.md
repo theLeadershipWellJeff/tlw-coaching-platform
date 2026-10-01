@@ -1089,6 +1089,11 @@ in at the same path — the signature points there, so no code change is needed.
 ### Coaching goals = the source of truth (and of the prep plan)
 `clients.coaching_goals` is the sacred goal list. Each goal is `{title,
 description, metrics?}` (`metrics` = up to three measures of fulfillment).
+Goals are **written to the client** ("You want to…"), never about them in the
+third person: the client reads them verbatim in the portal, the prep email,
+and goal nudges. The generator (`/api/clients/[id]/goals/generate`) prompts for
+second person and carries `CLIENT_VOICE_STANDARDS` (2026-10-01, Caleb's QA);
+goals written before that stay as worded until regenerated or edited.
 Edited in two places that share `GoalRows.tsx` (the rows editor + `toDrafts`/
 `cleanGoals`/`emptyGoal` helpers — both preserve metrics on save): the workspace
 `GoalsCard` (inline) and the notes-panel `EngagementGoalsCard` (modal). Session
@@ -3593,6 +3598,26 @@ and back in** to grant calendar-write + populate the refresh token with it;
   **renewal cron** to re-register before the ~7-day primary-calendar channel expiry
   (and `events.stop` the old channel). Keep the hourly poll as a safety-net backstop
   even with push on, so a missed/expired channel never silently drops bookings.
+
+#### Client Portal QA follow-ups (Caleb, 2026-09-30) — planned
+
+Items 1–3 shipped in theLeadershipWellJeff/tlw-coaching-platform#282; 5 (goals in
+client voice) and 7 (warmer chat tone) shipped after. Still planned, in order:
+
+- **CTO privacy + isolation review (item 4) — next.** Use the `cto` agent.
+  (a) Inventory every third party that receives client data (Anthropic, Google
+  Gmail/Calendar, Stripe, Resend, Vercel, Supabase) with retention and
+  training terms, and reconcile against `docs/DEBRIEF_DATA_HANDLING.md` and
+  `/privacy`. (b) Cross-client isolation test with the CANARY test clients
+  (Alpha / Bravo / Charlie): nothing from one client may appear in another's
+  portal, chat replies, emails, or nudges — any leak is a Blocker. (c) Note for
+  testers: browser extensions such as Grammarly read whatever is typed into the
+  portal; turn them off on the site. Output = an ADR in `docs/decisions/`.
+- **Read AI replies aloud (item 6) — after the review.** A speaker button on
+  each assistant reply with play/pause/stop and no auto-play. v1 = the
+  browser's Web Speech API (`speechSynthesis`): free, and the text never
+  leaves the device. A paid, more natural voice sends chat text to another
+  vendor, so it waits on the review's verdict.
 
 #### Client-Facing Portal (Major Build — highest complexity)
 
