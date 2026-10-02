@@ -17,7 +17,10 @@ export async function adminContext(): Promise<{ supabase: SupabaseClient<Databas
 }
 
 export function adminErrorResponse(e: unknown): NextResponse {
-  if (e instanceof AdminError || e instanceof DocumentError) {
+  if (e instanceof AdminError) {
+    return NextResponse.json({ ...(e.extra || {}), error: e.message }, { status: e.status })
+  }
+  if (e instanceof DocumentError) {
     return NextResponse.json({ error: e.message }, { status: e.status })
   }
   return toErrorResponse(e)

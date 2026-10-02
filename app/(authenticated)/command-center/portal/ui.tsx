@@ -2,10 +2,18 @@
 /** Small shared bits for the debrief command-center panels. */
 import { useEffect, useState, type ReactNode, type RefObject } from 'react'
 
+/** A failed admin request, carrying the response body (e.g. existingClientId on a 409). */
+export class ApiError extends Error {
+  constructor(message: string, public status: number, public data: Record<string, any>) {
+    super(message)
+    this.name = 'ApiError'
+  }
+}
+
 export async function api<T = any>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, { ...init, headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) } })
   const d = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(d.error || `Request failed (${res.status})`)
+  if (!res.ok) throw new ApiError(d.error || `Request failed (${res.status})`, res.status, d)
   return d as T
 }
 
@@ -82,11 +90,14 @@ export async function uploadUserDocument(
  * Upload the files picked on an add-participant form, one after another, and
  * describe each outcome. Never throws — a failed file is reported, the rest go on.
  */
-export async function uploadPickedDocuments(userId: string, report: File | null, others: File[]): Promise<string[]> {
+export async function uploadPickedDocuments(userId: string, report: File | null, others: File[], opts: { confirmName?: boolean } = {}): Promise<string[]> {
   const notes: string[] = []
   if (report) {
     try {
-      const r = await uploadUserDocument(userId, report, 'assessment_360')
+      // confirmName = the person entering them checked the printed name by eye
+      // (transliterated names rarely match letter for letter). Recorded in the
+      // audit log; the client's own portal upload can never set it.
+      const r = await uploadUserDocument(userId, report, 'assessment_360', { confirmName: opts.confirmName })
       notes.push(`360 report: ${r.document.extraction_status}${r.document.extraction_error ? ` — ${r.document.extraction_error}` : ''}`)
     } catch (e) {
       notes.push(`360 report failed: ${e instanceof Error ? e.message : 'upload error'}`)
@@ -107,18 +118,35 @@ export async function uploadPickedDocuments(userId: string, report: File | null,
 export function DocumentPickers({
   reportRef,
   othersRef,
+  confirmName,
+  onConfirmName,
+  personName,
   className = '',
 }: {
   reportRef: RefObject<HTMLInputElement>
   othersRef: RefObject<HTMLInputElement>
+  /** The name-check override for the 360 report (see uploadPickedDocuments). */
+  confirmName: boolean
+  onConfirmName: (v: boolean) => void
+  /** The name typed on the form, shown in the confirmation. */
+  personName: string
   className?: string
 }) {
+  const who = personName.trim() || 'this person'
   return (
     <div className={`grid grid-cols-1 gap-2 sm:grid-cols-2 ${className}`}>
-      <label className="text-[11px] text-tlw-warm-gray">
-        360 report (PDF, optional — switches the 360 on when it reads clean)
-        <input ref={reportRef} type="file" accept=".pdf" className={input} />
-      </label>
+      <div>
+        <label className="text-[11px] text-tlw-warm-gray">
+          360 report (PDF, optional — switches the 360 on when it reads clean)
+          <input ref={reportRef} type="file" accept=".pdf" className={input} />
+        </label>
+        <label className="mt-1 flex items-start gap-2 text-[11px] text-tlw-espresso">
+          <input type="checkbox" className="mt-0.5" checked={confirmName} onChange={(e) => onConfirmName(e.target.checked)} />
+          <span>
+            I opened this report and checked the name on its cover is {who}&apos;s (accept a spelling or transliteration difference)
+          </span>
+        </label>
+      </div>
       <label className="text-[11px] text-tlw-warm-gray">
         Other documents (PDF, Word, or text — join their chat context)
         <input ref={othersRef} type="file" multiple accept=".pdf,.docx,.txt,.md" className={input} />

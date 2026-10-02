@@ -18,7 +18,8 @@ import { getBaseUrl } from '@/lib/url'
 import { loadAssignedCoaches } from './coach-assignment'
 
 export class AdminError extends Error {
-  constructor(public status: number, message: string) {
+  /** Extra JSON fields for the response body (e.g. the id of an existing record). */
+  constructor(public status: number, message: string, public extra?: Record<string, unknown>) {
     super(message)
     this.name = 'AdminError'
   }
@@ -79,6 +80,9 @@ export type PortalUserRow = {
  */
 export async function listPortalUsers(supabase: SupabaseClient<Database>, opts: { cohortId?: string; companyId?: string; kind?: PortalUserKind } = {}): Promise<PortalUserRow[]> {
   // Coaching clients count as portal users once a sign-in link has been minted.
+  // Team coaches (client_type 'coach') are included on the same signals — a
+  // coach invited to test the portal is a portal user (2026-10-02; before this
+  // the list excluded them outright, so an invited coach had no user page).
   const { data: invited } = await supabase.from('client_tokens').select('client_id').eq('purpose', 'login')
   const invitedIds = Array.from(new Set((invited || []).map((t) => t.client_id)))
   // Enterprise participants with an assigned coach are client_type 'client';
@@ -89,7 +93,6 @@ export async function listPortalUsers(supabase: SupabaseClient<Database>, opts: 
     .from('clients')
     .select('id, name, email, client_type, status, company_id, cohort_id, portal_features, portal_access_expires_at, created_at')
     .or(filters.join(','))
-    .neq('client_type', 'coach')
     .neq('status', 'archived')
     .order('created_at', { ascending: false })
   if (opts.cohortId) q = q.eq('cohort_id', opts.cohortId)
@@ -192,7 +195,9 @@ export async function createPortalParticipant(
   if (!name) throw new AdminError(400, 'Name is required.')
   if (!email || !email.includes('@')) throw new AdminError(400, 'A valid email is required.')
   const { data: dup } = await supabase.from('clients').select('id, name').ilike('email', email).maybeSingle()
-  if (dup) throw new AdminError(409, `A client with that email already exists (${dup.name}).`)
+  // The existing record is returned so the Command Center can offer to set up
+  // THAT person's portal instead of dead-ending (never a duplicate row).
+  if (dup) throw new AdminError(409, `${dup.name} already has a record with that email.`, { existingClientId: dup.id, existingName: dup.name })
 
   let expires: string | null = null
   let companyId = input.companyId || null
