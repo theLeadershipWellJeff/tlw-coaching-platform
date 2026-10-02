@@ -1815,7 +1815,14 @@ own section in the prompt) so the portal works as a general coaching tool.
 - **Documents at creation.** Both add-participant forms (Portal users tab, and
   under a company) carry a 360 PDF picker + an "other documents" multi-picker
   (`ui.tsx#DocumentPickers`); after the row is created the files upload one by
-  one (`uploadPickedDocuments`) and the outcome is reported inline.
+  one (`uploadPickedDocuments`) and the outcome is reported inline. Since
+  2026-10-02 the 360 picker carries the name-check override too — "I opened
+  this report and checked the name on its cover is <name>'s" — the same
+  `confirmName` the per-user page uses, because transliterated (e.g. Arabic)
+  names rarely match letter for letter. Jeff's rule: whoever enters a
+  participant opens the report, checks the name by eye, and ticks the box.
+  Every supervisor upload's audit row (`document_uploaded`) now records
+  `confirm_name`; the client's own portal upload/retry still never overrides.
 - **Companies tab** (was "ZF Portal"): each company card lists its cohorts with
   the **portal users under each** (name → user page, report status, invited /
   seen) plus a "participants without a cohort" group; the panel loads

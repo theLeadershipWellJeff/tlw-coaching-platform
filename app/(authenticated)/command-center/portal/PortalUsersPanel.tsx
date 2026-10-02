@@ -50,6 +50,7 @@ export function PortalUsersPanel({ companies, initialCohortId = '' }: { companie
   const [deleteConfirm, setDeleteConfirm] = useState('')
   const reportRef = useRef<HTMLInputElement>(null)
   const othersRef = useRef<HTMLInputElement>(null)
+  const [confirmName, setConfirmName] = useState(false)
 
   const shown = useMemo(() => (users || []).filter((u) => u.archived === (view === 'archived')), [users, view])
   const cohorts = useMemo(() => companies.flatMap((c) => c.cohorts.map((k) => ({ ...k, company_name: c.name }))), [companies])
@@ -86,11 +87,12 @@ export function PortalUsersPanel({ companies, initialCohortId = '' }: { companie
       // Documents picked on the form go up right after the row exists.
       const report = reportRef.current?.files?.[0] || null
       const others = Array.from(othersRef.current?.files || [])
-      const notes = await uploadPickedDocuments(created.id, report, others)
+      const notes = await uploadPickedDocuments(created.id, report, others, { confirmName })
       setNotice(`${form.name.trim()} added.${notes.length ? ` ${notes.join(' · ')}` : ''} Invite them from the list below.`)
       setForm({ name: '', email: '', companyId: form.companyId, cohortId: form.cohortId, coachId: '' })
       if (reportRef.current) reportRef.current.value = ''
       if (othersRef.current) othersRef.current.value = ''
+      setConfirmName(false)
       await load()
     } catch (e) {
       if (e instanceof ApiError && e.status === 409 && e.data.existingClientId) {
@@ -226,7 +228,7 @@ export function PortalUsersPanel({ companies, initialCohortId = '' }: { companie
           <CoachSelect value={form.coachId} onChange={(v) => setForm({ ...form, coachId: v })} coaches={coaches} />
           <button className={btnPrimary} disabled={creating || !form.name.trim() || !form.email.trim() || !form.coachId} title={!form.coachId ? 'Choose a coach (or “No coach”) first' : undefined} onClick={create}>{creating ? 'Adding…' : '+ Add participant'}</button>
         </div>
-        <DocumentPickers reportRef={reportRef} othersRef={othersRef} className="mt-2" />
+        <DocumentPickers reportRef={reportRef} othersRef={othersRef} confirmName={confirmName} onConfirmName={setConfirmName} personName={form.name} className="mt-2" />
         <ErrorLine error={error} />
         {existing && (
           <p className="mt-1 text-[12px] text-tlw-espresso">

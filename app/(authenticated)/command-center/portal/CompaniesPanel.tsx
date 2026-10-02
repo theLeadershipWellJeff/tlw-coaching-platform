@@ -366,13 +366,15 @@ function AddParticipant({ company, onAdded }: { company: Company; onAdded: (note
   const [error, setError] = useState('')
   const reportRef = useRef<HTMLInputElement>(null)
   const othersRef = useRef<HTMLInputElement>(null)
+  const [confirmName, setConfirmName] = useState(false)
   async function create() {
     setBusy(true)
     setError('')
     try {
       const created = await api<{ id: string }>('/api/admin/portal-users', { method: 'POST', body: JSON.stringify({ name: form.name, email: form.email, companyId: company.id, cohortId: form.cohortId || null, coachId: coachIdFromChoice(form.coachId) }) })
-      const notes = await uploadPickedDocuments(created.id, reportRef.current?.files?.[0] || null, Array.from(othersRef.current?.files || []))
+      const notes = await uploadPickedDocuments(created.id, reportRef.current?.files?.[0] || null, Array.from(othersRef.current?.files || []), { confirmName })
       setForm({ name: '', email: '', cohortId: form.cohortId, coachId: '' })
+      setConfirmName(false)
       setOpen(false)
       onAdded(`${created.id ? form.name.trim() : 'Participant'} added.${notes.length ? ` ${notes.join(' · ')}` : ''}`)
     } catch (e) {
@@ -395,7 +397,7 @@ function AddParticipant({ company, onAdded }: { company: Company; onAdded: (note
         <button className={btnPrimary} disabled={busy || !form.name.trim() || !form.email.trim() || !form.coachId} title={!form.coachId ? 'Choose a coach (or “No coach”) first' : undefined} onClick={create}>{busy ? 'Adding…' : 'Add'}</button>
         <button className={btnSecondary} onClick={() => setOpen(false)}>Cancel</button>
       </div>
-      <DocumentPickers reportRef={reportRef} othersRef={othersRef} className="sm:col-span-5" />
+      <DocumentPickers reportRef={reportRef} othersRef={othersRef} confirmName={confirmName} onConfirmName={setConfirmName} personName={form.name} className="sm:col-span-5" />
       {error && <p className="text-[12px] text-tlw-signal-orange sm:col-span-5">{error}</p>}
     </div>
   )
