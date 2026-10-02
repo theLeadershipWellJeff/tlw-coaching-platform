@@ -2,10 +2,18 @@
 /** Small shared bits for the debrief command-center panels. */
 import { useEffect, useState, type ReactNode, type RefObject } from 'react'
 
+/** A failed admin request, carrying the response body (e.g. existingClientId on a 409). */
+export class ApiError extends Error {
+  constructor(message: string, public status: number, public data: Record<string, any>) {
+    super(message)
+    this.name = 'ApiError'
+  }
+}
+
 export async function api<T = any>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, { ...init, headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) } })
   const d = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(d.error || `Request failed (${res.status})`)
+  if (!res.ok) throw new ApiError(d.error || `Request failed (${res.status})`, res.status, d)
   return d as T
 }
 

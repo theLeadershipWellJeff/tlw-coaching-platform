@@ -1,7 +1,8 @@
 'use client'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { api, btnLink, btnPrimary, btnSecondary, Chip, CoachSelect, coachIdFromChoice, DocumentPickers, ErrorLine, fmtDate, input, NO_COACH, Section, statusTone, uploadPickedDocuments, useAdminCoaches } from './ui'
+import { useRouter } from 'next/navigation'
+import { api, ApiError, btnLink, btnPrimary, btnSecondary, Chip, CoachSelect, coachIdFromChoice, DocumentPickers, ErrorLine, fmtDate, input, NO_COACH, Section, statusTone, uploadPickedDocuments, useAdminCoaches } from './ui'
 import { cohortStatus, type Company } from './CompaniesPanel'
 
 export type PortalUser = {
@@ -31,6 +32,10 @@ export type PortalUser = {
 export function PortalUsersPanel({ companies, initialCohortId = '' }: { companies: Company[]; initialCohortId?: string }) {
   const [users, setUsers] = useState<PortalUser[] | null>(null)
   const [error, setError] = useState('')
+  // The add form hit an email that already has a record: offer to set up THAT
+  // person's portal (never a duplicate row).
+  const [existing, setExisting] = useState<{ id: string; name: string } | null>(null)
+  const router = useRouter()
   const [notice, setNotice] = useState('')
   const [filterCohort, setFilterCohort] = useState(initialCohortId)
   const [filterKind, setFilterKind] = useState<'' | PortalUser['kind']>('')
@@ -75,6 +80,7 @@ export function PortalUsersPanel({ companies, initialCohortId = '' }: { companie
     setCreating(true)
     setError('')
     setNotice('')
+    setExisting(null)
     try {
       const created = await api<{ id: string }>('/api/admin/portal-users', { method: 'POST', body: JSON.stringify({ name: form.name, email: form.email, companyId: form.companyId || null, cohortId: form.cohortId || null, coachId: coachIdFromChoice(form.coachId) }) })
       // Documents picked on the form go up right after the row exists.
@@ -87,8 +93,24 @@ export function PortalUsersPanel({ companies, initialCohortId = '' }: { companie
       if (othersRef.current) othersRef.current.value = ''
       await load()
     } catch (e) {
+      if (e instanceof ApiError && e.status === 409 && e.data.existingClientId) {
+        setExisting({ id: String(e.data.existingClientId), name: String(e.data.existingName || 'This person') })
+      }
       setError(e instanceof Error ? e.message : 'Could not create.')
     } finally {
+      setCreating(false)
+    }
+  }
+
+  /** Switch the 360 on for the existing record (which puts them on this list) and open their page. */
+  async function setUpExisting() {
+    if (!existing) return
+    setCreating(true)
+    try {
+      await api(`/api/admin/portal-users/${existing.id}`, { method: 'PATCH', body: JSON.stringify({ assessments: true }) })
+      router.push(`/command-center/portal/users/${existing.id}`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not set up their portal.')
       setCreating(false)
     }
   }
@@ -206,6 +228,15 @@ export function PortalUsersPanel({ companies, initialCohortId = '' }: { companie
         </div>
         <DocumentPickers reportRef={reportRef} othersRef={othersRef} className="mt-2" />
         <ErrorLine error={error} />
+        {existing && (
+          <p className="mt-1 text-[12px] text-tlw-espresso">
+            Use their existing record instead —{' '}
+            <button className={btnLink} disabled={creating} onClick={setUpExisting}>
+              Set up {existing.name.split(' ')[0]}&apos;s portal
+            </button>{' '}
+            switches the 360 on and opens their page, where you can upload a report and send the invite.
+          </p>
+        )}
       </Section>
 
       <Section

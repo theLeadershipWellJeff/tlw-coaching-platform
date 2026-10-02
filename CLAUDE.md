@@ -1667,6 +1667,14 @@ writes `admin_audit_log`). Five tabs, each a client component:
   (how a coaching client gets the 360 without re-onboarding), invite/resend,
   cohort/company/expiry/caps edit, portal state (`loadPortalStates`), latest
   report status, and an engagement summary from `portal_events`.
+- **Team coaches + existing records (2026-10-02).** The Portal users list no
+  longer excludes `client_type='coach'` rows — a roster team coach who was
+  invited (or has the 360 on) shows like any portal user, so a coach testing
+  the portal has a user page for report upload and invites. Adding a
+  participant whose email already has a record returns 409 with
+  `existingClientId`; the Portal users form then offers **"Set up <name>'s
+  portal"** (PATCH `{assessments: true}` on the existing row → their user page),
+  never a duplicate row. The reminders cron still skips team coaches.
 - **Archive / delete a portal user (2026-09-25).** `portal_features.archived`
   (no migration) switches portal access off without touching `clients.status`
   — so archiving a coaching client's portal never archives their coaching
