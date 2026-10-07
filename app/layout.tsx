@@ -1,7 +1,10 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import { SITE_URL } from '@/lib/site'
 
 export const metadata: Metadata = {
+  // Resolves each public page's relative canonical to the one real domain.
+  metadataBase: new URL(SITE_URL),
   title: 'TLW Coaching App',
   description: 'theLeadershipWell coaching platform',
 }

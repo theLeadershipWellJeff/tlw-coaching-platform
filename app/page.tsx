@@ -6,6 +6,10 @@ import Image from 'next/image'
 import { COACH_PRICING } from '@/lib/access'
 import { LegalFooter } from './components/legal/LegalPage'
 
+export const metadata = {
+  alternates: { canonical: '/' },
+}
+
 /**
  * Public homepage — the "Application home page" on the Google OAuth consent
  * screen. Google's verification rejects a homepage that is "behind a login

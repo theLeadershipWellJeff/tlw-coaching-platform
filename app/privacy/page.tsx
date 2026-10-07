@@ -19,6 +19,7 @@ export const dynamic = 'force-static'
 
 export const metadata = {
   title: 'Privacy Policy — theLeadershipWell',
+  alternates: { canonical: '/privacy' },
 }
 
 const LIMITED_USE_URL = 'https://developers.google.com/terms/api-services-user-data-policy'
