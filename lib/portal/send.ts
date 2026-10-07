@@ -23,7 +23,7 @@ import { sendCoachHtmlEmail } from '@/lib/gmail'
 import { logCommunication } from '@/lib/communications'
 import { isTransactionalEmailConfigured, sendTransactionalEmail } from '@/lib/email/transactional'
 import { resolveClientCoach } from './coach'
-import { buildMagicLinkEmailHtml } from './email'
+import { buildMagicLinkEmailHtml, portalInviteContextLine } from './email'
 import type { Coach } from '@/lib/supabase/types'
 
 export type PortalMailKind = 'login_link' | 'invite'
@@ -56,10 +56,14 @@ export async function sendPortalLoginEmail(opts: {
   const coach = opts.coach === undefined ? await resolveClientCoach(opts.client.id) : opts.coach
   const firstName = (opts.client.name || '').split(' ')[0] || 'there'
   const subject = opts.kind === 'invite' ? 'Your coaching portal invitation' : 'Your sign-in link'
+  const about = await loadInviteFacts(opts.client.id, opts.kind === 'invite')
   const html = buildMagicLinkEmailHtml({
     firstName,
     link: opts.link,
-    coachName: coach?.name || null,
+    // A portal-only participant's house-coach link is structural: the firm
+    // signs off, as the reminder emails already do.
+    coachName: about.clientType === 'portal' ? null : coach?.name || null,
+    contextLine: opts.kind === 'invite' ? portalInviteContextLine({ companyName: about.companyName, hasReport: about.hasReport }) : null,
     // Invitations last 14 days, a requested sign-in link 24 hours (lib/portal/tokens.ts).
     expiresIn: opts.kind === 'invite' ? '14 days' : '24 hours',
   })
@@ -73,6 +77,42 @@ export async function sendPortalLoginEmail(opts: {
     preview: opts.kind === 'invite' ? 'Client Portal invitation' : 'Client Portal sign-in link',
     attributeToCoachId: opts.attributeToCoachId,
   })
+}
+
+/**
+ * What the invitation needs to know about the client: client_type (for the
+ * sign-off) and, for an invitation, the company name and whether a completed
+ * 360 is on file (for the context line). Best-effort — a failed read just
+ * means the plain email.
+ */
+async function loadInviteFacts(
+  clientId: string,
+  forInvite: boolean
+): Promise<{ clientType: string | null; companyName: string | null; hasReport: boolean }> {
+  const out = { clientType: null as string | null, companyName: null as string | null, hasReport: false }
+  try {
+    const supabase = getSupabaseAdmin()
+    const { data: c } = await supabase.from('clients').select('client_type, company_id, portal_features').eq('id', clientId).maybeSingle()
+    if (!c) return out
+    out.clientType = c.client_type
+    if (!forInvite) return out
+    const [company, report] = await Promise.all([
+      c.company_id ? supabase.from('companies').select('name').eq('id', c.company_id).maybeSingle() : Promise.resolve({ data: null }),
+      (c.portal_features as { assessments?: boolean } | null)?.assessments === true
+        ? supabase
+            .from('client_documents')
+            .select('id', { count: 'exact', head: true })
+            .eq('client_id', clientId)
+            .eq('kind', 'assessment_360')
+            .eq('extraction_status', 'complete')
+        : Promise.resolve({ count: 0 }),
+    ])
+    out.companyName = (company.data as { name?: string } | null)?.name ?? null
+    out.hasReport = ((report as { count?: number | null }).count ?? 0) > 0
+  } catch {
+    /* plain email */
+  }
+  return out
 }
 
 /**

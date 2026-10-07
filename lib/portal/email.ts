@@ -10,6 +10,12 @@ export function buildMagicLinkEmailHtml(opts: {
   coachName: string | null
   /** How long the link lasts, as the reader sees it ("24 hours", "14 days"). */
   expiresIn?: string
+  /**
+   * One line of context for an invitation (plain text, escaped here): which
+   * program the portal is for and whether their report is waiting. Built by
+   * `portalInviteContextLine`. Omitted = the plain sign-in email.
+   */
+  contextLine?: string | null
 }): string {
   const { firstName, link, coachName } = opts
   const expiresIn = opts.expiresIn || '24 hours'
@@ -18,7 +24,8 @@ export function buildMagicLinkEmailHtml(opts: {
   return `
   <div style="font-family:Georgia,'Times New Roman',serif;color:#111226;line-height:1.55;">
     <p style="margin:0 0 16px;">Hi ${escapeHtml(firstName)},</p>
-    <p style="margin:0 0 20px;">Here's your secure link to sign in to your coaching portal:</p>
+    ${opts.contextLine ? `<p style="margin:0 0 12px;">${escapeHtml(opts.contextLine)}</p>` : ''}
+    <p style="margin:0 0 20px;">${opts.contextLine ? 'Here is your secure link to sign in:' : "Here's your secure link to sign in to your coaching portal:"}</p>
     <p style="margin:0 0 24px;">
       <a href="${link}"
          style="display:inline-block;background:#111226;color:#ffffff;text-decoration:none;
@@ -41,6 +48,18 @@ export function buildMagicLinkEmailHtml(opts: {
   </div>`
 }
 
+/**
+ * The invitation's context line. The invitation goes out once a participant's
+ * report is in, so it doubles as the "your report is ready" notice.
+ */
+export function portalInviteContextLine(opts: { companyName?: string | null; hasReport: boolean }): string | null {
+  const company = (opts.companyName || '').trim()
+  if (company && opts.hasReport) return `Your portal for the ${company} program is ready, and your 360 feedback report is inside.`
+  if (opts.hasReport) return 'Your portal is ready, and your 360 feedback report is inside.'
+  if (company) return `Your portal for the ${company} program is ready.`
+  return null
+}
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')
@@ -56,7 +75,7 @@ function escapeHtml(s: string): string {
  */
 export function buildReminderEmailHtml(opts: {
   firstName: string
-  kind: 'welcome' | 'comeback' | 'quarterly_goals' | 'weekly_plan'
+  kind: 'welcome' | 'comeback' | 'quarterly_goals' | 'weekly_plan' | 'report_ready'
   link: string
   settingsLink: string
   coachName: string | null
@@ -78,6 +97,11 @@ export function buildReminderEmailHtml(opts: {
       lead: 'A new week. Five things would make it a good one — which five?',
       body: 'Plan your week is a short conversation in your portal that ends in your Top 5, saved to your home page as a checklist. It draws on your goals, what got done last week, and anything you have noted since. Ten minutes, usually less.',
       button: 'Plan your week',
+    },
+    report_ready: {
+      lead: 'Your 360 feedback report is ready in your portal.',
+      body: 'You can read it, download it, and talk it through with the assistant, which has read it too. A good first question: what stands out to you, before anyone tells you what it means? This link signs you straight in.',
+      button: 'See your report',
     },
     quarterly_goals: {
       lead: 'A new quarter has started, which makes this a good moment to look at your goals.',
@@ -103,8 +127,12 @@ export function buildReminderEmailHtml(opts: {
       <a href="${link}" style="color:#F5821F;word-break:break-all;">${link}</a>
     </p>
     <p style="margin:20px 0 0;font-size:13px;color:#6b6b73;">
-      This link works once and expires in 14 days. You can switch these reminders off any time under
-      <a href="${settingsLink}" style="color:#F5821F;">Settings</a> in your portal.
+      This link works once and expires in 14 days.${
+        kind === 'report_ready'
+          ? ''
+          : ` You can switch these reminders off any time under
+      <a href="${settingsLink}" style="color:#F5821F;">Settings</a> in your portal.`
+      }
     </p>
     <p style="margin:20px 0 0;">${signoff}</p>
   </div>`

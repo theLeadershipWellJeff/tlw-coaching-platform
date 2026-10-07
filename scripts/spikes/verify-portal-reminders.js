@@ -136,3 +136,22 @@ assert.strictEqual(N.cleanNoteInput({ title: '', body: '   ' }).ok, false)
 assert.ok(N.formatNotesForPrompt([{ title: 'Q4 focus', date: '2026-09-08', text: 'x' }]).startsWith('## Q4 focus — 2026-09-08'))
 
 console.log('portal reminders / progress / notes: all checks passed')
+
+// PR 2: invitation context line + report-ready email copy.
+{
+  const E = require(path.join(ROOT, '.spike-build/lib/portal/email.js'))
+  assert.strictEqual(E.portalInviteContextLine({ companyName: 'Acme', hasReport: true }), 'Your portal for the Acme program is ready, and your 360 feedback report is inside.')
+  assert.strictEqual(E.portalInviteContextLine({ companyName: null, hasReport: true }), 'Your portal is ready, and your 360 feedback report is inside.')
+  assert.strictEqual(E.portalInviteContextLine({ companyName: 'Acme', hasReport: false }), 'Your portal for the Acme program is ready.')
+  assert.strictEqual(E.portalInviteContextLine({ companyName: '  ', hasReport: false }), null, 'coaching client: plain email')
+  const inv = E.buildMagicLinkEmailHtml({ firstName: 'Pat', link: 'https://x/portal/verify?token=t', coachName: null, contextLine: 'A & B <program>' })
+  assert.ok(inv.includes('A &amp; B &lt;program&gt;'), 'context line escaped')
+  assert.ok(inv.includes('— theLeadershipWell'), 'firm sign-off when no coach name')
+  const ready = E.buildReminderEmailHtml({ firstName: 'Pat', kind: 'report_ready', link: 'https://x/l', settingsLink: 'https://x/s', coachName: 'Jeff Holmes' })
+  assert.ok(ready.includes('Your 360 feedback report is ready'), 'report-ready lead')
+  assert.ok(!ready.includes('switch these reminders off'), 'report-ready is not a reminder: no opt-out line')
+  const wel = E.buildReminderEmailHtml({ firstName: 'Pat', kind: 'welcome', link: 'https://x/l', settingsLink: 'https://x/s', coachName: null })
+  assert.ok(wel.includes('switch these reminders off'), 'reminders keep the opt-out line')
+  assert.strictEqual(R.REMINDER_SUBJECTS.report_ready, 'Your 360 report is ready')
+  console.log('invitation context + report-ready copy: all checks passed')
+}

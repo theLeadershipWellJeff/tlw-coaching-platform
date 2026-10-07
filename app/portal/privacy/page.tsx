@@ -30,13 +30,20 @@ export default function PortalPrivacyPage() {
             <li>The people who rated you are anonymous to you, and they stay anonymous to the assistant. The names of everyone invited to rate you are removed before your report is read by the system, and the assistant will not guess who said what, however the question is asked.</li>
             <li>If you have a coach in this program, they can see your report and your goals so they can work with you. If you do not have a coach, no coach sees them.</li>
             <li>Anything you upload yourself that is marked as a personnel review is visible only to you.</li>
+            <li>Your own notes in My notes are private to you. Your coach cannot read them.</li>
+            <li>The theLeadershipWell team can see whether you have signed in and how much you use the portal, such as how many messages you have sent the assistant, so we can support the program. We do not read your conversations or your notes.</li>
           </ul>
         </section>
 
         <section>
           <h2 className="text-[13px] font-semibold uppercase tracking-[1.5px] text-tlw-navy-rich">The assistant</h2>
           <ul className="mt-2 list-disc space-y-1.5 pl-5">
-            <li>It reads your report, your goals, and your own conversations with it. Nothing else about you.</li>
+            <li>
+              It reads what is in your portal so it can help you think: your report, your goals and the progress you record,
+              your conversations with it, your own notes, the documents you add (never a personnel review), your weekly plans,
+              and, if you have a coach, your session transcripts and the session notes your coach sent you. If your company
+              shared material for the program, such as its values, it reads that too. It does not read anything outside your portal.
+            </li>
             <li>It quotes only what is in your report. It does not invent scores, comments, or comparisons.</li>
             <li>It is a thinking partner for what comes after your debrief, not a coach, a therapist, or a decision-maker. It will not tell you what your goals should be. You decide.</li>
             <li>Your conversations are stored so you can return to them. They are used to run and improve the service, not to train public AI models.</li>
@@ -46,8 +53,9 @@ export default function PortalPrivacyPage() {
         <section>
           <h2 className="text-[13px] font-semibold uppercase tracking-[1.5px] text-tlw-navy-rich">Signing in</h2>
           <p className="mt-2">
-            You sign in with a link sent to your email, or with a username and password you set yourself. Links work once and
-            expire after 24 hours. We never ask for a password by email.
+            You sign in with a link sent to your email, or with a username and password you set yourself. Each link works once.
+            A link you ask for yourself expires after 24 hours; an invitation or reminder link lasts 14 days. We never ask for
+            a password by email.
           </p>
         </section>
 

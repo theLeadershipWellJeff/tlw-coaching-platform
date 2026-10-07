@@ -1040,7 +1040,9 @@ export type PortalNote = {
 }
 
 // Dedupe ledger for the daily portal-reminder cron (migration 063).
-export type PortalReminderKind = 'welcome' | 'comeback' | 'quarterly_goals' | 'weekly_plan'
+// 'report_ready' is never chosen by the cron — it is sent by hand from the
+// Command Center (lib/portal/report-ready.ts), period_key 'report-<documentId>'.
+export type PortalReminderKind = 'welcome' | 'comeback' | 'quarterly_goals' | 'weekly_plan' | 'report_ready'
 export type PortalReminder = {
   id: string
   org_id: string

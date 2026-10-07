@@ -21,6 +21,13 @@ export async function GET() {
   const clientId = await getPortalClientId()
   if (!clientId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const supabase = getSupabaseAdmin()
+  // Same rule as the home page and the prompt (lib/portal/data.ts): a coach link
+  // that is not a portal participant's structural house-coach link.
+  const [{ data: me }, { data: links }] = await Promise.all([
+    supabase.from('clients').select('client_type').eq('id', clientId).maybeSingle(),
+    supabase.from('coach_clients').select('coach_id').eq('client_id', clientId).limit(1),
+  ])
+  const hasCoach = (links?.length ?? 0) > 0 && me?.client_type !== 'portal'
   // `mode` (migration 061) read defensively: pre-migration every thread is general.
   const withMode = await supabase
     .from('portal_conversations')
@@ -28,14 +35,14 @@ export async function GET() {
     .eq('client_id', clientId)
     .order('updated_at', { ascending: false })
     .limit(50)
-  if (!withMode.error) return NextResponse.json({ conversations: withMode.data || [] })
+  if (!withMode.error) return NextResponse.json({ conversations: withMode.data || [], hasCoach })
   const { data } = await supabase
     .from('portal_conversations')
     .select('id, title, updated_at')
     .eq('client_id', clientId)
     .order('updated_at', { ascending: false })
     .limit(50)
-  return NextResponse.json({ conversations: (data || []).map((c) => ({ ...c, mode: 'general' })) })
+  return NextResponse.json({ conversations: (data || []).map((c) => ({ ...c, mode: 'general' })), hasCoach })
 }
 
 /** A client-generated id for one outgoing message (the retry/idempotency key). */
