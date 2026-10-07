@@ -129,6 +129,21 @@ export default function PortalUserPage({ params }: { params: { id: string } }) {
       setBusy(false)
     }
   }
+  async function reportReady() {
+    if (!window.confirm('Email them that their 360 report is ready, with a link that signs them straight in? This goes once per report.')) return
+    setBusy(true)
+    setError('')
+    setNotice('')
+    try {
+      const d = await api<{ sentTo: string; via: string; warning?: string }>(`/api/admin/portal-users/${params.id}/report-ready`, { method: 'POST' })
+      setNotice(`Told ${d.sentTo} their report is ready (via ${d.via === 'resend' ? 'the portal address' : 'Gmail'}).${d.warning ? ` ${d.warning}` : ''}`)
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not send.')
+    } finally {
+      setBusy(false)
+    }
+  }
   async function upload() {
     const file = fileRef.current?.files?.[0]
     if (!file) return
@@ -197,6 +212,12 @@ export default function PortalUserPage({ params }: { params: { id: string } }) {
             actions={
               <div className="flex flex-wrap items-center gap-3">
                 <button className={btnLink} disabled={busy || !u.email || u.archived} onClick={invite}>{u.portal.invitedAt ? 'Resend portal link' : 'Invite to portal'}</button>
+                {/* For someone already invited when a report lands; the first invitation already says the report is inside. */}
+                {(u.portal.invitedAt || u.portal.lastSeenAt) && detail.documents.some((d) => d.kind === 'assessment_360' && d.extraction_status === 'complete') && (
+                  <button className={btnLink} disabled={busy || !u.email || u.archived} onClick={reportReady} title="Email them that their 360 report is ready (once per report)">
+                    Tell them it&apos;s ready
+                  </button>
+                )}
                 {u.has_coach_relationship && <Link className={btnLink} href={`/clients/${u.id}`}>Coach workspace →</Link>}
                 {!edit && <button className={btnLink} onClick={() => setEdit(true)}>Edit</button>}
                 <button className={btnLink} disabled={busy} onClick={() => patch({ archived: !u.archived }, u.archived ? 'Restored — they can sign in again.' : 'Archived — portal access is off. Their data is kept.')}>

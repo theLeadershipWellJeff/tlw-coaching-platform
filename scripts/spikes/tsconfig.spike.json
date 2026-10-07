@@ -29,6 +29,7 @@
     "../../lib/portal/chat.ts",
     "../../lib/portal/reminders.ts",
     "../../lib/portal/archive.ts",
+    "../../lib/portal/email.ts",
     "../../lib/portal/notes.ts",
     "../../lib/scoring/engine.ts",
     "../../lib/documents/failure.ts",

@@ -32,6 +32,7 @@ export type AdminAction =
   | 'portal_user_restored'
   | 'portal_user_deleted'
   | 'portal_invite_sent'
+  | 'portal_report_ready_sent'
   | 'cohort_invite_batch'
   | 'document_uploaded'
   | 'document_retry'

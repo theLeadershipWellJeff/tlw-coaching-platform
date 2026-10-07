@@ -190,6 +190,7 @@ export const REMINDER_SUBJECTS: Record<PortalReminderKind, string> = {
   comeback: 'A quiet nudge from your coaching portal',
   quarterly_goals: 'A new quarter — a good moment for your goals',
   weekly_plan: 'Your Top 5 for this week',
+  report_ready: 'Your 360 report is ready',
 }
 
 /** Everyone with a portal presence: participants, the 360 flag, or ever invited. */

@@ -52,6 +52,13 @@ const ASSESSMENT_SUGGESTIONS = [
 ]
 const COMPARISON_SUGGESTION = "What's changed since my last 360?"
 
+/** For someone with no coach (and no report yet): nothing about sessions or a coach's notes. */
+const NO_COACH_SUGGESTIONS = [
+  'What should I focus on this week?',
+  'Help me think through a decision.',
+  'Help me set a goal I can measure.',
+]
+
 /** The 360 is switched on but the report is not here yet — it is being added for them. */
 const AWAITING_REPORT_SUGGESTIONS = [
   'How does a 360 work?',
@@ -98,12 +105,15 @@ export default function PortalChat() {
   const [failMenuFor, setFailMenuFor] = useState<string | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const [branding, setBranding] = useState<PortalBranding | null>(null)
+  /** Defaults to true (today's copy) until the conversation list says otherwise. */
+  const [hasCoach, setHasCoach] = useState(true)
 
   async function refreshConversations() {
     try {
       const res = await fetch('/api/portal/chat')
       const d = res.ok ? await res.json() : { conversations: [] }
       setConversations(d.conversations || [])
+      if (typeof d.hasCoach === 'boolean') setHasCoach(d.hasCoach)
     } catch {
       /* ignore */
     }
@@ -167,7 +177,9 @@ export default function PortalChat() {
         ? [...ASSESSMENT_SUGGESTIONS, ...(assessment.hasComparison ? [COMPARISON_SUGGESTION] : [])]
         : assessment.awaiting
           ? AWAITING_REPORT_SUGGESTIONS
-          : SUGGESTIONS
+          : hasCoach
+            ? SUGGESTIONS
+            : NO_COACH_SUGGESTIONS
   const canSavePlan = mode === 'weekly_plan' && !!activeId && messages.some((m) => m.role === 'assistant' && m.content.trim()) && !sending
 
   useEffect(() => {
@@ -510,7 +522,9 @@ export default function PortalChat() {
                       ? 'Ask me anything about your report, your goals, or what to do next.'
                       : assessment.awaiting
                         ? 'Your 360 report is on its way and will be added for you. In the meantime, ask me anything about how a 360 works or what you hope to learn from it.'
-                        : 'Ask me anything about your goals, sessions, or the notes your coach sent you.'}
+                        : hasCoach
+                          ? 'Ask me anything about your goals, sessions, or the notes your coach sent you.'
+                          : 'Ask me anything about your goals, the documents you have added, or what you are working on.'}
                 </p>
                 <div className="mt-4 flex flex-col items-center gap-2">
                   {starters.map((s) => (

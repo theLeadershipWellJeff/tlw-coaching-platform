@@ -1882,6 +1882,21 @@ own section in the prompt) so the portal works as a general coaching tool.
   buildReminderEmailHtml`. Verify the pure rules:
   `node_modules/.bin/tsc -p scripts/spikes/tsconfig.spike.json && node
   scripts/spikes/verify-portal-reminders.js`.
+- **Launch fixes (2026-10-07, PRs #286 + PR 2).** Reminder links mint as
+  `client_tokens.purpose='reminder_login'` so they never count as an invitation
+  (the welcome ladder anchors on `purpose='login'` only); sign-in accepts
+  `login | reminder_login | reminder` (the last = rows migration 075 relabelled).
+  `portal_access_expires_at` is enforced on the session and every auth route
+  (`lib/portal/archive.ts#isPortalAccessBlocked`). The **invitation** carries a
+  context line (`email.ts#portalInviteContextLine` — company program + "your
+  360 report is inside" when one is complete), because invitations go out only
+  once a report is in. A `portal`-type participant's invite and sign-in emails
+  sign off as the firm, matching the reminders. **"Tell them it's ready"** on
+  the Command Center per-user page (`POST /api/admin/portal-users/[id]/
+  report-ready` → `lib/portal/report-ready.ts`) emails an already-invited
+  person that a completed 360 is in — `portal_reminders` kind `report_ready`,
+  period_key `report-<documentId>` (once per report, claim-before-send,
+  released on failure); the cron never sends it.
 
 ### Enterprise co-branding — company logos (2026-09-24; migration 073)
 
