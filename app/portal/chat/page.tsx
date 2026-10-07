@@ -52,6 +52,13 @@ const ASSESSMENT_SUGGESTIONS = [
 ]
 const COMPARISON_SUGGESTION = "What's changed since my last 360?"
 
+/** The 360 is switched on but the report is not here yet — it is being added for them. */
+const AWAITING_REPORT_SUGGESTIONS = [
+  'How does a 360 work?',
+  'What should I expect from my report?',
+  'What should I reflect on while I wait?',
+]
+
 /** Plan-your-week openers — the brief expects the client to say they're planning. */
 const WEEK_SUGGESTIONS = ["I'm planning my week.", 'Help me work out what a successful week looks like.']
 
@@ -77,7 +84,7 @@ export default function PortalChat() {
   const [uploading, setUploading] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [menuFor, setMenuFor] = useState<string | null>(null)
-  const [assessment, setAssessment] = useState<{ enabled: boolean; hasComparison: boolean }>({ enabled: false, hasComparison: false })
+  const [assessment, setAssessment] = useState<{ enabled: boolean; hasComparison: boolean; awaiting: boolean }>({ enabled: false, hasComparison: false, awaiting: false })
   const [goalSeed, setGoalSeed] = useState<{ title: string; description: string } | null>(null)
   const [goalSaved, setGoalSaved] = useState(false)
   // Plan your week: a thread's mode is fixed at creation; ?mode=week starts one.
@@ -147,6 +154,7 @@ export default function PortalChat() {
         setAssessment({
           enabled: !!d.enabled && (d.documents || []).length > 0,
           hasComparison: (d.documents || []).some((x: { has_comparison?: boolean }) => x.has_comparison),
+          awaiting: !!d.enabled && (d.documents || []).length === 0,
         })
       )
       .catch(() => {})
@@ -157,7 +165,9 @@ export default function PortalChat() {
       ? WEEK_SUGGESTIONS
       : assessment.enabled
         ? [...ASSESSMENT_SUGGESTIONS, ...(assessment.hasComparison ? [COMPARISON_SUGGESTION] : [])]
-        : SUGGESTIONS
+        : assessment.awaiting
+          ? AWAITING_REPORT_SUGGESTIONS
+          : SUGGESTIONS
   const canSavePlan = mode === 'weekly_plan' && !!activeId && messages.some((m) => m.role === 'assistant' && m.content.trim()) && !sending
 
   useEffect(() => {
@@ -498,7 +508,9 @@ export default function PortalChat() {
                     ? 'A short conversation that ends in your Top 5 for the week. Start by saying you are planning your week.'
                     : assessment.enabled
                       ? 'Ask me anything about your report, your goals, or what to do next.'
-                      : 'Ask me anything about your goals, sessions, or the notes your coach sent you.'}
+                      : assessment.awaiting
+                        ? 'Your 360 report is on its way and will be added for you. In the meantime, ask me anything about how a 360 works or what you hope to learn from it.'
+                        : 'Ask me anything about your goals, sessions, or the notes your coach sent you.'}
                 </p>
                 <div className="mt-4 flex flex-col items-center gap-2">
                   {starters.map((s) => (

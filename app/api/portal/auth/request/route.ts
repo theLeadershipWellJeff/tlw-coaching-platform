@@ -4,7 +4,7 @@ import { createLoginToken, recentLoginTokenCount, MAX_LINKS_PER_HOUR } from '@/l
 import { sendPortalLoginEmail } from '@/lib/portal/send'
 import { getBaseUrl } from '@/lib/url'
 import { logPortalAccess } from '@/lib/portal/access'
-import { isPortalArchived } from '@/lib/portal/archive'
+import { isPortalAccessBlocked } from '@/lib/portal/archive'
 
 export const runtime = 'nodejs'
 
@@ -23,12 +23,21 @@ export async function POST(req: NextRequest) {
 
   try {
     const supabase = getSupabaseAdmin()
-    const { data: client } = await supabase
+    // limit(2), not maybeSingle(): two rows sharing an email made maybeSingle()
+    // error, the error was dropped, and that person silently never got a link.
+    const { data: matches, error: lookupErr } = await supabase
       .from('clients')
-      .select('id, org_id, name, email, portal_features')
+      .select('id, org_id, name, email, portal_features, portal_access_expires_at')
       .ilike('email', email)
-      .maybeSingle()
-    if (!client || !client.email || isPortalArchived(client.portal_features)) return generic
+      .order('created_at', { ascending: true })
+      .limit(2)
+    if (lookupErr) console.error('portal login request: client lookup failed:', lookupErr.message)
+    if (matches && matches.length > 1) {
+      console.warn(`[portal/auth/request] duplicate client rows share one email — sending to the first: ${matches.map((m) => m.id).join(', ')}`)
+    }
+    const client = matches?.[0]
+    // Archived or past the access window: the same generic response, nothing minted.
+    if (!client || !client.email || isPortalAccessBlocked(client)) return generic
 
     if ((await recentLoginTokenCount(client.id)) >= MAX_LINKS_PER_HOUR) return generic
 

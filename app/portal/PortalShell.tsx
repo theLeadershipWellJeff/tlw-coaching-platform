@@ -12,11 +12,14 @@ export function PortalShell({
   hasCoach = true,
   assessmentsEnabled = false,
   hasBooking = true,
+  hasReport = true,
 }: {
   onboarded: boolean
   hasCoach?: boolean
   assessmentsEnabled?: boolean
   hasBooking?: boolean
+  /** A completed 360 report is on file (only meaningful with assessmentsEnabled). */
+  hasReport?: boolean
 }) {
   const [openSignal, setOpenSignal] = useState(0)
   return (
@@ -27,6 +30,7 @@ export function PortalShell({
         hasCoach={hasCoach}
         assessmentsEnabled={assessmentsEnabled}
         hasBooking={hasBooking}
+        hasReport={hasReport}
       />
       <div className="mt-8 flex justify-center">
         <TourReplayLink onReplay={() => setOpenSignal((v) => v + 1)} />

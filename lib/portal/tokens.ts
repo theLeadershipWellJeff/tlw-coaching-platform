@@ -17,26 +17,43 @@ export const INVITE_LINK_TTL_MS = 14 * 24 * 3600 * 1000
 /** Max magic-link emails per client per hour (anti-abuse). */
 export const MAX_LINKS_PER_HOUR = 5
 
+/**
+ * Why a sign-in link was minted. Both purposes sign the client in; they differ
+ * only in what they MEAN. `login` = an invitation or a link the client asked
+ * for — "invited at" (lib/admin/portal-status.ts) and the welcome-reminder
+ * ladder anchor on these. `reminder_login` = the link inside a cron reminder email;
+ * it must never count as an invitation, or each welcome reminder would restart
+ * the welcome ladder it belongs to (day 3 → day 6 → day 9 … forever).
+ */
+export type LoginTokenPurpose = 'login' | 'reminder_login'
+// 'reminder' = links relabelled by migration 075 (applied 2026-10-07) before the
+// code settled on 'reminder_login'. Still sign-in-able; never minted again.
+const SIGN_IN_PURPOSES = ['login', 'reminder_login', 'reminder']
+
 function hashToken(raw: string): string {
   return createHash('sha256').update(raw).digest('hex')
 }
 
 /** Mint + persist a login token; returns the RAW token for the emailed link. */
-export async function createLoginToken(clientId: string, orgId: string, opts: { ttlMs?: number } = {}): Promise<string> {
+export async function createLoginToken(
+  clientId: string,
+  orgId: string,
+  opts: { ttlMs?: number; purpose?: LoginTokenPurpose } = {}
+): Promise<string> {
   const raw = randomBytes(32).toString('hex')
   const supabase = getSupabaseAdmin()
   const { error } = await supabase.from('client_tokens').insert({
     client_id: clientId,
     org_id: orgId,
     token_hash: hashToken(raw),
-    purpose: 'login',
+    purpose: opts.purpose ?? 'login',
     expires_at: new Date(Date.now() + (opts.ttlMs ?? LOGIN_LINK_TTL_MS)).toISOString(),
   })
   if (error) throw new Error(`client_tokens insert: ${error.message}`)
   return raw
 }
 
-/** How many login links this client has been sent in the last hour. */
+/** How many sign-in links (any purpose) this client has been sent in the last hour. */
 export async function recentLoginTokenCount(clientId: string): Promise<number> {
   const supabase = getSupabaseAdmin()
   const since = new Date(Date.now() - 3600 * 1000).toISOString()
@@ -44,7 +61,7 @@ export async function recentLoginTokenCount(clientId: string): Promise<number> {
     .from('client_tokens')
     .select('id', { count: 'exact', head: true })
     .eq('client_id', clientId)
-    .eq('purpose', 'login')
+    .in('purpose', SIGN_IN_PURPOSES)
     .gte('created_at', since)
   return count ?? 0
 }
@@ -63,7 +80,7 @@ export async function consumeLoginToken(
     .from('client_tokens')
     .select('id, client_id, org_id, expires_at, used_at')
     .eq('token_hash', hashToken(raw))
-    .eq('purpose', 'login')
+    .in('purpose', SIGN_IN_PURPOSES)
     .maybeSingle()
   if (error || !data) return null
   if (data.used_at) return null

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { consumeLoginToken } from '@/lib/portal/tokens'
 import { signPortalToken, PORTAL_COOKIE, portalCookieOptions } from '@/lib/portal/session'
 import { logPortalAccess } from '@/lib/portal/access'
+import { getSupabaseAdmin } from '@/lib/supabase/server'
+import { isPortalAccessBlocked } from '@/lib/portal/archive'
 import { getPortalClientId } from '@/lib/portal/server'
 
 export const runtime = 'nodejs'
@@ -25,6 +27,22 @@ export async function POST(req: NextRequest) {
     const signedIn = await getPortalClientId().catch(() => null)
     if (signedIn) return NextResponse.json({ ok: true, alreadySignedIn: true })
     return NextResponse.json({ error: 'This link is invalid or has expired.' }, { status: 401 })
+  }
+
+  // Archived or past the access window: refuse with the same message as a bad
+  // link (consistent with request/login). A failed lookup fails open — the
+  // session check in getPortalClientId re-applies the rule on every request.
+  try {
+    const { data: owner } = await getSupabaseAdmin()
+      .from('clients')
+      .select('portal_features, portal_access_expires_at')
+      .eq('id', result.clientId)
+      .maybeSingle()
+    if (owner && isPortalAccessBlocked(owner)) {
+      return NextResponse.json({ error: 'This link is invalid or has expired.' }, { status: 401 })
+    }
+  } catch {
+    /* fail open */
   }
 
   await logPortalAccess(result.clientId, 'login_verify')

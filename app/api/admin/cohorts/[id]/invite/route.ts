@@ -4,7 +4,7 @@ import { inviteCohortBatch } from '@/lib/admin/debrief'
 import { logAdminAction } from '@/lib/admin/audit'
 
 export const runtime = 'nodejs'
-export const maxDuration = 60
+export const maxDuration = 300
 
 /**
  * Send portal invitations to a cohort — batched (≤25 per call) and throttled,

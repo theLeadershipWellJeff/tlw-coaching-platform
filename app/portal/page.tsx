@@ -18,6 +18,7 @@ import { CoBrandHeader } from './CoBrandHeader'
 import { ScheduleWithCoach } from './ScheduleWithCoach'
 import { UpcomingSessionsCard } from './UpcomingSessionsCard'
 import { loadPortalBranding } from '@/lib/portal/branding'
+import { loadPortalAssessments } from '@/lib/portal/assessments'
 
 export const dynamic = 'force-dynamic'
 
@@ -56,9 +57,15 @@ export default async function PortalHome() {
   const clientId = await getPortalClientId()
   if (!clientId) redirect('/portal/login')
 
-  const [data, branding]: [PortalOverview | null, Awaited<ReturnType<typeof loadPortalBranding>>] = await Promise.all([
+  const [data, branding, assessments]: [
+    PortalOverview | null,
+    Awaited<ReturnType<typeof loadPortalBranding>>,
+    Awaited<ReturnType<typeof loadPortalAssessments>> | null,
+  ] = await Promise.all([
     loadPortalOverview(clientId),
     loadPortalBranding(clientId),
+    // Only to word the tour's 360 step; a failure keeps today's copy.
+    loadPortalAssessments(clientId).catch(() => null),
   ])
   if (!data) redirect('/portal/login')
 
@@ -99,6 +106,7 @@ export default async function PortalHome() {
         hasCoach={hasCoach}
         assessmentsEnabled={assessmentsEnabled}
         hasBooking={Boolean(data.coach ? data.coach.bookingUrl || data.coach.assistantEmail : data.bookingUrl)}
+        hasReport={!assessments || assessments.documents.length > 0}
       />
 
       <h1 className="mt-8 text-[24px] font-medium text-tlw-navy-deep">Welcome, {firstName}.</h1>
