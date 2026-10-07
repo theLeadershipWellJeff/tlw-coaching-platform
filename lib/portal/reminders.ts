@@ -35,7 +35,7 @@
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { getBaseUrl } from '@/lib/url'
 import { loadPortalStates } from '@/lib/admin/portal-status'
-import { createLoginToken } from './tokens'
+import { INVITE_LINK_TTL_MS, createLoginToken } from './tokens'
 import { resolveClientCoach } from './coach'
 import { deliverPortalEmail } from './send'
 import { buildReminderEmailHtml } from './email'
@@ -278,7 +278,7 @@ export async function runPortalReminders(opts: { now?: Date; dryRun?: boolean; l
     }
     try {
       const coach = await resolveClientCoach(c.id)
-      const raw = await createLoginToken(c.id, client?.org_id || '')
+      const raw = await createLoginToken(c.id, client?.org_id || '', { ttlMs: INVITE_LINK_TTL_MS })
       const base = getBaseUrl()
       const html = buildReminderEmailHtml({
         firstName: (c.name || '').split(' ')[0] || 'there',

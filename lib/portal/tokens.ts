@@ -1,12 +1,19 @@
 /**
  * Magic-link login tokens for the Client Portal. The raw token is emailed inside
  * the link and NEVER stored — only its sha256 hash lands in `client_tokens`.
- * Tokens are single-use (used_at) and expire after 24h. Node route handlers only.
+ * Tokens are single-use (used_at). A link the person asks for themselves (the
+ * sign-in page) expires after 24h; an INVITATION — coach / Command Center invite,
+ * cohort invite, reminder email — lasts 14 days, because people open those days
+ * later (Jeff, 2026-10-07: too many "the link isn't working" replies at 24h).
+ * Node route handlers only.
  */
 import { createHash, randomBytes } from 'crypto'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 
-const TOKEN_TTL_MS = 24 * 3600 * 1000
+/** A sign-in link the person requested themselves. */
+export const LOGIN_LINK_TTL_MS = 24 * 3600 * 1000
+/** An invitation or reminder link someone else sent them. */
+export const INVITE_LINK_TTL_MS = 14 * 24 * 3600 * 1000
 /** Max magic-link emails per client per hour (anti-abuse). */
 export const MAX_LINKS_PER_HOUR = 5
 
@@ -15,7 +22,7 @@ function hashToken(raw: string): string {
 }
 
 /** Mint + persist a login token; returns the RAW token for the emailed link. */
-export async function createLoginToken(clientId: string, orgId: string): Promise<string> {
+export async function createLoginToken(clientId: string, orgId: string, opts: { ttlMs?: number } = {}): Promise<string> {
   const raw = randomBytes(32).toString('hex')
   const supabase = getSupabaseAdmin()
   const { error } = await supabase.from('client_tokens').insert({
@@ -23,7 +30,7 @@ export async function createLoginToken(clientId: string, orgId: string): Promise
     org_id: orgId,
     token_hash: hashToken(raw),
     purpose: 'login',
-    expires_at: new Date(Date.now() + TOKEN_TTL_MS).toISOString(),
+    expires_at: new Date(Date.now() + (opts.ttlMs ?? LOGIN_LINK_TTL_MS)).toISOString(),
   })
   if (error) throw new Error(`client_tokens insert: ${error.message}`)
   return raw
