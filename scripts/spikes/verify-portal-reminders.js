@@ -44,6 +44,32 @@ assert.deepStrictEqual(R.decideReminder(invited, at('2026-09-11T16:00:00Z'), new
 assert.deepStrictEqual(R.decideReminder(invited, at('2026-09-13T16:00:00Z'), none), { kind: 'welcome', periodKey: 'welcome-10d-2026-09-01' }, 'day 12, nothing sent → only the 10d rung')
 assert.strictEqual(R.decideReminder(invited, at('2026-10-20T16:00:00Z'), new Set(['welcome:welcome-10d-2026-09-01'])), null, 'welcome ladder ends; no quarterly for someone never in')
 
+// F1 (2026-10-07): the anchor stays on the invitation. Reminder emails mint
+// 'reminder_login' tokens, which invitedAt (purpose='login' only) ignores, so
+// day 3's send can no longer restart the ladder. With the anchor fixed at day 0:
+const sent3 = new Set(['welcome:welcome-3d-2026-09-01'])
+for (let d = 4; d <= 9; d++) {
+  const day = String(1 + d).padStart(2, '0')
+  assert.strictEqual(R.decideReminder(invited, at(`2026-09-${day}T16:00:00Z`), sent3), null, `day ${d} after the 3d rung → nothing`)
+}
+assert.deepStrictEqual(R.decideReminder(invited, at('2026-09-11T16:00:00Z'), sent3), { kind: 'welcome', periodKey: 'welcome-10d-2026-09-01' }, 'day 10 → the 10d rung')
+const sentBoth = new Set(['welcome:welcome-3d-2026-09-01', 'welcome:welcome-10d-2026-09-01'])
+for (const day of ['12', '15', '20', '30']) {
+  assert.strictEqual(R.decideReminder(invited, at(`2026-09-${day}T16:00:00Z`), sentBoth), null, `day ${Number(day) - 1} after both rungs → nothing`)
+}
+
+// F2: access window + archive, the one auth/session test.
+const A = require(path.join(ROOT, '.spike-build/lib/portal/archive.js'))
+const nowMs = Date.parse('2026-10-07T12:00:00Z')
+assert.strictEqual(A.isPortalAccessExpired(null, nowMs), false, 'no window → open')
+assert.strictEqual(A.isPortalAccessExpired('not a date', nowMs), false, 'unparseable → open')
+assert.strictEqual(A.isPortalAccessExpired('2026-10-07T11:59:59Z', nowMs), true, 'past → expired')
+assert.strictEqual(A.isPortalAccessExpired('2026-12-31T00:00:00Z', nowMs), false, 'future → open')
+assert.strictEqual(A.isPortalAccessBlocked({ portal_features: { archived: true }, portal_access_expires_at: null }), true, 'archived → blocked')
+assert.strictEqual(A.isPortalAccessBlocked({ portal_features: {}, portal_access_expires_at: '2020-01-01T00:00:00Z' }), true, 'expired → blocked')
+assert.strictEqual(A.isPortalAccessBlocked({ portal_features: { assessments: true }, portal_access_expires_at: '2099-01-01T00:00:00Z' }), false, 'live participant → open')
+assert.strictEqual(A.isPortalAccessBlocked(null), false, 'no row → not blocked here (the cookie decides)')
+
 // ── quarterly, for people who have been in ───────────────────────────────────
 const seen = { ...base, invitedAt: '2026-06-01T00:00:00Z', lastSeenAt: '2026-09-28T16:00:00Z' }
 assert.strictEqual(R.decideReminder(seen, at('2026-10-04T16:00:00Z'), none), null, 'Sunday before the first Monday → nothing')

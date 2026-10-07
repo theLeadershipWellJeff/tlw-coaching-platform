@@ -4,7 +4,7 @@ import { verifyPortalLogin } from '@/lib/portal/credentials'
 import { signPortalToken, PORTAL_COOKIE, portalCookieOptions } from '@/lib/portal/session'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { checkPortalRateLimit, logPortalAccess } from '@/lib/portal/access'
-import { isPortalArchived } from '@/lib/portal/archive'
+import { isPortalAccessBlocked } from '@/lib/portal/archive'
 
 export const runtime = 'nodejs'
 
@@ -51,13 +51,13 @@ export async function POST(req: NextRequest) {
   if (clientId) await logPortalAccess(clientId, 'login_password', { ok: result.ok })
   if (!result.ok) return generic
 
-  // An archived portal user gets the same generic refusal (no enumeration).
+  // An archived or expired portal user gets the same generic refusal (no enumeration).
   const { data: owner } = await getSupabaseAdmin()
     .from('clients')
-    .select('portal_features')
+    .select('portal_features, portal_access_expires_at')
     .eq('id', result.clientId)
     .maybeSingle()
-  if (owner && isPortalArchived(owner.portal_features)) return generic
+  if (owner && isPortalAccessBlocked(owner)) return generic
 
   const token = await signPortalToken(result.clientId)
   cookies().set(PORTAL_COOKIE, token, portalCookieOptions())

@@ -32,6 +32,8 @@ type Step = {
   icon: string
   /** Swapped in when nobody is coaching them (a standalone or enterprise participant). */
   noCoach?: { title: string; body: string }
+  /** Swapped in when the 360 card is on but no completed report is on file yet. */
+  noReport?: { title: string; body: string }
 }
 
 export type TourContext = {
@@ -41,6 +43,8 @@ export type TourContext = {
   assessmentsEnabled: boolean
   /** The "Schedule your next session" button is on the page (coach has a booking link). */
   hasBooking: boolean
+  /** A completed 360 report is on file. Omitted = true (today's copy). */
+  hasReport?: boolean
 }
 
 /**
@@ -69,6 +73,10 @@ export function buildTourSteps(ctx: TourContext): Step[] {
       icon: '📊',
       title: 'Your 360 report',
       body: 'Your feedback report lives at the top of the page, ready to view or download whenever you want it. The assistant has read it too, so you can ask what your raters saw, where you and they see things differently, and what to do with that.',
+      noReport: {
+        title: 'Your 360 report',
+        body: 'Your feedback report will live at the top of the page. It is being added for you, so there is nothing you need to upload. Once it is here you can view or download it any time, and the assistant will have read it too.',
+      },
     },
     {
       key: 'chat',
@@ -148,7 +156,7 @@ export function buildTourSteps(ctx: TourContext): Step[] {
   ]
   return steps
     .filter((s) => s.when !== false)
-    .map(({ when: _when, ...s }) => s)
+    .map(({ when: _when, noReport, ...s }) => (ctx.hasReport === false && noReport ? { ...s, ...noReport } : s))
 }
 
 /**
@@ -162,6 +170,7 @@ export function PortalTour({
   hasCoach = true,
   assessmentsEnabled = false,
   hasBooking = true,
+  hasReport = true,
 }: {
   onboarded: boolean
   /** Bump to reopen the tour on demand ("take the tour again"). */
@@ -172,13 +181,15 @@ export function PortalTour({
   assessmentsEnabled?: boolean
   /** The booking button is on the page — otherwise its step is left out. */
   hasBooking?: boolean
+  /** A completed 360 report is on file — otherwise the 360 step says it is on its way. */
+  hasReport?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState(0)
   const router = useRouter()
   const steps = useMemo(
-    () => buildTourSteps({ hasCoach, assessmentsEnabled, hasBooking }),
-    [hasCoach, assessmentsEnabled, hasBooking]
+    () => buildTourSteps({ hasCoach, assessmentsEnabled, hasBooking, hasReport }),
+    [hasCoach, assessmentsEnabled, hasBooking, hasReport]
   )
 
   useEffect(() => {

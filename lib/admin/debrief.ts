@@ -15,6 +15,7 @@ import { loadPortalStates, type ClientPortalState } from '@/lib/admin/portal-sta
 import { createLoginToken, recentLoginTokenCount, MAX_LINKS_PER_HOUR } from '@/lib/portal/tokens'
 import { sendPortalLoginEmail } from '@/lib/portal/send'
 import { getBaseUrl } from '@/lib/url'
+import { isPortalAccessExpired } from '@/lib/portal/archive'
 import { loadAssignedCoaches } from './coach-assignment'
 
 export class AdminError extends Error {
@@ -194,7 +195,17 @@ export async function createPortalParticipant(
   const email = input.email.trim().toLowerCase()
   if (!name) throw new AdminError(400, 'Name is required.')
   if (!email || !email.includes('@')) throw new AdminError(400, 'A valid email is required.')
-  const { data: dup } = await supabase.from('clients').select('id, name').ilike('email', email).maybeSingle()
+  // limit(2), not maybeSingle(): with two rows already sharing the email,
+  // maybeSingle() errored, the error was dropped, and a THIRD row got created.
+  const { data: dups, error: dupErr } = await supabase
+    .from('clients')
+    .select('id, name')
+    .ilike('email', email)
+    .order('created_at', { ascending: true })
+    .limit(2)
+  if (dupErr) throw new AdminError(500, `Could not check for an existing record: ${dupErr.message}`)
+  if (dups && dups.length > 1) console.warn(`[createPortalParticipant] duplicate client rows share ${email}: ${dups.map((d) => d.id).join(', ')}`)
+  const dup = dups?.[0]
   // The existing record is returned so the Command Center can offer to set up
   // THAT person's portal instead of dead-ending (never a duplicate row).
   if (dup) throw new AdminError(409, `${dup.name} already has a record with that email.`, { existingClientId: dup.id, existingName: dup.name })
@@ -202,8 +213,12 @@ export async function createPortalParticipant(
   let expires: string | null = null
   let companyId = input.companyId || null
   if (input.cohortId) {
-    const { data: cohort } = await supabase.from('cohorts').select('id, company_id, access_expires_at').eq('id', input.cohortId).maybeSingle()
+    const { data: cohort } = await supabase.from('cohorts').select('id, company_id, access_expires_at, status').eq('id', input.cohortId).maybeSingle()
     if (!cohort) throw new AdminError(404, 'Cohort not found.')
+    // The UI hides these cohorts; the API refuses them too — a participant
+    // added here would have no access from day one.
+    if (cohort.status === 'archived') throw new AdminError(400, 'That cohort is archived. Restore it or pick another cohort.')
+    if (isPortalAccessExpired(cohort.access_expires_at)) throw new AdminError(400, "That cohort's access window has ended. Extend it or pick another cohort.")
     expires = cohort.access_expires_at
     companyId = companyId || cohort.company_id
   }

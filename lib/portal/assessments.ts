@@ -90,8 +90,10 @@ export async function loadLatestAssessmentForChat(
  * A one-line status for the chat when a 360 exists on file but is NOT the
  * surfaced report — so the assistant explains the state ("your report is on
  * file but the name didn't match", "it's still being read") instead of saying
- * no report exists. Null when nothing needs explaining: no assessment rows, or
- * the latest one is complete and the surfaces are on.
+ * no report exists. With the 360 on and nothing uploaded yet, it says the report
+ * is on its way and will be added for them. Null when nothing needs explaining:
+ * the 360 is off and no assessment rows exist, or the latest one is complete
+ * and the surfaces are on.
  */
 export async function loadAssessmentStatusForChat(clientId: string): Promise<string | null> {
   const supabase = getSupabaseAdmin()
@@ -134,6 +136,12 @@ export async function loadAssessmentStatusForChat(clientId: string): Promise<str
   )
   if (looksLike360) {
     return `A document added on ${when(looksLike360.created_at)}${looksLike360.title ? ` ("${looksLike360.title}")` : ''} looks like a 360 feedback report but was filed as an other document, so you see only part of its text rather than the full report. If they ask about their 360, say exactly that and suggest they remove it under "Your documents" on their home page and add it again — it will then be read in full.`
+  }
+  // F7: the 360 is switched on but nothing has been uploaded at all. Reports
+  // are added FOR participants (a coach or support uploads them), so the
+  // assistant must not send them off to upload one.
+  if (enabled) {
+    return `Their 360 feedback report has not been added to this account yet. It will be added for them by their coach or the theLeadershipWell team, so they do not need to find or upload it. If they ask about their report, say exactly that, and offer to explain how a 360 works or to help them think about what they hope to learn from it while they wait. Never suggest they upload it themselves.`
   }
   return null
 }

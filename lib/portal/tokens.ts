@@ -14,12 +14,12 @@ export const MAX_LINKS_PER_HOUR = 5
  * Why a sign-in link was minted. Both purposes sign the client in; they differ
  * only in what they MEAN. `login` = an invitation or a link the client asked
  * for — "invited at" (lib/admin/portal-status.ts) and the welcome-reminder
- * ladder anchor on these. `reminder` = the link inside a cron reminder email;
+ * ladder anchor on these. `reminder_login` = the link inside a cron reminder email;
  * it must never count as an invitation, or each welcome reminder would restart
  * the welcome ladder it belongs to (day 3 → day 6 → day 9 … forever).
  */
-export type LoginTokenPurpose = 'login' | 'reminder'
-const SIGN_IN_PURPOSES: LoginTokenPurpose[] = ['login', 'reminder']
+export type LoginTokenPurpose = 'login' | 'reminder_login'
+const SIGN_IN_PURPOSES: LoginTokenPurpose[] = ['login', 'reminder_login']
 
 function hashToken(raw: string): string {
   return createHash('sha256').update(raw).digest('hex')

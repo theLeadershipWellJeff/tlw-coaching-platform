@@ -278,9 +278,9 @@ export async function runPortalReminders(opts: { now?: Date; dryRun?: boolean; l
     }
     try {
       const coach = await resolveClientCoach(c.id)
-      // 'reminder', not 'login': this link must not read as a fresh invitation,
+      // 'reminder_login', not 'login': this link must not read as a fresh invitation,
       // or the welcome ladder (anchored on the latest invitation) restarts.
-      const raw = await createLoginToken(c.id, client?.org_id || '', 'reminder')
+      const raw = await createLoginToken(c.id, client?.org_id || '', 'reminder_login')
       const base = getBaseUrl()
       const html = buildReminderEmailHtml({
         firstName: (c.name || '').split(' ')[0] || 'there',
