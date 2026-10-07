@@ -2967,6 +2967,12 @@ Stripe hosted Checkout (`setup` mode) — never on a TLW page (PCI SAQ-A).**
   policy's "Google user data" section + Limited Use disclosure must match the
   scopes in `lib/authOptions.ts` — change a scope, change the page in the same
   PR. Billing terms must match `COACH_PRICING` and the no-refund cancel flow.
+- **Search indexing (2026-10-07).** `app/robots.ts` allows only `/`, `/join`,
+  `/privacy`, `/terms` (every app/token surface disallowed), `app/sitemap.ts`
+  lists those four, and each carries a canonical to `lib/site.ts#SITE_URL`
+  (`metadataBase` in the root layout). Fixes Search Console's "Page with
+  redirect" / "Duplicate without user-selected canonical". A new public page =
+  add it to `PUBLIC_PAGES` + the robots allow list + a canonical.
 - **OAuth consent screen is PUBLISHED / "In production"** (as of 2026-08). Any
   Google account can complete Google's consent step — but since 2026-09-09
   sign-in is **get-only**: the app admits the account only if a `coaches` row

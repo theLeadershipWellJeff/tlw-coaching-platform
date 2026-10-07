@@ -9,6 +9,7 @@ export const dynamic = 'force-dynamic'
 
 export const metadata = {
   title: 'theLeadershipWell — Join the coaching platform',
+  alternates: { canonical: '/join' },
 }
 
 /**
