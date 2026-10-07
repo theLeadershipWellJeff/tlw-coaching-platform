@@ -35,7 +35,7 @@
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { getBaseUrl } from '@/lib/url'
 import { loadPortalStates } from '@/lib/admin/portal-status'
-import { createLoginToken } from './tokens'
+import { INVITE_LINK_TTL_MS, createLoginToken } from './tokens'
 import { resolveClientCoach } from './coach'
 import { deliverPortalEmail } from './send'
 import { buildReminderEmailHtml } from './email'
@@ -280,7 +280,7 @@ export async function runPortalReminders(opts: { now?: Date; dryRun?: boolean; l
       const coach = await resolveClientCoach(c.id)
       // 'reminder_login', not 'login': this link must not read as a fresh invitation,
       // or the welcome ladder (anchored on the latest invitation) restarts.
-      const raw = await createLoginToken(c.id, client?.org_id || '', 'reminder_login')
+      const raw = await createLoginToken(c.id, client?.org_id || '', { ttlMs: INVITE_LINK_TTL_MS, purpose: 'reminder_login' })
       const base = getBaseUrl()
       const html = buildReminderEmailHtml({
         firstName: (c.name || '').split(' ')[0] || 'there',

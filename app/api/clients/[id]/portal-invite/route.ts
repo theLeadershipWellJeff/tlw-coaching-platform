@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { requireClientCoach } from '@/lib/client-access'
-import { createLoginToken } from '@/lib/portal/tokens'
+import { INVITE_LINK_TTL_MS, createLoginToken } from '@/lib/portal/tokens'
 import { sendPortalLoginEmail } from '@/lib/portal/send'
 import { getBaseUrl } from '@/lib/url'
 import { toErrorResponse } from '@/lib/api-handler'
@@ -66,7 +66,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
       return NextResponse.json({ error: 'This client has no email on file.' }, { status: 400 })
     }
 
-    const raw = await createLoginToken(client.id, client.org_id)
+    const raw = await createLoginToken(client.id, client.org_id, { ttlMs: INVITE_LINK_TTL_MS })
     const link = `${getBaseUrl()}/portal/verify?token=${raw}`
 
     const sent = await sendPortalLoginEmail({

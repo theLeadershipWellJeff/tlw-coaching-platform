@@ -60,6 +60,8 @@ export async function sendPortalLoginEmail(opts: {
     firstName,
     link: opts.link,
     coachName: coach?.name || null,
+    // Invitations last 14 days, a requested sign-in link 24 hours (lib/portal/tokens.ts).
+    expiresIn: opts.kind === 'invite' ? '14 days' : '24 hours',
   })
   return deliverPortalEmail({
     client: opts.client,

@@ -12,7 +12,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Coach, Database, PortalFeatures } from '@/lib/supabase/types'
 import { linkCoachToClient } from '@/lib/client-access'
 import { loadPortalStates, type ClientPortalState } from '@/lib/admin/portal-status'
-import { createLoginToken, recentLoginTokenCount, MAX_LINKS_PER_HOUR } from '@/lib/portal/tokens'
+import { INVITE_LINK_TTL_MS, createLoginToken, recentLoginTokenCount, MAX_LINKS_PER_HOUR } from '@/lib/portal/tokens'
 import { sendPortalLoginEmail } from '@/lib/portal/send'
 import { getBaseUrl } from '@/lib/url'
 import { isPortalAccessExpired } from '@/lib/portal/archive'
@@ -321,7 +321,7 @@ export async function inviteCohortBatch(
     try {
       const { data: c } = await supabase.from('clients').select('id, org_id, name, email').eq('id', u.id).maybeSingle()
       if (!c?.email) throw new Error('no email')
-      const raw = await createLoginToken(c.id, c.org_id)
+      const raw = await createLoginToken(c.id, c.org_id, { ttlMs: INVITE_LINK_TTL_MS })
       const link = `${getBaseUrl()}/portal/verify?token=${raw}`
       const r = await sendPortalLoginEmail({ client: { id: c.id, name: c.name, email: c.email }, link, kind: 'invite' })
       if (r.ok) sent.push(u.id)

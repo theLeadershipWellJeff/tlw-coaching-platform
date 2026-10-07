@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { requireSupervisor, toErrorResponse } from '@/lib/api-handler'
-import { createLoginToken, recentLoginTokenCount, MAX_LINKS_PER_HOUR } from '@/lib/portal/tokens'
+import { INVITE_LINK_TTL_MS, createLoginToken, recentLoginTokenCount, MAX_LINKS_PER_HOUR } from '@/lib/portal/tokens'
 import { sendPortalLoginEmail } from '@/lib/portal/send'
 import { getBaseUrl } from '@/lib/url'
 import { logAdminAction } from '@/lib/admin/audit'
@@ -66,7 +66,7 @@ export async function POST(
   const owningCoach = owner as Coach
   const sender: Coach = owningCoach.google_refresh_token ? owningCoach : actor
 
-  const raw = await createLoginToken(client.id, client.org_id)
+  const raw = await createLoginToken(client.id, client.org_id, { ttlMs: INVITE_LINK_TTL_MS })
   const link_ = `${getBaseUrl()}/portal/verify?token=${raw}`
 
   // Attributed to the OWNING coach either way — it's their client relationship.

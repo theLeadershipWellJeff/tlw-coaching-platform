@@ -4,6 +4,7 @@ import { signPortalToken, PORTAL_COOKIE, portalCookieOptions } from '@/lib/porta
 import { logPortalAccess } from '@/lib/portal/access'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { isPortalAccessBlocked } from '@/lib/portal/archive'
+import { getPortalClientId } from '@/lib/portal/server'
 
 export const runtime = 'nodejs'
 
@@ -18,6 +19,13 @@ export async function POST(req: NextRequest) {
 
   const result = await consumeLoginToken(token)
   if (!result) {
+    // Links are single-use, so re-clicking an invitation that was already used
+    // fails. When this browser already holds a live portal session, that person
+    // is signed in — send them to their own portal instead of an error page.
+    // Nothing about the token's owner is revealed: the session decides where
+    // they land, never the link.
+    const signedIn = await getPortalClientId().catch(() => null)
+    if (signedIn) return NextResponse.json({ ok: true, alreadySignedIn: true })
     return NextResponse.json({ error: 'This link is invalid or has expired.' }, { status: 401 })
   }
 
