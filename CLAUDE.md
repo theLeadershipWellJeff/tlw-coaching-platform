@@ -1135,8 +1135,10 @@ is never accepted here, and vice-versa.
   `POST /api/portal/auth/request` (anti-enumeration — always a generic response;
   rate-limited 5/client/hour; sends the link from the client's coach's Gmail via
   `sendCoachHtmlEmail`) → emailed link to `/portal/verify?token=` → the verify page
-  **POSTs** the token (scanner-safe) to `POST /api/portal/auth/verify`, which
-  consumes it and sets the session cookie. `lib/portal/session.ts` signs/verifies
+  shows a **"Sign in" button** and POSTs the token to `POST /api/portal/auth/verify`
+  only on that click (2026-10-07 — it used to POST on load, and corporate mail
+  scanners that open links in a script-running sandbox burned the single-use
+  token before the person clicked), which consumes it and sets the session cookie. `lib/portal/session.ts` signs/verifies
   the cookie with **Web Crypto (HMAC-SHA256)** so it runs in both the Edge
   `middleware.ts` (guards `/portal/**`, allowing only `/portal/login` + `/verify`)
   and Node routes; signed with `NEXTAUTH_SECRET` (no new env var).

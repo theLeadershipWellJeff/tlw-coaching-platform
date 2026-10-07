@@ -1,39 +1,38 @@
 'use client'
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 
+// The emailed link only opens this page; the single-use token is spent when
+// the person clicks "Sign in". Corporate mail scanners open links in a
+// sandboxed browser that runs scripts — an automatic POST on load let them
+// burn the token before the person ever clicked. They open, they don't click.
 function Verifier() {
   const params = useSearchParams()
   const router = useRouter()
-  const [state, setState] = useState<'verifying' | 'error'>('verifying')
+  const token = params.get('token')
+  const [state, setState] = useState<'ready' | 'verifying' | 'error'>(token ? 'ready' : 'error')
 
-  useEffect(() => {
-    const token = params.get('token')
-    if (!token) {
-      setState('error')
-      return
-    }
-    // POST (not the GET link) does the consuming, so email link-scanners that
-    // prefetch the link can't silently burn the single-use token.
-    fetch('/api/portal/auth/verify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token }),
-    })
-      .then((r) => {
-        if (r.ok) router.replace('/portal')
-        else setState('error')
+  async function signIn() {
+    if (!token) return
+    setState('verifying')
+    try {
+      const r = await fetch('/api/portal/auth/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
       })
-      .catch(() => setState('error'))
-  }, [params, router])
+      if (r.ok) router.replace('/portal')
+      else setState('error')
+    } catch {
+      setState('error')
+    }
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface p-8 text-center shadow-sm">
-        {state === 'verifying' ? (
-          <p className="text-[14px] text-tlw-warm-gray">Signing you in…</p>
-        ) : (
+        {state === 'error' ? (
           <>
             <p className="text-[15px] font-medium text-tlw-navy-deep">This link didn&apos;t work</p>
             <p className="mt-2 text-[14px] text-tlw-warm-gray">
@@ -45,6 +44,19 @@ function Verifier() {
             >
               Send me a new link
             </Link>
+          </>
+        ) : (
+          <>
+            <p className="text-[15px] font-medium text-tlw-navy-deep">Welcome to your portal</p>
+            <p className="mt-2 text-[14px] text-tlw-warm-gray">Click below to sign in.</p>
+            <button
+              type="button"
+              onClick={signIn}
+              disabled={state === 'verifying'}
+              className="mt-5 w-full rounded-tlw-lg bg-tlw-navy-deep px-4 py-3 text-[15px] font-medium text-white transition-colors hover:bg-tlw-navy-rich disabled:opacity-50"
+            >
+              {state === 'verifying' ? 'Signing you in…' : 'Sign in'}
+            </button>
           </>
         )}
       </div>
