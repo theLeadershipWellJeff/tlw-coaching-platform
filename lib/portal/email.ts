@@ -8,8 +8,11 @@ export function buildMagicLinkEmailHtml(opts: {
   firstName: string
   link: string
   coachName: string | null
+  /** How long the link lasts, as the reader sees it ("24 hours", "14 days"). */
+  expiresIn?: string
 }): string {
   const { firstName, link, coachName } = opts
+  const expiresIn = opts.expiresIn || '24 hours'
   const privacyUrl = `${link.split('/portal/')[0]}/portal/privacy`
   const signoff = coachName ? `— ${escapeHtml(coachName)}` : '— theLeadershipWell'
   return `
@@ -28,7 +31,7 @@ export function buildMagicLinkEmailHtml(opts: {
       <a href="${link}" style="color:#F5821F;word-break:break-all;">${link}</a>
     </p>
     <p style="margin:20px 0 0;font-size:13px;color:#6b6b73;">
-      This link works once and expires in 24 hours. If you didn't request it, you can ignore this email.
+      This link works once and expires in ${expiresIn}. If you didn't request it, you can ignore this email.
     </p>
     <p style="margin:12px 0 0;font-size:13px;color:#6b6b73;">
       Before you sign in, here is
@@ -100,7 +103,7 @@ export function buildReminderEmailHtml(opts: {
       <a href="${link}" style="color:#F5821F;word-break:break-all;">${link}</a>
     </p>
     <p style="margin:20px 0 0;font-size:13px;color:#6b6b73;">
-      This link works once and expires in 24 hours. You can switch these reminders off any time under
+      This link works once and expires in 14 days. You can switch these reminders off any time under
       <a href="${settingsLink}" style="color:#F5821F;">Settings</a> in your portal.
     </p>
     <p style="margin:20px 0 0;">${signoff}</p>

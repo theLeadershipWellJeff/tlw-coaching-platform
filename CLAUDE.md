@@ -1126,7 +1126,12 @@ is never accepted here, and vice-versa.
 
 - **Auth (Phase 1).** `client_tokens` (migration 044) stores only the **sha256
   hash** of each magic-link token (raw token lives only in the emailed link),
-  single-use (`used_at`), 24h TTL. Flow: `/portal/login` (email) →
+  single-use (`used_at`). **TTL (2026-10-07):** a link the client requests
+  from the sign-in page lasts 24h; an invitation (coach / Command Center /
+  cohort invite) or reminder-email link lasts **14 days**
+  (`tokens.ts#INVITE_LINK_TTL_MS`; the email copy says which). A re-click on
+  an already-used link from a browser that still holds a live portal session
+  goes to the portal instead of the error page (`/api/portal/auth/verify`). Flow: `/portal/login` (email) →
   `POST /api/portal/auth/request` (anti-enumeration — always a generic response;
   rate-limited 5/client/hour; sends the link from the client's coach's Gmail via
   `sendCoachHtmlEmail`) → emailed link to `/portal/verify?token=` → the verify page

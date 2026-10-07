@@ -37,13 +37,13 @@ function Verifier() {
           <>
             <p className="text-[15px] font-medium text-tlw-navy-deep">This link didn&apos;t work</p>
             <p className="mt-2 text-[14px] text-tlw-warm-gray">
-              It may have expired or already been used.
+              Each link works once and expires after a while. Ask for a fresh one with your email address — it arrives in a minute or two.
             </p>
             <Link
               href="/portal/login"
               className="mt-4 inline-block text-[13px] font-medium text-tlw-signal-orange hover:underline"
             >
-              Request a new link
+              Send me a new link
             </Link>
           </>
         )}
