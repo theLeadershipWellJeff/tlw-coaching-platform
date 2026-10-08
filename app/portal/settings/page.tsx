@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { orderedTimeZones } from '@/lib/scheduling'
 
@@ -11,7 +11,9 @@ import { orderedTimeZones } from '@/lib/scheduling'
  *   2. Email reminders — the master switch (portal_features.reminders) and
  *      which ones: weekly planning nudge + day, away check-in + interval,
  *      quarterly goal review (portal_features.reminder_settings).
- *   3. Sign in — the optional username + password (migration 054).
+ *   3. Sign in — the optional username + password (migration 054). When a
+ *      supervisor set a temporary password, this section asks for a new one
+ *      (portal_features.password_change_required).
  * Reaching this page requires a portal session, so the client arrived via a
  * magic link; possession of the email account is what authorizes changes here.
  */
@@ -228,7 +230,9 @@ function SignInSection() {
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [hasPassword, setHasPassword] = useState(false)
+  const [mustChange, setMustChange] = useState(false)
   const [loaded, setLoaded] = useState(false)
+  const sectionRef = useRef<HTMLDivElement>(null)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
@@ -239,6 +243,11 @@ function SignInSection() {
         if (d) {
           setUsername(d.username || '')
           setHasPassword(!!d.hasPassword)
+          if (d.mustChange) {
+            setMustChange(true)
+            // Sent here straight from sign-in with a temporary password.
+            requestAnimationFrame(() => sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+          }
         }
       })
       .catch(() => {})
@@ -263,6 +272,7 @@ function SignInSection() {
       if (res.ok) {
         setMsg({ ok: true, text: 'Saved. You can now sign in with your username and password.' })
         setHasPassword(true)
+        setMustChange(false)
         setPassword('')
         setConfirm('')
       } else {
@@ -276,11 +286,19 @@ function SignInSection() {
   }
 
   return (
-    <div className="rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface p-6">
-      <h2 className="text-[16px] font-medium text-tlw-navy-deep">{hasPassword ? 'Your sign-in details' : 'Set a username and password'}</h2>
-      <p className="mt-1 text-[13px] text-tlw-warm-gray">
-        Optional — you can always sign in with an emailed link instead. Setting a password just makes it quicker to get back in.
-      </p>
+    <div id="sign-in" ref={sectionRef} className="scroll-mt-6 rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface p-6">
+      <h2 className="text-[16px] font-medium text-tlw-navy-deep">
+        {mustChange ? 'Choose your own password' : hasPassword ? 'Your sign-in details' : 'Set a username and password'}
+      </h2>
+      {mustChange ? (
+        <p className="mt-2 rounded-tlw-lg bg-tlw-canvas px-3 py-2 text-[13px] text-tlw-espresso">
+          You signed in with a temporary password. Please choose a new one that only you know. You can keep your username.
+        </p>
+      ) : (
+        <p className="mt-1 text-[13px] text-tlw-warm-gray">
+          Optional — you can always sign in with an emailed link instead. Setting a password just makes it quicker to get back in.
+        </p>
+      )}
       <form onSubmit={save} className="mt-5 space-y-3">
         <div>
           <label className={label}>Username</label>
