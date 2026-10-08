@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { invoiceHref } from '@/lib/billing/invoice-links'
 import { CARD_META } from '@/lib/dashboard/cards'
 import type { CardSize, DashboardCard } from '@/lib/dashboard/types'
 import type { InvoiceStatus } from '@/lib/billing/types'
@@ -66,7 +67,7 @@ function Body({ size, loading, invoices, error }: { size: CardSize; loading: boo
       {shown.map((inv) => (
         <Link
           key={inv.id}
-          href={`/business-center/invoices/${inv.id}`}
+          href={invoiceHref(inv.id, '/business-center')}
           className="flex items-center justify-between gap-3 rounded-tlw-lg px-2 py-1.5 transition-colors hover:bg-tlw-canvas"
         >
           <div className="min-w-0">

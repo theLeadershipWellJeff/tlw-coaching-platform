@@ -1,6 +1,7 @@
 'use client'
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
+import { invoiceHref } from '@/lib/billing/invoice-links'
 import { PageHeader } from '@/app/components/layout/PageHeader'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -723,7 +724,7 @@ function InvoiceCard({
       <div className="flex items-center justify-between gap-4 border-b border-tlw-warm-gray/10 px-4 py-3">
         <div>
           <Link
-            href={`/business-center/invoices/${invoice.id}`}
+            href={invoiceHref(invoice.id, '/business-center/run')}
             className="group/name inline-flex items-baseline gap-1.5 text-[14px] font-semibold text-tlw-navy-deep hover:underline"
           >
             {invoice.billing_accounts.name}

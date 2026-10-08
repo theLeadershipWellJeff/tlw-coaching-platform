@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
+import { backLabelFor, safeBackPath } from '@/lib/billing/invoice-links'
 import { PageHeader } from '@/app/components/layout/PageHeader'
 import type { InvoiceWithLines, InvoiceLine } from '@/lib/billing/types'
 
@@ -320,6 +321,8 @@ function AdjustModal({ invoice, onClose, onDone }: {
 export default function InvoiceDetailPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
+  // ?from=<path> — return to the surface the coach opened this invoice from.
+  const backHref = safeBackPath(useSearchParams().get('from'))
   const [invoice, setInvoice] = useState<InvoiceWithLines | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
@@ -482,7 +485,7 @@ export default function InvoiceDetailPage() {
         setDeleting(false)
         return
       }
-      router.replace('/business-center/invoices')
+      router.replace(backHref)
     } catch {
       setDeleteErr('Network error — try again.')
       setDeleting(false)
@@ -518,8 +521,8 @@ export default function InvoiceDetailPage() {
   return (
     <>
       <PageHeader
-        backHref="/business-center/invoices"
-        backLabel={`Invoices${invoice?.account?.name ? ` / ${invoice.account.name}` : ''}`}
+        backHref={backHref}
+        backLabel={`${backLabelFor(backHref)}${invoice?.account?.name ? ` / ${invoice.account.name}` : ''}`}
         title={period ? `Invoice · ${period}` : 'Invoice'}
         actions={
           <div className="flex items-center gap-2">

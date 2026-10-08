@@ -2,6 +2,7 @@
 import type { DashboardCard } from '@/lib/dashboard/types'
 import { outstandingARCard } from './cards/OutstandingARCard'
 import { recentInvoicesCard } from './cards/RecentInvoicesCard'
+import { accountsReceivableCard } from './cards/AccountsReceivableCard'
 import { accountsCard } from './cards/AccountsCard'
 import { coachingHoursCard } from '@/components/dashboard/cards/CoachingHoursCard'
 import { pastRevenueCard } from '@/components/dashboard/cards/PastRevenueCard'
@@ -11,6 +12,7 @@ import { aiCostsCard } from '@/components/dashboard/cards/AiCostsCard'
 
 export const BUSINESS_CENTER_CARDS: Record<string, DashboardCard<any>> = {
   'bc-outstanding-ar': outstandingARCard,
+  'bc-accounts-receivable': accountsReceivableCard,
   'bc-recent-invoices': recentInvoicesCard,
   'bc-accounts': accountsCard,
   'coaching-hours': coachingHoursCard,
