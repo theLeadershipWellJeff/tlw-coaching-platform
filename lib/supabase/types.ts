@@ -562,6 +562,12 @@ export type PortalFeatures = {
    * their coaching record.
    */
   archived?: boolean
+  /**
+   * A supervisor set this client's username + a temporary password from the
+   * Command Center. The portal asks them to choose their own password; saving
+   * one clears the flag. Absent = nothing pending.
+   */
+  password_change_required?: boolean
   /** Per-client cap overrides (default 5 assessments / 10 documents). */
   max_assessments?: number
   max_documents?: number

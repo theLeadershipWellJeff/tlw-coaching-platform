@@ -41,7 +41,8 @@ export default function PortalLogin() {
         body: JSON.stringify({ username, password }),
       })
       if (res.ok) {
-        router.push('/portal')
+        const d = await res.json().catch(() => ({}))
+        router.push(d.mustChange ? '/portal/settings?setPassword=1#sign-in' : '/portal')
         router.refresh()
         return
       }
@@ -64,6 +65,10 @@ export default function PortalLogin() {
             <p className="text-[14px] text-tlw-espresso">
               If that email is on file, a sign-in link is on its way. It works once and
               expires in 24 hours.
+            </p>
+            <p className="mt-2 text-[13px] text-tlw-warm-gray">
+              Nothing after a few minutes? Check your junk or quarantine folder. If your coach gave you a
+              username and password, use the Password tab instead.
             </p>
             <button
               onClick={() => {
@@ -124,7 +129,7 @@ export default function PortalLogin() {
             ) : (
               <form onSubmit={signIn} className="mt-4">
                 <p className="text-[14px] text-tlw-warm-gray">
-                  Sign in with the username and password you set.
+                  Sign in with your username and password.
                 </p>
                 <input
                   autoFocus

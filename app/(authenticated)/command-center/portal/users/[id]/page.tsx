@@ -38,6 +38,21 @@ type Detail = {
 const KIND_LABEL: Record<string, string> = { assessment_360: '360 report', personnel_review: 'Personnel review (private to the client)', general: 'Document', company_doc: 'Company document' }
 const KIND_LABELS: Record<PortalUser['kind'], string> = { coaching: 'coaching', coaching_zf: 'coaching + ZF', standalone: 'standalone ZF', enterprise: 'enterprise' }
 
+/** A readable temporary password: no 0/O or 1/l/I, grouped for reading aloud. */
+function generateTempPassword(): string {
+  const alphabet = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  const bytes = new Uint32Array(12)
+  crypto.getRandomValues(bytes)
+  const chars = Array.from(bytes, (b) => alphabet[b % alphabet.length]).join('')
+  return `${chars.slice(0, 4)}-${chars.slice(4, 8)}-${chars.slice(8, 12)}`
+}
+
+/** A first guess at a username: the email's local part, cleaned to the allowed characters. */
+function suggestUsername(email: string | null, name: string): string {
+  const base = (email ? email.split('@')[0] : name.replace(/\s+/g, '.')).toLowerCase().replace(/[^a-z0-9._-]/g, '')
+  return base.slice(0, 40)
+}
+
 function fmtDateTime(iso: string | null): string {
   if (!iso) return '—'
   return new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
@@ -61,6 +76,10 @@ export default function PortalUserPage({ params }: { params: { id: string } }) {
   const [docTitle, setDocTitle] = useState('')
   const [confirmName, setConfirmName] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  const [pwOpen, setPwOpen] = useState(false)
+  const [pwUser, setPwUser] = useState('')
+  const [pwPass, setPwPass] = useState('')
 
   async function load() {
     try {
@@ -140,6 +159,29 @@ export default function PortalUserPage({ params }: { params: { id: string } }) {
       await load()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not send.')
+    } finally {
+      setBusy(false)
+    }
+  }
+  async function setTempPassword() {
+    if (!detail) return
+    setBusy(true)
+    setError('')
+    setNotice('')
+    try {
+      const d = await api<{ username: string }>(`/api/admin/portal-users/${params.id}/password`, {
+        method: 'POST',
+        body: JSON.stringify({ username: pwUser, password: pwPass }),
+      })
+      const first = detail.user.name.split(' ')[0]
+      setNotice(
+        `Saved. Give ${first} these yourself (phone, text or in person — nothing was emailed): username ${d.username}, password ${pwPass}. They sign in at theleadershipwell.online/portal/login on the Password tab and will be asked to choose their own password.`
+      )
+      setPwPass('')
+      setPwOpen(false)
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save.')
     } finally {
       setBusy(false)
     }
@@ -284,6 +326,62 @@ export default function PortalUserPage({ params }: { params: { id: string } }) {
                 </div>
                 <div><dt className="text-[11px] uppercase tracking-wider text-tlw-warm-gray">Added</dt><dd className="text-tlw-espresso">{fmtDate(detail.profile.created_at)}</dd></div>
               </dl>
+            )}
+          </Section>
+
+          {/* Sign-in: a temporary username + password for someone whose emailed links aren't getting through. */}
+          <Section
+            title="Sign-in"
+            sub="For someone whose emailed links aren't arriving or working (common with company email filters). You set a username and a temporary password and give them to the person yourself; they choose their own password the first time they sign in."
+            actions={
+              !pwOpen && (
+                <button
+                  className={btnLink}
+                  disabled={busy || u.archived}
+                  onClick={() => {
+                    setPwUser(u.portal.username || suggestUsername(u.email, u.name))
+                    setPwPass(generateTempPassword())
+                    setPwOpen(true)
+                  }}
+                >
+                  {u.portal.username ? 'Reset password' : 'Set username & password'}
+                </button>
+              )
+            }
+          >
+            <p className="text-[13px] text-tlw-espresso">
+              {u.portal.username ? (
+                <>
+                  Username <span className="font-medium">{u.portal.username}</span>
+                  {u.portal.locked && <span className="ml-2"><Chip tone="red">locked</Chip></span>}
+                </>
+              ) : (
+                <span className="text-tlw-warm-gray">No password yet — they sign in with emailed links.</span>
+              )}
+            </p>
+            {pwOpen && (
+              <div className="mt-3 rounded-tlw-xl bg-tlw-canvas p-3">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <label className="text-[11px] text-tlw-warm-gray">
+                    Username
+                    <input className={input} value={pwUser} onChange={(e) => setPwUser(e.target.value)} autoComplete="off" />
+                  </label>
+                  <label className="text-[11px] text-tlw-warm-gray">
+                    Temporary password
+                    <span className="flex gap-2">
+                      <input className={`${input} font-mono`} value={pwPass} onChange={(e) => setPwPass(e.target.value)} autoComplete="off" />
+                      <button type="button" className={btnLink} onClick={() => setPwPass(generateTempPassword())}>New</button>
+                    </span>
+                  </label>
+                </div>
+                <p className="mt-2 text-[11px] text-tlw-warm-gray">
+                  Usernames: 3–40 letters, numbers, dots, dashes or underscores. Passwords: at least 10 characters. Saving replaces any password they already have and clears a lockout.
+                </p>
+                <div className="mt-2 flex gap-2">
+                  <button className={btnPrimary} disabled={busy || !pwUser.trim() || !pwPass} onClick={setTempPassword}>{busy ? 'Saving…' : 'Save'}</button>
+                  <button className={btnSecondary} onClick={() => setPwOpen(false)}>Cancel</button>
+                </div>
+              </div>
             )}
           </Section>
 

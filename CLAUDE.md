@@ -1282,7 +1282,17 @@ is never accepted here, and vice-versa.
   returns username / password-set / last-seen / locked, surfaced on the
   `InviteToPortalButton` ("Resend portal link" once they've been in). The coach
   can never see the password — it's a one-way hash; the remedies are resend-link
-  and let the client set a new one. **Save failures are diagnosable
+  and let the client set a new one. **Supervisor-set temporary password
+  (2026-10-08).** For someone whose emailed links don't get through (corporate
+  mail filters), Command Center → portal user page → **Sign-in** → "Set
+  username & password" (`POST /api/admin/portal-users/[id]/password`, audit
+  `portal_password_set` — username only, never the password) saves a username
+  + a generated temporary password (also clears a lockout) and sets
+  `portal_features.password_change_required` (no migration). Nothing is
+  emailed — the supervisor passes it on. A password sign-in with the flag set
+  lands on `/portal/settings#sign-in` ("Choose your own password"), the home
+  page shows a banner until then, re-saving the temporary password is refused,
+  and saving a new one clears the flag. **Save failures are diagnosable
   (2026-09-09):** `setPortalCredentials` logs the Supabase error (code/message/
   details) to the server log and maps the actionable causes to a message — a
   missing `client_credentials` table / schema-cache miss (42P01 / PGRST205) says

@@ -58,8 +58,11 @@ export async function POST(req: NextRequest) {
     .eq('id', result.clientId)
     .maybeSingle()
   if (owner && isPortalAccessBlocked(owner)) return generic
+  // A temporary password set from the Command Center: send them to choose their own.
+  const mustChange =
+    ((owner?.portal_features as { password_change_required?: boolean } | null) || {}).password_change_required === true
 
   const token = await signPortalToken(result.clientId)
   cookies().set(PORTAL_COOKIE, token, portalCookieOptions())
-  return NextResponse.json({ ok: true })
+  return NextResponse.json({ ok: true, mustChange })
 }

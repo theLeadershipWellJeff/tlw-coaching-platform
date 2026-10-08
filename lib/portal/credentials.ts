@@ -13,6 +13,7 @@
 import { randomBytes, scrypt as scryptCb, timingSafeEqual } from 'crypto'
 import { promisify } from 'util'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
+import type { PortalFeatures } from '@/lib/supabase/types'
 
 const scrypt = promisify(scryptCb) as (
   password: string,
@@ -262,4 +263,34 @@ export async function getPortalLoginStatus(clientId: string): Promise<{
     lastLoginAt: data?.last_login_at ?? null,
     locked: !!data?.locked_until && new Date(data.locked_until).getTime() > Date.now(),
   }
+}
+
+/**
+ * Temporary passwords (set by a supervisor in the Command Center). The flag lives
+ * in `portal_features.password_change_required` — no migration. The portal asks
+ * the client to choose their own password until it is cleared.
+ */
+export async function isPasswordChangeRequired(clientId: string): Promise<boolean> {
+  const { data } = await getSupabaseAdmin().from('clients').select('portal_features').eq('id', clientId).maybeSingle()
+  return ((data?.portal_features as PortalFeatures | null) || {}).password_change_required === true
+}
+
+export async function setPasswordChangeRequired(clientId: string, required: boolean): Promise<void> {
+  const supabase = getSupabaseAdmin()
+  const { data } = await supabase.from('clients').select('portal_features').eq('id', clientId).maybeSingle()
+  const features = { ...((data?.portal_features as PortalFeatures | null) || {}) }
+  if (required) features.password_change_required = true
+  else delete features.password_change_required
+  const { error } = await supabase.from('clients').update({ portal_features: features }).eq('id', clientId)
+  if (error) console.error('[portal/credentials] could not update password_change_required', error.message)
+}
+
+/** True when `password` is the one already stored (used to refuse re-using a temporary password). */
+export async function isCurrentPassword(clientId: string, password: string): Promise<boolean> {
+  const { data } = await getSupabaseAdmin()
+    .from('client_credentials')
+    .select('password_hash')
+    .eq('client_id', clientId)
+    .maybeSingle()
+  return data?.password_hash ? verifyPassword(password, data.password_hash) : false
 }

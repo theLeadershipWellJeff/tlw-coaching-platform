@@ -19,6 +19,7 @@ import { ScheduleWithCoach } from './ScheduleWithCoach'
 import { UpcomingSessionsCard } from './UpcomingSessionsCard'
 import { loadPortalBranding } from '@/lib/portal/branding'
 import { loadPortalAssessments } from '@/lib/portal/assessments'
+import { isPasswordChangeRequired } from '@/lib/portal/credentials'
 
 export const dynamic = 'force-dynamic'
 
@@ -57,15 +58,17 @@ export default async function PortalHome() {
   const clientId = await getPortalClientId()
   if (!clientId) redirect('/portal/login')
 
-  const [data, branding, assessments]: [
+  const [data, branding, assessments, mustChangePassword]: [
     PortalOverview | null,
     Awaited<ReturnType<typeof loadPortalBranding>>,
     Awaited<ReturnType<typeof loadPortalAssessments>> | null,
+    boolean,
   ] = await Promise.all([
     loadPortalOverview(clientId),
     loadPortalBranding(clientId),
     // Only to word the tour's 360 step; a failure keeps today's copy.
     loadPortalAssessments(clientId).catch(() => null),
+    isPasswordChangeRequired(clientId).catch(() => false),
   ])
   if (!data) redirect('/portal/login')
 
@@ -108,6 +111,16 @@ export default async function PortalHome() {
         hasBooking={Boolean(data.coach ? data.coach.bookingUrl || data.coach.assistantEmail : data.bookingUrl)}
         hasReport={!assessments || assessments.documents.length > 0}
       />
+
+      {mustChangePassword && (
+        <Link
+          href="/portal/settings?setPassword=1#sign-in"
+          className="mt-6 block rounded-tlw-2xl border border-tlw-warm-gray/15 bg-tlw-surface px-5 py-4 text-[14px] text-tlw-espresso hover:border-tlw-signal-orange"
+        >
+          You signed in with a temporary password.{' '}
+          <span className="font-medium text-tlw-signal-orange">Choose your own password →</span>
+        </Link>
+      )}
 
       <h1 className="mt-8 text-[24px] font-medium text-tlw-navy-deep">Welcome, {firstName}.</h1>
 

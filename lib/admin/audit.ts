@@ -46,6 +46,7 @@ export type AdminAction =
   // Multi-coach portal rollout (migration 074)
   | 'client_coach_assigned'
   | 'coach_scheduling_updated'
+  | 'portal_password_set'
 
 export async function logAdminAction(
   supabase: SupabaseClient<Database>,
