@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { invoiceHref } from '@/lib/billing/invoice-links'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { PageHeader } from '@/app/components/layout/PageHeader'
 
@@ -813,7 +814,7 @@ function AccountInvoices({ accountId }: { accountId: string }) {
       {invoices.map((inv: any) => (
         <Link
           key={inv.id}
-          href={`/business-center/invoices/${inv.id}`}
+          href={invoiceHref(inv.id, `/business-center/accounts/${accountId}`)}
           className="flex items-center justify-between gap-4 px-5 py-3 transition-colors hover:bg-tlw-canvas"
         >
           <p className="text-[13px] font-medium text-tlw-navy-deep">

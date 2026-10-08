@@ -136,6 +136,14 @@ export const CARD_META: Record<string, CardMeta> = {
     supportedSizes: ['compact', 'standard', 'expanded'],
     defaultSize: 'standard',
   },
+  'bc-accounts-receivable': {
+    id: 'bc-accounts-receivable',
+    title: 'Accounts receivable',
+    titleHref: '/business-center/invoices',
+    surfaces: ['business-center'],
+    supportedSizes: ['compact', 'standard', 'expanded'],
+    defaultSize: 'standard',
+  },
   'bc-recent-invoices': {
     id: 'bc-recent-invoices',
     title: 'Recent invoices',
