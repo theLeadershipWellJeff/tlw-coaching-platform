@@ -9,6 +9,7 @@
  * coach's stored refresh token, so it works in the unattended webhook.
  */
 import { google } from 'googleapis'
+import { calendarClient } from './outbound-guard'
 import type { Coach } from './supabase/types'
 import { matchClient, type RosterClient } from './transcripts/match'
 
@@ -100,7 +101,7 @@ export async function findClientFromCalendar(
 
   const auth = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET)
   auth.setCredentials({ refresh_token: coach.google_refresh_token })
-  const calendar = google.calendar({ version: 'v3', auth })
+  const calendar = calendarClient(auth)
 
   let items: any[] = []
   try {
@@ -197,7 +198,7 @@ export async function createClientEvent(
 
   const auth = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET)
   auth.setCredentials({ refresh_token: coach.google_refresh_token })
-  const calendar = google.calendar({ version: 'v3', auth })
+  const calendar = calendarClient(auth)
 
   const end = new Date(opts.startsAt.getTime() + opts.durationMinutes * 60 * 1000)
   const attendees = opts.attendeeEmail ? [{ email: opts.attendeeEmail }] : undefined
@@ -245,7 +246,7 @@ export async function getClientEventState(coach: Coach, eventId: string): Promis
 
   const auth = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET)
   auth.setCredentials({ refresh_token: coach.google_refresh_token })
-  const calendar = google.calendar({ version: 'v3', auth })
+  const calendar = calendarClient(auth)
 
   async function read(calendarId: string): Promise<EventState | '404'> {
     try {
@@ -304,7 +305,7 @@ export async function getCalendarConflicts(
 
   const auth = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET)
   auth.setCredentials({ refresh_token: coach.google_refresh_token })
-  const calendar = google.calendar({ version: 'v3', auth })
+  const calendar = calendarClient(auth)
 
   try {
     const res = await calendar.freebusy.query({
@@ -330,7 +331,7 @@ export async function deleteClientEvent(coach: Coach, eventId: string): Promise<
   if (!coach.google_refresh_token || !eventId) return
   const auth = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET)
   auth.setCredentials({ refresh_token: coach.google_refresh_token })
-  const calendar = google.calendar({ version: 'v3', auth })
+  const calendar = calendarClient(auth)
   const selected = coachCalendarId(coach)
   try {
     await calendar.events.delete({ calendarId: selected, eventId, sendUpdates: 'all' })
@@ -375,7 +376,7 @@ export async function listClientMatchedEvents(
 
   const auth = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET)
   auth.setCredentials({ refresh_token: coach.google_refresh_token })
-  const calendar = google.calendar({ version: 'v3', auth })
+  const calendar = calendarClient(auth)
 
   let items: any[] = []
   try {
@@ -452,7 +453,7 @@ export async function listCalendarEvents(
 
   const auth = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET)
   auth.setCredentials({ refresh_token: coach.google_refresh_token })
-  const calendar = google.calendar({ version: 'v3', auth })
+  const calendar = calendarClient(auth)
 
   let items: any[] = []
   try {
@@ -513,7 +514,7 @@ export async function listCalendarDelta(coach: Coach, syncToken: string | null):
 
   const auth = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET)
   auth.setCredentials({ refresh_token: coach.google_refresh_token })
-  const calendar = google.calendar({ version: 'v3', auth })
+  const calendar = calendarClient(auth)
 
   // Full read floor — a couple of days back so a session just moved earlier is still
   // seen. Only used when there's no token (initial / post-410); a syncToken can't be
@@ -576,7 +577,7 @@ export async function listUpcomingEvents(coach: Coach, timeMin: Date, timeMax: D
 
   const auth = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET)
   auth.setCredentials({ refresh_token: coach.google_refresh_token })
-  const calendar = google.calendar({ version: 'v3', auth })
+  const calendar = calendarClient(auth)
 
   const events: any[] = []
   let pageToken: string | undefined

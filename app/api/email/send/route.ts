@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { google } from 'googleapis'
+import { gmailClient } from '@/lib/outbound-guard'
 import { z } from 'zod'
 import { authOptions } from '@/lib/authOptions'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
@@ -77,7 +78,7 @@ export async function POST(req: NextRequest) {
 
     const auth = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET)
     auth.setCredentials({ access_token: session.accessToken as string })
-    const gmail = google.gmail({ version: 'v1', auth })
+    const gmail = gmailClient(auth, 'compose-email')
 
     try {
       const raw = makeRawHtmlEmail({ fromName, fromEmail, to, cc: ccAddr, subject, html: composedHtml })

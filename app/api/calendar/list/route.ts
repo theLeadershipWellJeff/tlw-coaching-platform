@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { google } from 'googleapis'
+import { calendarClient } from '@/lib/outbound-guard'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 import { requireCoach, toErrorResponse, ApiError } from '@/lib/api-handler'
 import { coachCalendarId } from '@/lib/calendar'
@@ -23,7 +24,7 @@ export async function GET() {
 
     const auth = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET)
     auth.setCredentials({ refresh_token: coach.google_refresh_token })
-    const calendar = google.calendar({ version: 'v3', auth })
+    const calendar = calendarClient(auth)
 
     const res = await calendar.calendarList.list({ maxResults: 250 })
     const selected = coachCalendarId(coach)

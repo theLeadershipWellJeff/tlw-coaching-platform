@@ -13,6 +13,7 @@
  * released, and nothing is marked sent.
  */
 import { google } from 'googleapis'
+import { gmailClient } from '../outbound-guard'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Coach, Database } from '../supabase/types'
 import { ApiError } from '../api-handler'
@@ -104,7 +105,7 @@ export async function sendSessionNoteEmail(supabase: Db, input: SendNoteEmailInp
 
   const auth = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET)
   auth.setCredentials({ access_token: accessToken })
-  const gmail = google.gmail({ version: 'v1', auth })
+  const gmail = gmailClient(auth, 'session-note')
 
   try {
     const raw = makeRawHtmlEmail({

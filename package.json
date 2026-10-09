@@ -4,11 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "prebuild": "sh scripts/check-ai-imports.sh",
+    "prebuild": "sh scripts/check-ai-imports.sh && sh scripts/check-env-guard.sh",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "check:ai-imports": "sh scripts/check-ai-imports.sh"
+    "check:ai-imports": "sh scripts/check-ai-imports.sh",
+    "check:env-guard": "sh scripts/check-env-guard.sh"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.127.0",

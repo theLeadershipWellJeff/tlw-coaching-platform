@@ -11,6 +11,8 @@
 import { google } from 'googleapis'
 import type { Coach } from './supabase/types'
 import { headerSafe, encodeHeaderValue } from './email-mime'
+import { isStaging } from './env'
+import { gmailClient, sinkEmail } from './outbound-guard'
 
 export type EmailAttachment = {
   filename: string
@@ -69,12 +71,32 @@ export async function sendCoachHtmlEmail(
   coach: Coach,
   opts: { to: string; cc?: string; subject: string; html: string; attachments?: EmailAttachment[] }
 ): Promise<boolean> {
+  // Staging: capture instead of sending — before the token check, since seeded
+  // coaches have no Google token (lib/outbound-guard.ts).
+  if (isStaging()) {
+    try {
+      await sinkEmail({
+        transport: 'gmail',
+        from: coach.email,
+        to: opts.to,
+        cc: opts.cc ?? null,
+        subject: opts.subject,
+        html: opts.html,
+        attachments: opts.attachments?.map((a) => ({ filename: a.filename, contentType: a.contentType, bytes: a.content.length })),
+        meta: { coachId: coach.id },
+      })
+      return true
+    } catch (e) {
+      console.error('[staging] email sink write failed:', e)
+      return false
+    }
+  }
   if (!coach.google_refresh_token) {
     throw new Error('Coach has no Google refresh token — sign out and back in to grant email access.')
   }
   const auth = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET)
   auth.setCredentials({ refresh_token: coach.google_refresh_token })
-  const gmail = google.gmail({ version: 'v1', auth })
+  const gmail = gmailClient(auth, 'coach-unattended')
 
   try {
     // The send goes out through THIS coach's Gmail (their refresh token), so the

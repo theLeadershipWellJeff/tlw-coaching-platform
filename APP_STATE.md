@@ -675,4 +675,5 @@ the single Phase 1 pass (full detail + line numbers in `ISOLATION_AUDIT.md`):
 
 ## Always-on test bots (2026-10-09 → ; brief `docs/TESTING_SYSTEM.md`)
 
-- **Phase 0 done (recon + file plan), waiting on Jeff's go.** Decisions D1–D6 in §14 of the brief. Headline surprise: the GitHub repo is public, so bot issues and artifacts can't be published there. Deferred: a real post-engagement read-only portal mode (brief assumed it exists; it doesn't, so F7 tests lock-out instead).
+- **Phase 0 done; Jeff said go on D1–D6 (2026-10-09). Phase 1 code built and verified locally; waiting on Jeff's three console tasks (`docs/STAGING_SETUP.md`) then the `staging` branch push.**
+- Phase 0 done (recon + file plan). Decisions D1–D6 in §14 of the brief. Headline surprise: the GitHub repo is public, so bot issues and artifacts can't be published there. Deferred: a real post-engagement read-only portal mode (brief assumed it exists; it doesn't, so F7 tests lock-out instead).

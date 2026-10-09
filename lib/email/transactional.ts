@@ -17,6 +17,9 @@
  * optional PORTAL_FROM_NAME (default "theLeadershipWell").
  */
 
+import { isStaging } from '../env'
+import { sinkEmail } from '../outbound-guard'
+
 const RESEND_ENDPOINT = 'https://api.resend.com/emails'
 
 export type TransactionalEmail = {
@@ -33,6 +36,7 @@ export type TransactionalResult =
 
 /** True when the transport is configured; callers fall back to Gmail otherwise. */
 export function isTransactionalEmailConfigured(): boolean {
+  if (isStaging()) return true // the staging sink stands in for Resend
   return Boolean(process.env.RESEND_API_KEY && process.env.PORTAL_FROM_EMAIL)
 }
 
@@ -48,6 +52,14 @@ function fromHeader(): string {
  * the failure).
  */
 export async function sendTransactionalEmail(msg: TransactionalEmail): Promise<TransactionalResult> {
+  if (isStaging()) {
+    try {
+      const id = await sinkEmail({ transport: 'resend', to: msg.to, replyTo: msg.replyTo ?? null, subject: msg.subject, html: msg.html })
+      return { ok: true, id }
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) }
+    }
+  }
   if (!isTransactionalEmailConfigured()) {
     return { ok: false, error: 'Transactional email is not configured (RESEND_API_KEY / PORTAL_FROM_EMAIL).' }
   }

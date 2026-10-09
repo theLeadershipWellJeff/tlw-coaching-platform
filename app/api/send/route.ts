@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { getServerSession } from 'next-auth'
 import { google } from 'googleapis'
+import { gmailClient } from '@/lib/outbound-guard'
 import { authOptions } from '@/lib/authOptions'
 import { buildClientEmailHTML } from '@/lib/email-template'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
@@ -50,7 +51,7 @@ export async function POST(req: NextRequest) {
     process.env.GOOGLE_CLIENT_SECRET
   )
   auth.setCredentials({ access_token: session.accessToken as string })
-  const gmail = google.gmail({ version: 'v1', auth })
+  const gmail = gmailClient(auth, 'prep-email')
   // The send goes out through the signed-in coach's Gmail — From is their
   // identity, and the courtesy copy goes to their own inbox (not a firm default).
   const senderEmail = (session as any).user?.email || process.env.JEFF_FROM_EMAIL!

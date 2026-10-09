@@ -370,6 +370,13 @@ _Format: `YYYY-MM-DD · Phase · Note (decision / surprise / deferred → APP_ST
 - 2026-10-09 · P0 · GitHub cron is UTC with no DST. 6:00am MT = `0 12 * * *` in summer and 5:00am in winter (or 13:00 → 7:00am in summer). Pick one (§14 D6).
 - 2026-10-09 · P0 · Could not verify from the container (Jeff to check, §14): the Vercel plan, the Resend domain status, whether the old staging Supabase project still exists and the Supabase plan, and the Anthropic Console workspace. Claude Action auth: `anthropics/claude-code-action` accepts a `claude_code_oauth_token` from `claude setup-token` (Pro/Max). It draws on the Max usage allowance, not a separate bill. Confirm in Phase 7.
 
+- 2026-10-09 · P1 · Jeff: **go on D1–D6**; daily email at **5am PT** → two cron slots (12:00 + 13:00 UTC), the script sends only from the one that is 5:00 in America/Los_Angeles. Vercel = **Pro**, Resend domain **verified**, old staging project **gone** (nothing to delete).
+- 2026-10-09 · P1 · Built: `scripts/staging/build-baseline.sh` (regenerates the 001–074 baseline), new seed (4 coaches / 7 clients / 2 orgs / canary in every `key_info` + an unsent note per client), `003_test_email_sink.sql` (+ a `tlw_environment` marker), `scripts/staging/apply.sh` (**refuses any DB with app tables but no staging marker**), the `Staging database` workflow, `lib/env.ts#isStaging`, `lib/outbound-guard.ts` (`gmailClient` / `calendarClient` / `sinkEmail`) wired into all 11 Gmail/Calendar sites + Resend, and `scripts/check-env-guard.sh` in `prebuild` (fails a build on an unguarded `google.gmail(`/`google.calendar(`/Resend call, or `APP_ENV=staging` / `E2E_TEST_LOGIN_SECRET` on a production build). All 74 migrations replayed clean on Postgres 16; 7 guard behaviour checks pass; the fake-production refusal verified.
+- 2026-10-09 · P1 · Dropped `supabase/staging/002_org_split.sql` — the new seed assigns `org_id` directly.
+- 2026-10-09 · P1 · `isStaging()` requires `APP_ENV=staging` AND `VERCEL_ENV!=production`, so the switch can't flip production even if the var leaks; the build gate catches it earlier anyway.
+- 2026-10-09 · P1 · Staging gets `AI_PORTAL_CHAT_ENABLED=false` and no `ANTHROPIC_API_KEY` — v1 bots don't test chat, AI spend on staging stays $0. The AI Explorer (Phase 7) gets its own key.
+- 2026-10-09 · P1 · The app reads no Supabase publishable key (URL + secret key only), so Jeff copies two values, not three.
+
 ## 14. Phase 0 — decisions for Jeff and file plan
 
 ### Decisions (recommended option first)

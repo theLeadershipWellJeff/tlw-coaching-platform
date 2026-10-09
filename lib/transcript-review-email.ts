@@ -8,6 +8,7 @@
  * scorecard email). Best-effort: never throws into the ingest path.
  */
 import { google } from 'googleapis'
+import { gmailClient } from './outbound-guard'
 import type { Coach } from './supabase/types'
 import { getBaseUrl } from './url'
 import { headerSafe, encodeHeaderValue } from './email-mime'
@@ -40,7 +41,7 @@ export async function sendNeedsReviewEmail(
 
   const auth = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET)
   auth.setCredentials({ refresh_token: coach.google_refresh_token })
-  const gmail = google.gmail({ version: 'v1', auth })
+  const gmail = gmailClient(auth, 'transcript-review')
 
   const url = `${getBaseUrl()}/practice`
   const when = info.sessionDate ? ` from ${esc(info.sessionDate)}` : ''

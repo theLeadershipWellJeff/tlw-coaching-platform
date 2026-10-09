@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { google } from 'googleapis'
+import { calendarClient } from '@/lib/outbound-guard'
 import { authOptions } from '@/lib/authOptions'
 import { matchZoomSummariesForClient } from '@/lib/matchZoomToClient'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
@@ -73,7 +74,7 @@ async function getCalendarSessionTimes(
     process.env.GOOGLE_CLIENT_SECRET,
   )
   auth.setCredentials({ access_token: accessToken })
-  const calendar = google.calendar({ version: 'v3', auth })
+  const calendar = calendarClient(auth)
 
   const now = new Date()
   const past = new Date(now.getTime() - CALENDAR_LOOKBACK_DAYS * 24 * 60 * 60 * 1000)

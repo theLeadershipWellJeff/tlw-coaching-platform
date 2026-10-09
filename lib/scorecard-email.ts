@@ -7,6 +7,7 @@
  * sign-in (see authOptions); a coach with no refresh token yet can't be emailed.
  */
 import { google } from 'googleapis'
+import { gmailClient } from './outbound-guard'
 import type { Coach } from './supabase/types'
 import type { SessionReportJson } from './scoring/types'
 import { buildScorecardEmailHTML } from './scorecard-email-template'
@@ -42,7 +43,7 @@ export async function sendScorecardEmail(
 
   const auth = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET)
   auth.setCredentials({ refresh_token: coach.google_refresh_token })
-  const gmail = google.gmail({ version: 'v1', auth })
+  const gmail = gmailClient(auth, 'scorecard')
 
   const html = buildScorecardEmailHTML(report)
   // Keep the subject plain ASCII so it never depends on a mail client decoding

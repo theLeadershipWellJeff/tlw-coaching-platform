@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { google } from 'googleapis'
+import { calendarClient } from '@/lib/outbound-guard'
 import { authOptions } from '@/lib/authOptions'
 
 export async function GET(req: NextRequest) {
@@ -15,7 +16,7 @@ export async function GET(req: NextRequest) {
   )
   auth.setCredentials({ access_token: session.accessToken as string })
 
-  const calendar = google.calendar({ version: 'v3', auth })
+  const calendar = calendarClient(auth)
 
   const now = new Date()
   const twoWeeksOut = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)
