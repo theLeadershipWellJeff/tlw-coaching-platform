@@ -672,3 +672,7 @@ the single Phase 1 pass (full detail + line numbers in `ISOLATION_AUDIT.md`):
 | How to make a schema change safely | `docs/MIGRATION_PROCEDURE.md` |
 | Standing up staging | `docs/STAGING_SETUP.md` |
 | Deploy / env setup | `README.md` |
+
+## Always-on test bots (2026-10-09 → ; brief `docs/TESTING_SYSTEM.md`)
+
+- **Phase 0 done (recon + file plan), waiting on Jeff's go.** Decisions D1–D6 in §14 of the brief. Headline surprise: the GitHub repo is public, so bot issues and artifacts can't be published there. Deferred: a real post-engagement read-only portal mode (brief assumed it exists; it doesn't, so F7 tests lock-out instead).
