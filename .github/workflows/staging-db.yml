@@ -1,0 +1,44 @@
+# Build or refresh the STAGING database (docs/TESTING_SYSTEM.md §3, docs/STAGING_SETUP.md).
+# Run from GitHub → Actions → "Staging database" → Run workflow.
+# Needs the repository secret STAGING_DATABASE_URL (the staging project's
+# Session pooler URI). scripts/staging/apply.sh refuses any database that looks
+# like production, so a wrong secret changes nothing.
+name: Staging database
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "build = first time on an empty project · reseed = restore the fake data · migrate = apply one migration file"
+        required: true
+        default: reseed
+        type: choice
+        options: [build, reseed, migrate]
+      migration:
+        description: "Only for migrate — a file name from supabase/migrations/, e.g. 075_example.sql"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-db
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install psql
+        run: command -v psql || (sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client)
+      - name: Apply
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          MODE: ${{ inputs.mode }}
+          MIGRATION: ${{ inputs.migration }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then echo "::error::Add the STAGING_DATABASE_URL repository secret first."; exit 1; fi
+          sh scripts/staging/apply.sh "$MODE" "$MIGRATION"
