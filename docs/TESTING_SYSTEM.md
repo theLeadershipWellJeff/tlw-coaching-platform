@@ -377,6 +377,8 @@ _Format: `YYYY-MM-DD · Phase · Note (decision / surprise / deferred → APP_ST
 - 2026-10-09 · P1 · Staging gets `AI_PORTAL_CHAT_ENABLED=false` and no `ANTHROPIC_API_KEY` — v1 bots don't test chat, AI spend on staging stays $0. The AI Explorer (Phase 7) gets its own key.
 - 2026-10-09 · P1 · The app reads no Supabase publishable key (URL + secret key only), so Jeff copies two values, not three.
 
+- 2026-10-10 · P1 · Jeff's console tasks: Supabase project created as **`tow-staging`** (ref `chnxrxrloqnokhekwcgu`); old paused project deleted; `STAGING_DATABASE_URL` secret set; the **Staging database** workflow had to be merged to `main` first (GitHub only dispatches workflows on the default branch — PR #291, staging-only files, no app code). First run used the default mode `reseed` → safe stop; `build` succeeded (coaches=4 clients=7 canaries=7). Preview env vars added (16) and production-only leftovers from 2026-08 (`RESEND_API_KEY`, `SUPABASE_DB_URL`, `ANTHROPIC_API_KEY`, `VAULT_GITHUB_TOKEN`, `ZOOM_*`, `CRON_SECRET`) scoped back to Production. The dead 2026-08 `staging` branch was deleted by Jeff and re-created from the working branch (force-push is blocked for Claude). Domain bound. Remaining: 2d bypass token, Task 3 checks.
+
 ## 14. Phase 0 — decisions for Jeff and file plan
 
 ### Decisions (recommended option first)

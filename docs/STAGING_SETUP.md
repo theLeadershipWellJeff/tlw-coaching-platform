@@ -26,12 +26,14 @@ GitHub workflow that applies all of it.
    password manager. You need it in step 7.
 4. Region: the same as production. Plan: **Free**. Click **Create new project**.
    Wait until the page says the project is ready (1–2 min).
-5. Left sidebar → **Project Settings** (gear) → **API**. You'll copy two values
+5. Left sidebar → **Project Settings** (gear) → **API Keys**. You'll copy two values
    into Vercel in Task 2, so leave this tab open:
-   - **Project URL**
+   - **Project URL** — shown under **Data API** (same settings menu), or build it from
+     the address bar: `https://<the 20 chars after /project/>.supabase.co`
    - **Secret key** (`sb_secret_…`; on older screens "service_role") — click reveal
-6. Top of the dashboard → click **Connect** → tab **Session pooler** (not Direct, not
-   Transaction). Copy the URI. It looks like
+6. Top of the dashboard → click **Connect** → tab **Direct** (or "Connection string")
+   → change the **Type/Method** dropdown from *Direct connection* to **Session pooler**
+   (Direct is IPv6-only and GitHub's runners can't reach it). Copy the URI. It looks like
    `postgresql://postgres.xxxx:[YOUR-PASSWORD]@aws-0-us-west-1.pooler.supabase.com:5432/postgres`.
 7. In that URI, replace `[YOUR-PASSWORD]` with the password from step 3.
 8. Open https://github.com/theLeadershipWellJeff/tlw-coaching-platform/settings/secrets/actions
@@ -76,7 +78,7 @@ only add values to **Preview**, which is what the `staging` branch deploys as.
    | `JEFF_CC_EMAIL` | `owner.coach@bots.theleadershipwell.test` |
    | `SUPPORT_NOTIFY_EMAIL` | `supervisor@bots.theleadershipwell.test` |
    | `PORTAL_FROM_EMAIL` | `portal@bots.theleadershipwell.test` |
-   | `STRIPE_SECRET_KEY` | Stripe Dashboard → toggle **Test mode** (top right) → Developers → API keys → **Secret key** (`sk_test_…`) |
+   | `STRIPE_SECRET_KEY` | https://dashboard.stripe.com/test/apikeys (newer accounts call this a **Sandbox**; create one if asked) → **Secret key** → must start `sk_test_` |
    | `STRIPE_WEBHOOK_SECRET` | `whsec_staging_unused` (no test webhook yet — that's v2) |
    | `AI_PORTAL_CHAT_ENABLED` | `false` (the bots don't test chat; keeps AI spend at $0) |
 
@@ -90,12 +92,14 @@ only add values to **Preview**, which is what the `staging` branch deploys as.
    `CRON_SECRET`, `INGEST_SECRET`, `NEXTAUTH_SECRET`.
    (`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` may stay shared — the Google
    handshake needs them and the bots never complete a real Google login.)
-   **If you added a Preview-only row for the same key in step 2, Vercel keeps both;
-   the Preview-scoped one wins. Removing Preview from the shared row is still the
-   safe thing to do.**
+   A key may also appear as TWO rows (one Production, one Preview). For keys you gave
+   a staging value in step 2 that is correct. For any other key, the Preview row is a
+   leftover holding a production secret → **Delete** that Preview row only.
 4. **Domain:** Settings → **Domains** → **Add** → type
-   `staging.theleadershipwell.online` → **Add**. On the row it creates, click
-   **Edit** → set **Git Branch** to **`staging`** → **Save**.
+   `staging.theleadershipwell.online` → environment **Preview** → branch **`staging`**
+   → **Add**. The branch must already exist on GitHub, or the picker won't offer it
+   (Claude pushes it before this step; the 2026-08 `staging` branch had to be deleted
+   first — GitHub → Branches → *All branches* → search → trash icon).
    Vercel shows a DNS record to add. Because the domain's nameservers are already
    Vercel's, it usually says **Valid Configuration** on its own within a minute.
    If it asks for a CNAME, add it in Vercel → **Domains** (top-level) →
@@ -110,8 +114,9 @@ only add values to **Preview**, which is what the `staging` branch deploys as.
 
 ## Task 3 — Deploy and check (≈5 min)
 
-Claude pushes the `staging` branch once Tasks 1–2 are done (say "pushed staging" /
-"ready"). Vercel builds it as a Preview deployment on the staging domain.
+The `staging` branch is pushed during Task 2 (Vercel needs it to exist before the
+domain can be bound). Vercel builds every push to it as a Preview deployment on the
+staging domain.
 
 1. Open **https://staging.theleadershipwell.online**. Vercel will ask you to log in
    to Vercel once (that's Deployment Protection — expected).
